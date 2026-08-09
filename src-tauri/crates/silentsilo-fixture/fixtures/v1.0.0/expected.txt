@@ -1,0 +1,17 @@
+folder / deleted=0 fav=0
+folder /Acte deleted=0 fav=1
+folder /Acte/2026 deleted=0 fav=0
+folder /Arhivă deleted=0 fav=0
+folder /Vechituri deleted=1 fav=0
+folder /Ștampile deleted=0 fav=0
+file /::.gitignore deleted=0 fav=0 size=7 hash=hash-dot mime=
+file /::notițe.md deleted=0 fav=0 size=250 hash=hash-notes-second mime=text/markdown
+file /::șiret.txt deleted=0 fav=0 size=9 hash=hash-nfd mime=
+file /Acte::contract.pdf deleted=0 fav=1 size=2048 hash=hash-contract mime=application/pdf
+file /Acte::final.txt deleted=0 fav=0 size=64 hash=hash-draft mime=
+file /Acte/2026::vechi.txt deleted=1 fav=0 size=10 hash=hash-old mime=
+file /Vechituri::ruginit.dat deleted=1 fav=0 size=5 hash=hash-rust mime=
+file /Ștampile::gol.bin deleted=0 fav=0 size=0 hash=hash-empty mime=
+password 00000000-0000-0000-0000-000000000021
+password 00000000-0000-0000-0000-000000000022
+ops count=31

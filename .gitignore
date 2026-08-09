@@ -1,0 +1,20 @@
+node_modules
+dist
+target
+src-tauri/target
+target-linux
+dist-release
+.env*
+
+# Local tooling state, never part of the source tree
+.claude/
+
+# Playwright run artifacts; the committed baselines live in e2e/*-snapshots
+test-results/
+playwright-report/
+
+# Internal working documents (audits, drafts, business notes)
+private/
+
+# Git history archives
+*.bundle

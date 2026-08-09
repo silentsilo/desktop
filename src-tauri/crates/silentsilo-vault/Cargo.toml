@@ -1,0 +1,44 @@
+[package]
+name = "silentsilo-vault"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+# Exposes wrapping the DEK under a caller-chosen recovery code. Only the
+# fixture builder may enable it: see recovery.rs.
+fixture-support = []
+
+[dependencies]
+argon2 = { workspace = true }
+aes-gcm = { workspace = true }
+rand = { workspace = true }
+rusqlite = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+hex = "0.4"
+# Without an explicit platform backend, keyring 3 falls back to `mock`, which
+# keeps credentials in memory and hands back an empty entry on every
+# `Entry::new`. Every secret then took the fallback-file path instead, which
+# on Linux and macOS meant plaintext on disk.
+keyring = { version = "3", features = [
+    "windows-native",
+    "apple-native",
+    "linux-native-sync-persistent",
+    "crypto-rust",
+] }
+uuid = { workspace = true }
+zeroize = { workspace = true }
+thiserror = { workspace = true }
+silentsilo-core = { workspace = true }
+silentsilo-store = { workspace = true }
+silentsilo-crypto = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security_Cryptography",
+] }
+
+[dev-dependencies]
+tempfile = { workspace = true }

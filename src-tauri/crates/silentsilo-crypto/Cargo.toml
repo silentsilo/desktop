@@ -1,0 +1,18 @@
+[package]
+name = "silentsilo-crypto"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+aes-gcm = { workspace = true }
+blake3 = { workspace = true }
+rand = { workspace = true }
+zeroize = { workspace = true }
+uuid = { workspace = true }
+silentsilo-core = { workspace = true }
+thiserror = { workspace = true }
+hex = "0.4"
+
+[dev-dependencies]
+tempfile = "3"

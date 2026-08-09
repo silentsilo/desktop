@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" role="img" aria-label="SilentSilo">
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#080c18" />
+      <stop offset="100%" stop-color="#0d1123" />
+    </linearGradient>
+    <linearGradient id="outer-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a78bfa" />
+      <stop offset="100%" stop-color="#7c3aed" />
+    </linearGradient>
+    <linearGradient id="middle-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#4f46e5" />
+    </linearGradient>
+    <linearGradient id="inner-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+  </defs>
+
+  <!-- Dark rounded square canvas -->
+  <rect width="512" height="512" rx="100" fill="url(#bg-grad)" stroke="#1a2035" stroke-width="8" />
+
+  <!-- Outer security square (violet, open top-left) -->
+  <path
+    d="M 160 86 H 426 V 426 H 86 V 160"
+    stroke="url(#outer-grad)"
+    stroke-width="26"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Middle security square (indigo, open top-right) -->
+  <path
+    d="M 256 142 H 370 V 370 H 142 V 220"
+    stroke="url(#middle-grad)"
+    stroke-width="26"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Inner security square (emerald, open bottom-left) -->
+  <path
+    d="M 198 270 V 314 H 314 V 198 H 250"
+    stroke="url(#inner-grad)"
+    stroke-width="26"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Secure core token -->
+  <rect x="236" y="236" width="40" height="40" rx="10" fill="#10b981" />
+</svg>
