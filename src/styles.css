@@ -1,0 +1,6454 @@
+:root {
+  /* Match silentsilo.web — dark obsidian + violet */
+  --bg: #0a0e1a;
+  --bg-deep: #05070e;
+  --surface: #12182a;
+  --surface-muted: #0e1422;
+  --bg-hover: #1a2238;
+  --border: rgba(139, 92, 246, 0.22);
+  --border-subtle: rgba(139, 92, 246, 0.12);
+  --ink: #f8fafc;
+  --text: #f8fafc;
+  /* Nudged up from #8892b0, which measured 4.2:1 on the app's surfaces —
+     just under AA, and this token carries every hint and secondary label in
+     the product. */
+  --text-muted: #98a3c2;
+  --text-dim: #6b7594;
+  --accent: #8b5cf6;
+  --accent-hover: #a78bfa;
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  /* For filled surfaces carrying white text. `--accent` itself is tuned to
+     be read *as* text on a dark background, which leaves it too light to sit
+     behind any: white on it measures 4.2:1, and on `--accent-hover` 2.7:1. */
+  --accent-solid: #6d28d9;
+  --accent-solid-hover: #5b21b6;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  /* The middle of the password strength scale. Tokens rather than literals
+     in the component, because amber and lime on near-black are the wrong
+     two colours entirely on a white card. */
+  --strength-weak: #f59e0b;
+  --strength-fair: #eab308;
+  --strength-good: #84cc16;
+  /* The same red, lightened enough to be read on the app's dark surfaces. */
+  --danger-on-dark: #f87171;
+  --radius: 10px;
+  --radius-sm: 7px;
+  --sidebar-w: 76px;
+  --font-display: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-body: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", system-ui, sans-serif;
+  --shadow-soft: 0 12px 40px rgba(0, 0, 0, 0.45);
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 1.5;
+  font-optical-sizing: auto;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 100% 70% at 50% -20%, rgba(139, 92, 246, 0.15), transparent 60%),
+    radial-gradient(circle 800px at 0% 100%, rgba(99, 102, 241, 0.06), transparent 70%),
+    linear-gradient(180deg, var(--bg) 0%, #05070d 100%);
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  border: none;
+  border-radius: var(--radius-sm);
+  /* Tall enough to be a comfortable pointer target and to sit level with a
+     text input beside it, which is where most of these live. */
+  min-height: 36px;
+  padding: 0.55rem 1.05rem;
+  line-height: 1.2;
+  background: linear-gradient(135deg, #7c3aed 0%, #5b5bd6 100%);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 14px rgba(139, 92, 246, 0.22);
+  transition: background 0.15s ease, transform 0.12s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* The guard is inside `:where()` so it costs no specificity.
+ *
+ * Written as `button:hover:not(:disabled)` this scored (0,2,1) and beat every
+ * `.some-class:hover` rule below that omitted the same guard — which is most
+ * of them. The primary violet gradient ended up painting itself over the
+ * theme toggle, the sidebar silo switcher, the password pills and chips, the
+ * inline icon buttons, the search-result rows and the folder picker: a dozen
+ * quiet controls each lighting up like a primary CTA, their grey icons left
+ * at 2.7:1 on violet. At (0,1,1) it still beats the base `button` rule but
+ * loses to any single class, which is what all of those assumed. */
+button:hover:where(:not(:disabled)) {
+  background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%);
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.38);
+}
+
+button:active:where(:not(:disabled)) {
+  transform: translateY(0.5px);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* The primary look is a violet gradient *and* the glow beneath it. Controls
+ * that paint their own surface were overriding only the gradient, so icon
+ * buttons, toolbar chips and list rows each sat in a violet drop shadow that
+ * belongs to the main action alone. Qualified with `button` (matching the
+ * hover rule's specificity) and placed after it, so the reset holds while
+ * hovered too. */
+button.explorer-icon-btn,
+button.sidebar-silo,
+button.silo-item,
+button.silo-remove,
+button.search-result,
+button.search-clear,
+button.folder-picker-row,
+button.browser-open-btn,
+button.pw-favicon-toggle,
+button.pw-transfer-btn,
+button.pw-pill,
+button.pw-gen-chip,
+button.pw-gen-btn,
+button.pw-inline-btn,
+button.pw-action-btn,
+button.pw-totp-remove-btn,
+button.storage-option {
+  box-shadow: none;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, white);
+  outline-offset: 2px;
+}
+
+/* An icon must never be squeezed by a long label, and never drift off the
+   text's optical centre. */
+button > svg {
+  flex-shrink: 0;
+}
+
+button.secondary {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+button.secondary:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: rgba(139, 92, 246, 0.35);
+}
+
+button.danger {
+  background: transparent;
+  border-color: rgba(239, 68, 68, 0.35);
+  color: var(--danger-on-dark);
+  box-shadow: none;
+}
+
+button.danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+button.link {
+  display: inline;
+  min-height: 0;
+  gap: 0;
+  background: none;
+  color: var(--accent-hover);
+  padding: 0.15rem 0.35rem;
+  font-size: inherit;
+  font-weight: 600;
+  border: none;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+/* An icon inside a link sits in the text, so it aligns to the baseline
+   rather than to a flex centre that no longer exists. */
+button.link > svg {
+  vertical-align: -0.16em;
+  margin-right: 0.3em;
+}
+
+/* `--accent-hover` rather than a fixed violet: the light theme redefines the
+   token to a *darker* violet, and the hardcoded #c4b5fd this used to carry
+   measured 1.64:1 on the white auth card — every inline link on the unlock,
+   enrolment and restore screens vanished under the pointer. */
+button.link:hover:not(:disabled) {
+  background: var(--accent-soft);
+  /* Mixed towards `--ink`, which lightens in dark and darkens in light —
+     so the hover reads as a change in both themes rather than only one. */
+  color: color-mix(in srgb, var(--accent-hover) 80%, var(--ink));
+  text-decoration: underline;
+}
+
+/* Icons that open a line of prose sit in the text, so they align to the
+   baseline and keep a word space after them. `button` used to be listed in
+   this selector too (and in a duplicate of it near the top of the file),
+   which handed every button in the app a 0.4em right margin: enough to push
+   a centred `.actions` row off the centre of its card, and to detach the
+   full stop from an inline link inside a sentence. */
+.hint > svg:first-child,
+.error > svg:first-child {
+  vertical-align: -0.16em;
+  margin-right: 0.4em;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.7rem;
+  background: rgba(0, 0, 0, 0.4);
+  color: var(--ink);
+}
+
+/* A select's drop-down list is drawn by the platform, and Chromium paints
+ * it from the control's own colours. The shared rule above leaves those
+ * translucent, which composites to a light grey panel with dark text on
+ * top of a dark app: the one list in the product that ignored the theme.
+ * Opaque colours here, and on the options themselves, put it back. */
+select {
+  background-color: var(--surface-muted);
+}
+
+option {
+  background-color: var(--surface);
+  color: var(--ink);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 1px var(--accent), 0 0 12px rgba(139, 92, 246, 0.25);
+}
+
+/* ── Auth ──
+ * `body` is `overflow: hidden` (the app shell manages its own scrolling), so
+ * this screen has to own the scrollbar for the tall forms — creating a silo,
+ * describing an SFTP server — which run well past a short window. Centring is
+ * `safe`: plain `center` on an overflowing flex container pushes the top of
+ * the card above the scroll origin, making it unreachable. */
+.app.auth-screen {
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: safe center;
+  padding: 2rem 1.25rem 3rem;
+  position: relative;
+  gap: 1.5rem;
+}
+
+/* The publisher line on the pre-unlock screens. Fixed to the viewport edge
+   rather than flowed after the card, so it reads as part of the window
+   chrome; the shell's own bottom padding keeps scrolled content clear of
+   it. Dim on purpose: it is a notice, not an interface. */
+.auth-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  text-align: center;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+  pointer-events: none;
+  /* A fade up from the page colour, because the screen behind this can
+     scroll: on a short window the enrolment card's last line passes through
+     this band, and two texts printed over each other read as neither. */
+  padding: 1.4rem 0 0.6rem;
+  background: linear-gradient(to top, var(--bg) 45%, transparent);
+}
+
+/* Fixed rather than absolute, so it covers the viewport rather than only the
+   first screenful once the content above scrolls. */
+.auth-screen .auth-atmosphere {
+  position: fixed;
+}
+
+.auth-atmosphere {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(139, 92, 246, 0.22), transparent 60%),
+    linear-gradient(180deg, transparent 40%, rgba(5, 7, 14, 0.92));
+}
+
+.brand {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  max-width: 28rem;
+}
+
+.brand-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 2rem;
+  letter-spacing: -0.03em;
+  margin: 0.85rem 0 0.35rem;
+  color: var(--ink);
+}
+
+.brand-sub {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.card.auth-card {
+  position: relative;
+  z-index: 1;
+  /* 420 was tight for the picker: a silo row carries a name, a badge, a
+     relative date and a full path, and the path was being cut mid-folder
+     while the window had room to spare. */
+  width: min(480px, 100%);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: calc(var(--radius) + 4px);
+  padding: 1.85rem 1.85rem 2rem;
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(16px) saturate(120%);
+  display: flex;
+  flex-direction: column;
+  /* Body copy reads left, headings read centred. Centring everything gave
+     every paragraph, field hint and checkbox label a ragged left edge, and
+     stretch is what lets a field, a hint or a list occupy the card's full
+     width instead of shrinking to its own text. */
+  align-items: stretch;
+  text-align: left;
+  gap: 1rem;
+}
+
+/* The card's own title, and the lead line under a screen's title, are the
+   two things that stay centred: they name the screen rather than explain
+   it. */
+.auth-card > h2 {
+  justify-content: center;
+  text-align: center;
+}
+
+/* Actions keep their own centring from `.actions`; a lone button outside
+   one would otherwise stretch edge to edge now that children fill the
+   card. */
+.auth-card > button {
+  align-self: center;
+}
+
+/* A sentence with a link in it stays a sentence: the button inside it must
+   sit on the text baseline rather than becoming a block of its own, and it
+   cannot carry side padding either. `button.link`'s 0.35rem left and right
+   read as extra word spacing here, which left "discard it ." with the full
+   stop floating away from the words. */
+.auth-card .hint > button.link {
+  display: inline;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Form-heavy screens — creating a silo, describing a bucket — need more
+   room than a card that only asks a question. */
+.card.auth-card.is-wide {
+  width: min(500px, 100%);
+}
+
+/* The one pre-unlock screen that is a form rather than a choice: wide enough
+   for the field pairs to sit side by side instead of stacking. */
+.card.auth-card.is-form {
+  width: min(760px, 100%);
+}
+
+/* Two rows of four, the same shape `.kit-code` prints on the emergency kit,
+   so a row on paper is a row here. */
+.recovery-entry {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+
+.recovery-entry-box {
+  /* Every input on this page is full width by default, which here would
+     put one box per line. */
+  width: auto;
+  min-width: 0;
+  padding: 0.6rem 0.4rem;
+  font-family: var(--font-mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.recovery-entry-box::placeholder {
+  letter-spacing: 0.12em;
+  opacity: 0.35;
+}
+
+/* A way out is not a peer of the action the screen is for, so it sits
+   below a rule rather than in the same row. */
+.auth-alternatives {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.auth-card h2 {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  margin: 0;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 100%;
+  text-align: left;
+}
+
+.field>span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+/* ── Brand logo ── */
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.brand-logo img {
+  border-radius: 22%;
+  display: block;
+}
+
+.brand-logo-text {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  font-size: 1.05rem;
+  color: #ffffff;
+  text-shadow: 0 0 20px rgba(139, 92, 246, 0.25);
+}
+
+/* ── Shell ── */
+.shell {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  background: transparent;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 232px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  background: color-mix(in srgb, var(--surface) 90%, var(--bg-deep));
+  border-right: 1px solid var(--border-subtle);
+  /* Top padding matches the pane views', so the brand and the page header
+     beside it start on the same line rather than 12px apart. */
+  padding: 1.5rem 1rem 1.1rem;
+  z-index: 10;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: width 0.18s ease;
+}
+
+.sidebar-collapsed {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  max-width: var(--sidebar-w);
+}
+
+/* Same height as the header row across the divider, so the two centre on
+   one line: the brand is the sidebar's title and sits level with the
+   page's. */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 36px;
+  padding: 0 0.4rem;
+}
+
+.sidebar-collapsed .sidebar-brand {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.sidebar-nav .tab-item {
+  width: 100%;
+  justify-content: flex-start;
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.75rem;
+}
+
+.sidebar-collapsed .sidebar-nav .tab-item {
+  justify-content: center;
+  padding: 0.6rem;
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  border: 1px solid transparent;
+  box-shadow: none;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  letter-spacing: 0.01em;
+}
+
+.tab-item:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.tab-item.active {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+  border-color: rgba(139, 92, 246, 0.25);
+  box-shadow: 0 0 15px rgba(139, 92, 246, 0.15);
+}
+
+.tab-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.tab-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.tab-badge {
+  margin-left: auto;
+  flex-shrink: 0;
+  min-width: 1.3rem;
+  height: 1.3rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.tab-badge-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 0;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  margin-left: 0;
+}
+
+.sidebar-spacer {
+  flex: 1;
+}
+
+.sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.sidebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sidebar-collapsed .sidebar-actions {
+  flex-direction: column;
+}
+
+.btn-theme {
+  flex-shrink: 0;
+}
+
+/* Out of the way of a centred card, and above the atmosphere layer so it
+   stays clickable. Fixed rather than absolute so it stays reachable on the
+   tall forms, which scroll past several screenfuls. */
+.auth-theme-toggle {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 2;
+}
+
+.btn-lock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  flex: 1;
+  padding: 0.45rem 0.85rem;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  transition: all 0.15s ease;
+}
+
+.btn-lock:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #fee2e2;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.15);
+}
+
+.sidebar-collapsed .btn-lock {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+.lock-label {
+  font-size: 0.82rem;
+}
+
+.sidebar-version {
+  /* 0.58rem landed at 8px, which is decoration rather than information. */
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  line-height: 1;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.main-area {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+}
+
+/* One width per view, so the title and the panel it labels share an edge.
+ * Set here rather than on each panel because the header is a sibling of the
+ * content, not a child of it. */
+.main-area {
+  --content-max: 720px;
+  /* Shared by the content and the status line so the two cannot drift. */
+  --content-pad: 1.35rem;
+}
+
+/* The explorer is not a centred panel, it fills the pane, so the status line
+   under it has to as well. It also runs tighter to the edges, and the status
+   bar has to follow or the two disagree by the difference. */
+.main-area[data-view="files"],
+.main-area[data-view="passwords"],
+.main-area[data-view="trash"],
+.main-area[data-view="settings"] {
+  --content-max: none;
+  --content-pad: 1rem;
+}
+
+/* Health is a list of findings rather than a form, so it reads at a wider
+   measure than a settings card, and it lays out its own panes, so it takes
+   the tighter padding of the views above. Favourites fills the pane like the
+   explorer, its cards being what uses the width. */
+.main-area[data-view="health"] {
+  --content-max: 880px;
+  --content-pad: 1rem;
+}
+
+.main-area[data-view="favorites"] {
+  --content-max: none;
+  --content-pad: 1rem;
+}
+
+.main-header {
+  padding: 1.5rem var(--content-pad) 0.5rem;
+  width: 100%;
+  text-align: left;
+  /* Mirrors the scroll gutter the content below reserves, so both boxes have
+     the same inner width and a title wider than the window still lines up
+     with its panel. `overflow` is what makes the gutter apply at all. */
+  overflow: hidden;
+  scrollbar-gutter: stable both-edges;
+}
+
+.main-header h2 {
+  /* Shorthand, not `margin-inline`: a later `margin: 0` in this file used to
+     reset it, and one declaration cannot be undone by accident that way. */
+  margin: 0 auto;
+  max-width: var(--content-max);
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  text-align: left;
+}
+
+.main-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.75rem var(--content-pad) 1.25rem;
+  /* Reserved on both edges so the centre line does not shift when a
+     scrollbar appears. Without it, centred content sits half a scrollbar
+     off the title above it, which only shows on the views that scroll. */
+  scrollbar-gutter: stable both-edges;
+}
+
+/* Views that lay out their own panes and scroll inside them: Files,
+ * Credentials, Trash. The page-level scroll is theirs to manage, because a
+ * scrollbar here would carry their toolbars off the top. */
+.main-content-panes {
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem var(--content-pad) 0.85rem;
+  gap: 0.55rem;
+}
+
+/* The offer to download content this device does not hold. A row above the
+ * explorer rather than a dialog: it is about the files being listed right
+ * there, and it must not stand between the user and them. */
+.content-offer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+
+.content-offer-text {
+  min-width: 12rem;
+  flex: 1;
+}
+
+.content-offer-text strong {
+  display: block;
+  font-size: 0.86rem;
+}
+
+.content-offer-text p {
+  margin: 0.15rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.content-offer-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* A transparent wrapper carrying the same padding and reserved scroll
+ * gutter as the content above, so the capsule inside lines up with it
+ * exactly instead of running 10px wider at each end. */
+.status-bar {
+  flex-shrink: 0;
+  padding: 0 var(--content-pad) var(--content-pad);
+  overflow: hidden;
+  scrollbar-gutter: stable both-edges;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* The capsule itself: its own surface, inset from every edge so it belongs
+ * to the page rather than to the window chrome. Actions at one end, what
+ * the view holds at the other, and the span between belonging to neither. */
+.status-bar-inner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+/* Pushed to the far end, which is what makes this a status bar rather than a
+   label: one thing about the silo on the left, one about the view on the
+   right, and the span between them belongs to neither. */
+.status-summary {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 0.4rem;
+  background: var(--text-dim);
+}
+
+.dot.ok {
+  background: var(--success);
+}
+
+/* A silo with no backup: not an error, and not green either. The base grey
+   already says "nothing to report", named here so the intent survives. */
+.dot.neutral {
+  background: var(--text-dim);
+}
+
+.dot.warn {
+  background: var(--warning);
+}
+
+.dot.err {
+  background: var(--danger);
+}
+
+/* ── Explorer ── */
+.explorer-chrome {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  flex-shrink: 0;
+  /* Queried below. Keyed off the space this toolbar actually has rather than
+   * the window, because the sidebar collapses independently of window size —
+   * a 1000px window with the sidebar out has less room here than an 800px one
+   * with it collapsed. */
+  container-type: inline-size;
+  container-name: explorer-chrome;
+}
+
+.explorer-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem;
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+
+/* Eight controls on one row leave the address bar and the search field
+ * fighting over what's left: at the app's 800px minimum both fell to ~100px,
+ * which is narrower than the placeholder text. Below that the search takes a
+ * row of its own — it is the widest thing here and the one that suffers most
+ * from being squeezed. */
+@container explorer-chrome (max-width: 640px) {
+  .explorer-nav {
+    flex-wrap: wrap;
+    row-gap: 0.35rem;
+  }
+
+  /* Descendant selectors so these outrank the single-class base rules, which
+     live further down the file and would otherwise win on source order —
+     container queries add no specificity of their own. */
+  .explorer-nav .explorer-search-group {
+    order: 10;
+    flex: 1 1 100%;
+    /* The basis alone does not force the break: a flex item still shrinks to
+       whatever is left on the line. This is the floor that makes it
+       genuinely not fit, so it wraps. */
+    min-width: 12rem;
+    max-width: none;
+  }
+
+  /* Needs a floor of its own. With the base `min-width: 0` it collapsed to
+     33px to keep the search on the line, trading one unreadable control for
+     another instead of breaking the row. */
+  .explorer-nav .explorer-address {
+    flex: 1 1 8rem;
+    min-width: 8rem;
+  }
+}
+
+/* The label is the first thing worth losing when the row is tight; the icon
+ * and the chevron still say "menu". */
+@container explorer-chrome (max-width: 420px) {
+  .btn-add-new-label {
+    display: none;
+  }
+}
+
+.explorer-icon-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid transparent;
+}
+
+.explorer-icon-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-subtle);
+}
+
+.explorer-address {
+  flex: 1;
+  min-width: 0;
+  /* Was capped at 46rem to stop it becoming an empty trough on a maximised
+     window. In use the cap was the worse trade: it left a dead gap before
+     the search field and cut deep paths short while space sat unused beside
+     them. It now runs to the search box, which is where a path bar goes in
+     every file manager people already use. */
+  margin-right: auto;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0 0.55rem;
+  height: 36px;
+  box-sizing: border-box;
+  background: var(--surface-muted);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.86rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.explorer-address::-webkit-scrollbar {
+  display: none;
+}
+
+.explorer-crumb {
+  display: inline-flex;
+  align-items: center;
+  max-width: 12rem;
+  flex-shrink: 0;
+}
+
+.explorer-sep {
+  color: var(--text-dim);
+  margin: 0 0.2rem;
+}
+
+.explorer-crumb-btn {
+  background: none;
+  color: var(--accent);
+  padding: 0.1rem 0.25rem;
+  font-weight: 600;
+  border: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-crumb-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.explorer-crumb-current {
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.1rem 0.25rem;
+}
+
+.explorer-commands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.inline-form {
+  display: flex;
+  gap: 0.4rem;
+  flex: 1;
+  min-width: 200px;
+}
+
+.inline-form input {
+  flex: 1;
+}
+
+/* A number input paired with a short unit label and a Save button — the
+ * default `.inline-form input { flex: 1 }` (plus the global `input { width:
+ * 100% }`) stretches a plain number field to fill the whole row, leaving
+ * the unit label and button squeezed at the far edge. This keeps the
+ * number field a fixed, sensible width instead. */
+.inline-form-compact {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.inline-form-compact input {
+  flex: none;
+  width: 5rem;
+}
+
+.inline-form-compact .hint {
+  flex-shrink: 0;
+}
+
+.auto-lock-select {
+  flex: none;
+  width: auto;
+  min-width: 9rem;
+}
+
+/* A setting and the control that changes it, on one line, with the label
+ * doing the explaining rather than the options. Wraps rather than squeezing
+ * the select when the panel is narrow. */
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.6rem;
+}
+
+.settings-row-label {
+  flex: 1 1 12rem;
+  min-width: 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.settings-row-label strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.upload-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border-subtle));
+  background: var(--accent-soft);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent-hover);
+  animation: fade-in 0.2s ease;
+}
+
+/* A small ring that says "working" wherever a label alone had to. Drawn in
+   currentColor so it inherits whatever the button or hint is already using. */
+.spinner {
+  width: 0.85em;
+  height: 0.85em;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  display: inline-block;
+  vertical-align: -0.1em;
+  animation: spinner-turn 0.8s linear infinite;
+}
+
+@keyframes spinner-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+/* A determinate bar for the operations that know their total: the deep
+   check, a seed, an update download. The label above it carries the
+   numbers; the bar is what makes "still moving" visible from across the
+   room. */
+.progress-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.progress-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.5rem 0;
+}
+
+.progress-row .hint {
+  margin: 0;
+}
+
+.upload-cancel-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+}
+
+.file-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  user-select: none;
+}
+
+.drag-select-box {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+}
+
+.file-list table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.file-list th {
+  text-align: left;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  font-weight: 700;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-muted);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.file-list td {
+  padding: 0.55rem 0.85rem;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.file-list tr {
+  transition: background 0.12s ease;
+  cursor: default;
+  user-select: none;
+}
+
+.file-list tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.file-list tbody tr.is-selected {
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+}
+
+.file-list tbody tr.is-selected:hover {
+  background: color-mix(in srgb, var(--accent) 24%, var(--surface));
+}
+
+.entry-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 550;
+}
+
+.entry-name svg {
+  color: var(--accent-hover);
+  flex-shrink: 0;
+}
+
+.row-file .entry-name svg {
+  color: var(--kind-color, var(--text-muted));
+}
+
+.col-muted {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  /* A date with a year ("Nov 15, 2023, 00:13") must not fold onto two
+     lines: every row in an archive is from a past year, so the wrap was
+     the rule rather than the exception, and it doubled each row's height. */
+  white-space: nowrap;
+}
+
+.row-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.rename-input {
+  min-width: 10rem;
+  padding: 0.25rem 0.45rem;
+  font-weight: 600;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 280px;
+  padding: 2rem;
+  text-align: center;
+}
+
+.empty-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+}
+
+@keyframes pulse-soft {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* ── Panels ──
+ * Centered rather than left-hugging: at the app's own default 1200×800 (and
+ * anything wider) a left-aligned, width-capped panel leaves the entire
+ * right side of the window empty. Auto side-margins on a column flexbox
+ * child center it on the cross axis once its width is capped below the
+ * container's, which is exactly the case above each max-width. */
+.panel {
+  max-width: var(--content-max, 720px);
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  padding-bottom: 3rem;
+}
+
+/* ── The pane views' shared header ────────────────────────────────── */
+
+/* A row, not a banner: it names the page and says what is in it, then gets
+ * out of the way of the panes below, which are what the user came for. */
+.view-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  padding-bottom: 0.8rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.view-header-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+
+.view-header-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.view-header-text h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.view-header-text p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* Settings is a rail and a pane, like the other full-width views: the
+ * left column is the list of things you can change, the right shows one of
+ * them. Six cards stacked in two columns meant scrolling past five to
+ * reach the sixth, and no way to say where you were. */
+.settings-view {
+  container-type: inline-size;
+  container-name: settings-view;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+  min-height: 0;
+}
+
+/* The rail and the pane, under the header. */
+.settings-body {
+  display: flex;
+  gap: 1.1rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.settings-pane {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+}
+
+/* A settings card is a short sequence of blocks: what this is, where it
+ * stands, what you can do about it, and the caveat that follows. Each one
+ * gets its own air. Left to the paragraph defaults they stacked into a
+ * single grey mass with the buttons wedged in the middle of it. */
+.settings-pane .panel-section > * + * {
+  margin-top: 1rem;
+}
+
+/* The description belongs to the heading above it, so it stays close. */
+.settings-pane .panel-section > h3 + p {
+  margin-top: 0.5rem;
+}
+
+/* Overrides the tighter global pairing: in a card this long, the buttons
+ * are their own step rather than a continuation of the sentence above. */
+.settings-pane .panel-section > p + .actions,
+.settings-pane .panel-section .actions {
+  margin-top: 1.15rem;
+}
+
+/* A footnote explains the action right above it, so it sits nearer to it
+ * than the next block would. */
+.settings-pane .panel-section > .actions + .hint {
+  margin-top: 0.7rem;
+}
+
+/* `.panel-section > p` caps the reading line at 62ch, counted in that
+ * paragraph's own font. A hint is two sizes smaller, so the same count
+ * came out ~110px narrower than the card and pushed the last word onto a
+ * line of its own with empty space beside it. The card is the measure. */
+.settings-pane .panel-section > p.hint {
+  max-width: none;
+}
+
+/* Each card sets its own reading width rather than stretching a form
+ * across the window. Left-aligned, not centred: `.panel` centres itself
+ * for the pages that are a column in the middle of the window, and Backup
+ * stopped being one when it moved in here beside a rail. */
+.settings-pane .panel-section,
+.settings-pane .backup-panel {
+  max-width: 720px;
+}
+
+/* Two cards in one pane used to touch exactly, sharing an edge, so the key
+ * list and the key change read as one long surface with a hairline across
+ * it. Nothing had ever set this: the pane was written when it held a
+ * single card, and Security keys grew a second one underneath. Wider than
+ * the 1rem step inside a card, because this gap separates whole objects
+ * rather than lines within one. */
+.settings-pane .panel-section + .panel-section {
+  margin-top: 1.25rem;
+}
+
+.settings-pane .backup-panel {
+  margin: 0;
+  padding-bottom: 0;
+}
+
+.settings-rail-icon {
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+
+.view-rail-item.active .settings-rail-icon {
+  color: var(--accent-hover);
+}
+
+/* ── Backup view ── */
+/* A little wider than the default panel: the status card carries a
+ * headline plus three actions, and the explainer rows read better with
+ * room for two lines instead of four. */
+
+.backup-status-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+/* The one glance answer: a tinted ring that is accent-coloured while the
+ * silo is local-only and success-coloured once a backup exists. */
+.backup-status-icon {
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+  color: var(--accent-hover);
+}
+
+.backup-status.is-connected .backup-status-icon {
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+  border-color: color-mix(in srgb, var(--success) 35%, transparent);
+  color: var(--success);
+}
+
+.backup-status-text {
+  min-width: 0;
+}
+
+.backup-status-text h3 {
+  margin: 0 0 0.3rem;
+  overflow-wrap: anywhere;
+}
+
+.backup-status-text p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+/* The saved connection, read back as label/value rows. Not a form: the
+ * backend keeps one connection per silo and replaces it wholesale, so the
+ * page shows what is saved and Edit opens the real form. */
+.backup-config {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-deep);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.backup-config-row {
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+  font-size: 0.88rem;
+}
+
+.backup-config dt {
+  flex-shrink: 0;
+  width: 90px;
+  color: var(--text-muted);
+}
+
+.backup-config dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.85rem;
+}
+
+.backup-points {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+}
+
+.backup-points li {
+  display: flex;
+  gap: 0.9rem;
+  align-items: flex-start;
+  font-size: 0.92rem;
+  color: var(--text-muted);
+}
+
+/* Title on its own line, body under it. One long run of bold-into-text per
+ * point is what made the list read as a wall. */
+.backup-points strong {
+  display: block;
+  color: var(--text);
+  margin-bottom: 0.2rem;
+}
+
+.backup-points li p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.backup-point-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  border: 1px solid var(--border-subtle);
+  color: var(--accent-hover);
+  margin-top: 0.1rem;
+}
+
+.backup-explainer .hint {
+  margin: 0.9rem 0 0;
+}
+
+/* ── Backup storage form ── */
+.s3-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin-top: 0.25rem;
+}
+
+/* Bucket and region belong together — both come off the same page of the
+ * provider's console, and they're short enough to share a row until the
+ * panel gets genuinely narrow. */
+.s3-form-row {
+  display: flex;
+  gap: 0.85rem;
+}
+
+.s3-form-row .field {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 560px) {
+  .s3-form-row {
+    flex-direction: column;
+  }
+}
+
+.s3-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+
+.s3-checkbox input {
+  width: auto;
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.s3-checkbox>span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.9rem;
+}
+
+/* Sits under the update actions with a little air, since it is a setting
+ * rather than part of the check/install flow above it. */
+.update-auto-toggle {
+  margin-top: 0.85rem;
+}
+
+
+
+.panel-section {
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 1.65rem 1.75rem;
+  box-shadow: var(--shadow-soft);
+  animation: panel-section-in 0.22s ease-out both;
+}
+
+@keyframes panel-section-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Stagger just the first handful so a long panel doesn't keep fading in
+ * sections well after the first ones have already settled. */
+.panel-section:nth-child(1) {
+  animation-delay: 0ms;
+}
+
+.panel-section:nth-child(2) {
+  animation-delay: 40ms;
+}
+
+.panel-section:nth-child(3) {
+  animation-delay: 80ms;
+}
+
+.panel-section:nth-child(4) {
+  animation-delay: 120ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-section {
+    animation: none;
+  }
+}
+
+.panel-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.4rem;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
+/* `.actions` is centred because the auth screens are centred columns. A
+ * settings card is not: its heading and prose start at the left edge, and
+ * buttons floating in the middle read as belonging to nothing. */
+.panel-section .actions {
+  justify-content: flex-start;
+  margin-top: 1.1rem;
+}
+
+/* The row directly under a paragraph already has that paragraph's bottom
+ * margin; a second gap on top of it opens a hole. */
+.panel-section>p+.actions {
+  margin-top: 0.35rem;
+}
+
+.panel-section h3 svg {
+  flex-shrink: 0;
+  color: var(--accent-hover);
+}
+
+/* A card's description sets up everything under it, so it gets a clear gap
+ * rather than sitting on top of the first control. */
+.panel-section>p {
+  line-height: 1.55;
+  max-width: 62ch;
+}
+
+.panel-section h3.is-danger svg {
+  color: var(--danger-on-dark);
+}
+
+/* The card itself says danger, not just its heading, so the eye separates
+ * it from its neighbours before reading a word. */
+.panel-section-danger {
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+  background: color-mix(in srgb, var(--danger) 4%, var(--surface));
+}
+
+.panel-section>p {
+  margin: 0 0 0.85rem;
+  color: var(--text-muted);
+}
+
+/* ── File type marks ── */
+/* Each kind only declares a colour; the icon rules below read it with a
+ * fallback. Done with a custom property rather than by colouring the icon
+ * here, because the existing `.row-file .entry-name svg` is more specific
+ * and would win. A variable sidesteps that fight entirely, and an
+ * unrecognised extension simply never sets it. */
+.kind-pdf {
+  --kind-color: #ef4444;
+}
+
+.kind-text {
+  --kind-color: #60a5fa;
+}
+
+.kind-image {
+  --kind-color: #a78bfa;
+}
+
+.kind-audio {
+  --kind-color: #f472b6;
+}
+
+.kind-video {
+  --kind-color: #fb923c;
+}
+
+.kind-archive {
+  --kind-color: #eab308;
+}
+
+.kind-code {
+  --kind-color: #34d399;
+}
+
+.kind-sheet {
+  --kind-color: #10b981;
+}
+
+.kind-slides {
+  --kind-color: #f97316;
+}
+
+/* The lighter hues are tuned for a dark surface and go faint on white, so
+ * the ones that lose the most are darkened rather than left decorative. */
+.light-theme .kind-text {
+  --kind-color: #2563eb;
+}
+
+.light-theme .kind-archive {
+  --kind-color: #a16207;
+}
+
+.light-theme .kind-code {
+  --kind-color: #047857;
+}
+
+.light-theme .kind-sheet {
+  --kind-color: #047857;
+}
+
+.light-theme .kind-image {
+  --kind-color: #7c3aed;
+}
+
+.light-theme .kind-audio {
+  --kind-color: #db2777;
+}
+
+.light-theme .kind-video {
+  --kind-color: #c2410c;
+}
+
+.light-theme .kind-slides {
+  --kind-color: #c2410c;
+}
+
+/* ── Per-file sync state ── */
+/* Deliberately quiet: it sits on every row, so anything louder would
+ * compete with the filenames, which are what people are actually reading. */
+.sync-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  line-height: 1;
+  color: var(--text-dim);
+}
+
+.sync-badge svg {
+  flex-shrink: 0;
+}
+
+.sync-pending {
+  color: var(--warning);
+}
+
+.sync-backed-up {
+  color: var(--success);
+}
+
+.sync-remote-only {
+  color: var(--text-dim);
+}
+
+/* Size and badge share a cell, so they need to stay on one line and keep
+ * their distance from each other. */
+.cell-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  white-space: nowrap;
+}
+
+/* Pinned to the card's corner rather than sitting under the name: the card
+ * is scanned as a tile, and a mark in a fixed corner is found without
+ * reading. Given a filled chip so it holds against the card behind it. */
+.grid-card-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border-subtle);
+}
+
+.grid-card-badge .sync-badge svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* ── Local storage meter ── */
+.sidebar-storage {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 100%;
+  margin: 0 0 0.6rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.sidebar-storage:hover {
+  border-color: var(--border-subtle);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+/* Reads bottom-to-top, the way a spine label does, so the digits keep their
+   normal shape instead of being rotated one by one. */
+.sidebar-storage-vertical {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  padding: 0.7rem 0.3rem;
+  margin-inline: auto;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+.sidebar-storage-vertical:hover {
+  color: var(--text);
+}
+
+/* The one thing the collapsed form cannot spell out: that something is
+   still owed to the backup. */
+.sidebar-storage-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--warning);
+  flex-shrink: 0;
+}
+
+.sidebar-storage-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar-storage-line>span:first-child {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.sidebar-storage-limit {
+  color: var(--text-dim);
+}
+
+.sidebar-storage-note {
+  color: var(--warning);
+}
+
+.storage-bar {
+  display: block;
+  height: 5px;
+  background: var(--bg-deep);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.storage-bar-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #6366f1);
+  border-radius: inherit;
+  transition: width 0.3s ease;
+}
+
+.key-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.key-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+/* Says that an organisation administers this key, on every device that lists
+ * it. Deliberately a badge rather than a line of hint text: the person at this
+ * computer cannot remove the key, and that fact should be as visible as the
+ * key's own name. */
+.key-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.45rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--text);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  vertical-align: middle;
+}
+
+/* The question at the first enrolment. Boxed so it reads as a decision about
+ * the silo rather than as one more sentence of advice. */
+.org-option {
+  margin-top: 0.9rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.org-option svg {
+  vertical-align: -2px;
+  margin-right: 0.25rem;
+  color: var(--text-muted);
+}
+
+/* The pre-unlock screens on a short window. The enrolment card in
+   particular carries enough prose that at 800px of window the brand header
+   pushed the buttons below the fold; everything scrolls, but a first run
+   that starts with scrolling reads as broken. The header and paddings give
+   way before the content does, because the content is the part being read. */
+@media (max-height: 820px) {
+  /* No `justify-content` here: the base rule is `safe center`, and `safe`
+     already falls back to start alignment when centring would clip. */
+  .app.auth-screen {
+    /* Clear of the footer: it is fixed, so shaving this buys no space and
+       only lets scrolled content slide underneath. */
+    padding: 0.6rem 1.25rem 3rem;
+    gap: 0.6rem;
+  }
+
+  .brand svg {
+    width: 36px;
+    height: 36px;
+  }
+
+  .brand-title {
+    font-size: 1.5rem;
+    margin: 0.5rem 0 0.2rem;
+  }
+
+  /* The card's own heading says what the screen is for; on a short window
+     the header saying it again costs a line that the buttons need. */
+  .brand-sub {
+    display: none;
+  }
+
+  .card.auth-card {
+    padding: 1.3rem 1.5rem 1.2rem;
+  }
+
+  .auth-card .hint {
+    font-size: 0.79rem;
+    line-height: 1.45;
+  }
+
+  .consequence {
+    padding: 0.7rem 0.85rem;
+    margin: 0.8rem 0 0.3rem;
+  }
+
+  .consequence p {
+    font-size: 0.79rem;
+    line-height: 1.45;
+  }
+
+  /* The join screen's bucket form is six fields; every bit of air between
+     them is a field pushed below the fold. */
+  .auth-card .s3-form {
+    gap: 0.55rem;
+  }
+}
+
+/* Rename sits beside Remove; both are quiet links, and a row that carries
+ * two of them needs them told apart by space rather than by weight. */
+.key-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.key-rename-input {
+  flex: 1;
+  min-width: 0;
+  margin-right: 0.75rem;
+  font-size: 0.9rem;
+  padding: 0.35rem 0.5rem;
+}
+
+/* The rule sits the same distance from the list above it as from the text
+   below: 0.85rem and 0.75rem read as a line pushed toward its own heading,
+   which is the one thing a divider must not do. */
+.key-add-panel {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+/* The alarm is about the silo, not about the steps it follows, and the
+   form is the action those steps lead to. At the panel's flat 0.55rem both
+   read as two more instructions. */
+.key-add-panel > .is-error,
+.key-add-panel > .inline-form {
+  margin-top: 0.35rem;
+}
+
+ol.key-add-steps {
+  margin: 0;
+  padding-left: 1.35rem;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.fido-live {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 500;
+  animation: fade-in 0.2s ease;
+}
+
+/* ── Trash: a pane view like Files and Credentials ─────────────────── */
+
+.trash-view {
+  container-type: inline-size;
+  container-name: trash-view;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+  min-height: 0;
+}
+
+/* The list owns the scrolling, so the toolbar above it stays put however
+ * many items are in here. No frame of its own: the capsules are the
+ * shapes, and a box around them would be a second border everywhere. */
+.trash-pane {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.1rem;
+}
+
+.trash-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* One capsule per item, rather than rows divided by hairlines: what is in
+ * the trash is a set of separate things to decide about one at a time,
+ * and a capsule is a thing you can point at. */
+.trash-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.trash-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
+}
+
+.trash-row.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Overrides the global `input { width: 100% }`, which would stretch the
+ * box across the capsule and push everything else off the end. */
+.trash-row-check,
+.trash-select-all input {
+  width: auto;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  transform: scale(1.1);
+  cursor: pointer;
+}
+
+.trash-select-all {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0 0.2rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+/* Appears only with a selection, so it never sits there as a row of
+ * disabled buttons. */
+.trash-selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+
+.trash-selection-count {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.trash-selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.trash-row-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: calc(var(--radius-sm) * 1.1);
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+
+.trash-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.trash-row-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trash-row-path {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trash-row-path svg {
+  flex-shrink: 0;
+}
+
+.trash-row-size,
+.trash-row-date {
+  flex-shrink: 0;
+  /* Sized by the date rather than a fixed 5.5rem, which fit "Nov 15,
+     00:13" and folded anything carrying a year. Trash is where old
+     things live, so the year is the common case here. */
+  width: auto;
+  min-width: 5.5rem;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Per-item actions appear on hover, like the copy buttons in Credentials:
+ * the resting list is what was deleted and where from, not a wall of
+ * buttons. Kept visible while focused so they stay reachable by keyboard,
+ * and while the row is selected, since that row is being acted on. */
+.trash-row-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  opacity: 0;
+}
+
+.trash-row:hover .trash-row-actions,
+.trash-row.is-selected .trash-row-actions,
+.trash-row-actions:focus-within {
+  opacity: 1;
+}
+
+.trash-row-actions button {
+  min-height: 30px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.82rem;
+}
+
+/* The date is the first thing to go: at narrow widths the name and where it
+ * came from are what identify the item. */
+@container trash-view (max-width: 620px) {
+  .trash-row-date {
+    display: none;
+  }
+}
+
+.trash-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 3rem 1rem;
+  color: var(--text-dim);
+}
+
+.trash-empty-state svg {
+  opacity: 0.4;
+}
+
+.trash-empty-state p {
+  margin: 0;
+}
+
+/* ── Feedback ── */
+.error {
+  color: var(--danger-on-dark);
+  font-size: 0.85rem;
+  padding: 0.6rem 0.85rem;
+  background: rgba(194, 65, 12, 0.08);
+  border: 1px solid rgba(194, 65, 12, 0.2);
+  border-radius: var(--radius-sm);
+  margin: 0;
+}
+
+.hint {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.empty-state-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.empty-state-row svg {
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+
+/* Extra separation for a secondary/destructive action placed right after a
+ * primary CTA (e.g. "Deactivate…" below "Unlock"/"Enroll") — a divider plus
+ * added top margin keeps it from being an accidental-click target.
+ * Purely spacing: for text that should *read* as an error, use
+ * `.hint.is-error` below. */
+.hint.danger-hint {
+  margin-top: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.hint.is-error {
+  color: var(--danger-on-dark);
+}
+
+/* The one thing on the setup screen that cannot be undone later, so it is
+   given a box rather than another grey line of hint text. Amber, not red:
+   it is the shape of the design being explained, not something going
+   wrong. */
+.consequence {
+  margin: 1.1rem 0 0.4rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--warning) 32%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--warning) 6%, transparent);
+  text-align: left;
+}
+
+.consequence h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--warning);
+}
+
+.consequence p {
+  margin: 0;
+  font-size: 0.83rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.consequence p + p {
+  margin-top: 0.55rem;
+}
+
+/* `.panel-section > p` is (0,1,1) and would otherwise beat a bare
+ * `.success-msg` (0,1,0), leaving every success line inside a panel section
+ * muted grey instead of green. The compound selector below matches that
+ * specificity so the colour actually lands; `.hint.is-error` above works for
+ * the same reason. */
+.success-msg,
+.hint.success-msg {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--success);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.success-msg svg {
+  flex-shrink: 0;
+}
+
+.toast-host {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  /* Right-aligned and capped rather than a fixed width. A fixed 360px made a
+     three-word confirmation as wide as the longest error the app can produce,
+     so a short message sat pinned to the left with a hand's width of nothing
+     between it and the dismiss. Each toast now takes the room its own
+     sentence needs, up to the cap. */
+  align-items: flex-end;
+  gap: 0.5rem;
+  max-width: min(360px, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  animation: toast-in 0.22s ease;
+}
+
+.toast p {
+  margin: 0;
+  flex: 1;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.toast-error {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border-subtle));
+  background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+}
+
+.toast-success {
+  border-color: color-mix(in srgb, var(--success) 40%, var(--border-subtle));
+  background: color-mix(in srgb, var(--success) 6%, var(--surface));
+}
+
+.toast-info {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+
+/* The global `min-height: 36px` is sized for buttons that stand next to a
+   text input. Left standing here it beat the 1.4rem height and produced a
+   20x36 sliver: tall enough to set the toast's own height, and tall enough
+   that the glyph, centred in its own box, sat a full line below the words it
+   dismisses. Hence `min-height: 0` and `flex: none`, which also stops the
+   row from shaving the width down to 19px. */
+.toast-dismiss {
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0;
+  min-height: 0;
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  line-height: 1;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.toast-dismiss:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* ── File Explorer Grid & Sort Enhancements ── */
+.sort-indicator {
+  display: inline-flex;
+  margin-left: 0.35rem;
+  font-size: 0.78rem;
+  opacity: 0.8;
+  color: var(--accent-hover);
+}
+
+.th-sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.th-sortable:hover {
+  background: var(--bg-hover) !important;
+  color: var(--ink);
+}
+
+.explorer-search-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  max-width: 260px;
+}
+
+.search-input-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.search-input-wrapper input {
+  padding-left: 2.1rem;
+  font-size: 0.85rem;
+  height: 36px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: var(--text-dim);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+
+.view-toggle-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+
+.view-toggle-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: rgba(139, 92, 246, 0.3);
+  color: var(--ink);
+}
+
+.view-toggle-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+  border-color: var(--border);
+}
+
+/* ── Contextual Floating Selection Toolbar ── */
+.selection-toolbar-container {
+  position: relative;
+  width: 100%;
+}
+
+/* Floats over the list, so the list has to give it room: without this the
+   bar covered the last row and the status bar underneath it, hiding the sync
+   state at exactly the moment the user is acting on files. */
+.file-list.has-selection {
+  scroll-padding-bottom: 4.5rem;
+}
+
+.file-list.has-selection > table,
+.file-list.has-selection > .grid-container {
+  margin-bottom: 4rem;
+}
+
+.selection-toolbar {
+  position: fixed;
+  /* Clear of the status bar, which is 1rem from the window edge and about
+     2.4rem tall. */
+  bottom: 4.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(10, 14, 26, 0.85);
+  backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  padding: 0.65rem 1.35rem;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.65), 0 0 25px rgba(139, 92, 246, 0.15);
+  z-index: 100;
+  animation: slide-up 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.selection-toolbar-count {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent-hover);
+  padding-right: 0.75rem;
+  border-right: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.selection-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.selection-toolbar-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.45rem 0.95rem;
+  font-size: 0.82rem;
+  border-radius: 999px;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.15s ease;
+}
+
+.selection-toolbar-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: rgba(139, 92, 246, 0.3);
+  box-shadow: none;
+}
+
+.selection-toolbar-btn.danger {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+}
+
+.selection-toolbar-btn.danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fee2e2;
+}
+
+@keyframes slide-up {
+  from {
+    transform: translate(-50%, 25px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
+/* ── Grid View Card Layout ── */
+/* ── Sort menu ── */
+.sort-menu-wrap {
+  position: relative;
+  display: flex;
+}
+
+.sort-dropdown-menu {
+  right: 0;
+  left: auto;
+  min-width: 190px;
+}
+
+/* Keeps the labels in one column when a row has no tick yet. */
+.dropdown-tick {
+  width: 15px;
+  flex-shrink: 0;
+}
+
+.dropdown-hint {
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.grid-container {
+  margin-bottom: 4rem;
+}
+
+.selection-toolbar {
+  position: fixed;
+  /* Clear of the status bar, which is 1rem from the window edge and about
+     2.4rem tall. */
+  bottom: 4.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(10, 14, 26, 0.85);
+  backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  padding: 0.65rem 1.35rem;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.65), 0 0 25px rgba(139, 92, 246, 0.15);
+  z-index: 100;
+  animation: slide-up 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.selection-toolbar-count {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent-hover);
+  padding-right: 0.75rem;
+  border-right: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.selection-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.selection-toolbar-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.45rem 0.95rem;
+  font-size: 0.82rem;
+  border-radius: 999px;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.15s ease;
+}
+
+.selection-toolbar-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: rgba(139, 92, 246, 0.3);
+  box-shadow: none;
+}
+
+.selection-toolbar-btn.danger {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+}
+
+.selection-toolbar-btn.danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fee2e2;
+}
+
+@keyframes slide-up {
+  from {
+    transform: translate(-50%, 25px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
+/* ── Grid View Card Layout ── */
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+.grid-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem 0.85rem;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  transition: all 0.18s ease;
+  cursor: default;
+  position: relative;
+  text-align: center;
+  user-select: none;
+}
+
+.grid-card:hover {
+  background: var(--bg-hover);
+  border-color: rgba(139, 92, 246, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+}
+
+.grid-card.is-selected {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border-color: var(--accent);
+  box-shadow: 0 0 15px rgba(139, 92, 246, 0.2);
+}
+
+.grid-card-icon {
+  position: relative;
+  margin-bottom: 0.65rem;
+  color: var(--accent-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.grid-card-icon.row-file {
+  color: var(--kind-color, var(--text-muted));
+}
+
+.grid-card-name {
+  font-size: 0.85rem;
+  font-weight: 550;
+  color: var(--ink);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 0.25rem;
+}
+
+/* --text-dim measured 3.7:1 here, under AA on type this small; the muted
+   token is the same greyness at a legible contrast. */
+.grid-card-meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  /* One line, elided if it must be: a meta line that wraps makes that one
+     card taller than its neighbours, and the full date is in Info and in
+     the list view anyway. */
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.grid-card .rename-input {
+  width: 90%;
+  min-width: unset;
+  text-align: center;
+  font-size: 0.8rem;
+  padding: 0.2rem;
+  margin-top: -0.25rem;
+}
+
+/* ── Modal Dialog ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 7, 14, 0.8);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 110;
+  animation: fade-in 0.2s ease;
+}
+
+.modal-card {
+  width: min(400px, 90vw);
+  max-height: 90vh;
+  background: rgba(18, 24, 42, 0.75);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(139, 92, 246, 0.1);
+  backdrop-filter: blur(20px);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  animation: modal-in 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Roomier variant for the shell upload/download browsers — enough width
+ * for a breadcrumb, longer file names, and a per-row "Open" affordance
+ * without everything feeling cramped. */
+.modal-card-wide {
+  width: min(560px, 94vw);
+  padding: 1.85rem;
+}
+
+.modal-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+
+.modal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.modal-title-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+
+.modal-title-icon.is-download {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+/* A checkbox with a label and a sub-line, wherever one is offered. */
+.confirm-option,
+.key-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+/* The second, harsher half of a confirmation. Set apart from the message so
+   it does not read as more of the same paragraph.
+
+   Only in a dialog. `.key-choice` is the same control inside a bordered row
+   of its own, where this rule drew a line that stopped a third of the way
+   across the box (the label is sized to its text, not to the row) and
+   pushed the content off-centre inside it. */
+.confirm-option {
+  margin-top: 0.35rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+/* Fills its row, so the whole box is the click target rather than just the
+   width of the words. */
+.key-choice {
+  width: 100%;
+}
+
+/* Overrides the global `input { width: 100% }`, which stretches the box
+   across the dialog and pushes the label off the end. Same override the
+   trash list needs. */
+.confirm-option input,
+.key-choice input {
+  width: auto;
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  transform: scale(1.1);
+  cursor: pointer;
+}
+
+/* A flex item's floor is its content, so without this the hint refuses to
+   wrap and widens the dialog instead. */
+.confirm-option > span,
+.key-choice > span {
+  min-width: 0;
+}
+
+.confirm-option .hint,
+.key-choice .hint {
+  display: block;
+  margin-top: 0.15rem;
+}
+
+.info-body {
+  gap: 0.65rem;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.88rem;
+}
+
+.info-row .info-label {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.info-row > span:last-child {
+  text-align: right;
+  word-break: break-word;
+}
+
+/* A wall of facts read downwards: wider card, monospaced column so paths
+   and sizes line up. */
+.silo-report-card {
+  width: min(560px, 94vw);
+}
+
+.silo-report-path,
+.silo-report-files .info-row > span:last-child {
+  font-family: var(--font-mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+  font-size: 0.82rem;
+}
+
+.silo-report-files {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.6rem 0;
+  margin: 0.2rem 0;
+  border-top: 1px solid rgba(139, 92, 246, 0.18);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.18);
+}
+
+.silo-report-files .info-label {
+  font-family: var(--font-mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+  font-size: 0.82rem;
+}
+
+.silo-report-missing {
+  color: var(--warning);
+}
+
+.folder-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--bg-deep);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border-subtle));
+  border-radius: calc(var(--radius) * 0.7);
+}
+
+.folder-picker-list li + li {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.folder-picker-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 0.85rem;
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-size: 0.92rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.folder-picker-row:hover {
+  background: var(--accent-soft);
+}
+
+.folder-picker-row.is-selected {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  font-weight: 600;
+}
+
+/* ── Shell upload/download dialog browser ── */
+.browser-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border-subtle));
+  border-radius: calc(var(--radius) * 0.6);
+}
+
+.browser-current-path {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-empty {
+  padding: 1.5rem 0.6rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.browser-empty.is-error {
+  color: var(--danger-on-dark);
+}
+
+.folder-picker-row-static {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.92rem;
+  color: var(--ink);
+}
+
+.folder-picker-row-static.is-selected {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.browser-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.browser-checkbox input[type="checkbox"] {
+  /* Overrides the global `input { width: 100% }` rule, which otherwise
+     stretches the checkbox to fill this flex row and shoves the icon/name
+     off to the far right with a big empty gap in between. */
+  width: auto;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  transform: scale(1.1);
+}
+
+.browser-checkbox span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-open-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border-subtle));
+  border-radius: calc(var(--radius-sm) * 0.9);
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.7rem;
+  cursor: pointer;
+}
+
+.browser-open-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border-subtle));
+}
+
+@keyframes modal-in {
+  from {
+    transform: scale(0.92) translateY(10px);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ── Unified Add Dropdown Menu ── */
+.add-menu-container {
+  position: relative;
+}
+
+.btn-add-new {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: linear-gradient(135deg, #7c3aed 0%, #5b5bd6 100%);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-weight: 650;
+  padding: 0.45rem 0.95rem;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+  height: 36px;
+  transition: all 0.15s ease;
+}
+
+.btn-add-new:hover:not(:disabled) {
+  background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%);
+  box-shadow: 0 6px 18px rgba(139, 92, 246, 0.4);
+}
+
+.btn-add-new:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+
+.chevron-icon {
+  /* A lucide glyph now, not a text "▼"; only the dimming is ours. */
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+
+.dropdown-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: transparent;
+}
+
+.add-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  width: 170px;
+  background: color-mix(in srgb, var(--surface) 96%, var(--bg-deep));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45), 0 0 15px rgba(139, 92, 246, 0.08);
+  z-index: 50;
+  backdrop-filter: blur(16px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  animation: fade-in 0.15s ease;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  /* The global `button` rule centres its content. These are menu rows, so
+     they start at the left edge and the icons form a column; `text-align`
+     alone never fixed it, because on a flex container it governs nothing. */
+  justify-content: flex-start;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.45rem 0.65rem;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font-weight: 550;
+  text-align: left;
+  border: none;
+  box-shadow: none;
+  font-size: 0.85rem;
+  transition: all 0.12s ease;
+}
+
+.dropdown-item:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+/* A fixed box per icon, so the labels line up in a column even when the
+   glyphs differ in width. */
+.dropdown-item svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+}
+
+.dropdown-item:hover svg {
+  color: var(--accent-hover);
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 0.25rem 0;
+}
+
+.context-menu {
+  position: fixed;
+  min-width: 190px;
+  background: color-mix(in srgb, var(--surface) 96%, var(--bg-deep));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45), 0 0 15px rgba(139, 92, 246, 0.08);
+  z-index: 120;
+  backdrop-filter: blur(16px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  animation: fade-in 0.12s ease;
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  /* The global `button` rule centres its content. These are menu rows, so
+     they start at the left edge and the icons form a column; `text-align`
+     alone never fixed it, because on a flex container it governs nothing. */
+  justify-content: flex-start;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.45rem 0.65rem;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font-weight: 550;
+  text-align: left;
+  border: none;
+  box-shadow: none;
+  font-size: 0.85rem;
+  transition: all 0.12s ease;
+}
+
+.context-menu-item:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.context-menu-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.context-menu-item svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+}
+
+.context-menu-item:hover:not(:disabled) svg {
+  color: var(--accent-hover);
+}
+
+.context-menu-item.danger {
+  color: var(--danger-on-dark);
+}
+
+.context-menu-item.danger svg {
+  color: var(--danger-on-dark);
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 0.25rem 0;
+}
+
+/* ── Refresh Sync button rotation ── */
+.btn-refresh-sync svg {
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-refresh-sync:hover svg {
+  transform: rotate(185deg);
+}
+
+/* ── Theme Switch Button ── */
+.btn-theme,
+.btn-collapse {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  transition: all 0.15s ease;
+}
+
+.btn-theme:hover,
+.btn-collapse:hover {
+  background: var(--bg-hover);
+  border-color: rgba(139, 92, 246, 0.25);
+  color: var(--ink);
+}
+
+/* ── Light Theme Variables & Tweaks ── */
+.light-theme {
+  --bg: #f8fafc;
+  --bg-deep: #f1f5f9;
+  --surface: #ffffff;
+  --surface-muted: #e2e8f0;
+  --bg-hover: #f1f5f9;
+  --border: rgba(124, 58, 237, 0.14);
+  --border-subtle: rgba(124, 58, 237, 0.08);
+  --ink: #0f172a;
+  --text: #1e293b;
+  --text-muted: #475569;
+  --text-dim: #64748b;
+  --accent: #7c3aed;
+  --accent-hover: #6d28d9;
+  --accent-soft: rgba(124, 58, 237, 0.08);
+  /* The dark theme's green and amber are tuned to sit on near-black: on
+     white they measure 2.5:1 and 2.1:1, which took every "Backing up to…",
+     "You're on the latest version" and "A recovery code is active" line —
+     plus the cloud-folder warning — below legibility. These are the same
+     hues carried down to AA on a white surface. */
+  --success: #047857;
+  --warning: #b45309;
+  --strength-weak: #b45309;
+  --strength-fair: #a16207;
+  --strength-good: #4d7c0f;
+  --shadow-soft: 0 12px 30px rgba(15, 23, 42, 0.05);
+  color-scheme: light;
+}
+
+.light-theme body {
+  background:
+    radial-gradient(ellipse 100% 70% at 50% -20%, rgba(124, 58, 237, 0.08), transparent 60%),
+    radial-gradient(circle 800px at 0% 100%, rgba(99, 102, 241, 0.03), transparent 70%),
+    linear-gradient(180deg, var(--bg) 0%, #f1f5f9 100%);
+}
+
+.light-theme .brand-logo-text {
+  color: var(--ink);
+  text-shadow: none;
+}
+
+.light-theme .sidebar-brand .brand-logo img {
+  background: #fff;
+  padding: 3px;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+/* Unlock / auth screens — light mode (avoid dark wash + washed-out card) */
+.light-theme .app.auth-screen {
+  background:
+    radial-gradient(ellipse 90% 50% at 50% -15%, rgba(124, 58, 237, 0.16), transparent 58%),
+    radial-gradient(circle 420px at 15% 95%, rgba(99, 102, 241, 0.08), transparent 65%),
+    linear-gradient(180deg, #f8fafc 0%, #f1f5ff 48%, #e8eef8 100%);
+}
+
+.light-theme .auth-atmosphere {
+  background:
+    radial-gradient(ellipse 70% 40% at 50% 18%, rgba(167, 139, 250, 0.18), transparent 70%),
+    radial-gradient(circle 280px at 70% 75%, rgba(16, 185, 129, 0.06), transparent 70%);
+  opacity: 1;
+}
+
+.light-theme .brand-title {
+  color: #0f172a;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+/* Darker than the usual muted text: this line sits on the violet wash at
+   the top of the page rather than on the card, and the standard muted
+   slate only reaches 4.3:1 against it. */
+.light-theme .brand-sub {
+  color: #334155;
+}
+
+.light-theme .card.auth-card {
+  background: #ffffff;
+  border: 1px solid rgba(124, 58, 237, 0.14);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 20px 48px -16px rgba(15, 23, 42, 0.14),
+    0 0 0 1px rgba(124, 58, 237, 0.04);
+  backdrop-filter: none;
+}
+
+.light-theme .auth-card h2 {
+  color: #0f172a;
+}
+
+/* Colour only. A `max-width: 28ch` used to live here and clamped every hint
+   on every auth card to a ~215px column inside a 480px card, so the light
+   theme drew a narrow ragged strip of text under a centred heading while
+   half the card sat empty. The card is the measure; the theme decides
+   contrast, not layout. */
+.light-theme .auth-card .hint {
+  color: #475569;
+}
+
+.light-theme .auth-card .error {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.22);
+  color: #b91c1c;
+}
+
+.light-theme .auth-card .fido-live {
+  background: rgba(124, 58, 237, 0.08);
+  border-color: rgba(124, 58, 237, 0.22);
+  color: #5b21b6;
+}
+
+.light-theme .auth-card button.secondary {
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: rgba(124, 58, 237, 0.18);
+}
+
+.light-theme .auth-card button.secondary:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: rgba(124, 58, 237, 0.3);
+}
+
+.light-theme .sidebar {
+  background: #ffffff;
+  border-color: rgba(124, 58, 237, 0.1);
+}
+
+.light-theme .tab-item {
+  color: #475569;
+}
+
+.light-theme .tab-item:hover:not(:disabled) {
+  background: rgba(124, 58, 237, 0.05);
+  color: var(--ink);
+}
+
+.light-theme .tab-item.active {
+  background: var(--accent-soft);
+  color: #5b21b6;
+  border-color: rgba(124, 58, 237, 0.2);
+}
+
+.light-theme input,
+.light-theme select,
+.light-theme textarea {
+  background: #ffffff;
+  border-color: rgba(124, 58, 237, 0.18);
+  color: var(--ink);
+}
+
+.light-theme input::placeholder {
+  color: var(--text-dim);
+}
+
+.light-theme .search-input-wrapper input {
+  background: #f1f5f9;
+  border-color: rgba(124, 58, 237, 0.15);
+  color: #0f172a;
+}
+
+.light-theme .search-input-wrapper input:focus {
+  background: #ffffff;
+  border-color: var(--accent);
+}
+
+.light-theme .explorer-address {
+  background: #f1f5f9;
+  border-color: rgba(124, 58, 237, 0.1);
+}
+
+.light-theme .btn-lock {
+  background: rgba(239, 68, 68, 0.06);
+  border-color: rgba(239, 68, 68, 0.2);
+  color: #b91c1c;
+}
+
+.light-theme .btn-lock:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #b91c1c;
+}
+
+.light-theme .selection-toolbar {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(124, 58, 237, 0.3);
+  box-shadow: 0 15px 35px rgba(15, 23, 42, 0.12), 0 0 25px rgba(124, 58, 237, 0.08);
+}
+
+.light-theme .selection-toolbar-btn {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: var(--text);
+}
+
+.light-theme .selection-toolbar-btn:hover:not(:disabled) {
+  background: rgba(124, 58, 237, 0.05);
+  border-color: rgba(124, 58, 237, 0.25);
+  color: var(--accent);
+}
+
+.light-theme .modal-overlay {
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.light-theme .modal-card {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(124, 58, 237, 0.2);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.12), 0 0 30px rgba(124, 58, 237, 0.04);
+}
+
+/* The download icon badge is intentionally green (not accent-purple) to
+ * tell it apart from Upload at a glance — its dark-mode colors (bright
+ * green text on a barely-there tint) read as low-contrast on a white
+ * modal card, so light mode gets its own darker, more saturated pairing. */
+.light-theme .modal-title-icon.is-download {
+  background: rgba(21, 128, 61, 0.12);
+  color: #15803d;
+}
+
+.light-theme .add-dropdown-menu {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(124, 58, 237, 0.15);
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
+}
+
+.light-theme .add-dropdown-menu .dropdown-item:last-child svg {
+  color: var(--accent);
+}
+
+.light-theme .storage-bar {
+  background: #e2e8f0;
+}
+
+.light-theme .key-list-item {
+  background: #f1f5f9;
+  border-color: rgba(124, 58, 237, 0.1);
+}
+
+/* ── Custom Scrollbar Styling ── */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.light-theme ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.light-theme ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.24);
+}
+
+/* ── Password Vault Panel ── */
+.pw-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Rail, list, detail. The detail pane gets the larger share: it is where
+ * reading and editing happen, and the list only needs enough to choose. */
+.pw-layout {
+  display: flex;
+  gap: 0.9rem;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Vertical scroll only. With both axes auto, the vertical scrollbar's own
+ * width pushed the items past the rail's edge and drew a horizontal
+ * scrollbar under a list four items long. */
+.view-rail {
+  width: 185px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  /* Inset on both sides, so a hovered or selected row is a capsule sitting
+     in the rail rather than a band running into the pane edge. */
+  padding: 0 0.35rem;
+}
+
+/* Below this the rail and the pane cannot both have a usable width, so the
+   rail lies down: a strip of tabs above the pane, scrolled sideways if it
+   has to be. Hiding it instead would be simpler and would strand whoever is
+   on one settings page with no way to reach another.
+
+   This has to sit after the rule above, not before it. A container query
+   adds no specificity, so `display: flex` declared later simply won, and the
+   rail kept its 185px inside a container of 250: every settings card
+   rendered about 50px wide and unreadable, on any window narrow enough to
+   trigger it. */
+@container settings-view (max-width: 640px) {
+  .settings-body {
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .view-rail {
+    flex-direction: row;
+    width: auto;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 0.3rem;
+    padding: 0 0 0.35rem;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  /* Each tab keeps its own width and the strip scrolls, rather than every
+     label being squeezed until none of them can be read. */
+  .view-rail-item {
+    flex-shrink: 0;
+  }
+}
+
+/* Wraps an item and its hover tools; the item alone when there are none. */
+.pw-rail-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+}
+
+.pw-rail-row:hover,
+.pw-rail-row.active {
+  background: var(--surface);
+}
+
+.pw-rail-row.active {
+  background: var(--accent-soft);
+}
+
+.view-rail-item {
+  display: flex;
+  align-items: center;
+  /* The global button rule centres its content. These are list rows: they
+     start at the left edge, and their icons form a column. In Credentials
+     the count's `margin-left: auto` masked this; a rail item without one
+     sat in the middle of its own row. */
+  justify-content: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  /* The global button rule's violet glow survives a transparent background
+     and drew a lavender pill behind every resting item in light theme. */
+  box-shadow: none;
+}
+
+.view-rail-item:hover,
+.pw-rail-row:hover .view-rail-item,
+.pw-rail-row.active .view-rail-item {
+  background: transparent;
+  color: var(--ink);
+}
+
+/* The standalone "All" item has no row wrapper to carry its background. */
+.view-rail > .view-rail-item:hover {
+  background: var(--surface);
+}
+
+.view-rail > .view-rail-item.active {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.view-rail-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pw-rail-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.view-rail-count {
+  margin-left: auto;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rename/delete surface on hover, exactly like the copy buttons on rows;
+ * the resting rail stays a list of names. Overlaid rather than in the
+ * flow: as flex siblings they squeezed each button to a different width
+ * and the counts landed mid-row. Covering the count while hovered is the
+ * cheaper loss. */
+.pw-rail-tools {
+  position: absolute;
+  right: 0.25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  /* Opaque on purpose: these sit over the count, and inheriting the row's
+     translucent hover colour let the digits read through the icons. */
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 0 0.1rem;
+  opacity: 0;
+}
+
+.pw-rail-row:hover .pw-rail-tools,
+.pw-rail-tools.is-open,
+.pw-rail-tools:focus-within {
+  opacity: 1;
+}
+
+.pw-rail-edit {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.15rem 0.3rem 0.15rem 0.6rem;
+}
+
+.pw-rail-edit input {
+  min-width: 0;
+  flex: 1;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.45rem;
+}
+
+.pw-rail-hint {
+  margin: 0.1rem 0.6rem 0.2rem;
+  font-size: 0.78rem;
+}
+
+/* Separates the kinds block from the categories block without pretending
+ * either is a page of its own. */
+.view-rail-heading {
+  margin: 0.8rem 0.6rem 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+/* The first group sits under the pane's own top padding and needs no push
+ * of its own. */
+.view-rail > div:first-child .view-rail-heading,
+.view-rail > .view-rail-heading:first-child {
+  margin-top: 0;
+}
+
+.pw-rail-type-icon {
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+
+.view-rail-item.active .pw-rail-type-icon {
+  color: var(--accent-hover);
+}
+
+/* The add menu reuses the explorer's dropdown pattern wholesale; this
+ * wrapper only anchors it to the toolbar button. */
+.pw-add-wrap {
+  position: relative;
+}
+
+/* The empty state's four ways in, tiles rather than a button row: each is
+ * a kind of thing, not an action variant. */
+.pw-empty-choices {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 0.4rem 0 0.6rem;
+}
+
+.pw-empty-choice {
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 96px;
+  padding: 0.8rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.pw-empty-choice:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+/* A public key is one long token; letting it wrap keeps the row readable
+ * without a horizontal scrollbar inside the pane. */
+.pw-pubkey {
+  word-break: break-all;
+  white-space: normal;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.78rem;
+}
+
+.pw-rail-add {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  margin-top: 0.25rem;
+  background: transparent;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.pw-rail-add:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.pw-list-pane {
+  flex: 1;
+  min-width: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.pw-detail-pane {
+  flex: 1.3;
+  min-width: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 1rem 1.1rem;
+}
+
+.pw-detail-placeholder {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+/* Keyed off the space the view actually has, not the window: the sidebar
+ * collapses independently, the same reason the explorer chrome queries its
+ * own container. Below the threshold the rail folds away; category
+ * filtering stays reachable through search and the entry labels. */
+.pw-view {
+  container-type: inline-size;
+  container-name: pw-view;
+}
+
+@container pw-view (max-width: 760px) {
+  .view-rail {
+    display: none;
+  }
+}
+
+.view-toolbar {
+  display: flex;
+  align-items: center;
+  /* Search at one end, actions at the other. */
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  /* Four fixed-width buttons against one flexible search field squeezes the
+   * field to ~110px at the app's 800px minimum window width. Wrapping drops
+   * the buttons to their own line instead, which stays usable all the way
+   * down. */
+  flex-wrap: wrap;
+}
+
+/* Ordered explicitly, because source order put the primary action last: once
+ * the row wrapped, "Add item" was the item that dropped, landing alone on a
+ * second line below three secondary buttons. It leads the row now and the
+ * secondary controls are what wrap away.
+ *
+ * The default is 2 rather than 0, so a toolbar with one plain button (the
+ * trash) puts it after search instead of before it. */
+.view-toolbar > * {
+  order: 2;
+}
+
+.view-toolbar .view-search {
+  order: 1;
+  /* Search leads the row and stops there: stretched across the window it
+     was a text field the width of a table, and the actions it shares the
+     row with ended up adrift in the middle. */
+  flex: 0 1 22rem;
+  max-width: 22rem;
+}
+
+/* One auto margin on search, rather than one on whichever sibling happens
+   to come next: the actions are reordered, so "the next one" in the DOM is
+   not the next one on screen, and the gap opened in the middle of the
+   row. */
+.view-toolbar .view-search {
+  margin-right: auto;
+}
+
+/* The wrapper, not the button: the menu anchor is the flex child now, and
+ * an order on the nested button governs nothing. */
+.view-toolbar .pw-add-wrap {
+  order: 2;
+}
+
+.view-toolbar .pw-transfer-btn,
+.view-toolbar .pw-favicon-toggle {
+  order: 3;
+}
+
+.view-toolbar .view-search {
+  position: relative;
+  min-width: 11rem;
+  display: flex;
+  align-items: center;
+}
+
+.view-toolbar .view-search input {
+  padding-left: 2.1rem;
+  font-size: 0.85rem;
+  height: 36px;
+  width: 100%;
+}
+
+.view-toolbar .search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: var(--text-dim);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+
+.btn-add-password {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 1rem;
+  height: 36px;
+  background: #6d28d9;
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 650;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+}
+
+.btn-add-password:hover:not(:disabled) {
+  background: #5b21b6;
+  box-shadow: 0 4px 14px rgba(139, 92, 246, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Import/Export sit between the search field and the primary "Add
+ * Password" action — same height as its neighbours, but secondary weight so
+ * they don't compete with the primary CTA. */
+.pw-transfer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.85rem;
+  height: 36px;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.pw-transfer-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.pw-export-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1rem;
+  background: color-mix(in srgb, var(--warning) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border-subtle));
+  border-radius: var(--radius);
+}
+
+.pw-export-warning strong {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: var(--warning);
+}
+
+.pw-export-warning p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.pw-export-warning-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.pw-transfer-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 1rem;
+  background: var(--surface-muted);
+  border: 1px solid color-mix(in srgb, var(--success) 30%, var(--border-subtle));
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+}
+
+.pw-transfer-notice.is-error {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border-subtle));
+  color: var(--danger-on-dark);
+}
+
+.pw-favicon-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.85rem;
+  height: 36px;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.pw-favicon-toggle:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+  border-color: rgba(139, 92, 246, 0.35);
+}
+
+.pw-favicon-toggle.active {
+  border-color: rgba(139, 92, 246, 0.4);
+  color: var(--accent-hover);
+  background: var(--accent-soft);
+}
+
+/* ── The list pane: one row per entry ─────────────────────────────── */
+
+.pw-rows {
+  display: flex;
+  flex-direction: column;
+  padding: 0.35rem;
+}
+
+.pw-rows:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, white);
+  outline-offset: -2px;
+  border-radius: var(--radius);
+}
+
+.pw-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.pw-row:hover {
+  background: var(--surface);
+}
+
+.pw-row.is-selected {
+  background: var(--accent-soft);
+}
+
+.pw-row-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+  letter-spacing: 0.03em;
+  overflow: hidden;
+}
+
+.pw-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pw-row-service {
+  font-weight: 650;
+  font-size: 0.86rem;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pw-row-username {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-height: 1em;
+}
+
+/* Quick copies surface on hover or selection, so the resting list is two
+ * columns of text rather than a wall of buttons. */
+.pw-row-actions {
+  display: flex;
+  gap: 0.2rem;
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+.pw-row:hover .pw-row-actions,
+.pw-row.is-selected .pw-row-actions {
+  opacity: 1;
+}
+
+/* ── The detail pane ──────────────────────────────────────────────── */
+
+.pw-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.pw-detail-service {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pw-detail-heading {
+  margin: 0 0 1.1rem;
+  font-size: 1rem;
+}
+
+.pw-field-notes {
+  align-items: flex-start;
+}
+
+/* Doubled class so it outranks .pw-field-value below, whose nowrap and
+   ellipsis were flattening every note onto one truncated line. */
+.pw-field-value.pw-notes-value {
+  white-space: pre-wrap;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.pw-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* The "still needed" note sits opposite the buttons, so the reason and the
+   disabled Add button are read together. */
+.pw-editor-actions .hint {
+  margin: 0 auto 0 0;
+}
+
+/* A form that stretches to whatever the pane happens to be reads worse the
+ * larger the window gets: 1700px inputs for a username are a wall, not a
+ * form. Reading and editing get the same measure. */
+.pw-detail,
+.pw-editor {
+  max-width: 640px;
+}
+
+/* Sizing only: `button.link` already resets the global button chrome and
+ * carries the readable accent colour in both themes. The element in the
+ * selector is what lets the size beat `button.link`'s `font-size: inherit`,
+ * which ties on specificity and would win on source order alone. */
+button.pw-gen-toggle {
+  margin-left: 0.35rem;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.pw-gen-toggle > svg {
+  margin-right: 0.15em;
+}
+
+/* The checkbox row reads as one clickable sentence, not a control and a
+ * paragraph that happen to be adjacent. */
+.pw-reauth-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.pw-reauth-toggle input[type="checkbox"] {
+  /* Overrides the global `input { width: 100% }` rule, which otherwise
+     stretches the checkbox to fill this flex row and shoves the sentence
+     into a one-word-per-line sliver at the far edge. */
+  width: auto;
+  margin-top: 0.15rem;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+  transform: scale(1.1);
+}
+
+.pw-reauth-toggle > span {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Attachments ──────────────────────────────────────────────────── */
+
+.pw-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.pw-attachment-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.82rem;
+  text-align: left;
+}
+
+.pw-attachment-row.is-clickable {
+  cursor: pointer;
+}
+
+.pw-attachment-row.is-clickable:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.pw-attachment-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pw-attachment-size {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pw-attach-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.6rem;
+  background: transparent;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pw-attach-btn:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.pw-card-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+  letter-spacing: 0.03em;
+  overflow: hidden;
+}
+
+/* When a real site icon renders, the category tint comes off: colouring
+ * over a logo repainted it and made every icon look broken. The colour
+ * stays on the category label and the rail dot. */
+.pw-card-avatar.has-favicon,
+.pw-row-avatar.has-favicon {
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+}
+
+.pw-card-favicon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.pw-row-avatar .pw-card-favicon {
+  width: 17px;
+  height: 17px;
+}
+
+.pw-card-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.pw-card-category {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.pw-card-actions {
+  display: flex;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.pw-card-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 0.5rem;
+}
+
+.pw-field-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.5rem;
+  margin: 0 -0.5rem;
+  border-radius: var(--radius-sm);
+  transition: background 0.12s ease;
+}
+
+/* Only the rows that actually do something on click — the website link.
+   The rest carry their own buttons, and a pointer cursor over a row that
+   merely displays a value is an invitation to click it by accident. */
+.pw-field-row.is-clickable {
+  cursor: pointer;
+}
+
+.pw-field-row.is-clickable:hover,
+.pw-field-row.is-clickable:focus-visible {
+  background: var(--bg-hover);
+}
+
+.pw-field-label {
+  flex-shrink: 0;
+  width: 68px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-dim);
+}
+
+.pw-field-value {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pw-mask {
+  font-family: "Courier New", Courier, monospace;
+  letter-spacing: 0.05em;
+}
+
+.pw-totp-code {
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.pw-totp-ring {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: conic-gradient(var(--accent) calc(var(--pw-totp-frac, 1) * 360deg), var(--border-subtle) 0deg);
+  transition: background 0.9s linear;
+}
+
+.pw-input-error {
+  border-color: var(--danger) !important;
+}
+
+.pw-totp-panel {
+  padding: 0.75rem 0.85rem;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.pw-totp-panel input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pw-totp-panel .pw-field-row {
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.pw-totp-hint {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.pw-totp-hint-error {
+  color: var(--danger-on-dark);
+}
+
+.pw-totp-remove-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.pw-totp-remove-btn:hover {
+  color: var(--danger-on-dark);
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.pw-link {
+  color: var(--accent-hover);
+  text-decoration: none;
+}
+
+.pw-link:hover {
+  text-decoration: underline;
+}
+
+.pw-inline-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.12s ease;
+  flex-shrink: 0;
+}
+
+.pw-inline-btn:hover {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+
+.pw-copied-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--success);
+  white-space: nowrap;
+}
+
+.pw-action-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.12s ease;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.pw-action-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-subtle);
+  color: var(--ink);
+}
+
+.pw-action-btn.danger {
+  color: #fca5a5;
+}
+
+.pw-action-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.25);
+  color: #fee2e2;
+}
+
+.pw-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  /* More air between rows than between columns: rows are different
+   * questions, columns are halves of the same one. */
+  gap: 1.1rem 1.25rem;
+}
+
+.pw-form .field-full {
+  grid-column: 1 / -1;
+}
+
+/* Hints inside form fields hug the control they explain instead of
+ * carrying paragraph margins that read as a row of their own. */
+.pw-form .hint {
+  margin: 0.2rem 0 0;
+}
+
+@media (max-width: 640px) {
+  .pw-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pw-form textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.pw-password-input-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.pw-password-input-row input {
+  flex: 1;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.85rem;
+  letter-spacing: 0.03em;
+}
+
+.pw-gen-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--accent-hover);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  flex-shrink: 0;
+}
+
+.pw-gen-btn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-hover);
+}
+
+.pw-gen-btn.accent {
+  background: var(--accent-solid);
+  border-color: var(--accent-solid);
+  color: #fff;
+}
+
+.pw-gen-btn.accent:hover {
+  background: var(--accent-solid-hover);
+  border-color: var(--accent-solid-hover);
+  color: #fff;
+}
+
+/* ── Strength meter ── */
+.pw-strength {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.pw-strength-track {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--bg-deep);
+  overflow: hidden;
+}
+
+.pw-strength-fill {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.2s ease, background 0.2s ease;
+}
+
+.pw-strength-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  min-width: 4.5rem;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ── Generator panel ── */
+.pw-gen-panel {
+  margin-top: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  box-sizing: border-box;
+}
+
+.pw-gen-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.pw-gen-length-value {
+  font-weight: 500;
+  color: var(--text-dim);
+}
+
+.pw-gen-slider {
+  width: 100%;
+  height: 4px;
+  accent-color: var(--accent);
+  display: block;
+  box-sizing: border-box;
+}
+
+.pw-gen-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.65rem;
+}
+
+.pw-gen-chip {
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: "Courier New", Courier, monospace;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.pw-gen-chip:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.pw-gen-chip.active {
+  background: var(--accent-solid);
+  border-color: var(--accent-solid);
+  color: #fff;
+}
+
+.empty-icon {
+  color: var(--text-dim);
+  opacity: 0.5;
+  margin-bottom: 0.5rem;
+}
+
+/* Light theme button overrides */
+.light-theme button.danger {
+  color: #dc2626;
+}
+
+.light-theme button.danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.08);
+  color: #b91c1c;
+}
+
+/* Light theme password overrides */
+.light-theme .pw-card {
+  background: rgba(0, 0, 0, 0.015);
+}
+
+.light-theme .pw-action-btn.danger {
+  color: #dc2626;
+}
+
+.light-theme .pw-action-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.08);
+  color: #b91c1c;
+}
+
+.light-theme .btn-add-password {
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
+}
+/* Recovery code reveal — shown once, so it has to be readable enough to
+   copy onto paper without a mistake. */
+.recovery-reveal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.recovery-code {
+  display: block;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 1.05rem;
+  /* Wide tracking is the point: 0/O and 1/l are excluded from the alphabet,
+     but the eye still needs room to land on each group. */
+  letter-spacing: 0.08em;
+  line-height: 1.7;
+  word-break: break-all;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  user-select: all;
+}
+
+/* Drag & drop target. Covers the window rather than the file list, because
+   the OS reports the drop against the webview as a whole — anchoring the
+   feedback to a narrower element would let the pointer leave the highlighted
+   area while still being over a valid target. */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--bg-deep) 72%, transparent);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+  animation: drop-overlay-in 120ms ease-out;
+}
+
+@keyframes drop-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drop-overlay { animation: none; }
+}
+
+.drop-overlay-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 2.25rem 3rem;
+  border-radius: 14px;
+  border: 2px dashed var(--accent);
+  background: var(--surface);
+  text-align: center;
+  color: var(--accent);
+}
+
+.drop-overlay-card strong {
+  font-size: 1.05rem;
+  color: var(--text);
+}
+
+/* Global search results. A flat list rather than the folder table, because
+   the columns that make sense in a folder (position in a sort) mean nothing
+   across the whole vault — the path does. */
+.search-results {
+  padding: 0.5rem 0.75rem 1rem;
+}
+
+/* Answers to a query the user has already typed past. Still readable, and
+   still clickable: they are correct for what they matched. */
+.search-results.is-stale {
+  opacity: 0.5;
+}
+
+.search-result-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.search-result {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.search-result:hover,
+.search-result:focus-visible {
+  background: var(--accent-soft);
+}
+
+.search-result-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.search-result-text strong {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result-size {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.search-clear {
+  display: grid;
+  place-items: center;
+  padding: 0.2rem;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.search-clear:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* Sync state in the status bar. Clickable, because someone who has just
+   noticed pending changes wants to act on them there, not go looking in
+   Settings for the button. */
+/* The global `button` rule lends a raised look: a violet drop shadow, a
+   36px floor and a 7px radius. Left in place they drew a capsule around a
+   line of status text. Everything that makes a button look like a button is
+   dropped here; only the pointer and the hover colour say it is clickable. */
+.status-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.status-sync:hover:not(:disabled) {
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+}
+
+.status-sync:disabled {
+  cursor: default;
+}
+
+.dot.busy {
+  background: var(--accent);
+  animation: sync-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes sync-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot.busy { animation: none; }
+}
+
+/* ── Silo picker ── */
+.silo-list {
+  list-style: none;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.silo-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.75rem 0.9rem;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.silo-item:hover:not(:disabled) {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Dimmed rather than hidden: the silo still exists, the drive just isn't
+   plugged in, and removing it from the list would read as data loss. */
+.silo-item.is-missing {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.silo-item-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+  overflow: hidden;
+}
+
+/* Quiet: it marks a shortcut, not a warning. */
+.silo-open-badge {
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid color-mix(in srgb, var(--success) 35%, var(--border-subtle));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  color: var(--success);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.silo-item-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.silo-item-text .hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.path-picker {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.path-picker input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Silo switcher in the sidebar ── */
+.sidebar-silo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  margin-bottom: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.sidebar-silo:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.sidebar-silo strong {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The row is the visible box, not the button inside it. Previously the
+   item carried the border and the remove button sat outside it with a gap,
+   so a single silo read as two loose controls. */
+.silo-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  overflow: hidden;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.silo-row:has(.silo-item:hover:not(:disabled)),
+.silo-row:has(.silo-item:focus-visible:not(:disabled)) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.silo-row .silo-item {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Quiet until reached for: removing a silo is not something to invite, but
+   an unreachable one has to be removable without hunting for the option. */
+.silo-remove {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  min-height: 0;
+  padding: 0;
+  flex-shrink: 0;
+  border: none;
+  border-left: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  /* Quiet, but still a control someone has to find — `--text-dim` measured
+     2.9:1 here, which is decoration, not an affordance. */
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.silo-row:hover .silo-remove,
+.silo-remove:focus-visible {
+  border-left-color: var(--border);
+  color: var(--danger-on-dark);
+}
+
+.silo-remove:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  box-shadow: none;
+}
+
+/* ── Auth screen actions ── */
+/* Shared by unlock and the picker: one prominent way forward, then the ways
+   out ruled off beneath it. */
+.auth-primary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: 100%;
+  margin-top: 0.35rem;
+}
+
+.auth-primary button {
+  width: 100%;
+  min-height: 48px;
+  font-size: 1rem;
+  gap: 0.6rem;
+}
+
+.auth-alt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  padding-top: 1.15rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* The links carry icons, so they need the row treatment rather than the
+   centred one the global button rule hands out. */
+.auth-alt .link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 0;
+  padding: 0.15rem 0.25rem;
+}
+
+.auth-alt .link svg {
+  flex-shrink: 0;
+}
+
+/* ── Silo picker actions ── */
+/* Ruled off from the list above: the list answers "which silo", these
+   answer "none of these", and running them together made the first action
+   read as another entry in the list. */
+.silo-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: 100%;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Left-aligned against the global centred `button`, so the three icons form
+   a column and the labels start on one line. Taller than a normal button:
+   these are the whole point of the screen, not a form's footer. */
+.silo-actions button {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 46px;
+  padding-inline: 1rem;
+  gap: 0.7rem;
+}
+
+.silo-actions button svg {
+  flex-shrink: 0;
+}
+
+
+/* ── Sidebar controls in light mode ────────────────────────────────────
+   These sit on a white sidebar and were picking up dark-theme colours,
+   measuring between 1.7:1 and 2.7:1. Stated outright so the values are
+   the ones that were measured. */
+.light-theme .btn-theme,
+.light-theme .btn-collapse {
+  color: #475569;
+}
+
+/* This one sits on the violet wash at the top of the auth screens rather
+   than on the white sidebar, where the muted slate only reached 4.38:1. A
+   solid surface of its own makes the reading predictable. */
+.light-theme .auth-theme-toggle {
+  background: #ffffff;
+  border-color: rgba(124, 58, 237, 0.16);
+  color: #334155;
+}
+
+.light-theme .btn-theme:hover,
+.light-theme .btn-collapse:hover {
+  color: #1e293b;
+  background: rgba(124, 58, 237, 0.06);
+}
+
+.light-theme .sidebar-silo {
+  color: #475569;
+  border-color: rgba(124, 58, 237, 0.16);
+}
+
+.light-theme .sidebar-silo:hover {
+  color: #1e293b;
+  background: rgba(124, 58, 237, 0.06);
+  border-color: rgba(124, 58, 237, 0.3);
+}
+
+.light-theme .btn-lock:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.12);
+  color: #991b1b;
+}
+
+
+/* `--danger-on-dark` is exactly that. On the light theme's white surfaces
+   the darker red is the legible one, so the token is redefined rather than
+   every use being special-cased. */
+.light-theme {
+  --danger-on-dark: #b91c1c;
+}
+
+/* Advisory rather than an error: the user has chosen something workable
+   with a caveat, not something wrong. */
+.hint.is-warning {
+  color: var(--warning);
+}
+
+/* Two mutually exclusive answers, shown as two buttons rather than a select:
+   the choice changes which fields appear next, so it should look like a
+   decision rather than a setting. */
+.store-kind-picker {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.store-kind-picker button {
+  flex: 1;
+}
+
+/* Server and port read as one address, so they sit on one line. */
+.sftp-host-row {
+  display: grid;
+  grid-template-columns: 1fr 6rem;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+/* The one step in the form that is a decision rather than a detail. */
+.host-key {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.85rem 0.95rem;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+
+.host-key-confirmed {
+  border-color: color-mix(in srgb, var(--success) 35%, var(--border-subtle));
+}
+
+.host-key-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.host-key-line svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.host-key-confirmed .host-key-line svg {
+  color: var(--success);
+}
+
+/* A fingerprint is compared character by character, so it must not wrap
+   into something that only looks the same. */
+.host-key-line code {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.85rem;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.host-key-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* ---- Health ---------------------------------------------------------- */
+
+.health-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.health-counters {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.health-counter {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.health-counters .health-high {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border-subtle));
+  color: var(--danger-on-dark);
+}
+
+.health-counters .health-medium {
+  border-color: color-mix(in srgb, var(--warning) 40%, var(--border-subtle));
+  color: var(--warning);
+}
+
+/* The list owns the scrolling, so the counters above it stay put. */
+.health-pane {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.1rem;
+}
+
+.health-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* One capsule per finding, with the severity carried by the left edge
+   rather than by a coloured background: several of these are on screen at
+   once and full-bleed colour would make the page shout. */
+.health-finding {
+  border: 1px solid var(--border-subtle);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 0.75rem 0.9rem;
+}
+
+.health-finding.health-high {
+  border-left-color: var(--danger);
+}
+
+.health-finding.health-medium {
+  border-left-color: var(--warning);
+}
+
+.health-finding.health-info {
+  border-left-color: var(--text-dim);
+}
+
+.health-finding-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.health-finding-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  width: auto;
+}
+
+.health-finding-toggle svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.health-finding-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.health-finding-title-static {
+  padding-left: 0.15rem;
+}
+
+.health-finding-fix {
+  margin-left: auto;
+  width: auto;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.8rem;
+}
+
+.health-finding-detail {
+  margin: 0.35rem 0 0;
+  padding-left: 0.15rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.health-finding-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+
+/* A group is the point of the finding when entries share something: these
+   four use one password. A hairline between groups says which are which
+   without a heading per group. */
+.health-entry-group {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 0 0;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.health-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.health-entry:hover {
+  background: var(--accent-soft);
+}
+
+.health-entry-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.health-entry-sub {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.health-entry-kind {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
+.health-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 3rem 1rem;
+  color: var(--success);
+  text-align: center;
+}
+
+.health-empty-state .hint {
+  max-width: 32rem;
+  color: var(--text-muted);
+}
+
+/* The base `button:hover` rule scores (0,1,1) and so outranks a plain class
+   rule at (0,1,0): without this, the primary violet gradient paints itself
+   over the finding's title on hover and leaves it at 2.6:1. Same trap the
+   comment on that rule describes. */
+.health-finding-toggle:hover,
+.health-finding-toggle:focus-visible {
+  background: none;
+  box-shadow: none;
+}
+
+.health-finding-toggle:hover .health-finding-title {
+  color: var(--accent-hover);
+}
+
+/* ---- Favourites ------------------------------------------------------ */
+
+.favorites-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.favorites-pane {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.1rem;
+}
+
+.favorites-section + .favorites-section {
+  margin-top: 1.25rem;
+}
+
+.favorites-section h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+.favorites-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 0.75rem;
+}
+
+/* The card and its star are siblings rather than nested buttons: a button
+   inside a button is invalid, and the star has to be clickable without
+   opening what it sits on. The star is positioned over the card instead. */
+.favorites-card {
+  position: relative;
+}
+
+.favorites-card-open {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.3rem;
+  padding: 1.1rem 0.85rem 0.9rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: center;
+  cursor: pointer;
+  box-shadow: none;
+  transition: all 0.18s ease;
+}
+
+.favorites-card-open:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+}
+
+.favorites-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.2rem;
+  color: var(--accent-hover);
+}
+
+/* Two lines at most, then an ellipsis: a long file name must not make one
+   card twice the height of the row it sits in. */
+.favorites-card-name {
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* Where it lives, which is what tells two files of the same name apart. */
+.favorites-card-sub {
+  max-width: 100%;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.favorites-card-meta {
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.favorites-unstar {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  width: auto;
+  min-height: 0;
+  padding: 0.3rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  box-shadow: none;
+  color: var(--warning);
+}
+
+.favorites-unstar:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--border-subtle);
+  box-shadow: none;
+}
+
+.favorites-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 3rem 1rem;
+  color: var(--warning);
+  text-align: center;
+}
+
+.favorites-empty-state .hint {
+  max-width: 34rem;
+  color: var(--text-muted);
+}
+
+/* A star on a row in the explorer, and on a starred credential's button. */
+.row-star,
+.grid-card-star {
+  display: inline-flex;
+  align-items: center;
+  color: var(--warning);
+}
+
+.row-star {
+  margin-left: 0.35rem;
+}
+
+.grid-card-star {
+  position: absolute;
+  top: 0.4rem;
+  left: 0.4rem;
+}
+
+.pw-action-btn.is-starred {
+  color: var(--warning);
+}
+
+/* Health is a column page, so it follows `.panel`'s rule rather than
+   stretching: at 2560px an uncapped finding put a 100-character sentence on
+   one line and threw its action button two thousand pixels from the title it
+   belongs to. The scroller stays full width, so the scrollbar keeps to the
+   window edge and only the content is centred. Favourites is a card grid
+   below, which fills the width instead. */
+.health-view .view-header,
+.health-counters,
+.health-list,
+.health-empty-state {
+  width: 100%;
+  max-width: var(--content-max);
+}
+
+/* Prose gets the same reading measure as a settings card's description. */
+.health-finding-detail {
+  max-width: 62ch;
+}
+
+/* ── A choice between two ways of doing the same thing ── */
+
+.storage-choice {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  margin: 0 0 1rem;
+}
+
+.storage-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: flex-start;
+  text-align: left;
+  padding: 1rem 1.1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.storage-option strong {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.storage-option:hover,
+button.storage-option:hover:where(:not(:disabled)) {
+  /* Qualified to match the global hover rule's specificity: a card paints
+     its own surface, and inheriting the primary gradient made an unchosen
+     option look chosen. */
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: none;
+  transform: translateY(-1px);
+}
+
+.storage-option:hover {
+  border-color: var(--accent);
+}
+
+.storage-option.is-active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.storage-option strong {
+  font-size: 0.95rem;
+}
+
+.storage-option span {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* ── Activity ── */
+.activity-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.activity-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0.2rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.activity-row:last-child {
+  border-bottom: none;
+}
+
+/* A record this build cannot read. Dimmed rather than hidden: a gap the
+   reader cannot see is worse than one that says what it is. */
+.activity-row.unknown .activity-summary {
+  font-style: italic;
+  opacity: 0.75;
+}
+
+.activity-meta {
+  font-size: 0.78rem;
+}
+
+/* A protected folder's two paths: where it is on this computer, and where it
+   lands in the silo. Stacked, because a Windows path followed inline by a
+   vault path reads as one nonsense string. */
+.protected-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  /* A flex item's floor is its content, and a deep path is wide. Without
+     this the row pushes the Stop button off the end. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.protected-row-text .hint {
+  display: block;
+}
+
+/* ── Copies ──────────────────────────────────────────────────────────
+   One row per copy of the silo, each carrying an age rather than a light.
+   A dot that has been red since a disk went in a drawer tells nobody
+   anything; "last written 47 days ago" is a decision. */
+.copies-list .key-list-item {
+  /* The row's text is three stacked lines, so the icon and the button line
+     up with the top of it rather than floating in the middle. */
+  align-items: flex-start;
+}
+
+/* The row is `justify-content: space-between`, which is right when it ends in
+   a button and wrong when it does not: with only an icon and a block of text,
+   the text is pushed against the right edge and reads as right-aligned.
+   Letting it take the free space puts it back where every other line on the
+   page starts. */
+.copies-list .protected-row-text {
+  flex: 1 1 auto;
+  align-items: flex-start;
+  text-align: left;
+}
+
+.copy-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  margin-top: 0.1rem;
+}
+
+.copy-icon.is-current {
+  color: var(--success);
+}
+
+.copy-icon.is-behind {
+  color: var(--warning);
+}
+
+.copy-icon.is-stale,
+.copy-icon.is-never {
+  color: var(--danger);
+}
+
+/* The headline reads before the supporting line, so it carries the weight
+   and the colour while the age below stays plain. */
+.copy-state {
+  font-weight: 600;
+}
+
+.copy-state.is-current {
+  color: var(--success);
+}
+
+.copy-state.is-behind {
+  color: var(--warning);
+}
+
+.copy-state.is-stale,
+.copy-state.is-never {
+  color: var(--danger);
+}
+
+.copies-add {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+/* The role, as a word on the row rather than a second icon. A copy the app
+   never deletes from behaves differently enough that it has to be readable
+   at a glance. */
+.copy-tag {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+
+/* The trial restore is a second question inside the same card, so its
+   heading needs the air a card boundary would otherwise have given it. */
+.verify-restore-head {
+  margin-top: 1.6rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* ── Emergency kit ───────────────────────────────────────────────────
+   A sheet of paper that happens to be rendered in a window. It is shown on
+   screen as a preview so nobody prints a surprise, and the print rules below
+   are what actually matter: this is the only artefact of the whole app that
+   is meant to leave the machine on paper. */
+.kit-sheet {
+  /* Always the printed palette, in both themes. A preview that is white on
+     dark tells the reader nothing about what will come out of the printer,
+     and this is the one screen where that has to match. */
+  background: #ffffff;
+  color: #101014;
+  padding: 12mm;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  max-width: 194mm;
+  margin: 0 auto;
+  font-size: 10.5pt;
+  line-height: 1.5;
+  /* A whole sheet of paper, not a block of text that stops where it runs
+     out. The column lets the closing box and the footer sit at the foot of
+     the page rather than halfway up it with a third of the paper blank. */
+  box-sizing: border-box;
+  min-height: 273mm;
+  display: flex;
+  flex-direction: column;
+}
+
+.kit-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 2.5pt solid #101014;
+  padding-bottom: 3mm;
+  margin-bottom: 6mm;
+}
+
+.kit-sheet h1 {
+  font-size: 19pt;
+  margin: 0;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+}
+
+.kit-sub {
+  margin: 1mm 0 0;
+  font-size: 10pt;
+}
+
+.kit-date {
+  margin: 0;
+  font-size: 9pt;
+  white-space: nowrap;
+}
+
+.kit-section {
+  margin-bottom: 6mm;
+  /* A section split across two pages is a section someone reads half of. */
+  break-inside: avoid;
+}
+
+/* Numbered parts, so the heading reads as a step in a sequence rather than
+   as a label. The rule under it gives each part a visible start, which is
+   what makes a dense page scannable when someone is in a hurry. */
+.kit-sheet h2 {
+  font-size: 12.5pt;
+  margin: 0 0 2mm;
+  padding-bottom: 1.2mm;
+  border-bottom: 0.5pt solid #b4b4bb;
+}
+
+.kit-sheet p,
+.kit-sheet li {
+  margin: 0 0 1.2mm;
+}
+
+/* The code itself. One box per character, because this is transcribed by
+   hand under stress and a run of 32 characters is where a digit goes
+   missing without anyone noticing. */
+/* Four groups a row, two rows, rather than however many happen to fit. The
+   sheet is counted across by someone transcribing it under stress, and a
+   ragged 5-then-3 is where a group gets read twice or skipped. */
+.kit-code {
+  display: grid;
+  grid-template-columns: repeat(4, max-content);
+  gap: 3mm 5mm;
+  margin: 4mm 0 2mm;
+  justify-content: start;
+}
+
+.kit-code-group {
+  display: flex;
+  gap: 0.6mm;
+}
+
+.kit-box {
+  width: 9mm;
+  height: 11.5mm;
+  border: 1pt solid #101014;
+  border-radius: 1mm;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  font-size: 17pt;
+  font-weight: 600;
+  /* Ambiguous glyphs are the enemy here: the alphabet already excludes the
+     worst pairs, and the extra spacing keeps the rest apart. */
+  letter-spacing: 0;
+}
+
+
+
+.kit-steps {
+  margin: 0;
+  padding-left: 5mm;
+}
+
+.kit-steps li {
+  margin-bottom: 1.5mm;
+}
+
+.kit-note {
+  font-size: 9pt;
+  font-style: italic;
+}
+
+
+
+
+/* The closing box and the footer are pushed to the foot of the page. A
+   warning floating in the middle of a half-empty sheet reads as an
+   afterthought; at the bottom it reads as the last word, which is what it
+   is. */
+.kit-warning {
+  border: 1pt solid #101014;
+  background: #f2f2f4;
+  padding: 4mm 5mm 3mm;
+  margin-top: auto;
+  margin-bottom: 0;
+}
+
+.kit-foot {
+  padding-top: 2.5mm;
+  margin-top: 3mm;
+  font-size: 8.5pt;
+  text-align: center;
+  color: #45454e;
+}
+
+/* The copy that actually prints lives directly under <body>, put there by a
+   portal. On screen it is not rendered at all: the preview in the panel is
+   what the user looks at. */
+.kit-print {
+  display: none;
+}
+
+/* What actually reaches the paper. Everything else in the window goes, the
+   shell, the rail and the buttons that produced this page having no business
+   on it. */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  /* By `display` rather than by `visibility`: a hidden element still takes up
+     its layout, which on paper means blank pages where the app used to be.
+     And by targeting children of body, because `.panel-section` creates a
+     containing block, so a sheet positioned inside the panel anchors to the
+     panel rather than to the page and comes out shifted down the paper. */
+  body > *:not(.kit-print) {
+    display: none !important;
+  }
+
+  .kit-print {
+    display: flex;
+    /* Not the full width of the paper. At 186mm a line of this size runs to
+       a hundred characters, which is well past what anyone reads
+       comfortably, and this page is read once, in a hurry, possibly by
+       someone who did not set the silo up. The narrower measure also makes
+       the text taller, which fills a sheet that was otherwise two thirds
+       empty. */
+    width: 170mm;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+  }
+
+  /* The rules and the boxes are the structure of this page, not decoration.
+     Without this most browsers drop them to save ink and the boxes come out
+     as nothing at all. */
+  .kit-print,
+  .kit-print * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* The preview scrolls rather than stretching the settings pane: the sheet is
+   a fixed width because paper is, and squeezing it would show a layout the
+   printer will not produce. */
+/* Holds the sheet at its true size, scaled down to fit. No padding: the
+   sheet has its own margins, and a frame around a picture of a page reads as
+   part of the page. */
+.kit-preview {
+  margin-top: 0.9rem;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+/* Fixed at a sheet's width so the millimetres inside mean what they will
+   mean on paper. The scale comes from the panel, which measures the room it
+   actually has. */
+.kit-preview-scale .kit-sheet {
+  width: 194mm;
+  max-width: none;
+  margin: 0;
+}
+
+/* The chosen half of a two-way pick. The storage options elsewhere are a
+   one-way door, so they never needed a selected state; here the choice
+   stays on screen and has to show which way it went. */
+.storage-option.is-chosen {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.kit-choice {
+  margin-top: 0.35rem;
+}
+
+/* The kit inside the recovery card. A rule rather than a new card, because
+   the code and the sheet it goes on are one subject: whether to print is a
+   decision about the code, not a separate feature to go and find. */
+.kit-block {
+  margin-top: 1.6rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.kit-block h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.6rem;
+  font-size: 0.98rem;
+}
+
+.kit-block > * + * {
+  margin-top: 0.85rem;
+}
+
+/* Introduces a list of steps. Bolder than body text and tighter to what
+   follows, so two sequences on the same page do not read as one. */
+.kit-lead {
+  font-weight: 600;
+  margin-top: 2.5mm;
+  margin-bottom: 1mm;
+}
+
+/* The two ways in, under the step that offers them. Indented and unbulleted
+   so they read as alternatives within a step rather than as more steps. */
+.kit-substeps {
+  list-style: none;
+  margin: 1.5mm 0 0;
+  padding-left: 0;
+}
+
+.kit-substeps li {
+  padding-left: 4mm;
+  border-left: 1pt solid #b4b4bb;
+  margin-bottom: 1.5mm;
+}
+
+/* ── The on-demand breach check, below the local findings ── */
+
+.health-breach {
+  margin-top: 1.2rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.health-breach-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.health-breach-head .health-finding-fix {
+  margin-left: auto;
+}
+
+.health-breach>.hint {
+  margin: 0.5rem 0 0;
+}
+
+.health-breach .health-entry-group {
+  margin-top: 0.6rem;
+}

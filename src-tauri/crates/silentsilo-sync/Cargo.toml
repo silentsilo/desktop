@@ -1,0 +1,29 @@
+[package]
+name = "silentsilo-sync"
+description = "Moves the SilentSilo operation log between a vault and object storage"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+silentsilo-core = { workspace = true }
+silentsilo-crypto = { workspace = true }
+silentsilo-store = { workspace = true }
+silentsilo-vfs = { workspace = true }
+silentsilo-vault = { workspace = true }
+uuid = { workspace = true }
+rusqlite = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+tempfile = { workspace = true }
+
+[dev-dependencies]
+silentsilo-testkit = { workspace = true }
+silentsilo-s3 = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+# Test doubles implementing ObjectStore, e.g. a store that corrupts writes.
+async-trait = "0.1"

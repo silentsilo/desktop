@@ -1,0 +1,268 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+
+# One run per branch: a newer push supersedes the runs before it, so a hung
+# job cannot hold a queue of stale commits behind it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gui:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.1
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --all
+      - run: cargo check --all
+
+  # The portability floor: evidence that the workspace still compiles off
+  # Windows. Not packaging, and not a promise of a Linux or macOS build.
+  #
+  # The job that builds this tree runs on Windows, so Windows-only code can
+  # spread into crates that have nothing to do with the OS and nothing will
+  # say so. The day a port starts, that drift is the whole difference between
+  # implementation and refactor. A few minutes here keeps the option open
+  # indefinitely, at no commitment to shipping anything.
+  #
+  # Linux only, on purpose. macOS bills at ten times the minute rate on a
+  # private repository, and requesting a runner the account will not pay for
+  # rejects the *entire* run, not just that job. The macOS half therefore
+  # lives in `portability-macos.yml`, on a weekly schedule. Move it back here
+  # when this repository goes public and the rate drops to zero.
+  #
+  # `--all`, the app crate included. Most of the `#[cfg(windows)]` lives in
+  # the app itself, so checking the leaf crates alone would miss what this is
+  # for. The frontend is built first because `tauri::generate_context!`
+  # refuses to compile when `frontendDist` is missing.
+  portability-floor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: portability-linux
+      # Tauri's webview and tray, the keychain's D-Bus backend, and the HID
+      # layer the security key speaks over.
+      - name: System libraries the workspace links against
+        run: |
+          for attempt in 1 2 3; do
+            sudo timeout 180 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update && break
+            echo "apt-get update stalled or failed (attempt $attempt)"
+            sleep 5
+          done
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libdbus-1-dev \
+            libudev-dev \
+            libssl-dev \
+            pkg-config
+      - run: npm ci
+      - run: npm run build
+      - run: cargo check --all
+
+  # The UI flows, in a real browser against the mock backend. What the unit
+  # tests cannot see is the wiring between screens: a button that stopped
+  # doing anything is invisible to every test under src/. The visual
+  # baselines do not run here: they are rendered by one platform's font
+  # stack, and the committed ones are Windows-made. Flows only.
+  ui-flows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      # `--with-deps` runs its own apt-get, so the -o flags the other Linux
+      # jobs pass cannot reach it. The same settings go in apt.conf.d, where
+      # every apt-get in this job picks them up, playwright's included. A
+      # stalled mirror otherwise hangs for the whole timeout, and the
+      # apt-get orphaned by that timeout keeps the lists lock, which is how
+      # one stall turned into three failed attempts.
+      - name: Cap apt when a mirror stalls
+        run: |
+          sudo tee /etc/apt/apt.conf.d/99-ci-timeouts >/dev/null <<'EOF'
+          Acquire::Retries "3";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          EOF
+      - name: Browser for the flow tests
+        run: |
+          for attempt in 1 2 3; do
+            timeout -k 30 300 npx playwright install --with-deps chromium && exit 0
+            echo "playwright install stalled or failed (attempt $attempt)"
+            # A killed attempt can leave apt-get holding the lock and dpkg
+            # half-configured, which fails the retry before it starts.
+            sudo pkill -9 -f apt-get || true
+            sudo dpkg --configure -a || true
+            sleep 10
+          done
+          exit 1
+      - run: npx playwright test
+
+  # Compile-checks the CTAP2/USB-HID security-key backend on Linux. This is
+  # the code path Windows never builds (it uses the OS WebAuthn API instead),
+  # so without this job a change could break the Linux path unnoticed. A
+  # check, not a build: packaging and distribution CI are a separate,
+  # deliberately unstarted piece of work.
+  fido-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@v2
+      - name: System libraries this job links against
+        run: |
+          for attempt in 1 2 3; do
+            sudo timeout 180 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update && break
+            echo "apt-get update stalled or failed (attempt $attempt)"
+            sleep 5
+          done
+          sudo apt-get install -y libudev-dev pkg-config
+      - run: cargo check -p silentsilo-fido --features hardware
+
+  # File modes are a Unix-only concern, and the machine that runs the rest of
+  # this workflow is Windows, so the tests covering them would never execute.
+  # Scoped to the `workdir` module on purpose: it is the one that decides what
+  # the plaintext working copy and every opened file are readable by.
+  permissions-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@v2
+      # The keyring backend reaches the Secret Service over D-Bus, which
+      # builds against the system library. Worth remembering when Linux
+      # packaging starts: this is a build and runtime dependency of the app,
+      # not of the test.
+      - name: System libraries this job links against
+        run: |
+          for attempt in 1 2 3; do
+            sudo timeout 180 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update && break
+            echo "apt-get update stalled or failed (attempt $attempt)"
+            sleep 5
+          done
+          sudo apt-get install -y libdbus-1-dev pkg-config
+      # Quoted: a plain YAML scalar ending in a colon reads as a mapping key.
+      - run: "cargo test -p silentsilo-vault workdir::"
+      # Here too, and for the same reason as the permission tests: the
+      # Windows runner refuses to create symbolic links without developer
+      # mode, so the protected-folder scan's "does not follow links" test
+      # skips itself there and would otherwise run nowhere at all.
+      - run: "cargo test -p silentsilo-vault protected::"
+
+  # The tests that talk to a real S3 server, which skip themselves when no
+  # endpoint is configured. Nothing configured one, so they had never run: the
+  # suite existed and proved nothing. Signing, header compatibility and
+  # response parsing are exactly what unit tests cannot reach, and exactly
+  # where an S3 client breaks against a provider that is not AWS.
+  storage-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SILENTSILO_TEST_S3_ENDPOINT: http://127.0.0.1:9000
+      SILENTSILO_TEST_S3_KEY: silentsilo
+      SILENTSILO_TEST_S3_SECRET: silentsilo123
+      SILENTSILO_TEST_S3_BUCKET: vault-test
+      SILENTSILO_TEST_WEBDAV_URL: http://127.0.0.1:8088
+      SILENTSILO_TEST_SFTP_HOST: 127.0.0.1
+      SILENTSILO_TEST_SFTP_PORT: "2222"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@v2
+      - name: System libraries this job links against
+        run: |
+          for attempt in 1 2 3; do
+            sudo timeout 180 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update && break
+            echo "apt-get update stalled or failed (attempt $attempt)"
+            sleep 5
+          done
+          sudo apt-get install -y libdbus-1-dev pkg-config
+      # Started as steps rather than service containers: two of the three
+      # images need a command, and services cannot give one.
+      - name: Start the storage backends
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=silentsilo \
+            -e MINIO_ROOT_PASSWORD=silentsilo123 \
+            minio/minio server /data
+          docker run -d --name webdav -p 8088:80 \
+            -e USERNAME=silentsilo -e PASSWORD=silentsilo123 \
+            bytemark/webdav
+          docker run -d --name sftp -p 2222:22 \
+            atmoz/sftp:alpine silentsilo:silentsilo123:::silo
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:9000/minio/health/live; then break; fi
+            sleep 1
+          done
+          # MC_HOST_<alias> rather than `mc alias set`: the alias would be
+          # written inside a --rm container and gone before the next command,
+          # which fails as "Access Denied" and looks like a credentials
+          # problem rather than a missing alias.
+          docker run --rm --network host \
+            -e MC_HOST_local=http://silentsilo:silentsilo123@127.0.0.1:9000 \
+            minio/mc mb --ignore-existing local/vault-test
+      - run: cargo test -p silentsilo-s3 --test live_roundtrip
+      - run: cargo test -p silentsilo-store --test contract
+      - run: cargo test -p silentsilo-sync
+      # A backend that quietly skipped is the failure this job exists to
+      # prevent, so make the skip loud rather than leave it in captured
+      # output nobody reads.
+      - name: Fail if a backend was skipped
+        run: |
+          out=$(cargo test -p silentsilo-store --test contract -- --nocapture 2>&1)
+          echo "$out"
+          if echo "$out" | grep -q "skipped"; then
+            echo "::error::a storage backend was not exercised"
+            exit 1
+          fi
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs minio; docker logs webdav; docker logs sftp

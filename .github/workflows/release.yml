@@ -1,0 +1,117 @@
+name: Release extractors
+
+# Runs on version tags, and builds only the extraction tool, for the two
+# platforms that cannot be built on the release machine. Everything else in
+# a release (the installer, its updater signature and latest.json) is built
+# by scripts\build-release-local.ps1 and uploaded by hand.
+#
+# The app is not built here on purpose. Its Authenticode certificate lives on
+# a hardware token that no runner can reach, so a CI build would produce an
+# unsigned installer under exactly the file names the signed one uses, plus a
+# latest.json whose minisign signature covers the unsigned bytes. Publishing
+# that manifest offers an update the app then refuses to install, and nothing
+# announces the mistake until someone tries to update.
+#
+# The Windows extractor is built and signed by the same local script, for the
+# same reason. This leaves Linux and macOS, which need their own runners.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  # The extraction tool is the answer to "what if the project disappears", so
+  # shipping it only inside the Windows installer would put it exactly where
+  # it is least useful: someone recovering on Linux would have to install a
+  # Windows application first. It is a plain binary with no interface and no
+  # security key, so one source builds everywhere.
+  build-extract:
+    strategy:
+      # One platform failing must not withhold the binary that did build: the
+      # release is a draft either way, and a missing macOS binary is something
+      # to notice rather than a reason to have no Linux one.
+      fail-fast: false
+      # Whichever job runs first creates the draft this uploads into. In
+      # parallel they would race to create the same release, so they queue.
+      max-parallel: 1
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: silentsilo-extract-linux-x86_64
+            built: silentsilo-extract
+          - os: macos-latest
+            asset: silentsilo-extract-macos-aarch64
+            built: silentsilo-extract
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.1
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: extract-${{ matrix.os }}
+
+      # The keychain crate reaches for D-Bus on Linux, because the vault
+      # stores credentials in the OS keychain and the persistent Linux
+      # backend is secret-service. The extractor never calls that code, but
+      # it links the crate, so the build needs the headers.
+      #
+      # This is a workaround rather than the answer. A recovery binary that
+      # links libdbus needs libdbus present on the machine someone is
+      # recovering on, which is the one place to assume nothing. Making the
+      # keychain optional in silentsilo-vault is the real fix.
+      - name: D-Bus headers, for the keychain crate the extractor does not use
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          for attempt in 1 2 3; do
+            sudo timeout 180 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update && break
+            echo "apt-get update stalled or failed (attempt $attempt)"
+            sudo pkill -9 -f apt-get || true
+            sudo dpkg --configure -a || true
+            sleep 5
+          done
+          sudo apt-get install -y libdbus-1-dev pkg-config
+
+      # `-p` and nothing else: this must not drag in Tauri or the security
+      # key backend, which is the whole reason it builds on three platforms
+      # from one source. If that ever stops being true, this job is where it
+      # shows up.
+      - run: cargo test -p silentsilo-extract --release
+      - run: cargo build -p silentsilo-extract --release
+
+      - name: Name the binary for the platform it runs on
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp "target/release/${{ matrix.built }}" "dist/${{ matrix.asset }}"
+
+      # Signed with the same updater key as the installer. This is the tool
+      # someone downloads when they have lost confidence in everything else,
+      # so "is this the binary the project published" has to be answerable
+      # without trusting GitHub. Verify with minisign against the public key
+      # in tauri.conf.json.
+      - name: Sign it
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx --yes @tauri-apps/cli signer sign "dist/${{ matrix.asset }}"
+
+      - name: Attach it to the draft
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            dist/${{ matrix.asset }}
+            dist/${{ matrix.asset }}.sig

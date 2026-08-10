@@ -1,0 +1,32 @@
+[package]
+name = "silentsilo-store"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait = "0.1"
+thiserror = { workspace = true }
+silentsilo-core = { workspace = true }
+silentsilo-s3 = { workspace = true }
+# All three are already in the tree via Tauri and its updater plugin, so the
+# WebDAV backend costs no new compilation. `stream` lets a PUT read from a
+# file instead of a buffer.
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "stream"] }
+quick-xml = "0.41"
+percent-encoding = "2"
+url = "2"
+serde = { workspace = true, features = ["derive"] }
+# Only to name a target stably; already in the tree everywhere else.
+uuid = { workspace = true }
+russh = "0.62"
+russh-sftp = "2.3"
+tokio = { workspace = true, features = ["rt", "net", "time", "fs"] }
+# Turns a tokio file into the byte stream reqwest's streaming body wants.
+tokio-util = { version = "0.7", features = ["io"] }
+
+[dev-dependencies]
+silentsilo-testkit = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+uuid = { workspace = true }

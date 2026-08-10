@@ -1,0 +1,124 @@
+SilentSilo: the licence, and what it does not promise
+
+SilentSilo is free software under the GNU Affero General Public License,
+version 3 or later. The full text ships with the application and is at
+https://www.gnu.org/licenses/agpl-3.0.html. You may use, study, change and
+share it, and anyone you pass a modified version to must be able to do the
+same.
+
+This page adds no terms to that licence. Section 10 of the AGPL forbids
+imposing further restrictions, and nothing here tries to. What follows
+restates what the licence already says, states facts about how this program
+works, and reminds you of obligations the law puts on you anyway.
+
+Please read the rest of this page before installing. It is short, and it is
+the part people regret skipping.
+
+
+NO WARRANTY
+
+There is none. The software is provided as is, without warranty of any kind,
+express or implied, including but not limited to the warranties of
+merchantability, fitness for a particular purpose, and non-infringement. This
+is sections 15 and 16 of the AGPL, and it is not a formality: nobody has
+promised you that this program works.
+
+
+NO INDEPENDENT SECURITY AUDIT
+
+Nobody outside this project has been paid to attack this software. That is
+worth stating plainly on a page about an encryption tool, because it is the
+one assurance people tend to assume is there.
+
+What exists instead: the cryptography is specified in docs/CRYPTO.md, the
+persisted formats in FORMATS.md, the threat model and its stated limits are
+published on silentsilo.com, and the entire source is public and can be
+built and read by anyone. Those make the design reviewable. They are not the
+same thing as an audit, and blurring the two would be dishonest.
+
+What it means in practice: a serious flaw could exist in code that looks
+correct and passes its tests. If your threat model includes a well-resourced
+adversary, or disclosure would be severe for you, weigh that absence before
+relying on this. When an audit happens, it will be published, including
+whatever it finds.
+
+
+NO LIABILITY, INCLUDING FOR LOST DATA
+
+To the maximum extent permitted by law, neither the authors nor Software Hive
+S.R.L. are liable for any damages arising out of the use of, or the inability
+to use, this software. That covers direct, indirect, incidental, special,
+consequential and punitive damages alike, and it includes loss of data, loss
+of access to data, corrupted files, failed backups, failed recoveries, lost or
+forgotten keys and codes, interrupted work or business, and any financial or
+personal loss that follows from any of those. It applies whether or not anyone
+had been warned that such a loss was possible.
+
+Some of this cannot be excluded from a consumer under the law of the country
+you live in. Where that is so, that law wins and the rest of this section
+still stands.
+
+This matters more here than in most programs, so it is worth being plain about
+why.
+
+
+WHAT YOU ARE RESPONSIBLE FOR
+
+SilentSilo encrypts your files on your computer, with keys held by you. There
+is no account, no server of ours in the middle, and nothing of yours is sent
+to us. We cannot read your files, we do not hold a copy of them, and we hold
+nothing that would open them. If you choose to back up to storage, what goes
+there is ciphertext, and the provider cannot read it either.
+
+That protection has no back door and no master key. It is not a figure of
+speech:
+
+  - If you lose every security key and your recovery code, your files cannot
+    be recovered. Not by us, not by anyone. There is no reset, no support
+    request that helps, and no amount of proving who you are that will open
+    them.
+
+  - Print your emergency kit, check that the recovery code on it is correct,
+    and keep it somewhere safe and away from the computer. The application
+    can test a recovery for you; run that test rather than assuming.
+
+  - Keep more than one copy of anything you cannot lose. SilentSilo can back
+    up to storage you control and will tell you how each copy is doing, but
+    whether those copies exist, and whether they are somewhere a fire or a
+    theft would not reach, is your decision and not ours.
+
+  - This is a young program. It has been tested, and it has not yet been used
+    by many people for a long time. Do not make it the only place a file
+    exists.
+
+
+THE LAW THAT APPLIES
+
+Software Hive S.R.L. is a company registered in Romania, and Romanian law
+governs this notice, without taking away any protection the law of your own
+country gives you as a consumer.
+
+Strong encryption is regulated in some places, and export control and
+sanctions rules apply to software regardless of what any licence says.
+Whether you may download, use or pass on this program where you are, and
+whether the use you put it to is lawful, is for you to know and for you to
+answer for. Nothing here grants permission the law does not, and nothing here
+takes away rights the AGPL gives you.
+
+
+WHAT THIS IS BUILT FROM
+
+SilentSilo is assembled from several hundred open-source components, each
+under its own licence: MIT, Apache-2.0, BSD, ISC and a few others. Every one
+of them is listed, with its version and the full text of its licence, in
+THIRD-PARTY-NOTICES.txt, installed beside the application. That file is
+generated from the dependency graph the release was actually built from, not
+kept by hand.
+
+
+SOURCE
+
+The source code is public: https://github.com/silentsilo/desktop. If you would
+rather verify than trust, that is the point.
+
+By continuing, you accept this licence and these terms.

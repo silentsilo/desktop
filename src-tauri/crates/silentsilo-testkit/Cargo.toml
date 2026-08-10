@@ -1,0 +1,10 @@
+[package]
+name = "silentsilo-testkit"
+description = "Test scaffolding shared by the suites. Never a dependency of the app."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]

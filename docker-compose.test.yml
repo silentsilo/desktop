@@ -1,0 +1,28 @@
+# The storage backends the app really talks to, for running the suites that
+# skip themselves without one. CI starts the same three; this file is so the
+# same tests can run here before a push rather than only after it.
+services:
+  minio:
+    image: minio/minio
+    command: server /data
+    ports: ["9000:9000"]
+    environment:
+      MINIO_ROOT_USER: silentsilo
+      MINIO_ROOT_PASSWORD: silentsilo123
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  webdav:
+    image: bytemark/webdav
+    ports: ["8088:80"]
+    environment:
+      USERNAME: silentsilo
+      PASSWORD: silentsilo123
+
+  sftp:
+    image: atmoz/sftp:alpine
+    ports: ["2222:22"]
+    command: silentsilo:silentsilo123:::silo

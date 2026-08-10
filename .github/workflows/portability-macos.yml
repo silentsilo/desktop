@@ -1,0 +1,47 @@
+name: Portability (macOS)
+
+# The macOS half of the portability floor, kept out of `ci.yml` for one
+# reason: a private repository bills macOS runners at ten times the minute
+# rate, and asking for a runner the account will not pay for rejects the
+# whole run, every job in it, before a single step starts. Putting it here
+# means the cost is visible, deliberate, and cannot take the main CI down
+# with it.
+#
+# Weekly rather than per-push, which is the right cadence anyway. Drift into
+# Windows-only code happens over weeks; catching it seven days late costs
+# nothing, and catching it never is what turns a port into a refactor.
+#
+# Fold this back into `ci.yml` when the repository goes public: the rate
+# drops to zero and there is no reason to run it any less often than the
+# Linux half.
+on:
+  schedule:
+    # Sundays, 04:00 UTC.
+    - cron: "0 4 * * 0"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: portability-macos
+      - run: npm ci
+      # `tauri::generate_context!` refuses to compile when `frontendDist` is
+      # missing, so the app crate cannot be checked without this.
+      - run: npm run build
+      # `--all`, the app crate included. Most of the `#[cfg(windows)]` lives
+      # in the app itself, so checking the leaf crates alone would miss what
+      # this exists to catch.
+      - run: cargo check --all
