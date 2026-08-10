@@ -1,3 +1,17 @@
+/**
+ * Whether this is a command that failed only because the silo locked.
+ *
+ * Locking exists to make everything stop, so an operation caught by it did
+ * what it was told. The user pressed Lock a moment ago and knows; a row of
+ * error toasts saying so is noise, and in-flight reads racing the lock made
+ * several of them at once.
+ */
+export function isLockedError(err: unknown): boolean {
+  return String(err ?? "")
+    .toLowerCase()
+    .includes("vault is locked");
+}
+
 /** Map raw Tauri errors to short human-readable copy. */
 export function formatAppError(err: unknown): string {
   const msg = String(err ?? "Unknown error");

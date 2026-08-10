@@ -397,8 +397,15 @@ export default function App() {
           return;
         }
         setSync((prev) => ({ ...prev, state: "ok", lastSyncAt: Date.now(), lastError: null }));
-        for (const rename of event.payload.renamed) {
-          toasts.info(`Renamed to avoid a clash on another device: ${rename}`);
+        // One message however many were renamed: a pass that resolves
+        // twenty clashes is one event to report, not twenty.
+        const renamed = event.payload.renamed;
+        if (renamed.length === 1) {
+          toasts.info(`Renamed to avoid a clash on another device: ${renamed[0]}`);
+        } else if (renamed.length > 1) {
+          toasts.info(
+            `${renamed.length} items were renamed to avoid clashes on another device, including ${renamed.slice(0, 3).join(", ")}.`,
+          );
         }
       }),
     [toasts],
@@ -1557,10 +1564,16 @@ export default function App() {
       if (total > 0) {
         toasts.success(total === 1 ? "Added 1 item." : `Added ${total} items.`);
       }
-      // Reported rather than folded into the count: an item that did not
-      // arrive is the one thing the user needs to know about.
-      for (const failure of result.failed) {
-        toasts.error(failure);
+      // Named rather than folded into a count: an item that did not arrive
+      // is the one thing the user needs to know about. Only the first few,
+      // because fifty of them are one problem, not fifty.
+      if (result.failed.length > 0) {
+        const named = result.failed.slice(0, 3).join(", ");
+        toasts.error(
+          result.failed.length > 3
+            ? `${result.failed.length} items were not added, including ${named}.`
+            : named,
+        );
       }
       if (total === 0 && result.failed.length === 0) {
         toasts.info("Nothing was added.");
@@ -1842,6 +1855,7 @@ export default function App() {
 
     begin("transfer");
     let saved = 0;
+    let failure: unknown = null;
     try {
       for (const file of files) {
         const destPath = await join(dest, file.name);
@@ -1849,11 +1863,18 @@ export default function App() {
           await invoke("vault_export_file", { fileId: file.id, destPath });
           saved++;
         } catch (e) {
-          toasts.error(e);
+          // The first failure ends the run. A silo that locked while the
+          // destination picker was open fails every remaining file for the
+          // same reason, and reporting it once is the whole of the news.
+          failure = e;
+          break;
         }
       }
       if (saved > 0) {
         toasts.success(saved === 1 ? "Saved 1 file." : `Saved ${saved} files.`);
+      }
+      if (failure) {
+        toasts.error(failure);
       }
     } finally {
       end("transfer");
