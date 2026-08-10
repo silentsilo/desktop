@@ -671,6 +671,24 @@ pub fn compact_local(conn: &mut Connection, snapshot: &Snapshot) -> CoreResult<P
     Ok(report)
 }
 
+/// [`compact_local`] for a silo with no configured target: unpushed records
+/// at or below the horizon are dropped too, the base written in the same
+/// transaction being their replacement. Every future target must then get
+/// this base before its first push.
+pub fn compact_covered(conn: &mut Connection, snapshot: &Snapshot) -> CoreResult<usize> {
+    let tx = conn.transaction().map_err(db)?;
+    init_base(&tx).map_err(db)?;
+    write_base(&tx, snapshot)?;
+    let dropped = tx
+        .execute(
+            "DELETE FROM oplog WHERE lamport <= ?1",
+            [snapshot.horizon as i64],
+        )
+        .map_err(db)?;
+    tx.commit().map_err(db)?;
+    Ok(dropped)
+}
+
 /// Throws away everything derived from the log, installs `snapshot` as the
 /// new base, and gives this device a fresh identity. The fresh id is the
 /// part that is easy to get wrong: the old id's chain positions are derived

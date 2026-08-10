@@ -228,7 +228,7 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
     // released, so a slow upload never blocks the UI. What each target is
     // owed is read per target: one shared queue would let a disk in a
     // drawer decide what the bucket is offered.
-    let (due, dek, kek, vault_id, applied_through) = {
+    let (due, dek, kek, vault_id, applied_through, base) = {
         let state = app.state::<AppState>();
         let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
         let session = sessions
@@ -251,6 +251,7 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
             session.kek.clone(),
             session.vault_id,
             highest_applied_lamport(conn).map_err(|e| e.to_string())?,
+            silentsilo_vfs::snapshot::read_base(conn).map_err(|e| e.to_string())?,
         )
     };
 
@@ -363,6 +364,15 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
         if failure.is_none()
             && let Ok(recovery) = silentsilo_vault::load_recovery_envelope(&root)
             && let Err(e) = sync::ensure_recovery_envelope(store, &recovery).await
+        {
+            failure = Some(e.to_string());
+        }
+
+        // The base snapshot, before any push: a log compacted locally must
+        // never start mid-stream in a bucket a device could join from.
+        if failure.is_none()
+            && let Some(base) = &base
+            && let Err(e) = sync::publish_base_if_missing(store, &dek, base).await
         {
             failure = Some(e.to_string());
         }
@@ -1084,9 +1094,10 @@ pub fn spawn_auto_sync(app: AppHandle) {
                     }
                     // Not configured means no storage: nothing was attempted
                     // and nothing is owed, so it should not be retried on
-                    // every tick either.
+                    // every tick either. It still compacts its own log.
                     Ok(_) => {
                         last_pull.insert(silo.id, now);
+                        maybe_compact_local(&app, silo.id, now).await;
                     }
                     Err(e) => {
                         // Recorded as an attempt so a silo that cannot reach
@@ -1102,6 +1113,48 @@ pub fn spawn_auto_sync(app: AppHandle) {
             }
         }
     });
+}
+
+const LOCAL_COMPACT_INTERVAL_SECS: i64 = 24 * 60 * 60;
+
+/// Daily log compaction for a silo with no storage configured. With targets
+/// the sync pass owns compaction; without them the log would otherwise grow
+/// for ever.
+async fn maybe_compact_local(app: &AppHandle, silo_id: Uuid, now: i64) {
+    let app = app.clone();
+    let _ = tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let Ok(mut sessions) = state.sessions.lock() else {
+            return;
+        };
+        let Some(session) = sessions.get_mut(&silo_id) else {
+            return;
+        };
+        let last: i64 = session
+            .conn
+            .query_row(
+                "SELECT CAST(value AS INTEGER) FROM vault_meta WHERE key = 'local_compacted_at'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        if now - last < LOCAL_COMPACT_INTERVAL_SECS {
+            return;
+        }
+
+        let policy = silentsilo_vfs::CompactionPolicy::default();
+        if let Ok(Some(snapshot)) =
+            sync::plan_compaction(&session.conn, session.vault_id, &policy, now)
+        {
+            let _ = silentsilo_vfs::snapshot::compact_covered(&mut session.conn, &snapshot);
+        }
+        let _ = session.conn.execute(
+            "INSERT INTO vault_meta(key, value) VALUES ('local_compacted_at', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            [now.to_string()],
+        );
+    })
+    .await;
 }
 
 /// Changes this device has authored and not yet sent, read from its own

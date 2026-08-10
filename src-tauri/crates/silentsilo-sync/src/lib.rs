@@ -918,6 +918,21 @@ pub async fn put_snapshot(
     Ok(())
 }
 
+/// Publishes the local base snapshot unless this target already has one at
+/// that horizon. Must run before the first push to a target, or a locally
+/// compacted log starts mid-stream in the bucket.
+pub async fn publish_base_if_missing(
+    client: &dyn ObjectStore,
+    dek: &MasterDek,
+    base: &Snapshot,
+) -> Result<bool, SyncError> {
+    if client.head(&snapshot_key(base.horizon)).await?.is_some() {
+        return Ok(false);
+    }
+    put_snapshot(client, dek, base).await?;
+    Ok(true)
+}
+
 /// The highest horizon the bucket has a snapshot for, or 0 for none.
 ///
 /// Answered from the listing alone, without downloading or decrypting

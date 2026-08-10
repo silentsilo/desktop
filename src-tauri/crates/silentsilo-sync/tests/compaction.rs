@@ -736,3 +736,63 @@ async fn a_target_nobody_can_reach_is_not_read_as_zero() {
 
     assert!(err.contains("could be reached"), "was: {err}");
 }
+
+#[tokio::test]
+async fn a_silo_with_no_target_compacts_itself_and_still_seeds_a_bucket() {
+    // Local-only compaction may drop unpushed records because the base
+    // written in the same transaction replaces them; the debt is that any
+    // later target gets the base before the first push.
+    let mut d = Device::joining(Uuid::new_v4());
+    for i in 0..40 {
+        d.author(added(d.root(), &format!("f{i}.txt")));
+    }
+    let before = d.tree();
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64
+        + 60;
+    let policy = silentsilo_vfs::CompactionPolicy {
+        retain_seconds: 0,
+        keep_recent: 5,
+        min_records: 10,
+    };
+    let snapshot = silentsilo_sync::plan_compaction(d.conn(), d.session.vault_id, &policy, now)
+        .unwrap()
+        .unwrap();
+    let dropped =
+        silentsilo_vfs::snapshot::compact_covered(&mut d.session.conn, &snapshot).unwrap();
+    assert!(dropped >= 35, "dropped {dropped}");
+    let left: i64 = d
+        .conn()
+        .query_row("SELECT COUNT(*) FROM oplog", [], |r| r.get(0))
+        .unwrap();
+    assert!(left as usize <= policy.keep_recent, "left {left}");
+    assert_eq!(d.tree(), before, "the tree must survive its own compaction");
+
+    // The first target arrives after the fact: base first, then the tail.
+    let (_dir, store) = store();
+    let dek = generate_dek();
+    assert!(
+        silentsilo_sync::publish_base_if_missing(&store, &dek, &snapshot)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !silentsilo_sync::publish_base_if_missing(&store, &dek, &snapshot)
+            .await
+            .unwrap(),
+        "publishing twice must not write twice"
+    );
+    d.sync(&store, &dek).await.unwrap();
+
+    let mut newcomer = Device::joining(d.session.vault_id);
+    let (snap, tail) = fetch_rebuild(&store, &dek).await.unwrap().unwrap();
+    apply_rebuild(&mut newcomer.session.conn, &snap, tail).unwrap();
+    assert_eq!(
+        newcomer.tree(),
+        before,
+        "a newcomer must see the whole tree"
+    );
+}
