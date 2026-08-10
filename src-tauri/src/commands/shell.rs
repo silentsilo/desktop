@@ -5,7 +5,7 @@ use silentsilo_shell::{
 };
 use tauri::{AppHandle, Emitter, Manager};
 
-/// Paths queued by the OS shell "Upload to SilentSilo" action since the last
+/// Paths queued by the OS shell "Add to SilentSilo" action since the last
 /// time this was called. Draining (not just peeking) so a picked-up batch
 /// isn't shown twice.
 #[tauri::command]
@@ -13,7 +13,7 @@ pub fn shell_upload_queue_pending() -> Result<Vec<String>, String> {
     drain_upload_queue().map_err(|e| e.to_string())
 }
 
-/// The target directory queued by the OS shell "Download from SilentSilo"
+/// The target directory queued by the OS shell "Save here from SilentSilo"
 /// action (right-click on empty space in a folder or on the Desktop), if
 /// any, since the last time this was called.
 #[tauri::command]

@@ -1,7 +1,12 @@
-//! macOS Finder Quick Action — installs a Services workflow that forwards files to silentsilo --upload.
+//! macOS Finder Quick Action: a Services workflow that forwards files to
+//! `silentsilo --upload`. The workflow's filename is what Finder shows, so
+//! it carries the same wording as the Windows verb.
 
 use std::path::Path;
 use std::process::Command;
+
+/// Shown in Finder's Services menu.
+const WORKFLOW_NAME: &str = "Add to SilentSilo.workflow";
 
 pub fn register_context_menu(exe_path: &Path) -> std::io::Result<()> {
     let exe = exe_path
@@ -13,7 +18,7 @@ pub fn register_context_menu(exe_path: &Path) -> std::io::Result<()> {
         std::io::Error::new(std::io::ErrorKind::NotFound, "home directory not found")
     })?;
 
-    let workflow_root = home.join("Library/Services/Upload to SilentSilo.workflow");
+    let workflow_root = home.join("Library/Services").join(WORKFLOW_NAME);
     let contents = workflow_root.join("Contents");
     std::fs::create_dir_all(&contents)?;
 
@@ -106,7 +111,7 @@ pub fn unregister_context_menu() -> std::io::Result<()> {
     let home = dirs::home_dir().ok_or_else(|| {
         std::io::Error::new(std::io::ErrorKind::NotFound, "home directory not found")
     })?;
-    let workflow = home.join("Library/Services/Upload to SilentSilo.workflow");
+    let workflow = home.join("Library/Services").join(WORKFLOW_NAME);
     if workflow.exists() {
         std::fs::remove_dir_all(workflow)?;
     }

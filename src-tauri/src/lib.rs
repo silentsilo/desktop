@@ -73,7 +73,7 @@ pub fn run() {
 
     let builder = tauri::Builder::default();
 
-    // Without this, every "Upload/Download from SilentSilo" shell-verb
+    // Without this, every SilentSilo shell-verb
     // click spawns a new process and re-prompts for the security key
     // instead of forwarding to the running app. Once release-only over a
     // single-instance plugin panic on `tauri dev` relaunch, fixed upstream

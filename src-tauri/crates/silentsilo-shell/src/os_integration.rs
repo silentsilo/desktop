@@ -4,9 +4,8 @@ const INTEGRATION_FLAG: &str = "shell-integration.json";
 
 /// Bump whenever the registered context-menu entries change shape, so an
 /// existing install re-registers from a clean slate instead of mixing old
-/// and new entries. 3 fixed a `\\?\`-prefixed exe path that broke
-/// Explorer's verb dispatch.
-const MENU_VERSION: u32 = 3;
+/// and new entries.
+const MENU_VERSION: u32 = 1;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct IntegrationState {

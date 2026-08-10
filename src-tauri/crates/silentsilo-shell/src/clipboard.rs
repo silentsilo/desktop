@@ -1,6 +1,6 @@
 //! Reads the file/folder paths from the OS clipboard (populated by Ctrl+C in
 //! Windows Explorer), so the vault can offer a matching Ctrl+V "paste to
-//! upload" — mirroring the existing "Upload to SilentSilo" context-menu flow
+//! upload" — mirroring the existing "Add to SilentSilo" context-menu flow
 //! but triggered from inside the app instead of from Explorer.
 
 #[cfg(windows)]

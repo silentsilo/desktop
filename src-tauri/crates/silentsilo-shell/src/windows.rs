@@ -2,18 +2,19 @@
 //!
 //! Two distinct actions, each with its own registry key so they coexist and
 //! can be told apart:
-//!   - "Upload to SilentSilo" — right-click ON a file or a folder item
-//!     (pushes that item up into the vault).
-//!   - "Download from SilentSilo" — right-click on empty space inside a
-//!     folder window, or on the Desktop itself (pulls a chosen vault folder
-//!     down into wherever you right-clicked).
+//!   - "Add to SilentSilo" — right-click ON a file or a folder item.
+//!   - "Save here from SilentSilo" — right-click on empty space inside a
+//!     folder window, or on the Desktop itself.
+//!
+//! Not upload/download: a silo is a file on this disk and works with no
+//! network at all, so cloud words would describe the wrong product.
 
 use std::path::Path;
 
 const UPLOAD_KEY: &str = "SilentSiloUpload";
-const UPLOAD_LABEL: &str = "Upload to SilentSilo";
+const UPLOAD_LABEL: &str = "Add to SilentSilo";
 const DOWNLOAD_KEY: &str = "SilentSiloDownload";
-const DOWNLOAD_LABEL: &str = "Download from SilentSilo";
+const DOWNLOAD_LABEL: &str = "Save here from SilentSilo";
 
 pub fn register_context_menu(exe_path: &Path) -> std::io::Result<()> {
     use winreg::RegKey;
