@@ -209,6 +209,7 @@ pub async fn fido_enroll_primary(
         &StoredFidoKeys {
             keys: vec![StoredFidoCredential {
                 kind: silentsilo_vault::KIND_FIDO2.to_string(),
+                derivation: silentsilo_vault::DERIVATION_HMAC_V1.to_string(),
                 credential_id: hex_encode(&cred.credential_id),
                 public_key: hex_encode(&cred.public_key),
                 key_slot: cred.key_slot,
@@ -309,6 +310,7 @@ pub async fn fido_add_key(
 
     let stored = StoredFidoCredential {
         kind: silentsilo_vault::KIND_FIDO2.to_string(),
+        derivation: silentsilo_vault::DERIVATION_HMAC_V1.to_string(),
         credential_id: hex_encode(&cred.credential_id),
         public_key: hex_encode(&cred.public_key),
         key_slot: slot,

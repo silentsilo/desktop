@@ -21,6 +21,7 @@ fn store(dir: &tempfile::TempDir) -> FolderStore {
 fn credential(id: &str, revoked: bool) -> StoredFidoCredential {
     StoredFidoCredential {
         kind: silentsilo_vault::KIND_FIDO2.to_string(),
+        derivation: silentsilo_vault::DERIVATION_HMAC_V1.to_string(),
         credential_id: id.into(),
         public_key: "cafe".into(),
         key_slot: 0,

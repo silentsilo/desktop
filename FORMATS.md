@@ -24,7 +24,7 @@ Anything else needs a version discriminator first.
 | Sealed payload | wraps every op record | `SEAL_VERSION = 1`, `silentsilo-crypto/sealed.rs` | Refuses, naming the version |
 | Blob | `blobs/….sslo` | `SSLO_VERSION = 1`, `silentsilo-crypto/blob.rs` | Refuses, naming the version |
 | Recovery envelope | `recovery.env` | `RECOVERY_ENVELOPE_VERSION = 1`, plus stored KDF parameters | Refuses on a newer structure; a parameter change needs no bump |
-| Key envelopes | `keys/….env` | **No file version.** Plain JSON of one enrolled key, carrying a `kind` field that says how its `wrapped_dek` is unwrapped | Ignores an envelope whose `kind` it does not know, and refuses by name when none is left it can use |
+| Key envelopes | `keys/….env` | **No file version.** Plain JSON of one enrolled key, carrying `kind` (what unwraps its `wrapped_dek`) and `derivation` (how that key was derived from the authenticator) | Ignores an envelope whose `kind` or `derivation` it does not know, and refuses by name when none is left it can use |
 | Content KEK | `keys/content.kek` | Sealed payload under the vault DEK | Refuses, naming the version |
 
 ## Reading a backup from scratch

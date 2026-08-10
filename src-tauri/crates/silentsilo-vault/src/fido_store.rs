@@ -16,8 +16,20 @@ pub const KEY_SLOT_PRIMARY: u8 = 0;
 /// would make that a parse error instead of an answer.
 pub const KIND_FIDO2: &str = "fido2";
 
+/// How the wrap key was derived from the authenticator: `hmac-secret` over
+/// SHA-256 of `silentsilo-dek-v1:{vault_id}`, then BLAKE3 of the output.
+/// Recorded rather than assumed, like the recovery envelope's KDF
+/// parameters, so a backend deriving differently (a phone's PRF, a TPM) is
+/// skipped by clients that cannot reproduce it instead of unwrapping to
+/// nothing.
+pub const DERIVATION_HMAC_V1: &str = "hmac-secret-v1";
+
 fn default_kind() -> String {
     KIND_FIDO2.to_string()
+}
+
+fn default_derivation() -> String {
+    DERIVATION_HMAC_V1.to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,6 +41,9 @@ pub struct StoredFidoCredential {
     /// clients cannot be taught after the fact.
     #[serde(default = "default_kind")]
     pub kind: String,
+    /// See [`DERIVATION_HMAC_V1`].
+    #[serde(default = "default_derivation")]
+    pub derivation: String,
     pub credential_id: String,
     pub public_key: String,
     pub key_slot: u8,
@@ -124,7 +139,8 @@ impl StoredFidoKeys {
     /// publishing and revoking; this answers "could a ceremony on this
     /// machine end with the DEK", the one every unlock path wants.
     pub fn usable(&self) -> impl Iterator<Item = &StoredFidoCredential> {
-        self.active().filter(|k| k.kind == KIND_FIDO2)
+        self.active()
+            .filter(|k| k.kind == KIND_FIDO2 && k.derivation == DERIVATION_HMAC_V1)
     }
 
     pub fn primary(&self) -> Option<&StoredFidoCredential> {
@@ -175,6 +191,7 @@ mod tests {
     fn fido2(id: &str) -> StoredFidoCredential {
         StoredFidoCredential {
             kind: KIND_FIDO2.to_string(),
+            derivation: DERIVATION_HMAC_V1.to_string(),
             credential_id: id.into(),
             public_key: "3059".into(),
             key_slot: 0,
@@ -208,7 +225,26 @@ mod tests {
             "rp_id":"silentsilo.com","label":"Key","wrapped_dek":"de","platform":false}"#;
         let key: StoredFidoCredential = serde_json::from_slice(json).expect("parses");
         assert_eq!(key.kind, KIND_FIDO2);
+        assert_eq!(key.derivation, DERIVATION_HMAC_V1);
         assert_eq!(StoredFidoKeys { keys: vec![key] }.usable().count(), 1);
+    }
+
+    #[test]
+    fn a_derivation_this_build_cannot_reproduce_is_skipped() {
+        // The phone case: same FIDO2 kind, wrap key derived another way.
+        // Trying it would unwrap the DEK to nothing.
+        let mut phone = fido2("cc33");
+        phone.derivation = "prf-ios-v1".into();
+        let keys = StoredFidoKeys {
+            keys: vec![phone, fido2("aa11")],
+        };
+
+        assert_eq!(keys.active().count(), 2, "both are enrolled on the silo");
+        assert_eq!(
+            keys.credential_ids_bytes().expect("no error"),
+            vec![vec![0xaa, 0x11]]
+        );
+        assert!(keys.find_by_credential_id(&[0xcc, 0x33]).is_none());
     }
 
     #[test]
