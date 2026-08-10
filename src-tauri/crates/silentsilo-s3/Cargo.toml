@@ -1,0 +1,19 @@
+[package]
+name = "silentsilo-s3"
+description = "S3-compatible object storage client for SilentSilo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+silentsilo-core = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+aws-credential-types = { workspace = true }
+aws-smithy-types = { workspace = true }
+aws-smithy-runtime-api = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+uuid = { workspace = true }

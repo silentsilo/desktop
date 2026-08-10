@@ -1,0 +1,21 @@
+[package]
+name = "silentsilo-fixture"
+description = "Builds and reads the compatibility fixtures. Development only, never shipped."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+silentsilo-core = { workspace = true }
+silentsilo-crypto = { workspace = true }
+silentsilo-store = { workspace = true }
+silentsilo-sync = { workspace = true }
+silentsilo-vault = { workspace = true, features = ["fixture-support"] }
+silentsilo-vfs = { workspace = true }
+rusqlite = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tempfile = { workspace = true }
+uuid = { workspace = true }

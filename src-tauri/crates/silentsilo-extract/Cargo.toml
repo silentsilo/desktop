@@ -1,0 +1,30 @@
+[package]
+name = "silentsilo-extract"
+description = "Reads a SilentSilo backup with nothing but a recovery code. Ships as a standalone binary."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "silentsilo-extract"
+path = "src/main.rs"
+
+[dependencies]
+# Deliberately no FIDO and no interface. Unlocking here is the recovery code
+# and nothing else, which is what keeps this buildable for Windows, Linux and
+# macOS from one source with no hardware in the loop.
+silentsilo-core = { workspace = true }
+silentsilo-crypto = { workspace = true }
+silentsilo-store = { workspace = true }
+silentsilo-sync = { workspace = true }
+silentsilo-vault = { workspace = true }
+silentsilo-vfs = { workspace = true }
+rusqlite = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+hex = "0.4"

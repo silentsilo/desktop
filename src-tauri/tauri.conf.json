@@ -1,0 +1,58 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "SilentSilo",
+  "version": "1.0.0",
+  "identifier": "com.silentsilo.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "SilentSilo",
+        "visible": false,
+        "center": true,
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
+    "publisher": "Software Hive S.R.L.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png",
+      "icons/icon.ico"
+    ],
+    "externalBin": [],
+    "licenseFile": "LICENSE-INSTALLER.txt",
+    "windows": {
+      "nsis": {
+        "installerHooks": "nsis-hooks.nsh"
+      }
+    },
+    "shortDescription": "Zero-knowledge encrypted vault",
+    "longDescription": "Encrypted vault for files and passwords, unlocked by a FIDO2 security key or Windows Hello, with optional backup to storage you control."
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc5RTUzMjIwQjc1Qzc5QjcKUldTM2VWeTNJRExsZWFuOUJyWldVYXhiVHlqK29LZm9jNGcrSUo2eGFBaFV3YlY4djhXbkRiWlAK",
+      "endpoints": [
+        "https://releases.silentsilo.com/{{target}}/{{arch}}/{{current_version}}"
+      ]
+    }
+  }
+}
