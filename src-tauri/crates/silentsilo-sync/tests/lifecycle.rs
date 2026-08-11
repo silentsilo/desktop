@@ -13,9 +13,10 @@
 //! involved was correct on its own, and no test asked what the copy actually
 //! held. Asking it here is what makes the class of bug visible.
 //!
-//! The sync below deliberately mirrors `commands/sync.rs` rather than
-//! calling `sync_ops`: the bug was in *how the queue was computed*, so a
-//! harness that takes the queue as a parameter cannot see it.
+//! The sync below computes the queue itself and then calls
+//! `push_everything_to`, the same function the Tauri command uses. The bug
+//! was in *how the queue was computed*, so a harness that takes the queue as
+//! a parameter cannot see it.
 
 use rusqlite::Connection;
 use silentsilo_crypto::MasterDek;
