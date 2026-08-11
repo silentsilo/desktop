@@ -20,8 +20,8 @@ use silentsilo_vfs::{
 
 use rusqlite::Connection;
 use silentsilo_vault::{
-    RecoveryEnvelope, StoredFidoCredential, StoredFidoKeys, list_unsynced_blob_ids,
-    mark_blob_synced, record_blob_present, remove_blob_from_cache,
+    RecoveryEnvelope, StoredFidoCredential, StoredFidoKeys, list_undelivered_blob_ids,
+    record_blob_delivered, record_blob_present, remove_blob_from_cache,
 };
 use std::path::Path;
 use uuid::Uuid;
@@ -408,6 +408,7 @@ pub struct BlobPushOutcome {
 pub async fn push_blobs(
     client: &dyn ObjectStore,
     vault_root: &Path,
+    target: Uuid,
     blob_ids: &[Uuid],
 ) -> Result<BlobPushOutcome, SyncError> {
     let mut outcome = BlobPushOutcome::default();
@@ -429,7 +430,7 @@ pub async fn push_blobs(
                 // Already up there. Record that so eviction is allowed to
                 // reclaim the space — without this the local copy would be
                 // pinned forever.
-                mark_blob_synced(vault_root, *blob_id)
+                record_blob_delivered(vault_root, *blob_id, target)
                     .map_err(|e| SyncError::Vault(e.to_string()))?;
                 outcome.already_present += 1;
                 continue;
@@ -454,7 +455,7 @@ pub async fn push_blobs(
                 // Only now: marking a blob synced before the upload lands
                 // would make it evictable while the bucket has no copy,
                 // which is how you lose a file for good.
-                mark_blob_synced(vault_root, *blob_id)
+                record_blob_delivered(vault_root, *blob_id, target)
                     .map_err(|e| SyncError::Vault(e.to_string()))?;
                 outcome.uploaded += 1;
             }
@@ -835,9 +836,10 @@ pub async fn reseal_under_new_key(
 pub async fn push_pending_blobs(
     client: &dyn ObjectStore,
     vault_root: &Path,
+    target: Uuid,
 ) -> Result<BlobPushOutcome, SyncError> {
-    let pending = list_unsynced_blob_ids(vault_root);
-    push_blobs(client, vault_root, &pending).await
+    let pending = list_undelivered_blob_ids(vault_root, target);
+    push_blobs(client, vault_root, target, &pending).await
 }
 
 /// One blob's sealed bytes, without a cache to put them in. For the
@@ -871,9 +873,11 @@ pub async fn fetch_blob(
     std::fs::rename(&temp_path, &final_path).map_err(|e| SyncError::Vault(e.to_string()))?;
 
     let size = bytes.len() as i64;
-    // Downloaded means the bucket already has it, so it is immediately
-    // evictable — unlike a freshly imported blob.
-    record_blob_present(vault_root, blob_id, size, true)
+    // Not marked evictable here, even though it plainly exists on the
+    // target it came from: eviction needs every target to hold it, and this
+    // call does not know the others. The next push settles that with a HEAD
+    // per target, and holding the local copy until then errs the safe way.
+    record_blob_present(vault_root, blob_id, size, false)
         .map_err(|e| SyncError::Vault(e.to_string()))?;
     Ok(size as u64)
 }

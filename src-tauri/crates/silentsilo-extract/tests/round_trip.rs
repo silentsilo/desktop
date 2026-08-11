@@ -58,7 +58,7 @@ async fn publish(session: &VaultSession, store: &dyn ObjectStore, blobs: &[Uuid]
     silentsilo_sync::push_ops(store, &session.dek, &pending_ops(&session.conn).unwrap())
         .await
         .unwrap();
-    silentsilo_sync::push_blobs(store, &session.paths.root, blobs)
+    silentsilo_sync::push_blobs(store, &session.paths.root, uuid::Uuid::new_v4(), blobs)
         .await
         .unwrap();
 

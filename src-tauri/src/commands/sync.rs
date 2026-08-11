@@ -401,7 +401,7 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
         }
 
         if failure.is_none() {
-            match sync::push_pending_blobs(store, &root).await {
+            match sync::push_pending_blobs(store, &root, target.id).await {
                 Ok(outcome) => {
                     uploaded_here = outcome.uploaded;
                     blobs_failed += outcome.failed.len();
@@ -487,6 +487,10 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
             settle_delivery(&mut session.conn, &every_target).map_err(|e| e.to_string())?;
         }
     }
+    // The same accounting for content. Both tables also drop what they hold
+    // for a target that is no longer configured, so removing a copy and
+    // adding another leaves nothing claiming the new one is up to date.
+    silentsilo_vault::settle_blob_delivery(&root, &every_target).map_err(|e| e.to_string())?;
     record_target_outcomes(app, silo, &statuses, now)?;
 
     // ── Housekeeping, on the first target that will have it ─────────

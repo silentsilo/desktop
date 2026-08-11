@@ -60,7 +60,17 @@ fn open_cache_db(vault_root: &Path) -> Result<Connection, VaultError> {
         CREATE TABLE IF NOT EXISTS cache_meta (
             key   TEXT PRIMARY KEY,
             value TEXT NOT NULL
-        );",
+        );
+        -- Which target holds which blob. `synced` above answers the
+        -- narrower question of whether the blob may be evicted, so it can
+        -- only mean \"every target has it\"; a target added later needs to
+        -- be told what it is missing, which is what this records.
+        CREATE TABLE IF NOT EXISTS blob_delivery (
+            target  TEXT NOT NULL,
+            blob_id TEXT NOT NULL,
+            PRIMARY KEY (target, blob_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_blob_delivery_blob ON blob_delivery(blob_id);",
     )?;
     Ok(conn)
 }
@@ -86,12 +96,55 @@ pub fn record_blob_present(
     Ok(())
 }
 
-/// Mark an already-tracked blob as synced to the cloud (safe to evict later).
-pub fn mark_blob_synced(vault_root: &Path, blob_id: Uuid) -> Result<(), VaultError> {
+/// Records that one target now holds this blob.
+pub fn record_blob_delivered(
+    vault_root: &Path,
+    blob_id: Uuid,
+    target: Uuid,
+) -> Result<(), VaultError> {
     let conn = open_cache_db(vault_root)?;
     conn.execute(
-        "UPDATE blob_cache SET synced = 1 WHERE blob_id = ?1",
-        params![blob_id.to_string()],
+        "INSERT OR IGNORE INTO blob_delivery(target, blob_id) VALUES (?1, ?2)",
+        params![target.to_string(), blob_id.to_string()],
+    )?;
+    Ok(())
+}
+
+/// Marks as synced every blob that all `targets` hold, and forgets rows for
+/// targets that are no longer configured. `synced` gates eviction, so it has
+/// to mean every copy has it, not merely one.
+pub fn settle_blob_delivery(vault_root: &Path, targets: &[Uuid]) -> Result<(), VaultError> {
+    let conn = open_cache_db(vault_root)?;
+
+    if targets.is_empty() {
+        // No copy is configured, so nothing is backed up anywhere and
+        // nothing may be evicted. Recomputed rather than left alone: a silo
+        // whose only target was removed would otherwise keep blobs marked
+        // evictable on the strength of a copy it can no longer reach.
+        conn.execute("DELETE FROM blob_delivery", [])?;
+        conn.execute("UPDATE blob_cache SET synced = 0", [])?;
+        return Ok(());
+    }
+
+    let list: Vec<String> = targets.iter().map(|t| t.to_string()).collect();
+    let placeholders = vec!["?"; list.len()].join(",");
+
+    conn.execute(
+        &format!("DELETE FROM blob_delivery WHERE target NOT IN ({placeholders})"),
+        rusqlite::params_from_iter(list.iter()),
+    )?;
+    // Both directions. Only ever setting it would leave a blob evictable
+    // after the copy that held it was removed, which is how a local file
+    // gets thrown away while no backup has it.
+    conn.execute(
+        &format!(
+            "UPDATE blob_cache SET synced = CASE
+                WHEN (SELECT COUNT(*) FROM blob_delivery d
+                      WHERE d.blob_id = blob_cache.blob_id) = {} THEN 1
+                ELSE 0 END",
+            list.len()
+        ),
+        [],
     )?;
     Ok(())
 }
@@ -122,10 +175,9 @@ pub fn list_local_blob_ids(vault_root: &Path) -> Vec<Uuid> {
         .collect()
 }
 
-/// Blobs on local disk that have not been confirmed uploaded yet.
-///
-/// These are the only copy of their content, so they are both what a push
-/// needs to send and what eviction must never touch.
+/// Blobs that not every copy holds, for the counters on screen and for
+/// eviction. `synced` answers "every configured target has it", which is
+/// the only safe basis for throwing the local file away.
 pub fn list_unsynced_blob_ids(vault_root: &Path) -> Vec<Uuid> {
     let Ok(conn) = open_cache_db(vault_root) else {
         return Vec::new();
@@ -134,6 +186,31 @@ pub fn list_unsynced_blob_ids(vault_root: &Path) -> Vec<Uuid> {
         return Vec::new();
     };
     let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(0)) else {
+        return Vec::new();
+    };
+    rows.filter_map(|r| r.ok())
+        .filter_map(|id| Uuid::parse_str(&id).ok())
+        .collect()
+}
+
+/// Blobs one particular target does not have yet, which is what a push to
+/// that target owes.
+pub fn list_undelivered_blob_ids(vault_root: &Path, target: Uuid) -> Vec<Uuid> {
+    let Ok(conn) = open_cache_db(vault_root) else {
+        return Vec::new();
+    };
+    // Not `synced = 0`: that flag says every target had it at some point,
+    // which is not an answer about a target added since.
+    let Ok(mut stmt) = conn.prepare(
+        "SELECT blob_id FROM blob_cache b
+         WHERE NOT EXISTS (
+             SELECT 1 FROM blob_delivery d
+             WHERE d.blob_id = b.blob_id AND d.target = ?1
+         )",
+    ) else {
+        return Vec::new();
+    };
+    let Ok(rows) = stmt.query_map([target.to_string()], |row| row.get::<_, String>(0)) else {
         return Vec::new();
     };
     rows.filter_map(|r| r.ok())
@@ -454,5 +531,135 @@ mod pin_tests {
             enforce_cache_limit(dir.path(), 1).unwrap().is_empty(),
             "a pinned silo lost content to the cache limit"
         );
+    }
+}
+
+/// What each copy holds, through the whole life of a target list: added,
+/// removed, replaced, re-added. The bug these exist for shipped once: a
+/// target added after the content was already backed up elsewhere was
+/// offered nothing and reported itself up to date while holding nothing.
+#[cfg(test)]
+mod delivery_tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    fn silo() -> (tempfile::TempDir, std::path::PathBuf) {
+        let dir = tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        std::fs::create_dir_all(blobs_dir(&root)).unwrap();
+        (dir, root)
+    }
+
+    #[test]
+    fn a_target_added_later_is_owed_everything() {
+        let (_dir, root) = silo();
+        let (first, second) = (Uuid::new_v4(), Uuid::new_v4());
+        let blob = Uuid::new_v4();
+        record_blob_present(&root, blob, 10, false).unwrap();
+
+        record_blob_delivered(&root, blob, first).unwrap();
+        settle_blob_delivery(&root, &[first]).unwrap();
+
+        assert!(list_undelivered_blob_ids(&root, first).is_empty());
+        assert_eq!(
+            list_undelivered_blob_ids(&root, second),
+            vec![blob],
+            "a copy that has never seen this blob must be owed it"
+        );
+    }
+
+    #[test]
+    fn eviction_waits_for_every_copy_not_the_first() {
+        let (_dir, root) = silo();
+        let (first, second) = (Uuid::new_v4(), Uuid::new_v4());
+        let blob = Uuid::new_v4();
+        record_blob_present(&root, blob, 10, false).unwrap();
+
+        record_blob_delivered(&root, blob, first).unwrap();
+        settle_blob_delivery(&root, &[first, second]).unwrap();
+        assert_eq!(
+            list_unsynced_blob_ids(&root),
+            vec![blob],
+            "one copy out of two is not a reason to drop the local file"
+        );
+
+        record_blob_delivered(&root, blob, second).unwrap();
+        settle_blob_delivery(&root, &[first, second]).unwrap();
+        assert!(list_unsynced_blob_ids(&root).is_empty());
+    }
+
+    #[test]
+    fn removing_a_target_forgets_what_it_held() {
+        let (_dir, root) = silo();
+        let (gone, kept) = (Uuid::new_v4(), Uuid::new_v4());
+        let blob = Uuid::new_v4();
+        record_blob_present(&root, blob, 10, false).unwrap();
+        record_blob_delivered(&root, blob, gone).unwrap();
+        record_blob_delivered(&root, blob, kept).unwrap();
+        settle_blob_delivery(&root, &[gone, kept]).unwrap();
+
+        // The user removes one copy. What it held says nothing about the
+        // silo any more.
+        settle_blob_delivery(&root, &[kept]).unwrap();
+
+        assert!(list_undelivered_blob_ids(&root, kept).is_empty());
+        assert_eq!(
+            list_undelivered_blob_ids(&root, gone),
+            vec![blob],
+            "a target that comes back is owed everything again"
+        );
+    }
+
+    #[test]
+    fn replacing_one_target_with_another_owes_the_new_one_everything() {
+        // Add, remove, add a different one: the sequence that produced an
+        // empty second copy with a green tick.
+        let (_dir, root) = silo();
+        let (old, new) = (Uuid::new_v4(), Uuid::new_v4());
+        let blob = Uuid::new_v4();
+        record_blob_present(&root, blob, 10, false).unwrap();
+        record_blob_delivered(&root, blob, old).unwrap();
+        settle_blob_delivery(&root, &[old]).unwrap();
+        assert!(
+            list_unsynced_blob_ids(&root).is_empty(),
+            "settled on the old"
+        );
+
+        settle_blob_delivery(&root, &[new]).unwrap();
+
+        assert_eq!(list_undelivered_blob_ids(&root, new), vec![blob]);
+        assert_eq!(
+            list_unsynced_blob_ids(&root),
+            vec![blob],
+            "and the local file is pinned again, since no copy holds it"
+        );
+    }
+
+    #[test]
+    fn a_silo_with_no_targets_is_left_alone() {
+        // Nothing configured is not "everyone has it": the empty list must
+        // not settle anything, or the local copy becomes evictable with
+        // nowhere to fetch it back from.
+        let (_dir, root) = silo();
+        let blob = Uuid::new_v4();
+        record_blob_present(&root, blob, 10, false).unwrap();
+
+        settle_blob_delivery(&root, &[]).unwrap();
+
+        assert_eq!(list_unsynced_blob_ids(&root), vec![blob]);
+    }
+
+    #[test]
+    fn delivery_is_recorded_once_however_often_it_is_reported() {
+        let (_dir, root) = silo();
+        let target = Uuid::new_v4();
+        let blob = Uuid::new_v4();
+        record_blob_present(&root, blob, 10, false).unwrap();
+
+        record_blob_delivered(&root, blob, target).unwrap();
+        record_blob_delivered(&root, blob, target).unwrap();
+
+        settle_blob_delivery(&root, &[target]).unwrap();
+        assert!(list_unsynced_blob_ids(&root).is_empty());
     }
 }

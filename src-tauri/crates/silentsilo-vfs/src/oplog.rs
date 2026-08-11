@@ -1889,9 +1889,13 @@ pub fn init_delivery(conn: &Connection) -> rusqlite::Result<()> {
 pub fn pending_ops_for(conn: &Connection, target: Uuid) -> CoreResult<Vec<OpRecord>> {
     let mut stmt = conn
         .prepare(
+            // Not filtered on `pushed`: that flag means every target
+            // configured at the time had it, which says nothing about a
+            // target added later. Asking the delivery table alone is what
+            // makes a new copy receive the history rather than only what
+            // happens next.
             "SELECT o.payload FROM oplog o
-             WHERE o.pushed = 0
-               AND NOT EXISTS (
+             WHERE NOT EXISTS (
                    SELECT 1 FROM op_delivery d
                    WHERE d.op_id = o.op_id AND d.target = ?1
                )
@@ -1930,10 +1934,16 @@ pub fn mark_delivered(conn: &Connection, target: Uuid, records: &[OpRecord]) -> 
 /// has to mean "every target has this". A target removed from the list
 /// stops being waited for.
 pub fn settle_delivery(conn: &mut Connection, targets: &[Uuid]) -> CoreResult<usize> {
+    let db = |e: rusqlite::Error| CoreError::Database(e.to_string());
     if targets.is_empty() {
+        // Nothing configured holds anything. Left alone, records would stay
+        // marked as everywhere and compaction would be free to drop them.
+        let tx = conn.transaction().map_err(db)?;
+        tx.execute("DELETE FROM op_delivery", []).map_err(db)?;
+        tx.execute("UPDATE oplog SET pushed = 0", []).map_err(db)?;
+        tx.commit().map_err(db)?;
         return Ok(0);
     }
-    let db = |e: rusqlite::Error| CoreError::Database(e.to_string());
     let list: Vec<String> = targets.iter().map(|t| t.to_string()).collect();
     let placeholders = vec!["?"; list.len()].join(",");
 
@@ -1960,12 +1970,24 @@ pub fn settle_delivery(conn: &mut Connection, targets: &[Uuid]) -> CoreResult<us
         )
         .map_err(db)?;
 
+    // And back, for a record whose copies no longer include every target:
+    // `pushed` is what lets compaction drop a record, so leaving it set
+    // after a target was removed would prune history nothing still holds.
     tx.execute(
-        "DELETE FROM op_delivery WHERE op_id IN (SELECT op_id FROM oplog WHERE pushed = 1)",
+        &format!(
+            "UPDATE oplog SET pushed = 0
+             WHERE pushed = 1
+               AND (SELECT COUNT(*) FROM op_delivery d WHERE d.op_id = oplog.op_id) < {}",
+            list.len()
+        ),
         [],
     )
     .map_err(db)?;
 
+    // The rows stay. They used to be dropped once every target had the
+    // record, which loses the only account of what each target holds: a
+    // target added afterwards then looked up to date while holding nothing.
+    // They are removed with the record itself, by `prune_to`.
     tx.commit().map_err(db)?;
     Ok(settled)
 }
@@ -2013,8 +2035,7 @@ pub fn pending_count_for(conn: &Connection, target: Uuid) -> CoreResult<usize> {
     let count: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM oplog o
-             WHERE o.pushed = 0
-               AND NOT EXISTS (
+             WHERE NOT EXISTS (
                    SELECT 1 FROM op_delivery d
                    WHERE d.op_id = o.op_id AND d.target = ?1
                )",
@@ -3847,10 +3868,13 @@ mod emission_tests {
         assert_eq!(pending_count(&conn).unwrap(), 0);
     }
 
-    /// Settling clears the per-target rows, so the table stays the size of
-    /// what is in flight rather than growing with every record ever written.
+    /// Settling keeps the per-target rows. They used to be cleared, to hold
+    /// the table down to what was in flight, and that is what let a target
+    /// added later be offered nothing: with no account of who holds what,
+    /// an empty copy is indistinguishable from a complete one. They go with
+    /// the record instead, when compaction prunes it.
     #[test]
-    fn settling_forgets_the_per_target_rows() {
+    fn settling_keeps_the_per_target_rows() {
         let vault = Uuid::new_v4();
         let mut conn = bare_device(vault);
         let root = crate::schema::root_folder_id_for(vault);
@@ -3875,7 +3899,12 @@ mod emission_tests {
         let rows: i64 = conn
             .query_row("SELECT COUNT(*) FROM op_delivery", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(rows, 0);
+        assert_eq!(rows, 3);
+        assert_eq!(
+            pending_count_for(&conn, Uuid::new_v4()).unwrap(),
+            3,
+            "and a target added afterwards is still owed all three"
+        );
     }
 
     /// A target that keeps failing has to be tried less often, and one that
@@ -4505,5 +4534,172 @@ mod emission_tests {
             0,
             "records that arrived from storage are not owed back to it"
         );
+    }
+}
+
+/// What each copy is owed, across a whole life of adding and removing
+/// targets. The bug these exist for shipped: a target added after the
+/// history had been pushed elsewhere was offered nothing, and the screen
+/// called it up to date while it held only metadata.
+#[cfg(test)]
+mod delivery_tests {
+    use super::tests::Device;
+    use super::*;
+
+    fn folder(name: &str) -> VaultOp {
+        VaultOp::CreateFolder {
+            id: Uuid::new_v4(),
+            parent_id: Uuid::new_v4(),
+            name: name.into(),
+        }
+    }
+
+    /// Three records in the log, as a device that has been used would have.
+    fn history(device: &Device) -> Vec<OpRecord> {
+        (1..=3)
+            .map(|n| {
+                let record = device.make(n, folder(&format!("f{n}")));
+                record_op(device.conn(), &record, false, true).unwrap();
+                record
+            })
+            .collect()
+    }
+
+    fn settle(device: &mut Device, targets: &[Uuid]) {
+        settle_delivery(&mut device.session.conn, targets).unwrap();
+    }
+
+    fn owed(device: &Device, target: Uuid) -> usize {
+        pending_count_for(device.conn(), target).unwrap()
+    }
+
+    fn everywhere(device: &Device) -> usize {
+        device
+            .conn()
+            .query_row("SELECT COUNT(*) FROM oplog WHERE pushed = 1", [], |r| {
+                r.get::<_, i64>(0)
+            })
+            .unwrap() as usize
+    }
+
+    #[test]
+    fn a_target_added_later_is_owed_the_whole_history() {
+        let mut device = Device::new();
+        let (first, second) = (Uuid::new_v4(), Uuid::new_v4());
+        let records = history(&device);
+
+        mark_delivered(device.conn(), first, &records).unwrap();
+        settle(&mut device, &[first]);
+
+        assert_eq!(owed(&device, first), 0);
+        assert_eq!(
+            owed(&device, second),
+            3,
+            "a copy that has never been written to is owed everything"
+        );
+    }
+
+    #[test]
+    fn settling_keeps_the_account_of_who_holds_what() {
+        // The rows used to be deleted once every target had the record,
+        // which is what made a later target look up to date.
+        let mut device = Device::new();
+        let target = Uuid::new_v4();
+        let records = history(&device);
+
+        mark_delivered(device.conn(), target, &records).unwrap();
+        settle(&mut device, &[target]);
+
+        let rows: i64 = device
+            .conn()
+            .query_row("SELECT COUNT(*) FROM op_delivery", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rows, 3);
+        assert_eq!(everywhere(&device), 3, "and the log knows it is settled");
+    }
+
+    #[test]
+    fn replacing_one_target_with_another_owes_the_new_one_everything() {
+        let mut device = Device::new();
+        let (old, new) = (Uuid::new_v4(), Uuid::new_v4());
+        let records = history(&device);
+        mark_delivered(device.conn(), old, &records).unwrap();
+        settle(&mut device, &[old]);
+
+        // The user removes the old copy and adds a different one.
+        settle(&mut device, &[new]);
+
+        assert_eq!(owed(&device, new), 3);
+        assert_eq!(
+            everywhere(&device),
+            0,
+            "nothing is everywhere any more, so compaction must not drop it"
+        );
+    }
+
+    #[test]
+    fn removing_every_target_puts_the_whole_log_back_in_the_queue() {
+        let mut device = Device::new();
+        let target = Uuid::new_v4();
+        let records = history(&device);
+        mark_delivered(device.conn(), target, &records).unwrap();
+        settle(&mut device, &[target]);
+
+        settle(&mut device, &[]);
+
+        assert_eq!(everywhere(&device), 0);
+        assert_eq!(owed(&device, target), 3, "even for the target just removed");
+    }
+
+    #[test]
+    fn one_copy_out_of_two_is_not_everywhere() {
+        let mut device = Device::new();
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        let records = history(&device);
+
+        mark_delivered(device.conn(), a, &records).unwrap();
+        settle(&mut device, &[a, b]);
+        assert_eq!(everywhere(&device), 0);
+        assert_eq!(owed(&device, b), 3);
+
+        mark_delivered(device.conn(), b, &records).unwrap();
+        settle(&mut device, &[a, b]);
+        assert_eq!(everywhere(&device), 3);
+    }
+
+    #[test]
+    fn a_target_that_comes_back_is_offered_everything_again() {
+        // Removing and re-adding the same place: its rows went with the
+        // removal, so it is owed the history and the push skips whatever is
+        // already there.
+        let mut device = Device::new();
+        let target = Uuid::new_v4();
+        let records = history(&device);
+        mark_delivered(device.conn(), target, &records).unwrap();
+        settle(&mut device, &[target]);
+
+        settle(&mut device, &[Uuid::new_v4()]);
+        settle(&mut device, &[target]);
+
+        assert_eq!(owed(&device, target), 3);
+    }
+
+    #[test]
+    fn delivery_rows_go_when_the_record_does() {
+        // They are kept for the life of the record, so pruning is where
+        // they end rather than growing for ever.
+        let mut device = Device::new();
+        let target = Uuid::new_v4();
+        let records = history(&device);
+        mark_delivered(device.conn(), target, &records).unwrap();
+        settle(&mut device, &[target]);
+
+        crate::snapshot::prune_to(device.conn(), 3).unwrap();
+
+        let rows: i64 = device
+            .conn()
+            .query_row("SELECT COUNT(*) FROM op_delivery", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rows, 0);
     }
 }

@@ -637,11 +637,24 @@ pub fn prune_to(conn: &Connection, horizon: u64) -> CoreResult<PruneReport> {
             [horizon as i64],
         )
         .map_err(db)?;
+    clear_orphan_delivery(conn)?;
 
     Ok(PruneReport {
         dropped,
         stranded: stranded as usize,
     })
+}
+
+/// Drops delivery rows for records that are no longer in the log. They are
+/// kept while the record lives, because they are the account of what each
+/// target holds, so this is where they end.
+fn clear_orphan_delivery(conn: &Connection) -> CoreResult<()> {
+    conn.execute(
+        "DELETE FROM op_delivery WHERE op_id NOT IN (SELECT op_id FROM oplog)",
+        [],
+    )
+    .map_err(db)?;
+    Ok(())
 }
 
 /// What [`prune_to`] did.
@@ -685,6 +698,7 @@ pub fn compact_covered(conn: &mut Connection, snapshot: &Snapshot) -> CoreResult
             [snapshot.horizon as i64],
         )
         .map_err(db)?;
+    clear_orphan_delivery(&tx)?;
     tx.commit().map_err(db)?;
     Ok(dropped)
 }
