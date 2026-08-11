@@ -29,9 +29,9 @@ pub mod workdir;
 
 pub use cache_store::{
     CacheUsage, DEFAULT_CACHE_LIMIT_BYTES, cache_usage, enforce_cache_limit, get_cache_limit_bytes,
-    keep_full_copy, list_local_blob_ids, list_unsynced_blob_ids, mark_blob_synced,
-    record_blob_present, remove_blob_from_cache, set_cache_limit_bytes, set_keep_full_copy,
-    touch_blob_access,
+    keep_full_copy, list_local_blob_ids, list_undelivered_blob_ids, list_unsynced_blob_ids,
+    record_blob_delivered, record_blob_present, remove_blob_from_cache, set_cache_limit_bytes,
+    set_keep_full_copy, settle_blob_delivery, touch_blob_access,
 };
 pub use dek_store::{dek_path, load_dek, save_dek, unwrap_dek_hex, wrap_dek_bytes};
 pub use device_store::{

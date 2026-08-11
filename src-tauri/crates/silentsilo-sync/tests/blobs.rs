@@ -7,7 +7,12 @@ use silentsilo_core::S3Config;
 use silentsilo_s3::S3Client;
 use silentsilo_store::ObjectStore;
 use silentsilo_sync::{fetch_blob, push_blobs, push_pending_blobs};
-use silentsilo_vault::{list_local_blob_ids, list_unsynced_blob_ids, record_blob_present};
+use silentsilo_vault::{list_local_blob_ids, list_undelivered_blob_ids, record_blob_present};
+
+/// One backup target, the same one across the calls in a test.
+fn target() -> Uuid {
+    Uuid::from_u128(0x5170_0001)
+}
 use uuid::Uuid;
 
 struct Vault {
@@ -78,7 +83,7 @@ async fn a_blob_survives_the_round_trip_byte_for_byte() {
     let content: Vec<u8> = (0u8..=255).cycle().take(9000).collect();
     let id = source.add_local_blob(&content);
 
-    push_blobs(&client as &dyn ObjectStore, &source.root, &[id])
+    push_blobs(&client as &dyn ObjectStore, &source.root, target(), &[id])
         .await
         .unwrap();
 
@@ -97,11 +102,11 @@ async fn pushing_marks_blobs_as_synced() {
     let vault = Vault::new();
     let id = vault.add_local_blob(b"content");
 
-    assert_eq!(list_unsynced_blob_ids(&vault.root), vec![id]);
-    push_pending_blobs(&client as &dyn ObjectStore, &vault.root)
+    assert_eq!(list_undelivered_blob_ids(&vault.root, target()), vec![id]);
+    push_pending_blobs(&client as &dyn ObjectStore, &vault.root, target())
         .await
         .unwrap();
-    assert!(list_unsynced_blob_ids(&vault.root).is_empty());
+    assert!(list_undelivered_blob_ids(&vault.root, target()).is_empty());
 }
 
 #[tokio::test]
@@ -118,13 +123,13 @@ async fn a_failed_upload_leaves_the_blob_unsynced_for_the_next_attempt() {
     let vault = Vault::new();
     let id = vault.add_local_blob(b"precious");
 
-    let outcome = push_blobs(&broken as &dyn ObjectStore, &vault.root, &[id])
+    let outcome = push_blobs(&broken as &dyn ObjectStore, &vault.root, target(), &[id])
         .await
         .unwrap();
     assert_eq!(outcome.uploaded, 0);
     assert_eq!(outcome.failed.len(), 1, "the failure should be reported");
     assert_eq!(
-        list_unsynced_blob_ids(&vault.root),
+        list_undelivered_blob_ids(&vault.root, target()),
         vec![id],
         "a blob that never reached the bucket must stay unsynced"
     );
@@ -136,20 +141,20 @@ async fn a_second_push_skips_what_is_already_there() {
     let vault = Vault::new();
     let id = vault.add_local_blob(b"content");
 
-    let first = push_blobs(&client as &dyn ObjectStore, &vault.root, &[id])
+    let first = push_blobs(&client as &dyn ObjectStore, &vault.root, target(), &[id])
         .await
         .unwrap();
     assert_eq!(first.uploaded, 1);
 
     // Re-offering it, as a device that lost its cache bookkeeping would.
     record_blob_present(&vault.root, id, 7, false).unwrap();
-    let second = push_blobs(&client as &dyn ObjectStore, &vault.root, &[id])
+    let second = push_blobs(&client as &dyn ObjectStore, &vault.root, target(), &[id])
         .await
         .unwrap();
     assert_eq!(second.uploaded, 0);
     assert_eq!(second.already_present, 1);
     assert!(
-        list_unsynced_blob_ids(&vault.root).is_empty(),
+        list_undelivered_blob_ids(&vault.root, target()).is_empty(),
         "finding it already present should still release the eviction hold"
     );
 }
@@ -160,7 +165,7 @@ async fn an_evicted_blob_can_be_fetched_back() {
     let vault = Vault::new();
     let content = b"the original bytes".to_vec();
     let id = vault.add_local_blob(&content);
-    push_blobs(&client as &dyn ObjectStore, &vault.root, &[id])
+    push_blobs(&client as &dyn ObjectStore, &vault.root, target(), &[id])
         .await
         .unwrap();
 
@@ -203,7 +208,7 @@ async fn pushing_a_blob_whose_file_is_gone_is_skipped_quietly() {
     let id = vault.add_local_blob(b"x");
     vault.evict(id);
 
-    let outcome = push_blobs(&client as &dyn ObjectStore, &vault.root, &[id])
+    let outcome = push_blobs(&client as &dyn ObjectStore, &vault.root, target(), &[id])
         .await
         .unwrap();
     assert_eq!(outcome.uploaded, 0);
