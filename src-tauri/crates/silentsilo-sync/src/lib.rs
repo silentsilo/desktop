@@ -1400,3 +1400,112 @@ mod tests {
         assert_eq!(values, vec![2, 11, 100]);
     }
 }
+
+// ── One target, everything it is owed ───────────────────────────────
+
+/// What a copy needs before it can be joined from, and what it is owed.
+///
+/// Gathered into one struct so the pass below can be called from a test as
+/// easily as from the app. The bug this exists to prevent lived in the
+/// orchestration rather than in any function it calls, and orchestration
+/// that only the app can run is orchestration nothing checks.
+pub struct TargetPush<'a> {
+    pub id: Uuid,
+    pub store: &'a dyn ObjectStore,
+    /// False for an append-only copy, which is never sent a delete.
+    pub allows_delete: bool,
+    /// Records this copy does not have, from `pending_ops_for`.
+    pub owed: &'a [OpRecord],
+}
+
+/// Everything a silo has to hand a copy, besides the records themselves.
+pub struct SiloState<'a> {
+    pub vault_id: Uuid,
+    pub dek: &'a MasterDek,
+    /// Wrapped under the DEK before it goes up.
+    pub kek_envelope: &'a [u8],
+    pub recovery: Option<&'a RecoveryEnvelope>,
+    pub keys: Option<&'a StoredFidoKeys>,
+    /// The snapshot a compacted log starts from, if there is one.
+    pub base: Option<&'a Snapshot>,
+    /// Where the blobs live on this machine.
+    pub vault_root: &'a Path,
+}
+
+/// What one target's pass managed.
+#[derive(Debug, Default, Clone)]
+pub struct TargetPushOutcome {
+    pub ops_pushed: usize,
+    pub blobs_uploaded: usize,
+    pub blobs_failed: usize,
+    /// Credential ids whose published envelope this pass removed, so the
+    /// caller can drop the tombstones storage has now confirmed.
+    pub revoked: Vec<String>,
+    /// Why this copy got nothing further. `None` means it kept up.
+    pub failed: Option<String>,
+}
+
+/// Sends one copy everything it is owed, in the order a joining device
+/// needs it.
+///
+/// The order is the part worth being careful about. What a device needs to
+/// recognise and open the silo goes first (manifest, content key, recovery
+/// code, key envelopes), then the base snapshot, and only then the records:
+/// a log that starts part way through, with no snapshot in front of it,
+/// reads to a joining device as a smaller vault rather than an incomplete
+/// copy. Content goes last, because a record naming a blob that has not
+/// arrived is self-correcting on the next pass while the reverse looks like
+/// an orphan.
+///
+/// The first failure stops the rest for this copy: everything after it
+/// would fail the same way, and one reason is more use than six.
+pub async fn push_everything_to(
+    target: &TargetPush<'_>,
+    silo: &SiloState<'_>,
+) -> TargetPushOutcome {
+    let mut outcome = TargetPushOutcome::default();
+    macro_rules! attempt {
+        ($e:expr) => {
+            if let Err(e) = $e.await {
+                outcome.failed = Some(e.to_string());
+                return outcome;
+            }
+        };
+    }
+
+    attempt!(ensure_manifest(target.store, silo.vault_id));
+    attempt!(publish_content_kek(target.store, silo.kek_envelope));
+    if let Some(recovery) = silo.recovery {
+        attempt!(ensure_recovery_envelope(target.store, recovery));
+    }
+    if let Some(base) = silo.base {
+        attempt!(publish_base_if_missing(target.store, silo.dek, base));
+    }
+    if let Some(keys) = silo.keys {
+        match publish_key_envelopes(target.store, keys, target.allows_delete).await {
+            Ok(report) => outcome.revoked = report.revoked,
+            Err(e) => {
+                outcome.failed = Some(e.to_string());
+                return outcome;
+            }
+        }
+    }
+
+    match push_ops(target.store, silo.dek, target.owed).await {
+        Ok(count) => outcome.ops_pushed = count,
+        Err(e) => {
+            outcome.failed = Some(e.to_string());
+            return outcome;
+        }
+    }
+
+    match push_pending_blobs(target.store, silo.vault_root, target.id).await {
+        Ok(blobs) => {
+            outcome.blobs_uploaded = blobs.uploaded;
+            outcome.blobs_failed = blobs.failed.len();
+        }
+        Err(e) => outcome.failed = Some(e.to_string()),
+    }
+
+    outcome
+}

@@ -334,97 +334,59 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
     let mut blobs_uploaded = 0;
     let mut blobs_failed = 0;
 
+    // Read once rather than per target: the same bytes go to each copy, and
+    // the key file is re-read only when a revocation changes it.
+    let kek_envelope = silentsilo_vault::wrap_kek_bytes(&kek, &dek).map_err(|e| e.to_string())?;
+    let recovery = silentsilo_vault::load_recovery_envelope(&root).ok();
+    let mut keys = load_fido_keys(&root).ok();
+
     for target in &targets {
-        let store = &*target.store;
-        let mut failure: Option<String> = None;
-        let mut pushed_here = 0;
-        let mut uploaded_here = 0;
+        let state = sync::SiloState {
+            vault_id,
+            dek: &dek,
+            kek_envelope: &kek_envelope,
+            recovery: recovery.as_ref(),
+            keys: keys.as_ref(),
+            base: base.as_ref(),
+            vault_root: &root,
+        };
+        let outcome = sync::push_everything_to(
+            &sync::TargetPush {
+                id: target.id,
+                store: &*target.store,
+                allows_delete: target.role.allows_delete(),
+                owed: &target.owed,
+            },
+            &state,
+        )
+        .await;
 
-        // Publish who this prefix belongs to, so another device can recognise
-        // the vault before it can decrypt anything in it. Written only when
-        // the target does not already say it: this runs on every pass, and
-        // the contents change roughly never.
-        if let Err(e) = sync::ensure_manifest(store, vault_id).await {
-            failure = Some(e.to_string());
-        }
-
-        // Beside the manifest because it answers the same question: what a
-        // device joining here needs before it can read anything at all.
-        if failure.is_none()
-            && let Ok(envelope) = silentsilo_vault::wrap_kek_bytes(&kek, &dek)
-            && let Err(e) = sync::publish_content_kek(store, &envelope).await
+        // A revocation storage has now confirmed: the tombstone has done its
+        // job and the local list can drop it.
+        if !outcome.revoked.is_empty()
+            && let Some(list) = keys.as_mut()
         {
-            failure = Some(e.to_string());
+            list.keys
+                .retain(|k| !outcome.revoked.contains(&k.credential_id));
+            silentsilo_vault::save_fido_keys(&root, list).map_err(|e| e.to_string())?;
         }
 
-        // And the recovery envelope, for the same reason. Publishing it once
-        // when the code was generated only reached the storage configured at
-        // that moment: a target added later never got it, and nothing said
-        // so. The code looked set up and the recovery would not have worked.
-        if failure.is_none()
-            && let Ok(recovery) = silentsilo_vault::load_recovery_envelope(&root)
-            && let Err(e) = sync::ensure_recovery_envelope(store, &recovery).await
-        {
-            failure = Some(e.to_string());
-        }
-
-        // The base snapshot, before any push: a log compacted locally must
-        // never start mid-stream in a bucket a device could join from.
-        if failure.is_none()
-            && let Some(base) = &base
-            && let Err(e) = sync::publish_base_if_missing(store, &dek, base).await
-        {
-            failure = Some(e.to_string());
-        }
-
-        // The wrapped DEKs, which are what let a second device unlock at all,
-        // plus any revocation still owed to storage from a pass made offline.
-        if failure.is_none()
-            && let Ok(mut keys) = load_fido_keys(&root)
-        {
-            match sync::publish_key_envelopes(store, &keys, target.role.allows_delete()).await {
-                Ok(report) if !report.revoked.is_empty() => {
-                    keys.keys
-                        .retain(|k| !report.revoked.contains(&k.credential_id));
-                    silentsilo_vault::save_fido_keys(&root, &keys).map_err(|e| e.to_string())?;
-                }
-                Ok(_) => {}
-                Err(e) => failure = Some(e.to_string()),
-            }
-        }
-
-        if failure.is_none() {
-            match sync::push_ops(store, &dek, &target.owed).await {
-                Ok(count) => pushed_here = count,
-                Err(e) => failure = Some(e.to_string()),
-            }
-        }
-
-        if failure.is_none() {
-            match sync::push_pending_blobs(store, &root, target.id).await {
-                Ok(outcome) => {
-                    uploaded_here = outcome.uploaded;
-                    blobs_failed += outcome.failed.len();
-                }
-                Err(e) => failure = Some(e.to_string()),
-            }
-        }
-
-        ops_pushed += pushed_here;
-        blobs_uploaded += uploaded_here;
+        ops_pushed += outcome.ops_pushed;
+        blobs_uploaded += outcome.blobs_uploaded;
+        blobs_failed += outcome.blobs_failed;
         statuses.push(TargetStatus {
             id: target.id.to_string(),
             label: target.label.clone(),
-            ops_pushed: pushed_here,
-            blobs_uploaded: uploaded_here,
+            ops_pushed: outcome.ops_pushed,
+            blobs_uploaded: outcome.blobs_uploaded,
             // Everything it was owed either arrived this pass or was already
             // there; `push_ops` skips what the target already holds.
-            ops_behind: if failure.is_some() {
+            ops_behind: if outcome.failed.is_some() {
                 target.owed.len()
             } else {
                 0
             },
-            failed: failure,
+            failed: outcome.failed,
             last_success: 0,
             retry_in: 0,
             waiting: false,
