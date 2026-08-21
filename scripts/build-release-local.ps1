@@ -1,8 +1,13 @@
-# Builds, signs and names every release artifact on this machine, for the
-# case where GitHub Actions cannot run (out of minutes, or the workflow is
-# broken). It produces exactly what .github/workflows/release.yml produces,
-# under the same file names, so a release assembled by hand is
-# indistinguishable from one built by CI.
+# Builds and signs, on this machine, the release artifacts CI cannot: the
+# installer, its updater signature, latest.json and the Windows extractor.
+# The Authenticode certificate sits on a hardware token no runner reaches,
+# which is the whole reason they are built here.
+#
+# The Linux and macOS extractors come from .github/workflows/release.yml,
+# which runs on the tag and attaches them to the same draft. They are not
+# built here on purpose. A binary out of WSL links against this machine's
+# glibc, and the extractor is the one tool that has to start on a machine
+# nothing is assumed about.
 #
 # Run it from the repo root:
 #
@@ -153,39 +158,17 @@ try {
     & "$PSScriptRoot\sign-windows.ps1" -Path (Join-Path $out "silentsilo-extract-windows-x86_64.exe")
     if (-not $?) { throw "signing the windows extractor failed" }
 
-    Write-Host "`n== CLI, Linux ==" -ForegroundColor Cyan
-    # Built through WSL against the same source tree. Skipped rather than
-    # fatal: a missing Linux binary is worth noticing, not worth throwing away
-    # a signed installer over.
-    $linuxAsset = Join-Path $out "silentsilo-extract-linux-x86_64"
-    $wslRoot = "/mnt/" + $repoRoot.Substring(0, 1).ToLower() + $repoRoot.Substring(2).Replace("\", "/")
-    # A separate target directory on purpose: sharing target\ with the Windows
-    # build means the two overwrite each other's artifacts and recompile the
-    # world on every alternation.
-    wsl -d Ubuntu -- bash -lc "cd '$wslRoot' && CARGO_TARGET_DIR=target-linux cargo build -p silentsilo-extract --release"
-    if ($?) {
-        Copy-Item "target-linux\release\silentsilo-extract" $linuxAsset -Force -ErrorAction SilentlyContinue
-    }
-    if (-not (Test-Path $linuxAsset)) {
-        Write-Host "Linux extractor NOT built. Install the headers once:" -ForegroundColor Yellow
-        Write-Host "  wsl -d Ubuntu -- sudo apt-get install -y libdbus-1-dev pkg-config" -ForegroundColor Yellow
-    }
-
     # The extractor is the tool someone reaches for when they no longer trust
     # anything else, so it gets the same signature the installer does. Verify
-    # with: tauri signer verify, or minisign -V against the public key.
-    Write-Host "`n== Signing the extractors ==" -ForegroundColor Cyan
+    # with minisign against the public key in tauri.conf.json.
+    Write-Host "`n== Signing the extractor ==" -ForegroundColor Cyan
     # TAURI_SIGNING_PRIVATE_KEY holds a path here, which `tauri build` accepts
     # but `signer sign` would read as the key itself. Clear it so the explicit
     # -f flag is the only source.
     Remove-Item Env:\TAURI_SIGNING_PRIVATE_KEY -ErrorAction SilentlyContinue
-    foreach ($name in @("silentsilo-extract-windows-x86_64.exe", "silentsilo-extract-linux-x86_64")) {
-        $path = Join-Path $out $name
-        if (Test-Path $path) {
-            npx --yes @tauri-apps/cli signer sign --private-key-path $keyFile $path
-            if (-not $?) { throw "signing $name failed" }
-        }
-    }
+    npx --yes @tauri-apps/cli signer sign --private-key-path $keyFile `
+        (Join-Path $out "silentsilo-extract-windows-x86_64.exe")
+    if (-not $?) { throw "the updater signature for the windows extractor failed" }
 
     # latest.json is what the updater actually reads. tauri-action writes it
     # in CI; built by hand it has to match byte for byte in structure, and the
