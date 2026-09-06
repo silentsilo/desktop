@@ -11,7 +11,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 // here: they catch real bugs (a hook behind a condition, a stale closure over
 // props), and they are what the suppressions in this codebase refer to.
 export default tseslint.config(
-  { ignores: ["dist", "target", "src-tauri", "node_modules"] },
+  { ignores: ["dist", "target", "src-tauri", "crates", "node_modules"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

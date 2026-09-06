@@ -1,11 +1,15 @@
 node_modules
 dist
 target
-src-tauri/target
 dist-release
 .env*
 
 # Local tooling state, never part of the source tree
+
+# Local [patch] pointing Cargo at a core checkout on this machine. It rewrites
+# Cargo.lock, so it must never be committed and never be present for a release
+# build; build-release-local.ps1 refuses to run while it exists.
+.cargo/config.toml
 
 # Playwright run artifacts; the committed baselines live in e2e/*-snapshots
 test-results/

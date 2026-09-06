@@ -3,11 +3,15 @@
 # The Authenticode certificate sits on a hardware token no runner reaches,
 # which is the whole reason they are built here.
 #
-# The Linux and macOS extractors come from .github/workflows/release.yml,
-# which runs on the tag and attaches them to the same draft. They are not
-# built here on purpose. A binary out of WSL links against this machine's
-# glibc, and the extractor is the one tool that has to start on a machine
-# nothing is assumed about.
+# The Linux and macOS extractors come from silentsilo/core, built and signed
+# when its tag was pushed. This repository's release workflow downloads them
+# from the core release this build is pinned to and attaches them to the same
+# draft. They are not rebuilt here on purpose: a binary out of WSL links
+# against this machine's glibc, and the extractor is the one tool that has to
+# start on a machine nothing is assumed about.
+#
+# The Windows extractor is built here, from a clean clone of that same core
+# tag, because it needs the Authenticode signature.
 #
 # Run it from the repo root:
 #
@@ -52,6 +56,19 @@ $cargoVersion = ([regex]'(?m)^version\s*=\s*"([^"]+)"').Match(
 if ($cargoVersion -ne $version) {
     throw "Version mismatch: package.json says $version, Cargo.toml says $cargoVersion"
 }
+
+# A `[patch]` pointing Cargo at a local core checkout rewrites Cargo.lock and
+# builds the app against whatever sits in a sibling directory rather than
+# against the pinned tag. Convenient while developing, catastrophic in a
+# signed installer that nobody can trace back to a revision.
+if (Test-Path (Join-Path $repoRoot ".cargo\config.toml")) {
+    throw ".cargo\config.toml exists. It patches the core crates to a local checkout; remove it, run cargo check to restore Cargo.lock, then build."
+}
+
+# Says which core revision this installer will contain, and refuses a lockfile
+# that points anywhere but silentsilo/core.
+node scripts\check-lockfile.mjs
+if (-not $?) { throw "Cargo.lock does not point at silentsilo/core" }
 
 # A release build answers for the tag, so it must be built from the tag: a
 # dirty tree or a HEAD the tag does not point at produces an installer whose
@@ -110,8 +127,8 @@ try {
     npm test;          if (-not $?) { throw "tests failed" }
     npm run build;     if (-not $?) { throw "frontend build failed" }
     cargo fmt --all -- --check; if (-not $?) { throw "cargo fmt failed" }
-    cargo clippy --all-targets -- -D warnings; if (-not $?) { throw "clippy failed" }
-    cargo test --all;  if (-not $?) { throw "cargo test failed" }
+    cargo clippy --all-targets --locked -- -D warnings; if (-not $?) { throw "clippy failed" }
+    cargo test --all --locked;  if (-not $?) { throw "cargo test failed" }
 
     Write-Host "`n== Installer ==" -ForegroundColor Cyan
     # The Authenticode certificate lives on a hardware token, so a GitHub
@@ -129,9 +146,9 @@ try {
     npx tauri build --config src-tauri/tauri.signing.json
     if (-not $?) { throw "tauri build failed" }
 
-    # The workspace root is silentsilo.gui, so cargo writes to .\target, not
-    # to src-tauri\target. Getting this wrong looks like a failed build when
-    # the build actually succeeded.
+    # The workspace root is the repository root, so cargo writes to .\target,
+    # not to src-tauri\target. Getting this wrong looks like a failed build
+    # when the build actually succeeded.
     $nsisDir = "target\release\bundle\nsis"
     # Matched on the version, not on "most recent": installers from earlier
     # tags stay in this directory, and shipping one of those under this tag's
@@ -146,11 +163,48 @@ try {
     Copy-Item $setup.FullName (Join-Path $out $setup.Name) -Force
     Copy-Item $sig (Join-Path $out "$($setup.Name).sig") -Force
 
+    # The extractor lives in silentsilo/core now, so it is built from a clean
+    # clone of the tag this app is pinned to, at the exact commit Cargo.lock
+    # records. Cloning rather than reusing a sibling working copy: that copy
+    # may have uncommitted work, and this binary is the one somebody reaches
+    # for when they have lost confidence in everything else.
+    #
+    # The Linux and macOS extractors come from core's own release workflow.
+    # A binary built out of WSL links against this machine's glibc, and the
+    # extractor is the one tool that has to start on a machine nothing is
+    # assumed about.
     Write-Host "`n== CLI, Windows ==" -ForegroundColor Cyan
-    cargo build -p silentsilo-extract --release
-    if (-not $?) { throw "windows extractor build failed" }
-    Copy-Item "target\release\silentsilo-extract.exe" `
-        (Join-Path $out "silentsilo-extract-windows-x86_64.exe") -Force
+    $coreTag = ([regex]'silentsilo-core = \{ git = "[^"]+", tag = "([^"]+)"').Match(
+        (Get-Content Cargo.toml -Raw)).Groups[1].Value
+    if (-not $coreTag) { throw "no core tag pinned in Cargo.toml" }
+    $corePin = ([regex]'(?ms)name = "silentsilo-core".*?source = "git\+[^"#]+#([0-9a-f]{40})"').Match(
+        (Get-Content Cargo.lock -Raw)).Groups[1].Value
+    if (-not $corePin) { throw "Cargo.lock records no commit for silentsilo-core" }
+    Write-Host "  core $coreTag ($($corePin.Substring(0,7)))"
+
+    $coreDir = Join-Path ([System.IO.Path]::GetTempPath()) "silentsilo-core-$coreTag"
+    if (Test-Path $coreDir) { Remove-Item $coreDir -Recurse -Force }
+    git clone --quiet --branch $coreTag --depth 1 https://github.com/silentsilo/core $coreDir
+    if (-not $?) { throw "cloning core $coreTag failed" }
+
+    # A tag can be moved after the fact; the lockfile's commit cannot. If the
+    # two disagree, the app was compiled against something other than what is
+    # about to be built here.
+    $cloned = (git -C $coreDir rev-parse HEAD).Trim()
+    if ($cloned -ne $corePin) {
+        throw "core $coreTag is at $cloned, but Cargo.lock pins $corePin"
+    }
+
+    Push-Location $coreDir
+    try {
+        cargo build -p silentsilo-extract --release --locked
+        if (-not $?) { throw "windows extractor build failed" }
+        Copy-Item (Join-Path $coreDir "target\release\silentsilo-extract.exe") `
+            (Join-Path $out "silentsilo-extract-windows-x86_64.exe") -Force
+    }
+    finally {
+        Pop-Location
+    }
 
     # Tauri bundles the app, not this, so its Authenticode signature is applied
     # by hand. Here rather than next to the minisign signing below, because

@@ -1,8 +1,15 @@
 # Contributing to SilentSilo
 
-Thanks for considering a contribution. This repository is the whole product:
-a local-first, end-to-end encrypted vault (Tauri 2 + Rust + React). There is
-no server component. Sync runs against storage the user controls.
+Thanks for considering a contribution. This repository is the desktop
+application: a local-first, end-to-end encrypted vault (Tauri 2 + Rust +
+React). There is no server component. Sync runs against storage the user
+controls.
+
+The engine underneath, the cryptography, the persisted formats, the operation
+log, sync and the storage backends, lives in
+[silentsilo/core](https://github.com/silentsilo/core) and is pinned here to a
+tag. A change to any of that belongs in that repository; this one moves its
+pin afterwards.
 
 ## Contributor License Agreement
 
@@ -31,36 +38,41 @@ dependencies.
 
 ```bash
 npm run typecheck
+npm run lint
 npm test
+npm run build
 cargo fmt --all -- --check
-cargo clippy --all-targets -- -D warnings
-cargo test --all
+cargo clippy --all-targets --locked -- -D warnings
+cargo test --all --locked
+cargo check --all --locked
+node scripts/check-lockfile.mjs
 ```
 
-This is what CI runs. If these pass locally, CI should too.
+`./scripts/test-local.ps1` runs all of it in order. This is what CI runs. If
+these pass locally, CI should too.
 
-If your change touches anything in [`FORMATS.md`](FORMATS.md), read that page
-first. `cargo test --all` includes the compatibility fixtures, which rebuild a
-silo written by a past release and compare what comes out. A fixture whose
-output changes means released data no longer reads the same way; the fix goes
-in the code, never in the fixture.
+`--locked` is not decoration. Working on core at the same time means a
+`[patch]` in `.cargo/config.toml`, which rewrites `Cargo.lock` and points the
+build at a checkout on your machine. Committed, that lockfile builds the
+release against a sibling directory. `--locked` and the lockfile check are
+what catch it.
 
-The sync and storage integration tests need a real object store and skip
-without one; see the README's *Integration tests* section for the one-line
-MinIO setup.
+If your change needs something from core, say so in the PR rather than
+vendoring it here. The compatibility fixtures and the storage integration
+tests live there too.
 
 ## Making changes
 
 - Keep PRs focused. A bug fix doesn't need an accompanying refactor.
-- Read [`docs/CRYPTO.md`](docs/CRYPTO.md) before touching anything under
-  `silentsilo-crypto` or `silentsilo-vault`. It is the source of truth for
-  the key hierarchy and on-disk formats.
-- Add or update tests for anything in `silentsilo-crypto`,
-  `silentsilo-vault`, `silentsilo-vfs` or `silentsilo-sync`. These are the
-  crates where a silent regression is most costly.
-- If you change an on-disk or wire format (blob layout, `vault.db`
-  encryption, envelope structure, operation-log records), bump the relevant
-  version constant and update `docs/CRYPTO.md` in the same PR.
+- Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) before changing the
+  session lifecycle or the order a sync pass runs in. Core's own map covers
+  everything below the application.
+- The 107 commands are the contract with the frontend, and so are their
+  parameter names, the event names and payload shapes, and the error strings
+  `src/lib/errors.ts` matches on. All four are matched by string and fail
+  silently when renamed. Change the frontend in the same commit.
+- Nothing about a persisted format can change from here. That is core's
+  jurisdiction, and it has its own rules.
 - Comments explain *why*, not *what*: an invariant, a workaround, a
   constraint the code cannot express. If the code needs a *what* comment,
   rewrite the code.

@@ -5,6 +5,18 @@ Notable changes are documented here. The format follows
 onward the version follows semver, and anything that could stop an existing
 silo from opening needs a major version rather than a note.
 
+## [Unreleased]
+
+### Changed
+
+- The domain crates moved to
+  [silentsilo/core](https://github.com/silentsilo/core) and are now a pinned
+  dependency rather than part of this workspace. Nothing a silo contains
+  changed: the dependency graph was compared before and after, package for
+  package and version for version, and the compatibility fixtures still
+  rebuild a 1.0.0 silo from its storage. This repository keeps the
+  application, its OS integration and the frontend.
+
 ## [1.0.0] - First public release
 
 The first public version of SilentSilo: a local-first, end-to-end encrypted
@@ -43,15 +55,15 @@ vault for files and passwords.
   silo from its storage and a recovery code and compares, a printable
   emergency kit carries what recovery needs, and `silentsilo-extract` reads
   a backup with no GUI involved. The steps it follows are written out in
-  [`FORMATS.md`](FORMATS.md) so a reader can reimplement them.
+  [`FORMATS.md`](https://github.com/silentsilo/core/blob/main/FORMATS.md) so a reader can reimplement them.
 - **Cryptography**: AES-256-GCM throughout, envelope encryption per
   enrolled key, encrypted local index. Documented in
-  [`docs/CRYPTO.md`](docs/CRYPTO.md).
+  [`docs/CRYPTO.md`](https://github.com/silentsilo/core/blob/main/docs/CRYPTO.md).
 - **Formats**: everything written to disk or to storage carries a version,
   and a build meeting one it does not know says so instead of guessing. The
   local index is a rebuildable cache of the operation log, so a future
   release can change it without a migration. Listed in
-  [`FORMATS.md`](FORMATS.md), and checked on every build against a committed
+  [`FORMATS.md`](https://github.com/silentsilo/core/blob/main/FORMATS.md), and checked on every build against a committed
   silo and its storage, rebuilt from a recovery code and compared. From here
   on those bytes are what a later release has to keep reading.
 

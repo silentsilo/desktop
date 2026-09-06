@@ -13,7 +13,9 @@ nothing held back.
 
 > **No independent security audit has been done.** Nobody outside this
 > project has been paid to attack it. The cryptography is specified in
-> [`docs/CRYPTO.md`](docs/CRYPTO.md), the formats in [`FORMATS.md`](FORMATS.md),
+> [`docs/CRYPTO.md`](https://github.com/silentsilo/core/blob/main/docs/CRYPTO.md),
+> the formats in
+> [`FORMATS.md`](https://github.com/silentsilo/core/blob/main/FORMATS.md),
 > the threat model and its limits are published, and all of this is readable
 > here. That makes the design reviewable; it is not the same as an audit, and
 > a serious flaw could sit in code that looks right and passes its tests.
@@ -35,18 +37,30 @@ nothing held back.
 
 - Tauri 2 · Rust 1.97 · React 19 · Vite
 
-## Crates (Rust workspace)
+## Where the code is
 
-| Crate | Role |
-|-------|------|
-| `silentsilo-crypto` | AES-GCM streaming, envelope encryption |
-| `silentsilo-vault` | Local vault provisioning; `vault.db` encrypted at rest (AES-256-GCM) |
-| `silentsilo-vfs` | Folder/file tree |
-| `silentsilo-fido` | FIDO2 security keys and Windows Hello |
-| `silentsilo-s3` | S3-compatible object storage client |
-| `silentsilo-store` | Backup storage: bucket, folder, WebDAV or SFTP |
-| `silentsilo-sync` | Multi-device sync over whichever of those |
-| `silentsilo-shell` | Explorer/Finder context menu |
+This repository holds the desktop application: the Tauri shell, the command
+layer, the React frontend, and `silentsilo-shell`, which is the only crate
+here that talks to the operating system.
+
+Everything below the application lives in
+[silentsilo/core](https://github.com/silentsilo/core): the cryptography, the
+persisted formats, the operation log, sync, the storage backends, the
+security-key backends and the standalone extraction tool. `Cargo.toml` pins a
+tag from there, and the lockfile pins the commit. Mobile clients will pin the
+same crates.
+
+| Crate | Where | Role |
+|-------|-------|------|
+| `silentsilo` | here, `src-tauri/` | The app: commands, sessions, flows |
+| `silentsilo-shell` | here, `crates/` | Explorer context menu, clipboard, autostart, tray plumbing |
+| `silentsilo-crypto` | core | AES-GCM streaming, envelope encryption |
+| `silentsilo-vault` | core | Silo provisioning; `vault.db` encrypted at rest (AES-256-GCM) |
+| `silentsilo-vfs` | core | Folder/file tree, operation log |
+| `silentsilo-fido` | core | FIDO2 security keys and Windows Hello |
+| `silentsilo-s3` | core | S3-compatible object storage client |
+| `silentsilo-store` | core | Backup storage: bucket, folder, WebDAV or SFTP |
+| `silentsilo-sync` | core | Multi-device sync over whichever of those |
 
 ## Silos
 
@@ -131,27 +145,36 @@ npm install
 npm run tauri:dev
 ```
 
-### Integration tests
+### Working on core at the same time
 
-The sync and storage tests run against real servers, and skip themselves
-unless one is configured. `scripts/test-local.ps1` brings up MinIO, WebDAV
-and SFTP in containers, points the tests at them, and runs the whole CI
-sequence:
+The core crates come from git at a pinned tag. To build the app against a
+local checkout instead, create `.cargo/config.toml` (gitignored):
+
+```toml
+[patch."https://github.com/silentsilo/core"]
+silentsilo-core = { path = "../silentsilo.core/crates/silentsilo-core" }
+silentsilo-crypto = { path = "../silentsilo.core/crates/silentsilo-crypto" }
+silentsilo-vault = { path = "../silentsilo.core/crates/silentsilo-vault" }
+silentsilo-vfs = { path = "../silentsilo.core/crates/silentsilo-vfs" }
+silentsilo-store = { path = "../silentsilo.core/crates/silentsilo-store" }
+silentsilo-sync = { path = "../silentsilo.core/crates/silentsilo-sync" }
+silentsilo-fido = { path = "../silentsilo.core/crates/silentsilo-fido" }
+silentsilo-s3 = { path = "../silentsilo.core/crates/silentsilo-s3" }
+```
+
+That file rewrites `Cargo.lock`. Delete it and run `cargo check` to restore
+the lockfile before committing; `node scripts/check-lockfile.mjs` says whether
+the lockfile still points at core, and CI runs it.
+
+The storage and sync integration tests live in core, along with the container
+setup that feeds them.
 
 ```bash
 ./scripts/test-local.ps1
 ```
 
-It sets `SILENTSILO_TEST_REQUIRE_BACKENDS`, which turns a suite that skips
-itself into a failure: asking for those tests and getting a silent pass is
-how they went a development cycle without running. `-Stop` takes the
-containers down again; `-RustOnly` skips the frontend half.
-
-To point the tests at a server you already have, set the endpoint yourself:
-
-```bash
-SILENTSILO_TEST_S3_ENDPOINT=http://127.0.0.1:9000 cargo test -p silentsilo-s3 -p silentsilo-sync
-```
+runs the whole CI sequence for this repository. `-RustOnly` skips the
+frontend half.
 
 ### Platform notes
 
@@ -163,10 +186,12 @@ implementations, neither a stub):
 | Windows | OS WebAuthn API (`webauthn.dll`) | No administrator rights required. |
 | Linux / macOS | CTAP2 over USB HID (`ctap-hid-fido2`) | Linux typically needs `libudev-dev` and `libusb-1.0-0-dev` (or your distro's equivalents) installed to build the HID dependencies. |
 
-Building with `--no-default-features` disables the `hardware` feature on
-`silentsilo-fido` entirely (useful for CI/lint-only environments without HID
-libs available). The app then falls back to a stub backend where no
-security-key operation succeeds, so don't use it for a real build.
+`silentsilo-fido` lives in core and carries a `hardware` feature that pulls
+in the HID stack. The app asks for it explicitly, so a build here always has
+it; `--no-default-features` on the app turns off `custom-protocol` and
+nothing else. To compile the crate without HID libraries, for a lint-only
+environment, build it in core with `--no-default-features`, where it falls
+back to a stub backend on which no security-key operation succeeds.
 
 ## Known gaps
 
@@ -179,11 +204,15 @@ printable emergency kit and the standalone extraction tool are all done.
 
 ## Docs
 
-Crypto specification (public): [`docs/CRYPTO.md`](docs/CRYPTO.md)
+Crypto specification (public):
+[`docs/CRYPTO.md`](https://github.com/silentsilo/core/blob/main/docs/CRYPTO.md),
+in core
 
 Setting up storage that survives a bad day, including append-only targets,
 object lock, and the lifecycle rule that deletes your archive:
 [`docs/STORAGE.md`](docs/STORAGE.md)
 
 Persisted formats, their versions, and what an older build does when it meets
-a newer one: [`FORMATS.md`](FORMATS.md)
+a newer one:
+[`FORMATS.md`](https://github.com/silentsilo/core/blob/main/FORMATS.md), in
+core

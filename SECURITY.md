@@ -3,9 +3,14 @@
 ## Reporting a vulnerability
 
 Report vulnerabilities privately to **security@silentsilo.com**. Please do
-not open a public issue for anything that could be a vulnerability:
-anything touching `silentsilo-crypto`, `silentsilo-vault`, key material,
-the FIDO2 flows or the recovery code.
+not open a public issue for anything that could be a vulnerability: anything
+touching key material, the FIDO2 flows, the recovery code, or what a silo
+writes to disk.
+
+The same address covers
+[silentsilo/core](https://github.com/silentsilo/core), where the
+cryptography, the persisted formats and sync live. Report to whichever
+repository you found it in; it reaches the same person either way.
 
 This is a one-person project, so reports are read by one person: the aim is
 an acknowledgement within 72 hours, and you will get one as soon as I see it.
@@ -20,8 +25,9 @@ plus one small manifest naming a random vault id.
 
 Four things reach the network, and nothing else does. The first is the
 backup storage the user configures, which is optional and carries only the
-ciphertext described in `docs/CRYPTO.md`. The second is the updater, which
-asks `releases.silentsilo.com` whether a newer version exists and downloads
+ciphertext described in the cryptography specification. The second is the
+updater, which asks `releases.silentsilo.com` whether a newer version exists
+and downloads
 it from GitHub; update packages are signed, and the app verifies that
 signature before installing. Automatic update checks can be turned off in
 Settings. The third is the breach check in Health, which runs only when its
@@ -37,7 +43,7 @@ tells each of those sites that someone holding an entry for them opened this
 list, which is why it is off to begin with.
 
 The threat model, key hierarchy and on-disk formats are documented in
-[`docs/CRYPTO.md`](docs/CRYPTO.md). That document is the reference for what
+[`docs/CRYPTO.md`](https://github.com/silentsilo/core/blob/main/docs/CRYPTO.md). That document is the reference for what
 this project does and does not defend against.
 
 One scope note about organisation-administered silos, since it is the one place
@@ -51,7 +57,7 @@ organisation keeps on storage it owns. Reports that the marking can be bypassed
 locally are welcome as documentation bugs if the docs overstate it, not as
 security issues.
 
-[`FORMATS.md`](FORMATS.md) lists every persisted format with its version and
+[`FORMATS.md`](https://github.com/silentsilo/core/blob/main/FORMATS.md) lists every persisted format with its version and
 what an older build does when it meets a newer one. A format change that could
 leave a vault unopenable is treated as a security issue, not a compatibility
 one: the data is unrecoverable by the person who owns it.

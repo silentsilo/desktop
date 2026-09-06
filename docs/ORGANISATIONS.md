@@ -4,7 +4,7 @@ A company setting silos up for its people has one problem an individual does
 not: the archive has to survive the person leaving. This document is the
 procedure for that, written for whoever runs IT. The employee-facing summary is
 on the website's security page; the format-level rules are in
-[FORMATS.md](../FORMATS.md), and the honest limits of the whole mechanism are at
+[FORMATS.md](https://github.com/silentsilo/core/blob/main/FORMATS.md), and the honest limits of the whole mechanism are at
 the end of this page.
 
 ## What the feature is

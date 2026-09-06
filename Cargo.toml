@@ -2,18 +2,7 @@
 resolver = "2"
 members = [
     "src-tauri",
-    "src-tauri/crates/silentsilo-core",
-    "src-tauri/crates/silentsilo-crypto",
-    "src-tauri/crates/silentsilo-vault",
-    "src-tauri/crates/silentsilo-vfs",
-    "src-tauri/crates/silentsilo-fido",
-    "src-tauri/crates/silentsilo-shell",
-    "src-tauri/crates/silentsilo-s3",
-    "src-tauri/crates/silentsilo-store",
-    "src-tauri/crates/silentsilo-fixture",
-    "src-tauri/crates/silentsilo-testkit",
-    "src-tauri/crates/silentsilo-sync",
-    "src-tauri/crates/silentsilo-extract",
+    "crates/silentsilo-shell",
 ]
 
 [workspace.package]
@@ -22,38 +11,28 @@ edition = "2024"
 rust-version = "1.94"
 license = "AGPL-3.0-or-later"
 
+# The domain crates live in silentsilo/core and are pinned to a tag, never a
+# branch: a release built from a moving target cannot be rebuilt later. The
+# lockfile goes further and pins the commit, so a tag moved after the fact
+# changes nothing here.
+#
+# To work on both at once, put a `[patch]` in `.cargo/config.toml` pointing at
+# a local core checkout. That file is gitignored, and it rewrites Cargo.lock:
+# restore the lockfile before committing. CI passes `--locked` on every cargo
+# command, and the `lockfile-guard` job checks the sources directly, so a
+# patched lockfile fails loudly rather than shipping.
 [workspace.dependencies]
-anyhow = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-thiserror = "2"
-uuid = { version = "1", features = ["v4", "v5", "v7", "serde"] }
-aes-gcm = "0.10"
-blake3 = "1"
+silentsilo-core = { git = "https://github.com/silentsilo/core", tag = "v1.0.0" }
+silentsilo-crypto = { git = "https://github.com/silentsilo/core", tag = "v1.0.0" }
+silentsilo-vault = { git = "https://github.com/silentsilo/core", tag = "v1.0.0" }
+silentsilo-vfs = { git = "https://github.com/silentsilo/core", tag = "v1.0.0" }
+silentsilo-store = { git = "https://github.com/silentsilo/core", tag = "v1.0.0" }
+silentsilo-sync = { git = "https://github.com/silentsilo/core", tag = "v1.0.0" }
+silentsilo-fido = { git = "https://github.com/silentsilo/core", tag = "v1.0.0" }
+silentsilo-shell = { path = "crates/silentsilo-shell" }
+
 rand = "0.9"
-zeroize = { version = "1", features = ["derive"] }
-argon2 = "0.5"
 tempfile = "3"
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-rusqlite = { version = "0.40", features = ["bundled"] }
-chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
-silentsilo-core = { path = "src-tauri/crates/silentsilo-core" }
-silentsilo-crypto = { path = "src-tauri/crates/silentsilo-crypto" }
-silentsilo-fixture = { path = "src-tauri/crates/silentsilo-fixture" }
-silentsilo-testkit = { path = "src-tauri/crates/silentsilo-testkit" }
-silentsilo-vault = { path = "src-tauri/crates/silentsilo-vault" }
-silentsilo-vfs = { path = "src-tauri/crates/silentsilo-vfs" }
+uuid = { version = "1", features = ["v4", "v5", "v7", "serde"] }
+zeroize = { version = "1", features = ["derive"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "blocking", "rustls-tls"] }
-silentsilo-shell = { path = "src-tauri/crates/silentsilo-shell" }
-silentsilo-fido = { path = "src-tauri/crates/silentsilo-fido" }
-silentsilo-s3 = { path = "src-tauri/crates/silentsilo-s3" }
-silentsilo-store = { path = "src-tauri/crates/silentsilo-store" }
-silentsilo-sync = { path = "src-tauri/crates/silentsilo-sync" }
-# default-https-client, not the legacy "rustls" feature: that one drags in
-# rustls 0.21 with a webpki release carrying three RUSTSEC advisories, while
-# this one rides the maintained rustls 0.23 / aws-lc stack the tree already
-# compiles anyway.
-aws-sdk-s3 = { version = "1", default-features = false, features = ["rt-tokio", "default-https-client"] }
-aws-credential-types = "1"
-aws-smithy-types = "1"
-aws-smithy-runtime-api = "1"

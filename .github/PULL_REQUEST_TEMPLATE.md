@@ -8,12 +8,12 @@
       Opening this pull request is acceptance either way; ticking it says you
       read it first.
 - [ ] `cargo fmt --all -- --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test --all`
+- [ ] `cargo clippy --all-targets --locked -- -D warnings`
+- [ ] `cargo test --all --locked`
+- [ ] `cargo check --all --locked`
+- [ ] `node scripts/check-lockfile.mjs`
 - [ ] `npm run lint`
 - [ ] `npm run build`
-- [ ] If this changes an on-disk/wire format (blob layout, vault.db
-      encryption, envelope structure): version bumped and
-      [`docs/CRYPTO.md`](../docs/CRYPTO.md) updated in this PR
-- [ ] Tests added/updated for anything in `silentsilo-crypto`,
-      `silentsilo-vault`, or `silentsilo-vfs`
+- [ ] `Cargo.lock` still points at silentsilo/core, not at a local checkout
+- [ ] If this renames a command, a parameter, an event or an error string,
+      the frontend changed in the same commit
