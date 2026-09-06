@@ -1,22 +1,23 @@
-name: Release
+name: Release extractors
 
-# Runs on version tags. It opens the draft release and fills it with the
-# extraction tools for Linux and macOS, taken from the silentsilo/core
-# release this build is pinned to.
+# Runs on version tags, and builds only the extraction tool, for the two
+# platforms that cannot be built on the release machine. Everything else in
+# a release (the installer, its updater signature, latest.json and the
+# Windows extractor) is built by scripts\build-release-local.ps1 and uploaded
+# by hand.
 #
 # The app is not built here on purpose. Its Authenticode certificate lives on
 # a hardware token that no runner can reach, so a CI build would produce an
 # unsigned installer under exactly the file names the signed one uses, plus a
 # latest.json whose minisign signature covers the unsigned bytes. Publishing
 # that manifest offers an update the app then refuses to install, and nothing
-# announces the mistake until someone tries to update. The installer, its
-# updater signature, latest.json and the Windows extractor come from
-# scripts\build-release-local.ps1 and are uploaded by hand.
+# announces the mistake until someone tries to update.
 #
-# The Linux and macOS extractors are not rebuilt here either. They were built
-# and signed by silentsilo/core when its tag was pushed, from exactly the
-# revision this release is compiled against, so rebuilding them would produce
-# a second binary claiming to be the same thing.
+# The extractor's source lives in silentsilo/core. It is built here from a
+# clean clone of the core tag this app pins, checked against the commit the
+# lockfile records, so the binary on the release page comes from exactly the
+# revision the installer was compiled against. Same logic as the local script
+# uses for the Windows one.
 on:
   push:
     tags:
@@ -26,61 +27,125 @@ permissions:
   contents: write
 
 jobs:
-  draft:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+  # The extraction tool is the answer to "what if the project disappears", so
+  # shipping it only inside the Windows installer would put it exactly where
+  # it is least useful: someone recovering on Linux would have to install a
+  # Windows application first. It is a plain binary with no interface and no
+  # security key, so one source builds everywhere.
+  build-extract:
+    strategy:
+      # One platform failing must not withhold the binary that did build: the
+      # release is a draft either way, and a missing macOS binary is something
+      # to notice rather than a reason to have no Linux one.
+      fail-fast: false
+      # Whichever job runs first creates the draft this uploads into. In
+      # parallel they would race to create the same release, so they queue.
+      max-parallel: 1
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: silentsilo-extract-linux-x86_64
+            built: silentsilo-extract
+          - os: macos-latest
+            asset: silentsilo-extract-macos-aarch64
+            built: silentsilo-extract
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
 
-      # The tag this build is pinned to, read from the manifest rather than
-      # passed in: the pin is the single source of truth for which core
-      # revision the app was compiled against, and a hand-typed tag here
-      # could name a different one.
-      - name: Which core release this build is pinned to
+      # The pin is the single source of truth for which core revision the app
+      # was compiled against. Read from the manifest and the lockfile rather
+      # than typed here, and the two must agree with each other and with what
+      # the clone below actually checks out.
+      - name: Which core revision this build is pinned to
         id: pin
+        shell: bash
         run: |
           tag=$(grep -m1 -oE 'silentsilo-core = \{ git = "[^"]+", tag = "([^"]+)"' Cargo.toml \
                 | grep -oE 'tag = "[^"]+"' | cut -d'"' -f2)
-          if [ -z "$tag" ]; then
-            echo "::error::no core tag pinned in Cargo.toml"
+          commit=$(awk '/^name = "silentsilo-core"$/{f=1} f && /^source = /{print; exit}' Cargo.lock \
+                   | grep -oE '#[0-9a-f]{40}' | tr -d '#')
+          if [ -z "$tag" ] || [ -z "$commit" ]; then
+            echo "::error::Cargo.toml pins no core tag, or Cargo.lock records no commit for it"
             exit 1
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "pinned to core $tag"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "core $tag at $commit"
 
-      # The extraction tool is the answer to "what if the project
-      # disappears", so shipping it only inside the Windows installer would
-      # put it exactly where it is least useful: someone recovering on Linux
-      # would have to install a Windows application first.
-      - name: Fetch the extractors from the pinned core release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # A tag can be moved after the fact; the lockfile's commit cannot. If
+      # the two disagree, the extractor about to be built is not the code the
+      # installer contains.
+      - name: Clone core at that tag and check the commit
+        shell: bash
+        run: |
+          git clone --quiet --branch "${{ steps.pin.outputs.tag }}" --depth 1 \
+            https://github.com/silentsilo/core core-src
+          got=$(git -C core-src rev-parse HEAD)
+          if [ "$got" != "${{ steps.pin.outputs.commit }}" ]; then
+            echo "::error::core ${{ steps.pin.outputs.tag }} is at $got, but Cargo.lock pins ${{ steps.pin.outputs.commit }}"
+            exit 1
+          fi
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.1
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: extract-${{ matrix.os }}
+          workspaces: core-src
+
+      # The keychain crate reaches for D-Bus on Linux, because the vault
+      # stores credentials in the OS keychain and the persistent Linux
+      # backend is secret-service. The extractor never calls that code, but
+      # it links the crate, so the build needs the headers.
+      #
+      # This is a workaround rather than the answer. A recovery binary that
+      # links libdbus needs libdbus present on the machine someone is
+      # recovering on, which is the one place to assume nothing. Making the
+      # keychain optional in silentsilo-vault is the real fix.
+      - name: D-Bus headers, for the keychain crate the extractor does not use
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          for attempt in 1 2 3; do
+            sudo timeout 180 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update && break
+            echo "apt-get update stalled or failed (attempt $attempt)"
+            sudo pkill -9 -f apt-get || true
+            sudo dpkg --configure -a || true
+            sleep 5
+          done
+          sudo apt-get install -y libdbus-1-dev pkg-config
+
+      # `-p` and nothing else: this must not drag in the security key backend,
+      # which is the whole reason it builds on three platforms from one
+      # source. `--locked` against core's own lockfile: the extractor ships
+      # with the dependency versions core tested, not whatever resolves today.
+      - run: cargo test -p silentsilo-extract --release --locked
+        working-directory: core-src
+      - run: cargo build -p silentsilo-extract --release --locked
+        working-directory: core-src
+
+      - name: Name the binary for the platform it runs on
+        shell: bash
         run: |
           mkdir -p dist
-          gh release download "${{ steps.pin.outputs.tag }}" \
-            --repo silentsilo/core \
-            --pattern 'silentsilo-extract-*' \
-            --dir dist
-          ls -l dist
+          cp "core-src/target/release/${{ matrix.built }}" "dist/${{ matrix.asset }}"
 
-      # A release page missing half its recovery tools is worth failing for.
-      # The Windows extractor is not checked here: it comes off the release
-      # machine with the installer.
-      - name: Refuse a half-filled release
-        run: |
-          missing=0
-          for f in silentsilo-extract-linux-x86_64 \
-                   silentsilo-extract-linux-x86_64.sig \
-                   silentsilo-extract-macos-aarch64 \
-                   silentsilo-extract-macos-aarch64.sig; do
-            if [ ! -s "dist/$f" ]; then
-              echo "::error::$f is missing from core ${{ steps.pin.outputs.tag }}"
-              missing=1
-            fi
-          done
-          exit $missing
+      # Signed with the same updater key as the installer. This is the tool
+      # someone downloads when they have lost confidence in everything else,
+      # so "is this the binary the project published" has to be answerable
+      # without trusting GitHub. Verify with minisign against the public key
+      # in tauri.conf.json, also published as SIGNING-PUBKEY.txt in core.
+      - name: Sign it
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx --yes @tauri-apps/cli signer sign "dist/${{ matrix.asset }}"
 
-      - name: Open the draft and attach them
+      - name: Attach it to the draft
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -88,4 +153,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           draft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-          files: dist/*
+          body: "Built against silentsilo/core ${{ steps.pin.outputs.tag }} (${{ steps.pin.outputs.commit }})."
+          files: |
+            dist/${{ matrix.asset }}
+            dist/${{ matrix.asset }}.sig
