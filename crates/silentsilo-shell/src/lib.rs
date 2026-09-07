@@ -11,6 +11,7 @@ mod macos;
 mod os_integration;
 mod secret_clipboard;
 mod session_watch;
+mod tray;
 #[cfg(windows)]
 mod windows;
 
@@ -25,6 +26,7 @@ pub use secret_clipboard::{
     clear_outstanding as clear_secret_clipboard_now, set_secret_tracked as set_secret_clipboard,
 };
 pub use session_watch::{SessionEvent, on_user_left};
+pub use tray::available as tray_available;
 
 const UPLOAD_QUEUE: &str = "upload-queue.txt";
 const DOWNLOAD_QUEUE: &str = "download-queue.txt";

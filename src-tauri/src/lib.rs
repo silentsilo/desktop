@@ -125,7 +125,12 @@ pub fn run() {
             // Before the tray, so a first run that is also the first boot
             // has the Run entry in place whatever happens next.
             let _ = silentsilo_shell::ensure_autostart();
-            setup_tray(app.handle())?;
+            // Asked once, at startup, and used twice: whether to build the
+            // tray at all, and whether closing the window may hide it.
+            let has_tray = silentsilo_shell::tray_available();
+            if has_tray {
+                setup_tray(app.handle())?;
+            }
             commands::fido::bind_fido_parent_hwnd(app.handle());
             handle_shell_action(app.handle(), startup_args);
             commands::sync::spawn_auto_sync(app.handle().clone());
@@ -140,11 +145,17 @@ pub fn run() {
             });
 
             // Clicking the window's own close (X) button hides it instead of
-            // quitting — the app keeps running in the tray so shell "Upload to
+            // quitting: the app keeps running in the tray so shell "Upload to
             // SilentSilo" actions don't cold-start it (and re-prompt for the
             // security key). Real exit goes through the tray's Quit or the OS
             // shutting down (ExitRequested below).
-            if let Some(window) = app.get_webview_window("main") {
+            //
+            // Only where there is a tray. On a desktop without one, most of
+            // all GNOME without the AppIndicator extension, hiding the window
+            // would leave a running process with no icon and no window, which
+            // the user cannot reach at all. There, closing means quitting, and
+            // ExitRequested still flushes and closes every open silo.
+            if has_tray && let Some(window) = app.get_webview_window("main") {
                 let window_to_hide = window.clone();
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
