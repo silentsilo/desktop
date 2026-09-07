@@ -1,7 +1,7 @@
 //! Reads the file/folder paths from the OS clipboard (populated by Ctrl+C in
-//! Windows Explorer), so the vault can offer a matching Ctrl+V "paste to
-//! upload" — mirroring the existing "Add to SilentSilo" context-menu flow
-//! but triggered from inside the app instead of from Explorer.
+//! Windows Explorer, or Cmd+C in Finder), so the vault can offer a matching
+//! paste-to-upload: the same flow as the "Add to SilentSilo" shell verb,
+//! triggered from inside the app instead of from the file manager.
 
 #[cfg(windows)]
 mod imp {
@@ -56,7 +56,36 @@ mod imp {
 #[cfg(windows)]
 pub use imp::read_file_paths;
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+mod mac {
+    use objc2_app_kit::{NSPasteboard, NSPasteboardTypeFileURL};
+    use objc2_foundation::NSURL;
+
+    /// Whatever a Cmd+C in Finder put there: one item per file, each
+    /// carrying a `public.file-url`. Anything else on the pasteboard (text,
+    /// an image) has no such item and reads as empty.
+    pub fn read_file_paths() -> Vec<String> {
+        let pasteboard = NSPasteboard::generalPasteboard();
+        let Some(items) = pasteboard.pasteboardItems() else {
+            return Vec::new();
+        };
+        // SAFETY: a static AppKit exports for the life of the process.
+        let file_url = unsafe { NSPasteboardTypeFileURL };
+        items
+            .iter()
+            .filter_map(|item| item.stringForType(file_url))
+            .filter_map(|url| NSURL::URLWithString(&url))
+            .filter_map(|url| url.path())
+            .map(|path| path.to_string())
+            .filter(|path| !path.is_empty())
+            .collect()
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub use mac::read_file_paths;
+
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn read_file_paths() -> Vec<String> {
     Vec::new()
 }

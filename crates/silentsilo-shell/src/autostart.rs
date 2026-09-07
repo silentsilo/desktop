@@ -1,13 +1,16 @@
-//! "Start when Windows starts", as a per-user Run entry (HKCU, no admin).
-//! The app is meant to be running rather than launched: the Explorer verbs
+//! "Start when I sign in", as a per-user entry that needs no admin.
+//! The app is meant to be running rather than launched: the shell verbs
 //! forward to the unlocked instance, the sync timer only ticks while a
-//! process exists, and a cold start costs a key prompt. HKCU\...\Run needs
-//! no admin, is removed by one DeleteRegValue, and shows up in Task
-//! Manager's Startup tab, where people go to turn these off.
+//! process exists, and a cold start costs a key prompt.
+//!
+//! On Windows that is a Run value under HKCU, removed by one DeleteRegValue
+//! and listed in Task Manager's Startup tab. On macOS it is a LaunchAgent
+//! plist in the user's library, which System Settings lists under Login
+//! Items. Both carry `--autostart`, the flag that keeps the window hidden.
 
 #[cfg(windows)]
 use std::path::Path;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 use std::path::PathBuf;
 
 #[cfg(windows)]
@@ -19,7 +22,7 @@ const VALUE_NAME: &str = "SilentSilo";
 /// rather than on `cfg!`, so adding macOS or Linux later stays a change to
 /// this module.
 pub fn autostart_supported() -> bool {
-    cfg!(windows)
+    cfg!(any(windows, target_os = "macos"))
 }
 
 /// The command Windows runs at sign-in. `--autostart` is the whole reason
@@ -95,7 +98,7 @@ pub fn ensure_autostart() -> std::io::Result<()> {
 /// Presence of this file, not the registry value, is what says "this machine
 /// has already been asked once". The uninstaller deletes it along with the
 /// Run entry, so a reinstall is treated as a first install again.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 fn marker_path() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -103,20 +106,149 @@ fn marker_path() -> PathBuf {
         .join("autostart-initialized")
 }
 
-#[cfg(not(windows))]
+/// A LaunchAgent rather than `SMAppService`: the modern API registers the
+/// app itself as a login item, and launchd then starts it with no arguments,
+/// so there is no way to pass `--autostart` and the window would open on
+/// every login. A LaunchAgent is a command line, exactly like the Run value
+/// on Windows, and macOS 13 lists it under Login Items all the same.
+#[cfg(target_os = "macos")]
+mod mac {
+    use super::marker_path;
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+
+    /// The bundle identifier, which is what launchd and System Settings key
+    /// the entry by.
+    const LABEL: &str = "com.silentsilo.desktop";
+
+    fn plist_path() -> std::io::Result<PathBuf> {
+        let home = dirs::home_dir().ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotFound, "home directory not found")
+        })?;
+        Ok(home
+            .join("Library/LaunchAgents")
+            .join(format!("{LABEL}.plist")))
+    }
+
+    fn xml_escape(text: &str) -> String {
+        text.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+    }
+
+    /// `LimitLoadToSessionType Aqua`: only in a logged-in graphical session,
+    /// never for an SSH login. `RunAtLoad` is the whole point.
+    fn plist_for(exe: &Path) -> String {
+        let exe = xml_escape(&exe.display().to_string());
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>{LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>{exe}</string>
+    <string>--autostart</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>LimitLoadToSessionType</key><string>Aqua</string>
+</dict>
+</plist>
+"#
+        )
+    }
+
+    /// The launchd domain for the current user's graphical session.
+    fn domain() -> String {
+        // SAFETY: getuid has no preconditions and cannot fail.
+        format!("gui/{}", unsafe { libc::getuid() })
+    }
+
+    /// Best effort, deliberately: the file is what "enabled" means, and
+    /// launchd reads it at the next login regardless. Loading it now only
+    /// makes the change take effect immediately, and `bootstrap` refuses a
+    /// job that is already loaded, which is not an error worth surfacing.
+    fn launchctl(verb: &str, plist: &Path) {
+        let _ = Command::new("/bin/launchctl")
+            .arg(verb)
+            .arg(domain())
+            .arg(plist)
+            .status();
+    }
+
+    /// The command the plist would carry if written now.
+    fn expected_plist() -> std::io::Result<String> {
+        Ok(plist_for(&std::env::current_exe()?))
+    }
+
+    pub fn autostart_enabled() -> bool {
+        plist_path().map(|p| p.is_file()).unwrap_or(false)
+    }
+
+    pub fn set_autostart(enabled: bool) -> std::io::Result<()> {
+        let plist = plist_path()?;
+        if !enabled {
+            if plist.is_file() {
+                launchctl("bootout", &plist);
+                std::fs::remove_file(&plist)?;
+            }
+            return Ok(());
+        }
+        if let Some(parent) = plist.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&plist, expected_plist()?)?;
+        launchctl("bootstrap", &plist);
+        Ok(())
+    }
+
+    /// Same contract as the Windows version: on a machine that has never run
+    /// this app it turns autostart on; on every later launch it only repairs
+    /// a stale path, and never re-creates an entry the user removed.
+    pub fn ensure_autostart() -> std::io::Result<()> {
+        let marker = marker_path();
+        if !marker.is_file() {
+            set_autostart(true)?;
+            if let Some(parent) = marker.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(&marker, "")?;
+            return Ok(());
+        }
+
+        if !autostart_enabled() {
+            return Ok(());
+        }
+        let plist = plist_path()?;
+        let expected = expected_plist()?;
+        let current = std::fs::read_to_string(&plist).unwrap_or_default();
+        if current != expected {
+            launchctl("bootout", &plist);
+            std::fs::write(&plist, expected)?;
+            launchctl("bootstrap", &plist);
+        }
+        Ok(())
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub use mac::{autostart_enabled, ensure_autostart, set_autostart};
+
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn autostart_enabled() -> bool {
     false
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn set_autostart(_enabled: bool) -> std::io::Result<()> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
-        "starting with the system is only implemented on Windows",
+        "starting with the system is only implemented on Windows and macOS",
     ))
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn ensure_autostart() -> std::io::Result<()> {
     Ok(())
 }

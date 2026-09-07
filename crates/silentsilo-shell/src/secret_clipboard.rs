@@ -5,6 +5,11 @@
 //! writer opt out of both through two documented formats. Neither is a
 //! permission check (any process reading the clipboard still sees the
 //! value); what they stop is the system *retaining* the copy.
+//!
+//! macOS has no system clipboard history, but third-party managers are
+//! common, and they honour a convention instead: an item that also carries
+//! the `org.nspasteboard.ConcealedType` type is not recorded. Apple's own
+//! secure text fields set it, and so does this.
 
 use std::sync::Mutex;
 
@@ -198,12 +203,58 @@ mod imp {
 #[cfg(windows)]
 pub use imp::{clear_if_still, set_secret};
 
-#[cfg(not(windows))]
-pub fn set_secret(_text: &str) -> Result<(), String> {
-    Err("copying secrets is only implemented on Windows so far".into())
+#[cfg(target_os = "macos")]
+mod mac {
+    use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
+    use objc2_foundation::NSString;
+
+    /// The type clipboard managers agree to skip. Documented at
+    /// nspasteboard.org rather than by Apple, but Apple's password fields
+    /// set it, and 1Password, Maccy and Paste all honour it. The value does
+    /// not matter; the type's presence on the item is the whole signal.
+    const CONCEALED: &str = "org.nspasteboard.ConcealedType";
+
+    /// Copies `text` as a secret: readable by a paste, but flagged so a
+    /// clipboard manager does not keep it.
+    pub fn set_secret(text: &str) -> Result<(), String> {
+        let pasteboard = NSPasteboard::generalPasteboard();
+        pasteboard.clearContents();
+        // SAFETY: a static AppKit exports for the life of the process.
+        let string_type = unsafe { NSPasteboardTypeString };
+        if !pasteboard.setString_forType(&NSString::from_str(text), string_type) {
+            return Err("the pasteboard refused the value".into());
+        }
+        // After the value, on the same item, so a failure above leaves the
+        // pasteboard empty rather than holding a bare marker.
+        pasteboard.setString_forType(&NSString::from_str(""), &NSString::from_str(CONCEALED));
+        Ok(())
+    }
+
+    /// Clears the pasteboard, but only if it still holds `expected`. Same
+    /// reasoning as on Windows: by the time the timer fires the user may
+    /// have copied something else, and that is not ours to wipe.
+    pub fn clear_if_still(expected: &str) -> bool {
+        let pasteboard = NSPasteboard::generalPasteboard();
+        // SAFETY: as above.
+        let string_type = unsafe { NSPasteboardTypeString };
+        let current = pasteboard.stringForType(string_type).map(|s| s.to_string());
+        if current.as_deref() != Some(expected) {
+            return false;
+        }
+        pasteboard.clearContents();
+        true
+    }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+pub use mac::{clear_if_still, set_secret};
+
+#[cfg(not(any(windows, target_os = "macos")))]
+pub fn set_secret(_text: &str) -> Result<(), String> {
+    Err("copying secrets is only implemented on Windows and macOS so far".into())
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn clear_if_still(_expected: &str) -> bool {
     false
 }

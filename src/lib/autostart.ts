@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export type AutostartStatus = {
-  /** False where the OS integration does not exist yet (anything but Windows). */
+  /** False where the OS integration does not exist yet: Windows and macOS have one, Linux does not. */
   supported: boolean;
   enabled: boolean;
 };

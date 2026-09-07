@@ -69,17 +69,39 @@ mod platform {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(unix)]
 mod platform {
     use super::DiskSpace;
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
     use std::path::Path;
 
-    /// Not implemented off Windows, which is where this app runs. The Linux
-    /// job builds every crate, so this exists to compile rather than to
-    /// answer, and returning `None` means "no warning" rather than a wrong
-    /// number.
-    pub fn space_at(_path: &Path) -> Option<DiskSpace> {
-        None
+    /// The field widths differ between macOS and Linux (`f_bavail` is 32
+    /// bits on one and 64 on the other), so the widening goes through a
+    /// generic bound rather than a cast that is redundant on one of them.
+    fn wide(n: impl Into<u64>) -> u64 {
+        n.into()
+    }
+
+    /// `statvfs` on the filesystem holding `path`. `f_bavail` is what an
+    /// unprivileged process may still use, which is the honest number: the
+    /// reserve APFS and ext4 keep for root is not ours to fill.
+    pub fn space_at(path: &Path) -> Option<DiskSpace> {
+        let c_path = CString::new(path.as_os_str().as_bytes()).ok()?;
+        let mut stats = std::mem::MaybeUninit::<libc::statvfs>::uninit();
+        // SAFETY: `c_path` is NUL-terminated and outlives the call, and
+        // `stats` is writable storage of exactly the type statvfs fills.
+        let rc = unsafe { libc::statvfs(c_path.as_ptr(), stats.as_mut_ptr()) };
+        if rc != 0 {
+            return None;
+        }
+        // SAFETY: statvfs returned 0, so it initialised the struct.
+        let stats = unsafe { stats.assume_init() };
+        let fragment = wide(stats.f_frsize);
+        Some(DiskSpace {
+            available: wide(stats.f_bavail).saturating_mul(fragment),
+            total: wide(stats.f_blocks).saturating_mul(fragment),
+        })
     }
 }
 

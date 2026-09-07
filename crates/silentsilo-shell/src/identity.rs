@@ -17,14 +17,29 @@ pub fn system_name() -> Option<String> {
         }
     }
 
+    #[cfg(target_os = "macos")]
+    {
+        // The friendly name from System Settings, "Alex's MacBook Air", which
+        // is what a person recognises in a device list. The hostname is its
+        // ASCII shadow and only serves as the fallback below.
+        if let Ok(out) = std::process::Command::new("/usr/sbin/scutil")
+            .args(["--get", "ComputerName"])
+            .output()
+            && out.status.success()
+            && let Some(name) = non_empty(String::from_utf8_lossy(&out.stdout).trim().to_string())
+        {
+            return Some(name);
+        }
+    }
+
     #[cfg(not(windows))]
     {
         // `HOSTNAME` is a shell variable rather than an exported one on most
         // systems, so the file is the reliable half of this pair.
-        if let Ok(name) = std::fs::read_to_string("/etc/hostname") {
-            if let Some(name) = non_empty(name.trim().to_string()) {
-                return Some(name);
-            }
+        if let Ok(name) = std::fs::read_to_string("/etc/hostname")
+            && let Some(name) = non_empty(name.trim().to_string())
+        {
+            return Some(name);
         }
         if let Ok(name) = std::env::var("HOSTNAME") {
             return non_empty(name);

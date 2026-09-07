@@ -28,3 +28,30 @@ windows = { version = "0.61", features = [
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
+
+[target."cfg(unix)".dependencies]
+libc = "0.2"
+
+# Only the classes this crate touches: the pasteboard, the workspace's
+# notification centre and the distributed one. AppKit's default feature set
+# is every class in the framework.
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6.2"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "NSPasteboard",
+    "NSPasteboardItem",
+    "NSWorkspace",
+] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "block2",
+    "NSArray",
+    "NSDistributedNotificationCenter",
+    "NSEnumerator",
+    "NSNotification",
+    "NSObject",
+    "NSOperation",
+    "NSString",
+    "NSURL",
+] }

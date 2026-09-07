@@ -1,8 +1,10 @@
 //! Tells the app when the user leaves the machine. Auto-lock measures idle
 //! time, which does not answer the common case: the user locks the screen
 //! and walks off, leaving the silo open for minutes until the timer
-//! expires. Windows announces that through session notifications, so the
-//! app can lock at the same moment the workstation does.
+//! expires. Windows announces that through session notifications, macOS
+//! through a distributed notification when the screen locks and a
+//! workspace one when the machine sleeps, so the app can lock at the same
+//! moment the workstation does.
 
 /// What the OS just told us about the user's session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,14 +117,81 @@ mod imp {
     }
 }
 
+#[cfg(target_os = "macos")]
+mod imp {
+    use super::SessionEvent;
+    use std::ptr::NonNull;
+    use std::sync::OnceLock;
+
+    use block2::RcBlock;
+    use objc2_app_kit::{NSWorkspace, NSWorkspaceWillSleepNotification};
+    use objc2_foundation::{NSDistributedNotificationCenter, NSNotification, NSString};
+
+    /// Posted system-wide the moment the screen locks. Not in Apple's
+    /// documentation, but stable across every release since 10.x, and what
+    /// every "lock when the screen does" utility listens for.
+    const SCREEN_LOCKED: &str = "com.apple.screenIsLocked";
+
+    static HANDLER: OnceLock<Box<dyn Fn(SessionEvent) + Send + Sync>> = OnceLock::new();
+
+    fn user_left() {
+        if let Some(handler) = HANDLER.get() {
+            // Off the delivering thread, which for a workspace notification
+            // is the main thread. Locking every silo does file work, and the
+            // screen is already locked so nothing needs to stay responsive,
+            // but there is no reason to stall AppKit either.
+            std::thread::spawn(|| handler(SessionEvent::UserLeft));
+        }
+    }
+
+    /// Registers the two observers and returns. Unlike Windows there is no
+    /// loop to run here: AppKit delivers workspace notifications on the
+    /// main thread's run loop, and the distributed centre delivers to the
+    /// thread that registered, so being called from the main thread during
+    /// setup is what makes both arrive.
+    pub fn watch(handler: Box<dyn Fn(SessionEvent) + Send + Sync>) {
+        if HANDLER.set(handler).is_err() {
+            return; // Already watching.
+        }
+        let block = RcBlock::new(|_notification: NonNull<NSNotification>| user_left());
+        // SAFETY: the names are valid strings, the block captures nothing and
+        // reads only a static, and the observer objects are leaked on
+        // purpose: the centre keeps delivering for as long as they exist,
+        // which is meant to be the rest of the process.
+        unsafe {
+            let sleeping = NSWorkspace::sharedWorkspace()
+                .notificationCenter()
+                .addObserverForName_object_queue_usingBlock(
+                    Some(NSWorkspaceWillSleepNotification),
+                    None,
+                    None,
+                    &block,
+                );
+            std::mem::forget(sleeping);
+            let locked = NSDistributedNotificationCenter::defaultCenter()
+                .addObserverForName_object_queue_usingBlock(
+                    Some(&NSString::from_str(SCREEN_LOCKED)),
+                    None,
+                    None,
+                    &block,
+                );
+            std::mem::forget(locked);
+        }
+    }
+}
+
 /// Calls `handler` whenever the user leaves the machine.
 ///
-/// Spawns its own thread and never returns work to the caller. On platforms
-/// without an implementation this does nothing, and the idle timer remains
-/// the only thing closing an unattended silo.
+/// On Windows this spawns the thread that runs the message loop and never
+/// returns work to the caller. On macOS it registers observers with the
+/// system and returns; call it from the main thread. On platforms without
+/// an implementation it does nothing, and the idle timer remains the only
+/// thing closing an unattended silo.
 pub fn on_user_left(handler: impl Fn(SessionEvent) + Send + Sync + 'static) {
     #[cfg(windows)]
     std::thread::spawn(move || imp::watch(Box::new(handler)));
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    imp::watch(Box::new(handler));
+    #[cfg(not(any(windows, target_os = "macos")))]
     let _ = handler;
 }
