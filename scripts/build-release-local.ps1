@@ -3,12 +3,12 @@
 # The Authenticode certificate sits on a hardware token no runner reaches,
 # which is the whole reason they are built here.
 #
-# The Linux and macOS extractors come from silentsilo/core, built and signed
-# when its tag was pushed. This repository's release workflow downloads them
-# from the core release this build is pinned to and attaches them to the same
-# draft. They are not rebuilt here on purpose: a binary out of WSL links
-# against this machine's glibc, and the extractor is the one tool that has to
-# start on a machine nothing is assumed about.
+# The Linux and macOS extractors are built by this repository's release
+# workflow, from a clean clone of the core tag this build pins, and attached
+# to the same draft. Core publishes tags and no releases, so there is nothing
+# to download from it. They are not built here on purpose: a binary out of
+# WSL links against this machine's glibc, and the extractor is the one tool
+# that has to start on a machine nothing is assumed about.
 #
 # The Windows extractor is built here, from a clean clone of that same core
 # tag, because it needs the Authenticode signature.
@@ -143,6 +143,14 @@ try {
     # Direct, not `npm run tauri:build`: npm drops forwarded arguments for a
     # script chained with `&&`, taking the signing config with them.
     npm run icons; if (-not $?) { throw "icon generation failed" }
+    # The clean-tree check ran before this, and this rewrites committed
+    # files: every PNG, the ICO, the ICNS and the tray template. If the
+    # renderer produces different bytes than the ones the tag holds, the
+    # installer would carry icons no commit contains. Cheaper to notice here
+    # than to explain later.
+    if (git status --porcelain -- src-tauri\icons) {
+        throw "npm run icons changed committed icons. Commit them, retag, then build."
+    }
     npx tauri build --config src-tauri/tauri.signing.json
     if (-not $?) { throw "tauri build failed" }
 
@@ -169,10 +177,10 @@ try {
     # may have uncommitted work, and this binary is the one somebody reaches
     # for when they have lost confidence in everything else.
     #
-    # The Linux and macOS extractors come from core's own release workflow.
-    # A binary built out of WSL links against this machine's glibc, and the
-    # extractor is the one tool that has to start on a machine nothing is
-    # assumed about.
+    # The Linux and macOS extractors are built by the release workflow on
+    # GitHub, from this same core tag. A binary built out of WSL links
+    # against this machine's glibc, and the extractor is the one tool that
+    # has to start on a machine nothing is assumed about.
     Write-Host "`n== CLI, Windows ==" -ForegroundColor Cyan
     $coreTag = ([regex]'silentsilo-core = \{ git = "[^"]+", tag = "([^"]+)"').Match(
         (Get-Content Cargo.toml -Raw)).Groups[1].Value

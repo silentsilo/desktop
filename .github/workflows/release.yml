@@ -171,22 +171,29 @@ jobs:
   #
   # Signing and notarisation happen inside `tauri build` when the APPLE_*
   # variables are set, and are skipped when they are not. The rule that
-  # decides whether the output reaches the release is the identity: without
-  # one, the app is unsigned, Gatekeeper refuses it on every Mac, and an
-  # updater manifest pointing at it would offer an update nobody can
-  # install. So an unsigned build is uploaded as a workflow artifact, for
-  # looking at, and only a signed one is attached to the draft.
+  # decides whether the output reaches the release is Gatekeeper: an app
+  # that is not both signed and notarised is refused on every Mac that did
+  # not build it, and an updater manifest pointing at one would offer an
+  # update nobody can install. So a build without a Developer ID is kept as
+  # a workflow artifact, for looking at, and only a build this job has
+  # verified as signed and notarised is attached to the draft.
   #
-  # The macOS entries of latest.json are still assembled on the release
-  # machine, from the .sig this job attaches; the manifest is one file
-  # covering every platform and is published last, after the release is
-  # live.
+  # The macOS entries of latest.json are not written yet. When they are, the
+  # trap to know: the updater asks for `darwin-aarch64` and `darwin-x86_64`
+  # and never for `darwin-universal`, so a universal build needs both keys
+  # pointing at the same archive.
   build-macos-app:
     # After the extractors, so the draft exists before this attaches to it:
-    # two jobs creating the same release at once would race.
+    # two jobs creating the same release at once would race. `!cancelled()`
+    # rather than plain `needs`, because the matrix above sets
+    # `fail-fast: false` on purpose. One platform's extractor failing must
+    # not also withhold the application.
     needs: build-extract
+    if: ${{ !cancelled() }}
     runs-on: macos-latest
-    timeout-minutes: 60
+    # Two cold cargo release builds, one per architecture, plus notarisation,
+    # which is a queue on Apple's side and not a local step.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -203,20 +210,59 @@ jobs:
           key: macos-app
       - run: npm ci
 
+      # Same two lines as the extractor job reads. Repeated rather than
+      # taken from `needs`, because a matrix job publishes no outputs, and
+      # the release body has to name the core revision either way.
+      - name: Which core revision this build is pinned to
+        id: pin
+        shell: bash
+        run: |
+          tag=$(grep -m1 -oE 'silentsilo-core = \{ git = "[^"]+", tag = "([^"]+)"' Cargo.toml                 | grep -oE 'tag = "[^"]+"' | cut -d'"' -f2)
+          commit=$(awk '/^name = "silentsilo-core"$/{f=1} f && /^source = /{print; exit}' Cargo.lock                    | grep -oE '#[0-9a-f]{40}' | tr -d '#')
+          if [ -z "$tag" ] || [ -z "$commit" ]; then
+            echo "::error::Cargo.toml pins no core tag, or Cargo.lock records no commit for it"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "core $tag at $commit"
+
       # Secrets are not readable in `if:`, so the decision is made once here
-      # and read as a step output below.
-      - name: Is there a signing identity
+      # and read as a step output below. All six or none: a half-configured
+      # set is the dangerous case, because the bundler signs with what it has
+      # and then skips notarisation with a warning rather than an error,
+      # which yields an app Gatekeeper refuses under a name that says it was
+      # signed.
+      - name: Which Apple secrets are configured
         id: apple
         shell: bash
         env:
-          IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          if [ -n "$IDENTITY" ]; then
+          names="APPLE_SIGNING_IDENTITY APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID"
+          have=0
+          missing=""
+          for name in $names; do
+            if [ -n "${!name}" ]; then
+              have=$((have + 1))
+            else
+              missing="$missing $name"
+            fi
+          done
+          if [ "$have" -eq 0 ]; then
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "No Apple secrets: the build will be unsigned and kept as an artifact only"
+          elif [ -z "$missing" ]; then
             echo "signed=true" >> "$GITHUB_OUTPUT"
             echo "Developer ID present: the build will be signed and notarised"
           else
-            echo "signed=false" >> "$GITHUB_OUTPUT"
-            echo "No Developer ID: the build will be unsigned and kept as an artifact only"
+            echo "::error::Apple secrets are half configured. Missing:$missing. Set all six or none."
+            exit 1
           fi
 
       # Two build steps rather than one with empty variables: the bundler
@@ -242,22 +288,58 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npx tauri build --ci --target universal-apple-darwin -- --locked
 
+      # The workspace root is the repository root, so cargo and the bundler
+      # write to target\, not to src-tauri\target\. The staging directory is
+      # not `dist`: that is the frontend's build output, which `tauri build`
+      # has just refilled through beforeBuildCommand, and mixing the two
+      # would put index.html on the release page.
       - name: Collect the bundle
         shell: bash
         run: |
-          out=src-tauri/target/universal-apple-darwin/release/bundle
-          mkdir -p dist
-          cp "$out"/dmg/*.dmg dist/
-          cp "$out"/macos/*.app.tar.gz "$out"/macos/*.app.tar.gz.sig dist/
-          ls -l dist
+          out=target/universal-apple-darwin/release/bundle
+          mkdir -p dist-macos
+          cp "$out"/dmg/*.dmg dist-macos/
+          cp "$out"/macos/*.app.tar.gz "$out"/macos/*.app.tar.gz.sig dist-macos/
+          ls -l dist-macos
+
+      # What the gate above promised, checked against the artifact rather
+      # than against the presence of a secret. `spctl` answers the question
+      # a user's Mac will ask, and `stapler` proves the notarisation ticket
+      # travels with the app instead of needing Apple to be reachable.
+      - name: Prove it is signed and notarised
+        if: steps.apple.outputs.signed == 'true'
+        shell: bash
+        run: |
+          app=$(ls -d target/universal-apple-darwin/release/bundle/macos/*.app)
+          echo "== $app"
+          codesign --verify --strict --verbose=2 "$app"
+          spctl --assess --type exec --verbose=4 "$app"
+          xcrun stapler validate "$app"
 
       - name: Keep the unsigned build as an artifact
         if: steps.apple.outputs.signed == 'false'
         uses: actions/upload-artifact@v4
         with:
           name: macos-app-unsigned
-          path: dist/
+          path: dist-macos/
           retention-days: 7
+
+      # `draft: true` is applied to an existing release too, so attaching to
+      # a tag that has already been published would flip it back to draft and
+      # 404 every asset URL, latest.json's installer included. A re-run is
+      # exactly when that happens, so it is checked rather than assumed.
+      - name: Refuse to attach to a published release
+        if: steps.apple.outputs.signed == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          state=$(gh release view "${{ github.ref_name }}" --json isDraft -q .isDraft 2>/dev/null || echo absent)
+          if [ "$state" = "false" ]; then
+            echo "::error::${{ github.ref_name }} is already published. Attaching here would put it back in draft and break every download. Upload dist-macos/ by hand instead."
+            exit 1
+          fi
+          echo "release is $state, safe to attach"
 
       - name: Attach the signed build to the draft
         if: steps.apple.outputs.signed == 'true'
@@ -268,4 +350,10 @@ jobs:
           tag_name: ${{ github.ref_name }}
           draft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-          files: dist/*
+          # Named rather than globbed, so nothing that happens to be in the
+          # directory rides along onto the release page.
+          body: "Built against silentsilo/core ${{ steps.pin.outputs.tag }} (${{ steps.pin.outputs.commit }})."
+          files: |
+            dist-macos/*.dmg
+            dist-macos/*.app.tar.gz
+            dist-macos/*.app.tar.gz.sig
