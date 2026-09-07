@@ -15,6 +15,11 @@ silo from opening needs a major version rather than a note.
   Secure Enclave key rather than a FIDO2 credential, and every prompt names
   Touch ID where it used to name Windows Hello. Windows builds behave as
   before.
+- Release groundwork for macOS: a platform config with the app and disk
+  image targets, an ICNS and a menu-bar template icon rendered from the
+  same SVG as the rest, and a release job that builds the universal app.
+  Without a Developer ID in the repository secrets the job keeps its output
+  as a workflow artifact and attaches nothing to the release.
 
 - The domain crates moved to
   [silentsilo/core](https://github.com/silentsilo/core) and are now a pinned

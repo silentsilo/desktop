@@ -1,0 +1,11 @@
+{
+  "$comment": "Merged over tauri.conf.json when building on macOS. Arrays replace rather than extend, which is what makes the target list and the icon list platform-specific.",
+  "bundle": {
+    "targets": ["app", "dmg"],
+    "icon": ["icons/icon.icns"],
+    "macOS": {
+      "minimumSystemVersion": "13.0",
+      "hardenedRuntime": true
+    }
+  }
+}

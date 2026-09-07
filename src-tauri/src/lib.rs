@@ -30,13 +30,24 @@ fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
     let quit = MenuItem::with_id(app, "tray-quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &quit])?;
 
+    // Windows shows the coloured icon in the notification area. The macOS
+    // menu bar wants a template instead: a black-on-transparent glyph the
+    // system recolours for light and dark bars, so the coloured icon with
+    // its dark canvas would come out as a blob. Raw RGBA, rendered by
+    // `npm run icons`, so no image decoder is linked for it.
+    #[cfg(not(target_os = "macos"))]
     let icon = app
         .default_window_icon()
         .ok_or("missing default window icon")?
         .clone();
+    #[cfg(target_os = "macos")]
+    let icon = tauri::image::Image::new(include_bytes!("../icons/tray-template@2x.rgba"), 44, 44);
 
-    let _tray = TrayIconBuilder::new()
-        .icon(icon)
+    let builder = TrayIconBuilder::new().icon(icon);
+    #[cfg(target_os = "macos")]
+    let builder = builder.icon_as_template(true);
+
+    let _tray = builder
         .tooltip("SilentSilo")
         .menu(&menu)
         .on_menu_event(move |app, event| match event.id.as_ref() {

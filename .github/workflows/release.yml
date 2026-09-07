@@ -1,17 +1,23 @@
-name: Release extractors
+name: Release extractors and macOS app
 
-# Runs on version tags, and builds only the extraction tool, for the two
-# platforms that cannot be built on the release machine. Everything else in
-# a release (the installer, its updater signature, latest.json and the
-# Windows extractor) is built by scripts\build-release-local.ps1 and uploaded
-# by hand.
+# Runs on version tags. Builds the extraction tool for the two platforms
+# that cannot be built on the release machine, and the macOS app. Everything
+# else in a release (the Windows installer, its updater signature,
+# latest.json and the Windows extractor) is built by
+# scripts\build-release-local.ps1 and uploaded by hand.
 #
-# The app is not built here on purpose. Its Authenticode certificate lives on
-# a hardware token that no runner can reach, so a CI build would produce an
-# unsigned installer under exactly the file names the signed one uses, plus a
-# latest.json whose minisign signature covers the unsigned bytes. Publishing
-# that manifest offers an update the app then refuses to install, and nothing
-# announces the mistake until someone tries to update.
+# The Windows app is not built here on purpose. Its Authenticode certificate
+# lives on a hardware token that no runner can reach, so a CI build would
+# produce an unsigned installer under exactly the file names the signed one
+# uses, plus a latest.json whose minisign signature covers the unsigned
+# bytes. Publishing that manifest offers an update the app then refuses to
+# install, and nothing announces the mistake until someone tries to update.
+#
+# The macOS app has no such constraint: Developer ID signing takes a
+# certificate in a secret, and notarisation is a network call. Until those
+# secrets exist the job still runs, so the build itself is exercised, but
+# its unsigned output is kept as a workflow artifact and never attached to
+# the release. See the job for the rule.
 #
 # The extractor's source lives in silentsilo/core. It is built here from a
 # clean clone of the core tag this app pins, checked against the commit the
@@ -157,3 +163,109 @@ jobs:
           files: |
             dist/${{ matrix.asset }}
             dist/${{ matrix.asset }}.sig
+
+  # The macOS application: a universal binary (Apple silicon and Intel) in a
+  # .app inside a .dmg, plus the .app.tar.gz and its signature the updater
+  # downloads. Built against the core commit the lockfile pins, like
+  # everything else, through `--locked`.
+  #
+  # Signing and notarisation happen inside `tauri build` when the APPLE_*
+  # variables are set, and are skipped when they are not. The rule that
+  # decides whether the output reaches the release is the identity: without
+  # one, the app is unsigned, Gatekeeper refuses it on every Mac, and an
+  # updater manifest pointing at it would offer an update nobody can
+  # install. So an unsigned build is uploaded as a workflow artifact, for
+  # looking at, and only a signed one is attached to the draft.
+  #
+  # The macOS entries of latest.json are still assembled on the release
+  # machine, from the .sig this job attaches; the manifest is one file
+  # covering every platform and is published last, after the release is
+  # live.
+  build-macos-app:
+    # After the extractors, so the draft exists before this attaches to it:
+    # two jobs creating the same release at once would race.
+    needs: build-extract
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.1
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: macos-app
+      - run: npm ci
+
+      # Secrets are not readable in `if:`, so the decision is made once here
+      # and read as a step output below.
+      - name: Is there a signing identity
+        id: apple
+        shell: bash
+        env:
+          IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          if [ -n "$IDENTITY" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "Developer ID present: the build will be signed and notarised"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "No Developer ID: the build will be unsigned and kept as an artifact only"
+          fi
+
+      # Two build steps rather than one with empty variables: the bundler
+      # treats a set-but-empty APPLE_CERTIFICATE as a certificate to import,
+      # and fails on it.
+      - name: Build, unsigned
+        if: steps.apple.outputs.signed == 'false'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build --ci --target universal-apple-darwin -- --locked
+
+      - name: Build, sign and notarise
+        if: steps.apple.outputs.signed == 'true'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npx tauri build --ci --target universal-apple-darwin -- --locked
+
+      - name: Collect the bundle
+        shell: bash
+        run: |
+          out=src-tauri/target/universal-apple-darwin/release/bundle
+          mkdir -p dist
+          cp "$out"/dmg/*.dmg dist/
+          cp "$out"/macos/*.app.tar.gz "$out"/macos/*.app.tar.gz.sig dist/
+          ls -l dist
+
+      - name: Keep the unsigned build as an artifact
+        if: steps.apple.outputs.signed == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-app-unsigned
+          path: dist/
+          retention-days: 7
+
+      - name: Attach the signed build to the draft
+        if: steps.apple.outputs.signed == 'true'
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: dist/*
