@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { osOf, platformStrings } from "../lib/platformStrings";
 import { ArrowLeft, HardDrive, KeyRound, LifeBuoy } from "lucide-react";
 import type { Bootstrap } from "../lib/types";
 import { AuthShell } from "../layout/AuthShell";
@@ -24,6 +25,7 @@ export function UnlockView({
   onUnlockWithRecovery,
   onSwitchSilo,
 }: Props) {
+  const platform = platformStrings(osOf(bootstrap));
   const [usingCode, setUsingCode] = useState(false);
   const [code, setCode] = useState("");
 
@@ -77,13 +79,13 @@ export function UnlockView({
   const helloOnly = bootstrap.platform_enrolled && !bootstrap.portable_enrolled;
   const both = bootstrap.platform_enrolled && bootstrap.portable_enrolled;
   const subtitle = helloOnly
-    ? "Confirm with Windows Hello to unlock."
+    ? `Confirm with ${platform.builtIn} to unlock.`
     : both
-      ? "Touch an enrolled security key, or confirm with Windows Hello, to unlock."
+      ? `Touch an enrolled security key, or confirm with ${platform.builtIn}, to unlock.`
       : "Insert an enrolled security key and touch it to unlock.";
   const readyHint = helloOnly
-    ? "Windows Hello is ready. Windows will show its own prompt."
-    : "Security key ready. Windows will show a native prompt.";
+    ? `${platform.builtIn} is ready. ${platform.osName} will show its own prompt.`
+    : `Security key ready. ${platform.osName} will show a native prompt.`;
 
   return (
     <AuthShell subtitle={subtitle}>
@@ -92,10 +94,7 @@ export function UnlockView({
         {bootstrap.fido_available ? (
           <p className="hint">{readyHint}</p>
         ) : (
-          <p className="error">
-            FIDO2 is not available on this system. Use Windows 10 (1903+) or later with a compatible
-            security key.
-          </p>
+          <p className="error">{platform.fidoUnavailable}</p>
         )}
         {fidoProgress && <p className="fido-live">{fidoProgress}</p>}
 

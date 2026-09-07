@@ -1,9 +1,11 @@
 import { useState } from "react";
+import type { Os } from "../lib/platformStrings";
 import { AlertTriangle, KeyRound, RefreshCw } from "lucide-react";
 import { securityKeyDisplayName } from "../lib/keyName";
 import type { SecurityKeyInfo } from "../lib/types";
 
 type Props = {
+  os: Os;
   busy: boolean;
   keys: SecurityKeyInfo[];
   /** Live instruction from the backend, naming the key to touch next. */
@@ -27,7 +29,15 @@ type Props = {
  * you leave stops, which is the whole point when one of them is in someone
  * else's pocket.
  */
-export function RotateKeyPanel({ busy, keys, progress, onRotate, pending, onResume }: Props) {
+export function RotateKeyPanel({
+  os,
+  busy,
+  keys,
+  progress,
+  onRotate,
+  pending,
+  onResume,
+}: Props) {
   // `fido_list_keys` returns the ones that still work, so there is nothing
   // to filter here.
   const active = keys;
@@ -52,7 +62,7 @@ export function RotateKeyPanel({ busy, keys, progress, onRotate, pending, onResu
   const dropping = active.filter((k) => !keep.includes(k.credential_id));
   /// The same fallback the Security keys list uses, so one key carries one
   /// name across the page.
-  const named = (k: SecurityKeyInfo) => securityKeyDisplayName(k);
+  const named = (k: SecurityKeyInfo) => securityKeyDisplayName(k, os);
 
   if (pending) {
     return (

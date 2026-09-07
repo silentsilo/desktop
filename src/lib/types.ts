@@ -60,7 +60,13 @@ export type Silo = {
   unlocked: boolean;
 };
 
+/** The operating system the backend runs on, as `std::env::consts::OS` names it. */
+export type Os = "windows" | "macos" | "linux";
+
 export type Bootstrap = {
+  /** Which platform's words to use. Absent from a backend older than the
+   * field, which can only be Windows. */
+  os?: Os;
   provisioned: boolean;
   locked: boolean;
   fido_available: boolean;

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { platformStrings, type Os } from "../lib/platformStrings";
 import { invoke } from "@tauri-apps/api/core";
 import { FilePlus2, Folder, ChevronUp } from "lucide-react";
 import type { Bootstrap, FolderEntry, Silo, VaultEntry } from "../lib/types";
@@ -6,6 +7,8 @@ import { formatAppError } from "../lib/errors";
 import { useModal } from "../hooks/useModal";
 
 type Props = {
+  /** Names the file manager the items came from. */
+  os: Os;
   paths: string[];
   busy: boolean;
   onConfirm: (folderId: string) => void;
@@ -16,7 +19,8 @@ type Props = {
 type Subfolder = Extract<VaultEntry, { kind: "folder" }>;
 
 export function ShellUploadDialog(props: Props) {
-  const { paths, busy, onConfirm, onCancel } = props;
+  const { os, paths, busy, onConfirm, onCancel } = props;
+  const platform = platformStrings(os);
   const [folder, setFolder] = useState<FolderEntry | null>(null);
   const [subfolders, setSubfolders] = useState<Subfolder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -133,8 +137,8 @@ export function ShellUploadDialog(props: Props) {
                 folders too, and calling a folder a file here was the first
                 sign that the path behind this only handled files. */}
             {paths.length === 1
-              ? "1 item from Windows Explorer. Choose where it should go."
-              : `${paths.length} items from Windows Explorer. Choose where they should go.`}
+              ? `1 item from ${platform.fileManager}. Choose where it should go.`
+              : `${paths.length} items from ${platform.fileManager}. Choose where they should go.`}
           </p>
           {/* Only when there is a choice to make. One open silo is not a
               question, and asking it anyway would tax the common case to

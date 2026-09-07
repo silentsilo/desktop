@@ -34,3 +34,17 @@ test("shell uploads queued while locked surface right after unlock", async ({ pa
     page.getByText("2 items from Windows Explorer. Choose where they should go."),
   ).toBeVisible();
 });
+
+test("on a Mac the same screens use the Mac's own words", async ({ page }) => {
+  await page.goto("/?mock=unlock&dialogs&os=macos");
+  await expect(
+    page.getByText("Security key ready. macOS will show a native prompt."),
+  ).toBeVisible();
+  await expect(page.getByText(/Windows will show/)).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Unlock" }).click();
+  await expect(page.getByRole("heading", { name: "Add to SilentSilo" })).toBeVisible();
+  await expect(
+    page.getByText("2 items from Finder. Choose where they should go."),
+  ).toBeVisible();
+});

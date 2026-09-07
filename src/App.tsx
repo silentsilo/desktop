@@ -38,6 +38,7 @@ import { decideConfirmSlot } from "./lib/confirmSlot";
 import { PasswordRefreshGate } from "./lib/passwordRefresh";
 import { syncOutcome, type SyncReport } from "./lib/syncOutcome";
 import { securityKeyDisplayName } from "./lib/keyName";
+import { osOf, platformStrings } from "./lib/platformStrings";
 import { runsOnOpen } from "./lib/executable";
 import { checkForUpdate } from "./lib/updater";
 import {
@@ -1004,6 +1005,7 @@ export default function App() {
   };
 
   const enrollPrimaryKey = async (authenticator: Authenticator, organisation = false) => {
+    const platform = platformStrings(osOf(bootstrap));
     setFidoProgress(null);
     begin("keys");
     try {
@@ -1013,7 +1015,7 @@ export default function App() {
       resetExplorer();
       toasts.success(
         authenticator === "this-device"
-          ? "Windows Hello enrolled. It opens this silo from now on."
+          ? `${platform.builtIn} enrolled. It opens this silo from now on.`
           : "Security key enrolled. It opens this silo from now on.",
       );
     } catch (e) {
@@ -1569,6 +1571,7 @@ export default function App() {
   /// modals leave the one underneath still taking clicks. A refusal is
   /// still a refusal either way.
   const roomFor = async (paths: string[], ask = true): Promise<boolean> => {
+    const platform = platformStrings(osOf(bootstrap));
     let report: SpaceReport;
     try {
       report = await invoke<SpaceReport>("vault_disk_space", { paths });
@@ -1596,7 +1599,7 @@ export default function App() {
       const ok = await askConfirm(
         "This will nearly fill the disk",
         `Adding this leaves under ${formatBytes(report.headroom_bytes)} free where the silo lives. ` +
-          "Windows needs room of its own to keep working, and the silo needs room to record what " +
+          `${platform.osName} needs room of its own to keep working, and the silo needs room to record what ` +
           "changed.",
         { confirmLabel: "Add anyway" },
       );
@@ -2468,6 +2471,7 @@ export default function App() {
   };
 
   const addSecurityKey = async (authenticator: Authenticator, organisation = false) => {
+    const platform = platformStrings(osOf(bootstrap));
     const label = newKeyLabel.trim();
     if (
       label &&
@@ -2482,7 +2486,7 @@ export default function App() {
     }
 
     setKeyAddSuccess(null);
-    setFidoProgress("Insert the new security key, then follow the Windows prompts…");
+    setFidoProgress(`Insert the new security key, then follow the ${platform.osName} prompts…`);
     begin("keys");
     try {
       const added = await invoke<SecurityKeyInfo>("fido_add_key", {
@@ -2496,7 +2500,7 @@ export default function App() {
       const b = await invoke<Bootstrap>("app_bootstrap");
       setBootstrap(b);
       setKeyAddSuccess(
-        `Added “${securityKeyDisplayName(added)}”. That key can unlock this silo.`,
+        `Added “${securityKeyDisplayName(added, osOf(b))}”. That key can unlock this silo.`,
       );
       toasts.success("Security key added.");
     } catch (e) {
@@ -3103,6 +3107,7 @@ export default function App() {
           underneath still reacting to clicks. The save dialog waits. */}
       {pendingShellUploadPaths ? (
         <ShellUploadDialog
+          os={osOf(bootstrap)}
           paths={pendingShellUploadPaths}
           busy={shellUploadBusy}
           onConfirm={(folderId) => void confirmShellUpload(folderId)}
@@ -3246,6 +3251,7 @@ export default function App() {
 
         {view === "passwords" && meta && (
           <PasswordsPanel
+            os={osOf(bootstrap)}
             entries={passwordEntries}
             storedCategories={passwordCategories}
             busy={busy("entries")}
@@ -3312,6 +3318,7 @@ export default function App() {
 
         {view === "settings" && (
           <SettingsPanel
+            os={osOf(bootstrap)}
             section={settingsSection}
             onSection={setSettingsSection}
             backupPanel={

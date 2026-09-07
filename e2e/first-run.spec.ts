@@ -80,6 +80,15 @@ test("a machine without Windows Hello only offers the security key", async ({ pa
   await expect(page.getByRole("button", { name: "Use Windows Hello" })).toHaveCount(0);
 });
 
+test("on a Mac the built-in option is Touch ID, and Windows is never named", async ({ page }) => {
+  await page.goto("/?mock=empty&os=macos");
+  await page.getByRole("button", { name: "Create silo" }).click();
+
+  await expect(page.getByRole("button", { name: "Use Touch ID" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Use Windows Hello" })).toHaveCount(0);
+  await expect(page.getByText(/Windows/)).toHaveCount(0);
+});
+
 test("the two ways in are offered once, where they are the only way", async ({ page }) => {
   // First run has no list behind the form, so someone whose silo already
   // exists needs both of these here or they are stuck creating one.

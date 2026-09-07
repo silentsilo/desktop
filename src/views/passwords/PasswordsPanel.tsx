@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { platformStrings, type Os } from "../../lib/platformStrings";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFileDialog, save as saveFileDialog } from "@tauri-apps/plugin-dialog";
 import { Download, KeyRound, MousePointerClick, ShieldCheck, Upload } from "lucide-react";
@@ -45,6 +46,8 @@ type Props = {
   entries: PasswordEntry[];
   /** The stored category list, or null when this silo never saved one. */
   storedCategories: PasswordCategory[] | null;
+  /** Names the built-in authenticator in the verify notice. */
+  os: Os;
   busy: boolean;
   /** An entry another view is sending the user to. Selecting it clears the
    * filters, or the panel would land on an entry the current category or
@@ -90,6 +93,7 @@ function emptyEntry(type: CredentialType): PasswordEntry {
 export function PasswordsPanel({
   entries,
   storedCategories,
+  os,
   busy,
   focusEntryId,
   onSaveEntry,
@@ -98,6 +102,7 @@ export function PasswordsPanel({
   onSaveCategories,
   onConfirmRun,
 }: Props) {
+  const platform = platformStrings(os);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<CredentialType | null>(null);
@@ -700,7 +705,7 @@ export function PasswordsPanel({
 
       {verifying && (
         <div className="pw-transfer-notice" role="status">
-          <span>Touch your security key, or confirm with Windows Hello…</span>
+          <span>Touch your security key, or confirm with {platform.builtIn}…</span>
         </div>
       )}
 
@@ -815,6 +820,7 @@ export function PasswordsPanel({
           <div className="pw-detail-pane">
             {editing ? (
               <EntryEditor
+                os={os}
                 initial={editing.entry}
                 creating={editing.creating}
                 categories={categories}

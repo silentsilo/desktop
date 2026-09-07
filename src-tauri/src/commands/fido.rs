@@ -17,9 +17,24 @@ use hex::encode as hex_encode;
 /// No step count: how many ceremonies an enrolment needs is not known until
 /// the first one answers. Windows Hello hands back the wrap key with the
 /// credential, and then there is only this one.
+/// What this build's built-in authenticator is called on screen. The
+/// frontend has the same table in `platformStrings.ts`; these are the only
+/// strings that originate on the Rust side.
+const BUILT_IN: &str = if cfg!(target_os = "macos") {
+    "Touch ID"
+} else {
+    "Windows Hello"
+};
+
 fn step_one_message(authenticator: Authenticator) -> &'static str {
     match authenticator {
-        Authenticator::ThisDevice => "Confirm with Windows Hello to secure the silo.",
+        Authenticator::ThisDevice => {
+            if cfg!(target_os = "macos") {
+                "Confirm with Touch ID to secure the silo."
+            } else {
+                "Confirm with Windows Hello to secure the silo."
+            }
+        }
         Authenticator::SecurityKey => {
             "Touch your security key to create the enrollment credential."
         }
@@ -279,11 +294,10 @@ pub async fn fido_enroll_primary(
         // is sealed to this one. An organisation whose escrow key dies with
         // one motherboard was never holding escrow at all.
         if authenticator == Authenticator::ThisDevice {
-            return Err(
-                "Windows Hello is sealed to this computer, and an organisation key \
-                        has to open the silo from anywhere. Use a removable security key."
-                    .into(),
-            );
+            return Err(format!(
+                "{BUILT_IN} is sealed to this computer, and an organisation key has to \
+                     open the silo from anywhere. Use a removable security key."
+            ));
         }
         silentsilo_vault::POLICY_ORG.to_string()
     } else {
@@ -413,11 +427,10 @@ pub async fn fido_add_key(
     // refused is not first walked through a ceremony for nothing.
     let policy = if organisation.unwrap_or(false) {
         if authenticator == Authenticator::ThisDevice {
-            return Err(
-                "Windows Hello is sealed to this computer, and an organisation key \
-                        has to open the silo from anywhere. Use a removable security key."
-                    .into(),
-            );
+            return Err(format!(
+                "{BUILT_IN} is sealed to this computer, and an organisation key has to \
+                     open the silo from anywhere. Use a removable security key."
+            ));
         }
         if !keys.is_org_controlled() {
             return Err(

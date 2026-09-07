@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { osOf, platformStrings } from "../lib/platformStrings";
 import { AlertTriangle, ArrowLeft, Building2, Fingerprint, KeyRound } from "lucide-react";
 import type { Authenticator, Bootstrap } from "../lib/types";
 import { AuthShell } from "../layout/AuthShell";
@@ -22,6 +23,7 @@ export function EnrollView({
   onDiscard,
   onBack,
 }: Props) {
+  const platform = platformStrings(osOf(bootstrap));
   /// Off unless someone deliberately says otherwise, and only offered here.
   /// A key its holder cannot remove has to be part of what the silo was set
   /// up as: added later to a silo somebody is already using, the same feature
@@ -36,30 +38,23 @@ export function EnrollView({
         <h2>Set up unlocking</h2>
         <p className="hint">
           A FIDO2 key (YubiKey, Nitrokey, SoloKeys and others) travels with you and survives this
-          computer. Windows Hello is quicker, but it is sealed to this machine: if the machine
+          computer. {platform.builtIn} is quicker, but it is sealed to this machine: if the machine
           dies, so does that way in. Both protect the silo equally well, and you can add the
           other later in Settings.
         </p>
         {bootstrap.fido_available ? (
           <>
             <p className="hint">
-              Security key ready. Windows will show its own prompt. It may also offer a phone
-              via a QR code: that works on recent Android phones, and a phone whose passkey
-              cannot derive the silo key is refused with an explanation.
+              Security key ready. {platform.osName} will show its own prompt.
+              {platform.offersPhone &&
+                " It may also offer a phone via a QR code: that works on recent Android phones, and a phone whose passkey cannot derive the silo key is refused with an explanation."}
             </p>
             {!bootstrap.platform_authenticator && (
-              <p className="hint">
-                Windows Hello is not set up on this machine, so a security key is the only way in
-                here. Add a PIN or a fingerprint in Windows sign-in settings and Hello shows up as
-                a second option.
-              </p>
+              <p className="hint">{platform.builtInSetupHint}</p>
             )}
           </>
         ) : (
-          <p className="error">
-            FIDO2 is not available on this system. Use Windows 10 (1903+) or later with a compatible
-            security key.
-          </p>
+          <p className="error">{platform.fidoUnavailable}</p>
         )}
         {/* Said before the choice, not after it. Whichever way in they pick,
             this is the part that decides whether the silo survives a bad
@@ -139,7 +134,7 @@ export function EnrollView({
               onClick={() => onEnroll("this-device", false)}
             >
               <Fingerprint size={15} />
-              Use Windows Hello
+              Use {platform.builtIn}
             </button>
           )}
         </div>

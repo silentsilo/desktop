@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { platformStrings, type Os } from "../../lib/platformStrings";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { ChevronDown, ChevronRight, Paperclip } from "lucide-react";
@@ -29,6 +30,8 @@ import {
 type Props = {
   /** The entry as it was when editing started. The editor owns its draft. */
   initial: PasswordEntry;
+  /** Names the built-in authenticator in the re-verify option. */
+  os: Os;
   creating: boolean;
   categories: PasswordCategory[];
   now: number;
@@ -48,7 +51,7 @@ type Props = {
  * with baroque password rules, and permanently spending five lines on them
  * made every edit look like work.
  */
-export function EntryEditor({ initial, creating, categories, now, onSave, onCancel }: Props) {
+export function EntryEditor({ os, initial, creating, categories, now, onSave, onCancel }: Props) {
   const [draft, setDraft] = useState<PasswordEntry>({ ...initial });
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [genOptions, setGenOptions] = useState<PasswordGenOptions>(DEFAULT_GEN_OPTIONS);
@@ -527,7 +530,7 @@ export function EntryEditor({ initial, creating, categories, now, onSave, onCanc
                 setDraft({ ...draft, require_reauth: e.target.checked || undefined })
               }
             />
-            <span>Ask for my security key or Windows Hello before showing this entry</span>
+            <span>Ask for my security key or {platformStrings(os).builtIn} before showing this entry</span>
           </label>
           <p className="hint">
             Applies to revealing or copying the password, the one-time code, and opening attached

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { platformStrings, type Os } from "../lib/platformStrings";
 import {
   AlertTriangle,
   Building2,
@@ -40,6 +41,8 @@ import { ProtectedFoldersPanel } from "./ProtectedFolders";
 import type { Update } from "@tauri-apps/plugin-updater";
 
 type Props = {
+  /** Which platform's words to use for the built-in authenticator and the shell. */
+  os: Os;
   busy: boolean;
   /** Whether the daily scheduled update check is on. */
   autoUpdateEnabled: boolean;
@@ -125,6 +128,7 @@ function formatMinutes(minutes: number): string {
 }
 
 export function SettingsPanel(props: Props) {
+  const platform = platformStrings(props.os);
   const {
     busy,
     autoUpdateEnabled,
@@ -358,7 +362,7 @@ export function SettingsPanel(props: Props) {
             </h3>
             <p>
               Any FIDO2 hardware key with hmac-secret works (YubiKey, Nitrokey, SoloKeys, and
-              others), as does this computer&apos;s built-in Windows Hello. Each one can unlock
+              others), as does this computer&apos;s built-in {platform.builtIn}. Each one can unlock
               the silo on its own.
             </p>
             {securityKeys.length === 0 ? (
@@ -401,7 +405,7 @@ export function SettingsPanel(props: Props) {
                   ) : (
                   <li key={k.credential_id} className="key-list-item">
                     <div>
-                      <strong>{securityKeyDisplayName(k)}</strong>
+                      <strong>{securityKeyDisplayName(k, props.os)}</strong>
                       {/* Never hidden, on any device. A key the person at this
                           computer cannot remove is something they are entitled
                           to see named for what it is. */}
@@ -429,7 +433,7 @@ export function SettingsPanel(props: Props) {
                         className="link"
                         disabled={busy}
                         onClick={() => {
-                          setKeyLabelDraft(k.label || securityKeyDisplayName(k));
+                          setKeyLabelDraft(k.label || securityKeyDisplayName(k, props.os));
                           setRenamingKey(k.credential_id);
                         }}
                       >
@@ -461,7 +465,7 @@ export function SettingsPanel(props: Props) {
               <ol className="hint key-add-steps">
                 <li>Plug in the new key.</li>
                 <li>Give it a label, if you want one.</li>
-                <li>Click Add. Windows asks for two touches on that key.</li>
+                <li>Click Add. {platform.osName} asks for two touches on that key.</li>
               </ol>
               <p className="hint">Wait for the confirmation before clicking again.</p>
               {!hasPortableKey && securityKeys.length > 0 && (
@@ -497,7 +501,7 @@ export function SettingsPanel(props: Props) {
                     Enrol as an organisation key
                     <span className="hint">
                       A spare for the company safe. You will be asked for an existing
-                      organisation key first. Windows Hello cannot be one: it is sealed to a
+                      organisation key first. {platform.builtIn} cannot be one: it is sealed to a
                       single computer, and an organisation key has to open the silo from
                       anywhere.
                     </span>
@@ -527,7 +531,7 @@ export function SettingsPanel(props: Props) {
                     disabled={busy}
                     onClick={() => onAddKey("this-device", false)}
                   >
-                    Add Windows Hello
+                    Add {platform.builtIn}
                   </button>
                 )}
               </div>
@@ -536,6 +540,7 @@ export function SettingsPanel(props: Props) {
 
           {securityKeys.length > 0 && (
             <RotateKeyPanel
+              os={props.os}
               busy={busy}
               keys={securityKeys}
               progress={fidoProgress}
@@ -799,7 +804,7 @@ export function SettingsPanel(props: Props) {
                 onChange={(e) => void toggleAutostart(e.target.checked)}
               />
               <span>
-                Start SilentSilo when I sign in to Windows
+                Start SilentSilo when I {platform.signIn}
                 <span className="hint">
                   It starts to the notification area with no window and nothing unlocked. Your
                   security key is still needed before a silo opens.
@@ -811,8 +816,7 @@ export function SettingsPanel(props: Props) {
             )}
             {autostartError && <p className="hint is-error">{autostartError}</p>}
             <p className="hint">
-              Windows lists this under Startup apps in Task Manager. Turning it off there and
-              turning it off here are the same thing.
+              {platform.autostartHint}
             </p>
           </div>
         )}
@@ -906,7 +910,7 @@ export function SettingsPanel(props: Props) {
             </h3>
             <p>
               Version {__APP_VERSION__}. An encrypted vault for files and passwords, unlocked by a
-              FIDO2 security key or Windows Hello, backed up to storage you control.
+              FIDO2 security key or {platform.builtIn}, backed up to storage you control.
             </p>
             <dl className="backup-config">
               <div className="backup-config-row">

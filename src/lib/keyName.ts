@@ -1,4 +1,5 @@
-import type { SecurityKeyInfo } from "./types";
+import { platformStrings } from "./platformStrings";
+import type { Os, SecurityKeyInfo } from "./types";
 
 /**
  * The one kind of key this build can unlock with.
@@ -29,8 +30,8 @@ export function usableHere(key: SecurityKeyInfo): boolean {
  * authenticator, so naming it Hello would put a Windows name on a MacBook's
  * fingerprint reader.
  */
-export function securityKeyDisplayName(key: SecurityKeyInfo): string {
+export function securityKeyDisplayName(key: SecurityKeyInfo, os: Os = "windows"): string {
   if (key.label) return key.label;
   if (!usableHere(key)) return "Key from another device";
-  return key.platform ? "Windows Hello" : `Key in slot ${key.key_slot}`;
+  return key.platform ? platformStrings(os).builtIn : `Key in slot ${key.key_slot}`;
 }

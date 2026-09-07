@@ -1,3 +1,5 @@
+import type { Os } from "../lib/types";
+
 /**
  * A stand-in for the Rust side, so the pre-unlock screens can be opened in a
  * plain browser.
@@ -70,6 +72,13 @@ function file(id: string, name: string, size: number) {
 
 function flag(name: string): boolean {
   return new URLSearchParams(location.search).has(name);
+}
+
+/// `?os=macos` renders every screen with the Mac's words, so the platform
+/// strings can be looked at, and walked by Playwright, without a Mac.
+function os(): Os {
+  const v = new URLSearchParams(location.search).get("os");
+  return v === "macos" || v === "linux" ? v : "windows";
 }
 
 /** Which screen to render, since they are chosen by backend state. */
@@ -199,6 +208,7 @@ const handlers: Record<string, Handler> = {
         platform_authenticator: !flag("nohello"),
         portable_enrolled: !flag("helloonly"),
         platform_enrolled: flag("helloonly"),
+        os: os(),
         silo: createdSilo,
       };
     }
@@ -234,6 +244,7 @@ const handlers: Record<string, Handler> = {
       // insert a key sends them looking for hardware they do not own.
       portable_enrolled: !flag("helloonly"),
       platform_enrolled: flag("helloonly"),
+      os: os(),
       silo,
     };
   },
@@ -451,7 +462,7 @@ const handlers: Record<string, Handler> = {
       id: "d0000000-0000-0000-0000-000000000001",
       label: null,
       system_name: "ALEX-DESKTOP",
-      platform: "Windows 11 Pro",
+      platform: os() === "macos" ? "macOS" : "Windows 11 Pro",
       is_this_device: true,
       operations: 428,
       last_change_at: Math.floor(Date.now() / 1000) - 600,
