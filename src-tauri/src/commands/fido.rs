@@ -20,8 +20,15 @@ use hex::encode as hex_encode;
 /// What this build's built-in authenticator is called on screen. The
 /// frontend has the same table in `platformStrings.ts`; these are the only
 /// strings that originate on the Rust side.
+/// Linux has no built-in authenticator at all, and
+/// `platform_authenticator_available` answers `false` there, so nothing
+/// offers one. The generic name is for the sentences that mention it
+/// anyway: a silo carrying a key enrolled with another computer's built-in
+/// authenticator, which this machine can see and cannot use.
 pub(crate) const BUILT_IN: &str = if cfg!(target_os = "macos") {
     "Touch ID"
+} else if cfg!(target_os = "linux") {
+    "the built-in authenticator"
 } else {
     "Windows Hello"
 };
@@ -49,6 +56,9 @@ fn step_one_message(authenticator: Authenticator) -> &'static str {
         Authenticator::ThisDevice => {
             if cfg!(target_os = "macos") {
                 "Confirm with Touch ID to secure the silo."
+            } else if cfg!(target_os = "linux") {
+                // Unreachable: nothing offers this authenticator on Linux.
+                "Confirm with the built-in authenticator to secure the silo."
             } else {
                 "Confirm with Windows Hello to secure the silo."
             }

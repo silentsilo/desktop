@@ -10,6 +10,12 @@
 //! common, and they honour a convention instead: an item that also carries
 //! the `org.nspasteboard.ConcealedType` type is not recorded. Apple's own
 //! secure text fields set it, and so does this.
+//!
+//! Linux has neither. There is no system history to opt out of, and no
+//! convention the clipboard managers agree on: KDE's Klipper reads a hint
+//! type that GNOME's do not, and the helper programs can offer one type per
+//! invocation anyway. So on Linux the timed clear below is the whole
+//! defence, which is worth saying out loud rather than implying parity.
 
 use std::sync::Mutex;
 
@@ -249,12 +255,109 @@ mod mac {
 #[cfg(target_os = "macos")]
 pub use mac::{clear_if_still, set_secret};
 
-#[cfg(not(any(windows, target_os = "macos")))]
-pub fn set_secret(_text: &str) -> Result<(), String> {
-    Err("copying secrets is only implemented on Windows and macOS so far".into())
+#[cfg(target_os = "linux")]
+mod linux {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    /// A session can export `DISPLAY` for XWayland while being Wayland
+    /// natively, so `WAYLAND_DISPLAY` is the stronger signal and is read
+    /// first.
+    fn is_wayland() -> bool {
+        std::env::var_os("WAYLAND_DISPLAY").is_some()
+    }
+
+    /// The package to name when the helper is missing. "The clipboard
+    /// failed" sends someone looking in the wrong place.
+    fn missing(program: &str) -> String {
+        let package = if is_wayland() {
+            "wl-clipboard"
+        } else {
+            "xclip"
+        };
+        format!("{program} is not installed. Install the {package} package to copy secrets.")
+    }
+
+    /// Runs a clipboard helper with `text` on its standard input.
+    ///
+    /// Both helpers fork and stay alive to serve the selection, because on
+    /// X11 and Wayland alike the clipboard is owned by a process rather than
+    /// stored by the server. So this returns as soon as the text is handed
+    /// over, and the copy outlives it.
+    fn feed(program: &str, args: &[&str], text: &str) -> Result<(), String> {
+        let mut child = Command::new(program)
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    missing(program)
+                } else {
+                    format!("{program} could not be started: {e}")
+                }
+            })?;
+        child
+            .stdin
+            .take()
+            .ok_or_else(|| format!("{program} refused its input"))?
+            .write_all(text.as_bytes())
+            .map_err(|e| format!("{program} refused the value: {e}"))?;
+        Ok(())
+    }
+
+    /// Copies `text`. Readable by a paste, and cleared by the caller's timer.
+    pub fn set_secret(text: &str) -> Result<(), String> {
+        if is_wayland() {
+            feed("wl-copy", &[], text)
+        } else {
+            feed("xclip", &["-selection", "clipboard"], text)
+        }
+    }
+
+    fn current() -> Option<String> {
+        let out = if is_wayland() {
+            Command::new("wl-paste").arg("--no-newline").output()
+        } else {
+            Command::new("xclip")
+                .args(["-selection", "clipboard", "-o"])
+                .output()
+        }
+        .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        Some(String::from_utf8_lossy(&out.stdout).into_owned())
+    }
+
+    /// Clears the clipboard, but only if it still holds `expected`. Same
+    /// reasoning as on the other two platforms: by the time the timer fires
+    /// the user may have copied something else, and that is not ours to wipe.
+    pub fn clear_if_still(expected: &str) -> bool {
+        if current().as_deref() != Some(expected) {
+            return false;
+        }
+        let cleared = if is_wayland() {
+            Command::new("wl-copy").arg("--clear").status().is_ok()
+        } else {
+            // xclip has no clear: owning the selection with nothing in it is
+            // how the clipboard is emptied.
+            feed("xclip", &["-selection", "clipboard"], "").is_ok()
+        };
+        cleared
+    }
 }
 
-#[cfg(not(any(windows, target_os = "macos")))]
+#[cfg(target_os = "linux")]
+pub use linux::{clear_if_still, set_secret};
+
+#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
+pub fn set_secret(_text: &str) -> Result<(), String> {
+    Err("copying secrets is only implemented on Windows, macOS and Linux so far".into())
+}
+
+#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
 pub fn clear_if_still(_expected: &str) -> bool {
     false
 }

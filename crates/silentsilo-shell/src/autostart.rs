@@ -6,11 +6,14 @@
 //! On Windows that is a Run value under HKCU, removed by one DeleteRegValue
 //! and listed in Task Manager's Startup tab. On macOS it is a LaunchAgent
 //! plist in the user's library, which System Settings lists under Login
-//! Items. Both carry `--autostart`, the flag that keeps the window hidden.
+//! Items. On Linux it is a `.desktop` file in `~/.config/autostart`, the
+//! freedesktop convention every desktop environment reads, and the one the
+//! desktop's own settings panel edits. All three carry `--autostart`, the
+//! flag that keeps the window hidden.
 
 #[cfg(windows)]
 use std::path::Path;
-#[cfg(any(windows, target_os = "macos"))]
+#[cfg(any(windows, target_os = "macos", target_os = "linux"))]
 use std::path::PathBuf;
 
 #[cfg(windows)]
@@ -22,7 +25,7 @@ const VALUE_NAME: &str = "SilentSilo";
 /// rather than on `cfg!`, so adding macOS or Linux later stays a change to
 /// this module.
 pub fn autostart_supported() -> bool {
-    cfg!(any(windows, target_os = "macos"))
+    cfg!(any(windows, target_os = "macos", target_os = "linux"))
 }
 
 /// The command Windows runs at sign-in. `--autostart` is the whole reason
@@ -98,7 +101,7 @@ pub fn ensure_autostart() -> std::io::Result<()> {
 /// Presence of this file, not the registry value, is what says "this machine
 /// has already been asked once". The uninstaller deletes it along with the
 /// Run entry, so a reinstall is treated as a first install again.
-#[cfg(any(windows, target_os = "macos"))]
+#[cfg(any(windows, target_os = "macos", target_os = "linux"))]
 fn marker_path() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -235,20 +238,119 @@ mod mac {
 #[cfg(target_os = "macos")]
 pub use mac::{autostart_enabled, ensure_autostart, set_autostart};
 
-#[cfg(not(any(windows, target_os = "macos")))]
+/// A `.desktop` file in `~/.config/autostart`, which is the freedesktop
+/// spec every desktop environment implements and the one GNOME's and KDE's
+/// own settings panels read and write. So turning autostart off in the
+/// desktop's settings and turning it off here are the same operation on the
+/// same file, which is what the hint in the interface promises.
+#[cfg(target_os = "linux")]
+mod linux {
+    use super::marker_path;
+    use std::path::{Path, PathBuf};
+
+    /// The bundle identifier, matching the desktop entry the package
+    /// installs, so the two are one entry rather than two.
+    const LABEL: &str = "com.silentsilo.desktop";
+
+    fn entry_path() -> std::io::Result<PathBuf> {
+        let base = dirs::config_dir().ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotFound, "config directory not found")
+        })?;
+        Ok(base.join("autostart").join(format!("{LABEL}.desktop")))
+    }
+
+    /// Desktop entry values are not quoted, and the spec reserves a handful
+    /// of characters inside them. A path holding one is rare and a silently
+    /// broken Exec line is not worth the risk.
+    fn escape(value: &str) -> String {
+        value
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('$', "\\$")
+            .replace('`', "\\`")
+    }
+
+    /// `X-GNOME-Autostart-enabled` is what GNOME's own toggle writes, so an
+    /// entry without it reads as enabled there, which is what we want.
+    fn entry_for(exe: &Path) -> String {
+        let exe = escape(&exe.display().to_string());
+        format!(
+            "[Desktop Entry]\n\
+             Type=Application\n\
+             Name=SilentSilo\n\
+             Comment=Encrypted vault for files and passwords\n\
+             Exec=\"{exe}\" --autostart\n\
+             Icon={LABEL}\n\
+             Terminal=false\n\
+             X-GNOME-Autostart-enabled=true\n"
+        )
+    }
+
+    fn expected_entry() -> std::io::Result<String> {
+        Ok(entry_for(&std::env::current_exe()?))
+    }
+
+    pub fn autostart_enabled() -> bool {
+        entry_path().map(|p| p.is_file()).unwrap_or(false)
+    }
+
+    pub fn set_autostart(enabled: bool) -> std::io::Result<()> {
+        let entry = entry_path()?;
+        if !enabled {
+            if entry.is_file() {
+                std::fs::remove_file(&entry)?;
+            }
+            return Ok(());
+        }
+        if let Some(parent) = entry.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&entry, expected_entry()?)
+    }
+
+    /// Same contract as the other two: on a machine that has never run this
+    /// app it turns autostart on; on every later launch it only repairs a
+    /// stale path, and never re-creates an entry the user removed.
+    pub fn ensure_autostart() -> std::io::Result<()> {
+        let marker = marker_path();
+        if !marker.is_file() {
+            set_autostart(true)?;
+            if let Some(parent) = marker.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(&marker, "")?;
+            return Ok(());
+        }
+
+        if !autostart_enabled() {
+            return Ok(());
+        }
+        let entry = entry_path()?;
+        let expected = expected_entry()?;
+        if std::fs::read_to_string(&entry).unwrap_or_default() != expected {
+            std::fs::write(&entry, expected)?;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub use linux::{autostart_enabled, ensure_autostart, set_autostart};
+
+#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
 pub fn autostart_enabled() -> bool {
     false
 }
 
-#[cfg(not(any(windows, target_os = "macos")))]
+#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
 pub fn set_autostart(_enabled: bool) -> std::io::Result<()> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
-        "starting with the system is only implemented on Windows and macOS",
+        "starting with the system is only implemented on Windows, macOS and Linux",
     ))
 }
 
-#[cfg(not(any(windows, target_os = "macos")))]
+#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
 pub fn ensure_autostart() -> std::io::Result<()> {
     Ok(())
 }
