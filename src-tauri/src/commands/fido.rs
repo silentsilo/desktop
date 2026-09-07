@@ -20,11 +20,29 @@ use hex::encode as hex_encode;
 /// What this build's built-in authenticator is called on screen. The
 /// frontend has the same table in `platformStrings.ts`; these are the only
 /// strings that originate on the Rust side.
-const BUILT_IN: &str = if cfg!(target_os = "macos") {
+pub(crate) const BUILT_IN: &str = if cfg!(target_os = "macos") {
     "Touch ID"
 } else {
     "Windows Hello"
 };
+
+/// The `kind` and `derivation` a new envelope records, from what made it.
+/// Windows Hello is a FIDO2 credential like any removable key; Touch ID is
+/// a Secure Enclave key with its own agreement, and a client that does not
+/// know the kind carries the envelope without offering it.
+fn kind_and_derivation(authenticator: Authenticator) -> (&'static str, &'static str) {
+    if cfg!(target_os = "macos") && authenticator == Authenticator::ThisDevice {
+        (
+            silentsilo_vault::KIND_SECURE_ENCLAVE,
+            silentsilo_vault::DERIVATION_ECDH_P256_V1,
+        )
+    } else {
+        (
+            silentsilo_vault::KIND_FIDO2,
+            silentsilo_vault::DERIVATION_HMAC_V1,
+        )
+    }
+}
 
 fn step_one_message(authenticator: Authenticator) -> &'static str {
     match authenticator {
@@ -355,12 +373,13 @@ pub async fn fido_enroll_primary(
     // Commit: from here on the vault is FIDO-only — the device secret alone
     // no longer decrypts it.
     std::fs::write(dek_path(&root), &envelope_bytes).map_err(|e| e.to_string())?;
+    let (kind, derivation) = kind_and_derivation(authenticator);
     save_fido_keys(
         &root,
         &StoredFidoKeys {
             keys: vec![StoredFidoCredential {
-                kind: silentsilo_vault::KIND_FIDO2.to_string(),
-                derivation: silentsilo_vault::DERIVATION_HMAC_V1.to_string(),
+                kind: kind.to_string(),
+                derivation: derivation.to_string(),
                 // Set only here, at the first enrolment. A silo that starts as
                 // somebody's own must never acquire keys they cannot retire.
                 policy,
@@ -494,9 +513,10 @@ pub async fn fido_add_key(
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| format!("Key {}", keys.active().count() + 1));
 
+    let (kind, derivation) = kind_and_derivation(authenticator);
     let stored = StoredFidoCredential {
-        kind: silentsilo_vault::KIND_FIDO2.to_string(),
-        derivation: silentsilo_vault::DERIVATION_HMAC_V1.to_string(),
+        kind: kind.to_string(),
+        derivation: derivation.to_string(),
         policy,
         credential_id: hex_encode(&cred.credential_id),
         public_key: hex_encode(&cred.public_key),

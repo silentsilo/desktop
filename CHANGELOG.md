@@ -9,6 +9,13 @@ silo from opening needs a major version rather than a note.
 
 ### Changed
 
+- Core is pinned at 1.1.0. Nothing a silo contains changed; the tag brings
+  the Secure Enclave key kind and the CTAP backend's usage-page lookup.
+- On macOS a key enrolled with the built-in authenticator is recorded as a
+  Secure Enclave key rather than a FIDO2 credential, and every prompt names
+  Touch ID where it used to name Windows Hello. Windows builds behave as
+  before.
+
 - The domain crates moved to
   [silentsilo/core](https://github.com/silentsilo/core) and are now a pinned
   dependency rather than part of this workspace. Nothing a silo contains

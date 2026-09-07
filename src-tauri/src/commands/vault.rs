@@ -466,18 +466,19 @@ fn wrapped_dek_for(
         .ok_or_else(|| "No matching enrolled security key".to_string())
 }
 
-/// What to tell the user to do, matching what was actually asked of
-/// Windows: naming a security key to a Hello-only silo sends its owner
+/// What to tell the user to do, matching what was actually asked of the
+/// platform: naming a security key to a Hello-only silo sends its owner
 /// looking for hardware they do not have.
-fn unlock_prompt(wanted: Option<silentsilo_fido::Authenticator>) -> &'static str {
+fn unlock_prompt(wanted: Option<silentsilo_fido::Authenticator>) -> String {
+    let built_in = crate::commands::fido::BUILT_IN;
     match wanted {
         Some(silentsilo_fido::Authenticator::ThisDevice) => {
-            "Confirm with Windows Hello to unlock the silo."
+            format!("Confirm with {built_in} to unlock the silo.")
         }
         Some(silentsilo_fido::Authenticator::SecurityKey) => {
-            "Touch your security key to unlock the silo."
+            "Touch your security key to unlock the silo.".to_string()
         }
-        None => "Touch an enrolled security key, or confirm with Windows Hello, to unlock.",
+        None => format!("Touch an enrolled security key, or confirm with {built_in}, to unlock."),
     }
 }
 
@@ -500,7 +501,7 @@ pub async fn vault_unlock(
     // Asked for by kind, so a silo whose only key is Windows Hello opens
     // with Hello rather than through the whole passkey menu.
     let wanted = crate::commands::fido::preferred_authenticator(&keys);
-    emit_fido_progress(&app, unlock_prompt(wanted));
+    emit_fido_progress(&app, &unlock_prompt(wanted));
     let unlock = run_fido(&app, move || {
         silentsilo_fido::derive_unlock_material(&cred_ids, &vault_id, wanted)
     })
@@ -1379,11 +1380,14 @@ pub async fn fido_reverify(app: AppHandle) -> Result<(), String> {
     let wanted = crate::commands::fido::preferred_authenticator(&keys);
     emit_fido_progress(
         &app,
-        match wanted {
+        &match wanted {
             Some(silentsilo_fido::Authenticator::ThisDevice) => {
-                "Confirm with Windows Hello to show this entry."
+                format!(
+                    "Confirm with {} to show this entry.",
+                    crate::commands::fido::BUILT_IN
+                )
             }
-            _ => "Touch your security key to show this entry.",
+            _ => "Touch your security key to show this entry.".to_string(),
         },
     );
     let unlock = run_fido(&app, move || {
