@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for the macOS build. Not wired into tauri.macos.conf.json
+  yet, on purpose: the team identifier below is a placeholder, and a config
+  pointing at a file with a fake identifier would fail the first signed
+  build with a confusing error. Add
+
+      "entitlements": "entitlements.plist"
+
+  to the macOS bundle config in the same commit that fills in the real
+  identifier, which arrives with the Developer ID certificate.
+
+  Why this exists at all: the Touch ID key lives in the data protection
+  keychain (Location::DataProtectionKeychain in the core's enclave backend),
+  and that keychain refuses an app which is not signed AND carries no
+  keychain access group. Without it, enrolment fails with
+  errSecMissingEntitlement even though the signature itself is valid, which
+  reads like broken code rather than missing configuration.
+
+  Deliberately nothing else in here. The app needs no JIT, loads no unsigned
+  plugins, bundles no external binaries, and touches no camera, microphone
+  or location. Every entitlement is an attack surface and a thing to
+  justify, so the list stays at what breaks without it.
+-->
+<plist version="1.0">
+<dict>
+  <key>keychain-access-groups</key>
+  <array>
+    <string>TEAM_ID_GOES_HERE.com.silentsilo.desktop</string>
+  </array>
+</dict>
+</plist>
