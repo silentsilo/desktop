@@ -236,16 +236,18 @@ try {
     # in CI; built by hand it has to match byte for byte in structure, and the
     # URL has to point at the asset name uploaded to the release.
     Write-Host "`n== latest.json ==" -ForegroundColor Cyan
+
+    # The platform map lives in release-manifest.ps1, so it can be exercised
+    # without the signing token. See the comments there for why each key is
+    # shaped the way it is.
+    . (Join-Path $PSScriptRoot "release-manifest.ps1")
+    $platforms = New-ManifestPlatforms -Tag $tag -Slug $slug -OutDir $out -SetupName $setup.Name
+
     $manifest = [ordered]@{
         version   = $version
         notes     = "See the release notes for $tag."
         pub_date  = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-        platforms = [ordered]@{
-            "windows-x86_64" = [ordered]@{
-                signature = (Get-Content (Join-Path $out "$($setup.Name).sig") -Raw).Trim()
-                url       = "https://github.com/$slug/releases/download/$tag/$($setup.Name)"
-            }
-        }
+        platforms = $platforms
     }
     # Written through .NET, not Out-File: PowerShell 5.1's utf8 puts a BOM in
     # front, the worker parses this file as JSON straight out of KV, and a
@@ -269,6 +271,16 @@ try {
     if ($win.url -notlike "*/download/$tag/$($setup.Name)") {
         throw "latest.json points at the wrong asset: $($win.url)"
     }
+    # Every entry, not just Windows: an empty signature makes the app refuse
+    # the download it was just offered, and a URL under another tag 404s.
+    foreach ($key in $check.platforms.PSObject.Properties.Name) {
+        $entry = $check.platforms.$key
+        if (-not $entry.signature) { throw "latest.json: $key has no signature" }
+        if ($entry.url -notlike "*/download/$tag/*") {
+            throw "latest.json: $key points outside $tag at $($entry.url)"
+        }
+    }
+    Write-Host ("  platforms: {0}" -f (($check.platforms.PSObject.Properties.Name) -join ", "))
 
     # Semver ranks a prerelease below its release, so an rc shipped as plain
     # x.y.z makes the next rc look like a downgrade. Ask the live endpoint
