@@ -1,9 +1,9 @@
-name: Release extractors and macOS app
+name: Release everything that is not Windows
 
 # Runs on version tags. Builds the extraction tool for the two platforms
-# that cannot be built on the release machine, and the macOS app. Everything
-# else in a release (the Windows installer, its updater signature,
-# latest.json and the Windows extractor) is built by
+# that cannot be built on the release machine, and the macOS and Linux
+# applications. Everything Windows in a release (the installer, its updater
+# signature, latest.json and the Windows extractor) is built by
 # scripts\build-release-local.ps1 and uploaded by hand.
 #
 # The Windows app is not built here on purpose. Its Authenticode certificate
@@ -28,6 +28,13 @@ on:
   push:
     tags:
       - "v*"
+  # Run by hand, from any branch, to find out whether a build works before a
+  # tag exists. Nothing is attached to a release in that mode and no release
+  # is created: the output stays a workflow artifact, which is exactly what
+  # is wanted when the question is "does this even build". The extractors and
+  # the macOS app skip it, because they are answers to a tag rather than
+  # experiments.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -39,6 +46,9 @@ jobs:
   # Windows application first. It is a plain binary with no interface and no
   # security key, so one source builds everywhere.
   build-extract:
+    # A tag, never a manual run: on a branch `github.ref_name` is the branch
+    # name, and attaching to it would open a release called "main".
+    if: startsWith(github.ref, 'refs/tags/')
     strategy:
       # One platform failing must not withhold the binary that did build: the
       # release is a draft either way, and a missing macOS binary is something
@@ -189,7 +199,7 @@ jobs:
     # `fail-fast: false` on purpose. One platform's extractor failing must
     # not also withhold the application.
     needs: build-extract
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/') }}
     runs-on: macos-latest
     # Two cold cargo release builds, one per architecture, plus notarisation,
     # which is a queue on Apple's side and not a local step.
@@ -357,3 +367,141 @@ jobs:
             dist-macos/*.dmg
             dist-macos/*.app.tar.gz
             dist-macos/*.app.tar.gz.sig
+
+  # The Linux application: a .deb for the Debian and Ubuntu family, and an
+  # AppImage for everything else. No certificate and no secrets beyond the
+  # updater key, so unlike macOS there is nothing to gate on.
+  #
+  # Built inside an Ubuntu 22.04 container rather than on the runner image.
+  # The distribution you compile on fixes the minimum glibc, and 22.04 means
+  # 2.35, which covers Debian 12, Ubuntu 22.04 and newer, Fedora 36 and
+  # newer. On `ubuntu-latest` that floor would rise the day GitHub changes
+  # the image, and nobody would find out until someone could not start the
+  # app.
+  #
+  # For latest.json, the keys are `linux-x86_64-deb` and
+  # `linux-x86_64-appimage`. The updater looks for `{os}-{arch}-{format}`
+  # first and only then for `{os}-{arch}`, so a bare `linux-x86_64` would
+  # hand one of the two formats a file it cannot install. Write both, never
+  # the bare one.
+  build-linux-app:
+    needs: build-extract
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    timeout-minutes: 60
+    steps:
+      # The image is bare, so this comes before the checkout, which wants
+      # git, and before every action, which wants curl and certificates.
+      - name: What the bare image does not have
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl file git xz-utils \
+            build-essential pkg-config desktop-file-utils \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev libxdo-dev libdbus-1-dev libudev-dev libssl-dev
+
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: linux-app
+      - run: npm ci
+
+      # `APPIMAGE_EXTRACT_AND_RUN` because the AppImage tooling mounts itself
+      # through FUSE by default, and a container has no FUSE. Without it the
+      # AppImage step fails and the deb beside it never gets built.
+      - name: Build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPIMAGE_EXTRACT_AND_RUN: 1
+        run: npx tauri build --ci -- --locked
+
+      # The tree is listed before anything is copied out of it, so a missing
+      # file is a readable log line rather than a glob that matched nothing.
+      - name: Collect the bundle
+        shell: bash
+        run: |
+          out=target/release/bundle
+          echo "== what the bundler produced"
+          find "$out" -type f | sort
+          mkdir -p dist-linux
+          cp "$out"/deb/*.deb dist-linux/
+          cp "$out"/appimage/*.AppImage dist-linux/
+          # The updater archive for the AppImage, when the bundler made one.
+          cp "$out"/appimage/*.AppImage.tar.gz dist-linux/ 2>/dev/null || true
+          cp "$out"/appimage/*.AppImage.tar.gz.sig dist-linux/ 2>/dev/null || true
+          ls -l dist-linux
+
+      # The updater can install a .deb through pkexec, so the .deb needs a
+      # signature like everything else it might download. Only if the
+      # bundler did not already make one: whether it does is the sort of
+      # thing that changes between versions, and having two answers for the
+      # same file is worse than either.
+      - name: Sign anything the bundler left unsigned
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          for file in dist-linux/*.deb dist-linux/*.AppImage.tar.gz; do
+            [ -e "$file" ] || continue
+            if [ -f "$file.sig" ]; then
+              echo "already signed: $file"
+            else
+              echo "signing: $file"
+              npx --yes @tauri-apps/cli signer sign "$file"
+            fi
+          done
+          ls -l dist-linux
+
+      # Kept whatever the trigger was. On a manual run this is the whole
+      # point; on a tag it is the copy to look at while the draft is checked.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-app
+          path: dist-linux/
+          retention-days: 7
+
+      # Same guard as the macOS job: `draft: true` is applied to an existing
+      # release too, so attaching to a tag that has already been published
+      # would put it back in draft and 404 every asset URL.
+      - name: Refuse to attach to a published release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          state=$(gh release view "${{ github.ref_name }}" --json isDraft -q .isDraft 2>/dev/null || echo absent)
+          if [ "$state" = "false" ]; then
+            echo "::error::${{ github.ref_name }} is already published. Attaching here would put it back in draft and break every download. Upload dist-linux/ by hand instead."
+            exit 1
+          fi
+          echo "release is $state, safe to attach"
+
+      - name: Attach to the draft
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            dist-linux/*.deb
+            dist-linux/*.deb.sig
+            dist-linux/*.AppImage
+            dist-linux/*.AppImage.tar.gz
+            dist-linux/*.AppImage.tar.gz.sig
