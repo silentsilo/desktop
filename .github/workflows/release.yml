@@ -380,7 +380,8 @@ jobs:
   # app.
   #
   # For latest.json, the keys are `linux-x86_64-deb` and
-  # `linux-x86_64-appimage`. The updater looks for `{os}-{arch}-{format}`
+  # `linux-x86_64-appimage`, pointing at the .deb and the .AppImage
+  # themselves. The updater looks for `{os}-{arch}-{format}`
   # first and only then for `{os}-{arch}`, so a bare `linux-x86_64` would
   # hand one of the two formats a file it cannot install. Write both, never
   # the bare one.
@@ -438,18 +439,24 @@ jobs:
 
       # The tree is listed before anything is copied out of it, so a missing
       # file is a readable log line rather than a glob that matched nothing.
+      #
+      # Linux has no updater archive: unlike macOS, where the updater
+      # downloads a .app.tar.gz, here it downloads the .deb or the .AppImage
+      # itself, and the bundler signs each of them in place. So the
+      # signatures are copied out alongside their files rather than made
+      # again, and tolerantly, because the step below answers for anything
+      # that arrives without one.
       - name: Collect the bundle
         shell: bash
         run: |
           out=target/release/bundle
           echo "== what the bundler produced"
-          find "$out" -type f | sort
+          find "$out" -maxdepth 2 -type f | sort
           mkdir -p dist-linux
           cp "$out"/deb/*.deb dist-linux/
           cp "$out"/appimage/*.AppImage dist-linux/
-          # The updater archive for the AppImage, when the bundler made one.
-          cp "$out"/appimage/*.AppImage.tar.gz dist-linux/ 2>/dev/null || true
-          cp "$out"/appimage/*.AppImage.tar.gz.sig dist-linux/ 2>/dev/null || true
+          cp "$out"/deb/*.deb.sig dist-linux/ 2>/dev/null || true
+          cp "$out"/appimage/*.AppImage.sig dist-linux/ 2>/dev/null || true
           ls -l dist-linux
 
       # The updater can install a .deb through pkexec, so the .deb needs a
@@ -463,7 +470,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          for file in dist-linux/*.deb dist-linux/*.AppImage.tar.gz; do
+          for file in dist-linux/*.deb dist-linux/*.AppImage; do
             [ -e "$file" ] || continue
             if [ -f "$file.sig" ]; then
               echo "already signed: $file"
@@ -511,5 +518,4 @@ jobs:
             dist-linux/*.deb
             dist-linux/*.deb.sig
             dist-linux/*.AppImage
-            dist-linux/*.AppImage.tar.gz
-            dist-linux/*.AppImage.tar.gz.sig
+            dist-linux/*.AppImage.sig
