@@ -198,8 +198,14 @@ jobs:
     # rather than plain `needs`, because the matrix above sets
     # `fail-fast: false` on purpose. One platform's extractor failing must
     # not also withhold the application.
+    #
+    # Manual runs reach here too, so that "does it build" can be answered
+    # without a tag. The two steps that touch a release carry the tag
+    # condition themselves, which is where it belongs: without it, a manual
+    # run on a machine that did have the Apple secrets would attach to a
+    # release named after the branch.
     needs: build-extract
-    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ !cancelled() }}
     runs-on: macos-latest
     # Two cold cargo release builds, one per architecture, plus notarisation,
     # which is a queue on Apple's side and not a local step.
@@ -339,7 +345,7 @@ jobs:
       # 404 every asset URL, latest.json's installer included. A re-run is
       # exactly when that happens, so it is checked rather than assumed.
       - name: Refuse to attach to a published release
-        if: steps.apple.outputs.signed == 'true'
+        if: ${{ steps.apple.outputs.signed == 'true' && startsWith(github.ref, 'refs/tags/') }}
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -352,7 +358,7 @@ jobs:
           echo "release is $state, safe to attach"
 
       - name: Attach the signed build to the draft
-        if: steps.apple.outputs.signed == 'true'
+        if: ${{ steps.apple.outputs.signed == 'true' && startsWith(github.ref, 'refs/tags/') }}
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
