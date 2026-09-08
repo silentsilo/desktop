@@ -393,6 +393,13 @@ jobs:
     steps:
       # The image is bare, so this comes before the checkout, which wants
       # git, and before every action, which wants curl and certificates.
+      #
+      # The last line is the AppImage tooling's own needs, and it is there
+      # because the first run failed on it: linuxdeploy copies `xdg-open`
+      # into the image, its gtk plugin copies the pixbuf loaders, and
+      # `patchelf` and `mksquashfs` are what actually assemble the result.
+      # None of that is a build dependency of the app, which is why none of
+      # it appears in the CI job that only compiles.
       - name: What the bare image does not have
         env:
           DEBIAN_FRONTEND: noninteractive
@@ -402,7 +409,8 @@ jobs:
             ca-certificates curl file git xz-utils \
             build-essential pkg-config desktop-file-utils \
             libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
-            librsvg2-dev libxdo-dev libdbus-1-dev libudev-dev libssl-dev
+            librsvg2-dev libxdo-dev libdbus-1-dev libudev-dev libssl-dev \
+            xdg-utils patchelf squashfs-tools libgdk-pixbuf-2.0-dev
 
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
