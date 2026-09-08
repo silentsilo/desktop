@@ -1,0 +1,13 @@
+{
+  "bundle": {
+    "targets": ["deb", "appimage"],
+    "category": "Utility",
+    "linux": {
+      "deb": {
+        "section": "utils",
+        "priority": "optional",
+        "recommends": ["wl-clipboard", "xclip"]
+      }
+    }
+  }
+}
