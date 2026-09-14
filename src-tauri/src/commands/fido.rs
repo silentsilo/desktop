@@ -1192,23 +1192,24 @@ mod authenticator_choice_tests {
         // "any" would put the passkey menu in front of someone who has that
         // exact key in hand.
         let mut hello = key(true);
-        hello.credential_id = "hello".into();
+        // Hex, like every real credential id: core skips one that is not.
+        hello.credential_id = "11aa".into();
         let mut stick = key(false);
-        stick.credential_id = "stick".into();
+        stick.credential_id = "22bb".into();
         let keys = StoredFidoKeys {
             keys: vec![hello, stick],
         };
 
         assert_eq!(
-            super::authenticator_of(&keys, "hello"),
+            super::authenticator_of(&keys, "11aa"),
             Some(Authenticator::ThisDevice)
         );
         assert_eq!(
-            super::authenticator_of(&keys, "stick"),
+            super::authenticator_of(&keys, "22bb"),
             Some(Authenticator::SecurityKey)
         );
         // A key this silo does not have decides nothing.
-        assert_eq!(super::authenticator_of(&keys, "absent"), None);
+        assert_eq!(super::authenticator_of(&keys, "33cc"), None);
     }
 
     #[test]
