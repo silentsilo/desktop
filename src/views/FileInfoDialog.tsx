@@ -16,6 +16,8 @@ type Props = {
 function describeSyncState(state: FileSyncState): string {
   if (state === "backed-up") return "On this computer and in the backup.";
   if (state === "pending") return "On this computer, waiting to be backed up.";
+  if (state === "uploading") return "On this computer, uploading to the backup now.";
+  if (state === "downloading") return "In the backup, downloading to this computer now.";
   return "In the backup only. It downloads when opened.";
 }
 

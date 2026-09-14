@@ -44,6 +44,41 @@ impl silentsilo_app::inbox_import::OpenSilo for OpenForImport<'_> {
     }
 }
 
+/// Tells the window where a pass is (`sync-progress`), the same event the
+/// shared pass in `silentsilo-app` sends. A blob is named by its file, read
+/// from the session map directly so a background pass does not count as use.
+fn report_progress(
+    app: &AppHandle,
+    silo_id: Uuid,
+    phase: &'static str,
+    done: usize,
+    total: usize,
+    blob_id: Option<Uuid>,
+) {
+    let file = blob_id.and_then(|blob| {
+        let state = app.state::<AppState>();
+        let sessions = state.sessions.lock().ok()?;
+        let session = sessions.get(&silo_id)?;
+        Vfs::new(session).file_for_blob(blob).ok().flatten()
+    });
+    let _ = app.emit(
+        "sync-progress",
+        silentsilo_app::SyncProgress {
+            silo_id: silo_id.to_string(),
+            phase,
+            done,
+            total,
+            file_id: file.as_ref().map(|(id, _)| id.to_string()),
+            name: file.map(|(_, name)| name),
+        },
+    );
+}
+
+/// Records go by in the thousands; a status line needs a tenth of that.
+fn worth_saying(done: usize, total: usize) -> bool {
+    done.is_multiple_of(10) || done + 1 == total
+}
+
 /// What the last sync pass did, for the status bar.
 #[derive(Debug, Default, Clone, serde::Serialize)]
 pub struct SyncReport {
@@ -488,7 +523,7 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
             base: base.as_ref(),
             vault_root: &root,
         };
-        let outcome = sync::push_everything_to(
+        let outcome = sync::push_everything_to_reporting(
             &sync::TargetPush {
                 id: target.id,
                 store: &*target.store,
@@ -496,6 +531,18 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
                 owed: &target.owed,
             },
             &state,
+            &mut |step| match step {
+                sync::PushStep::Ops { done, total } => {
+                    if worth_saying(done, total) {
+                        report_progress(app, silo.id, "sending-changes", done, total, None);
+                    }
+                }
+                sync::PushStep::Blob {
+                    done,
+                    total,
+                    blob_id,
+                } => report_progress(app, silo.id, "uploading", done, total, Some(blob_id)),
+            },
         )
         .await;
 
@@ -545,7 +592,19 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
     let mut incoming = Vec::new();
     let mut unreadable: Vec<sync::UnreadableOp> = Vec::new();
     for target in &targets {
-        match sync::fetch_missing_ops(&*target.store, &dek, &known, local_horizon).await {
+        match sync::fetch_missing_ops_reporting(
+            &*target.store,
+            &dek,
+            &known,
+            local_horizon,
+            &mut |done, total| {
+                if worth_saying(done, total) {
+                    report_progress(app, silo.id, "fetching-changes", done, total, None);
+                }
+            },
+        )
+        .await
+        {
             Ok(mut got) => {
                 incoming.append(&mut got.records);
                 unreadable.append(&mut got.unreadable);
@@ -639,6 +698,7 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
         &kek,
         vault_id,
         every_target.len() > 1,
+        &|done: usize, total: usize| report_progress(app, silo.id, "importing", done, total, None),
     )
     .await;
 
@@ -809,7 +869,16 @@ async fn fetch_missing_for_full_copy(
     };
 
     let mut fetched = 0;
-    for blob_id in missing.into_iter().take(FULL_COPY_FETCH_PER_PASS) {
+    let batch: Vec<Uuid> = missing.into_iter().take(FULL_COPY_FETCH_PER_PASS).collect();
+    for (done, blob_id) in batch.iter().copied().enumerate() {
+        report_progress(
+            app,
+            silo.id,
+            "downloading",
+            done,
+            batch.len(),
+            Some(blob_id),
+        );
         // One object that will not come down must not stop the rest. It was
         // a `break`, so a single blob missing from the bucket, or one whose
         // bytes are damaged, held every later blob back on every pass

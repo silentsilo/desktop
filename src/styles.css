@@ -1869,6 +1869,27 @@ textarea:focus {
   color: var(--text-dim);
 }
 
+/* Moving now: the same cloud, pulsing, so a row being transferred stands
+ * out without a spinner in every column. */
+.sync-uploading,
+.sync-downloading {
+  color: var(--accent);
+  animation: sync-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes sync-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-uploading,
+  .sync-downloading {
+    animation: none;
+  }
+}
+
 /* Size and badge share a cell, so they need to stay on one line and keep
  * their distance from each other. */
 .cell-size {

@@ -17,7 +17,7 @@ import {
 import { BrandLogo } from "../components/BrandLogo";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { formatBytes } from "../lib/format";
-import type { View } from "../lib/types";
+import type { SyncProgress, View } from "../lib/types";
 
 export type SyncIndicator = {
   configured: boolean;
@@ -26,7 +26,27 @@ export type SyncIndicator = {
   /** Unix ms of the last pass that reached the bucket. */
   lastSyncAt: number | null;
   lastError: string | null;
+  /** Where a running pass is, when it has said. */
+  progress?: SyncProgress | null;
 };
+
+/** What the status bar says about a step of a running pass. */
+function describeProgress(p: SyncProgress): string {
+  const count = p.total > 1 ? ` ${Math.min(p.done + 1, p.total)} of ${p.total}` : "";
+  const name = p.name ? `: ${p.name}` : "";
+  switch (p.phase) {
+    case "sending-changes":
+      return `Sending changes${count}`;
+    case "uploading":
+      return `Uploading${count}${name}`;
+    case "fetching-changes":
+      return `Getting changes${count}`;
+    case "downloading":
+      return `Downloading${count}${name}`;
+    case "importing":
+      return `Adding from phone backup${count}`;
+  }
+}
 
 /// Deliberately vague past an hour: "3 minutes ago" is actionable, "47
 /// minutes ago" is not, and precision the user cannot act on reads as noise.
@@ -311,10 +331,16 @@ export function AppShell({
             >
               <span
                 className={`dot ${
-                  sync.state === "error" ? "warn" : sync.state === "syncing" ? "busy" : "ok"
+                  sync.state === "error"
+                    ? "warn"
+                    : sync.state === "syncing" || sync.progress
+                      ? "busy"
+                      : "ok"
                 }`}
               />
-              {sync.state === "syncing"
+              {sync.progress
+                ? describeProgress(sync.progress)
+                : sync.state === "syncing"
                 ? "Syncing…"
                 : sync.state === "error"
                   ? "Backup failed. Click to retry"

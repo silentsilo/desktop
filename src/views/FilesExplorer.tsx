@@ -3,6 +3,7 @@ import type { MouseEvent } from "react";
 import type {
   BreadcrumbSeg,
   FileSyncState,
+  SyncProgress,
   FolderEntry,
   SearchHit,
   VaultEntry,
@@ -100,6 +101,8 @@ type Props = {
   syncConfigured: boolean;
   localBlobIds: Set<string>;
   unsyncedBlobIds: Set<string>;
+  /** The step a running sync pass is on, to mark the file it moves. */
+  syncProgress?: SyncProgress | null;
 };
 
 export function FilesExplorer(props: Props) {
@@ -150,6 +153,7 @@ export function FilesExplorer(props: Props) {
     syncConfigured,
     localBlobIds,
     unsyncedBlobIds,
+    syncProgress,
   } = props;
 
   /**
@@ -161,6 +165,9 @@ export function FilesExplorer(props: Props) {
    */
   const syncStateOf = (entry: VaultEntry): FileSyncState | null => {
     if (!syncConfigured || entry.kind !== "file") return null;
+    if (syncProgress?.file_id === entry.id) {
+      return syncProgress.phase === "uploading" ? "uploading" : "downloading";
+    }
     if (unsyncedBlobIds.has(entry.blob_id)) return "pending";
     return localBlobIds.has(entry.blob_id) ? "backed-up" : "remote-only";
   };

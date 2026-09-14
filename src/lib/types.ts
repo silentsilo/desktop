@@ -159,7 +159,17 @@ export type BlobStatus = {
 };
 
 /** Where a file's content currently is, from the user's point of view. */
-export type FileSyncState = "local-only" | "pending" | "backed-up" | "remote-only";
+export type FileSyncState = "local-only" | "pending" | "backed-up" | "remote-only" | "uploading" | "downloading";
+
+/** Where a running sync pass is (`sync-progress`). Gone once it reports. */
+export type SyncProgress = {
+  silo_id: string;
+  phase: "sending-changes" | "uploading" | "fetching-changes" | "downloading" | "importing";
+  done: number;
+  total: number;
+  file_id: string | null;
+  name: string | null;
+};
 
 export type RecoveryStatus = {
   enabled: boolean;

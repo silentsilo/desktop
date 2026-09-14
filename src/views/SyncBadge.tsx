@@ -32,6 +32,16 @@ const LOOK: Record<
     label: "In backup only",
     title: "Backed up. The content downloads when you open it.",
   },
+  uploading: {
+    Icon: CloudUpload,
+    label: "Uploading",
+    title: "Uploading to the backup now.",
+  },
+  downloading: {
+    Icon: CloudDownload,
+    label: "Downloading",
+    title: "Downloading from the backup now.",
+  },
 };
 
 export function SyncBadge({ state, compact }: { state: FileSyncState; compact?: boolean }) {

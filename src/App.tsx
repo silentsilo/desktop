@@ -31,6 +31,7 @@ import type {
   VaultEntry,
   VaultMeta,
   View,
+  SyncProgress,
 } from "./lib/types";
 import { AUTO_LOCK_OPTIONS_MINUTES } from "./lib/types";
 import { silosToLock } from "./lib/autoLock";
@@ -324,6 +325,17 @@ export default function App() {
     [],
   );
 
+  // What a running sync pass is moving, for the status bar and the row it
+  // concerns. The pass's report clears it.
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+  useEventSubscription(
+    () =>
+      listen<SyncProgress>("sync-progress", (event) => {
+        setSyncProgress(event.payload);
+      }),
+    [],
+  );
+
   // Rust locks every silo when the workstation locks or suspends. The screen
   // behind that has to follow, or the user comes back to an explorer full of
   // file names belonging to a silo that is no longer open.
@@ -430,6 +442,7 @@ export default function App() {
     () =>
       listen<SyncReport>("sync-report", (event) => {
         const report = event.payload;
+        setSyncProgress(null);
         if (report.needs_rebuild) {
           setNeedsRebuild(report.silo_id ?? null);
           setSync((prev) => ({ ...prev, state: "idle" }));
@@ -3137,7 +3150,7 @@ export default function App() {
         }
         trashCount={trashEntries.length}
         healthCount={healthCount}
-        sync={sync}
+        sync={syncProgress ? { ...sync, progress: syncProgress } : sync}
         onSyncNow={() => void syncNow()}
         onOpenBackup={() => {
           setSettingsSection("backup");
@@ -3246,6 +3259,7 @@ export default function App() {
             syncConfigured={sync.configured}
             localBlobIds={localBlobIds}
             unsyncedBlobIds={unsyncedBlobIds}
+            syncProgress={syncProgress}
           />
         )}
 
