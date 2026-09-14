@@ -970,12 +970,20 @@ async fn ensure_blobs_local(app: &AppHandle, blob_ids: &[Uuid]) -> Result<(), St
             "Some of this content isn't on this device, and no backup storage is connected.".into(),
         );
     }
-    let stores: Vec<&dyn silentsilo_store::ObjectStore> =
-        targets.iter().map(|t| &*t.store).collect();
+    let stores: Vec<(Uuid, &dyn silentsilo_store::ObjectStore)> =
+        targets.iter().map(|t| (t.id, &*t.store)).collect();
     for id in missing {
-        silentsilo_sync::fetch_blob_from_any(&stores, &root, id)
+        silentsilo_sync::fetch_blob_from_targets(&stores, &root, id)
             .await
             .map_err(|e| format!("could not download the file content: {e}"))?;
+    }
+    // On the copy it came from, so no longer waiting to back up there.
+    if let Ok(silo) = crate::state::active_silo(app) {
+        let every_target: Vec<Uuid> = silentsilo_vault::load_targets(silo.id)
+            .iter()
+            .map(|t| t.config.target_id())
+            .collect();
+        let _ = silentsilo_vault::settle_blob_delivery(&root, &every_target);
     }
     Ok(())
 }

@@ -152,6 +152,8 @@ pub fn session_is_open(state: &State<AppState>, id: Uuid) -> bool {
 
 /// One target, opened, with everything a deletion needs to decide.
 pub struct TargetHandle {
+    /// The target's id, to note content fetched from it as held there.
+    pub id: Uuid,
     pub store: Box<dyn silentsilo_store::ObjectStore>,
     pub role: silentsilo_vault::TargetRole,
     /// What to call it when telling the user what happened to it.
@@ -178,6 +180,7 @@ pub fn targets_for(silo_id: Uuid) -> Vec<TargetHandle> {
     silentsilo_vault::load_targets(silo_id)
         .into_iter()
         .filter_map(|target| {
+            let id = target.config.target_id();
             let store = target.config.open().ok()?;
             let label = if target.label.is_empty() {
                 store.describe()
@@ -185,6 +188,7 @@ pub fn targets_for(silo_id: Uuid) -> Vec<TargetHandle> {
                 target.label.clone()
             };
             Some(TargetHandle {
+                id,
                 store,
                 role: target.role,
                 label,

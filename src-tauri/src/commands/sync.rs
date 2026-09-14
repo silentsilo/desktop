@@ -625,6 +625,7 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
     let inbox_targets: Vec<silentsilo_app::inbox_import::InboxTarget<'_>> = targets
         .iter()
         .map(|t| silentsilo_app::inbox_import::InboxTarget {
+            id: t.id,
             store: &*t.store,
             label: &t.label,
             may_finish: every_copy_reached && t.role.allows_delete(),
@@ -646,8 +647,14 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
     // Content is fetched from whichever copy has it: a blob is the same
     // bytes everywhere, so there is nothing to choose between them, and the
     // first target being behind must not stop a full copy from filling up.
-    let reachable: Vec<&dyn ObjectStore> = targets.iter().map(|t| &*t.store).collect();
+    let reachable: Vec<(Uuid, &dyn ObjectStore)> =
+        targets.iter().map(|t| (t.id, &*t.store)).collect();
     let pulled = fetch_missing_for_full_copy(app, silo, &reachable).await;
+    // What came down, from the inbox or for the full copy, is on the copy it
+    // came from, and no longer counts as waiting to back up there.
+    if pulled > 0 || inbox.imported > 0 {
+        let _ = silentsilo_vault::settle_blob_delivery(&root, &every_target);
+    }
 
     // Compaction publishes to each target before pruning it, which
     // `publish_compaction` guarantees for the target it is given. A target
@@ -775,7 +782,7 @@ async fn fetch_kek_or_refuse(
 async fn fetch_missing_for_full_copy(
     app: &AppHandle,
     silo: &SiloEntry,
-    stores: &[&dyn ObjectStore],
+    stores: &[(Uuid, &dyn ObjectStore)],
 ) -> usize {
     if !silentsilo_vault::keep_full_copy(&silo.path) {
         return 0;
@@ -808,7 +815,7 @@ async fn fetch_missing_for_full_copy(
         // bytes are damaged, held every later blob back on every pass
         // afterwards: a device asked to keep a full copy never became one
         // and never said why.
-        match sync::fetch_blob_from_any(stores, &silo.path, blob_id).await {
+        match sync::fetch_blob_from_targets(stores, &silo.path, blob_id).await {
             Ok(_) => fetched += 1,
             Err(e) => crate::diagnostics::warn(
                 "sync",
@@ -1047,11 +1054,22 @@ pub async fn sync_fetch_blob(
     if targets.is_empty() {
         return Err("That file isn't on this device, and no backup storage is connected.".into());
     }
-    let stores: Vec<&dyn ObjectStore> = targets.iter().map(|t| &*t.store).collect();
-    sync::fetch_blob_from_any(&stores, &silo.path, blob_id)
+    let stores: Vec<(Uuid, &dyn ObjectStore)> = targets.iter().map(|t| (t.id, &*t.store)).collect();
+    sync::fetch_blob_from_targets(&stores, &silo.path, blob_id)
         .await
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    settle_fetched(&silo);
+    Ok(())
+}
+
+/// Content just downloaded is on the copy it came from: settled against every
+/// configured target, so it stops counting as waiting to back up.
+fn settle_fetched(silo: &SiloEntry) {
+    let every_target: Vec<Uuid> = silentsilo_vault::load_targets(silo.id)
+        .iter()
+        .map(|t| t.config.target_id())
+        .collect();
+    let _ = silentsilo_vault::settle_blob_delivery(&silo.path, &every_target);
 }
 
 /// What a bucket looks like to a device that hasn't joined it yet.
