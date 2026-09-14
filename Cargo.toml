@@ -21,14 +21,19 @@ license = "AGPL-3.0-or-later"
 # restore the lockfile before committing. CI passes `--locked` on every cargo
 # command, and the `lockfile-guard` job checks the sources directly, so a
 # patched lockfile fails loudly rather than shipping.
+#
+# Pinned to a commit while core 1.4.0 is on its way. No release can be cut
+# from this: the release workflow reads the tag from these lines, and there
+# is none until they point at v1.4.0.
 [workspace.dependencies]
-silentsilo-core = { git = "https://github.com/silentsilo/core", tag = "v1.2.0" }
-silentsilo-crypto = { git = "https://github.com/silentsilo/core", tag = "v1.2.0" }
-silentsilo-vault = { git = "https://github.com/silentsilo/core", tag = "v1.2.0" }
-silentsilo-vfs = { git = "https://github.com/silentsilo/core", tag = "v1.2.0" }
-silentsilo-store = { git = "https://github.com/silentsilo/core", tag = "v1.2.0" }
-silentsilo-sync = { git = "https://github.com/silentsilo/core", tag = "v1.2.0" }
-silentsilo-fido = { git = "https://github.com/silentsilo/core", tag = "v1.2.0" }
+silentsilo-core = { git = "https://github.com/silentsilo/core", rev = "1756b28164aaa8083302a699eeb71f2990422aca" }
+silentsilo-crypto = { git = "https://github.com/silentsilo/core", rev = "1756b28164aaa8083302a699eeb71f2990422aca" }
+silentsilo-vault = { git = "https://github.com/silentsilo/core", rev = "1756b28164aaa8083302a699eeb71f2990422aca" }
+silentsilo-vfs = { git = "https://github.com/silentsilo/core", rev = "1756b28164aaa8083302a699eeb71f2990422aca" }
+silentsilo-store = { git = "https://github.com/silentsilo/core", rev = "1756b28164aaa8083302a699eeb71f2990422aca" }
+silentsilo-sync = { git = "https://github.com/silentsilo/core", rev = "1756b28164aaa8083302a699eeb71f2990422aca" }
+silentsilo-fido = { git = "https://github.com/silentsilo/core", rev = "1756b28164aaa8083302a699eeb71f2990422aca" }
+silentsilo-app = { git = "https://github.com/silentsilo/core", rev = "1756b28164aaa8083302a699eeb71f2990422aca" }
 silentsilo-shell = { path = "crates/silentsilo-shell" }
 
 rand = "0.9"

@@ -42,6 +42,7 @@ silentsilo-shell = { workspace = true }
 silentsilo-store = { workspace = true }
 silentsilo-sync = { workspace = true }
 silentsilo-fido = { workspace = true, features = ["hardware"] }
+silentsilo-app = { workspace = true }
 # The same version russh already pulls in for SFTP, so generating SSH keys
 # for credential entries costs no new crate in the tree.
 ssh-key = { version = "0.7.0-rc.11", default-features = false, features = ["ed25519", "std"] }

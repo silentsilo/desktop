@@ -63,10 +63,12 @@ sequenceDiagram
     Note over P: behind the horizon? → needs_rebuild, stop
     P->>T: does keys/content.kek open under our DEK?
     Note over P: no? → needs_rejoin, stop before pushing anything
+    P->>T: reconcile key envelopes: add keys enrolled elsewhere, honour revocation markers
     P->>T: push_everything_to: manifest, KEK, recovery, base snapshot, key envelopes, ops, blobs
     P->>T: fetch_missing_ops (op-id diff, above local base horizon)
     Note over P: usable_prefix: stop below the first unreadable object
     P->>DB: replay, mark_delivered per reached target, settle delivery
+    P->>T: inbox import (items a locked phone sent), finish items recorded earlier
     P->>T: full-copy fetch (any target that has the blob)
     P->>T: compaction if due (publish snapshot everywhere, then prune)
     P->>T: orphan sweep (deletable targets, two-pass, daily)
@@ -89,6 +91,18 @@ sequenceDiagram
   looks like an orphan and gets swept. Same reasoning gives the join order
   in `push_everything_to` (identity first, snapshot before log, content
   last).
+- **Keys reconcile before the push**: a device learns keys other devices
+  enrolled, and a revocation leaves a sealed marker the others honour.
+  Publishing first would put back a key another device just revoked. A
+  tombstone is dropped only once its marker is in storage. The step is
+  core's `silentsilo_sync::reconcile_key_envelopes`, run the same way as in
+  `silentsilo-app`.
+- **The inbox imports after the push and pull**: an item recorded in one
+  pass leaves the inbox only in a later pass that reached every target, so
+  it is never gone from storage while its record exists on this machine
+  alone. With more than one target the content is fetched down for the next
+  push to spread. Core's `silentsilo_app::inbox_import`, fed this app's
+  session map without touching idle timers.
 - **Delivery accounting is per target** (`op_delivery`, `blob_delivery`):
   `pushed`/`synced` mean "every configured target has it", which is the only
   meaning that makes local pruning and eviction safe. Removing a target

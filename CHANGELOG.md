@@ -7,10 +7,19 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+### Added
+
+- Keys enrolled on another device, such as a phone, now appear here after a
+  sync, and a key removed on one device stays removed on the others.
+- Photos, contacts and shared files a phone sent while its silo was locked
+  are added to the silo by the sync, under Phone backup.
+
 ### Changed
 
-- Core is pinned at 1.1.0. Nothing a silo contains changed; the tag brings
-  the Secure Enclave key kind and the CTAP backend's usage-page lookup.
+- Core is pinned at a commit on the way to 1.4.0, and the release will pin
+  that tag. Nothing a silo contains changed in a way 1.0.0 cannot read; it
+  brings the Secure Enclave and Android key kinds, the CTAP backend's
+  usage-page lookup, key reconciliation, the inbox and `silentsilo-app`.
 - On macOS a key enrolled with the built-in authenticator is recorded as a
   Secure Enclave key rather than a FIDO2 credential, and every prompt names
   Touch ID where it used to name Windows Hello. Windows builds behave as

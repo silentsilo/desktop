@@ -23,6 +23,27 @@ use uuid::Uuid;
 use crate::commands::fido::{emit_fido_progress, run_fido};
 use crate::state::AppState;
 
+/// The silo a pass imports into, read straight from the session map: a
+/// background pass must not count as use, or silos would never lock idle.
+struct OpenForImport<'a> {
+    app: &'a AppHandle,
+    id: Uuid,
+}
+
+impl silentsilo_app::inbox_import::OpenSilo for OpenForImport<'_> {
+    fn with_vfs(
+        &self,
+        f: &mut dyn FnMut(&Vfs<'_>) -> silentsilo_core::CoreResult<()>,
+    ) -> Result<(), String> {
+        let state = self.app.state::<AppState>();
+        let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
+        let session = sessions
+            .get(&self.id)
+            .ok_or_else(|| "The silo was locked".to_string())?;
+        f(&Vfs::new(session)).map_err(|e| e.to_string())
+    }
+}
+
 /// What the last sync pass did, for the status bar.
 #[derive(Debug, Default, Clone, serde::Serialize)]
 pub struct SyncReport {
@@ -76,6 +97,13 @@ pub struct SyncReport {
     /// below them in the log. Retried on every pass.
     #[serde(default)]
     pub held_back: usize,
+    /// Items a locked device sent that this pass recorded as files.
+    #[serde(default)]
+    pub inbox_imported: usize,
+    /// Items left in an inbox, with why: an unknown sender, a removed key, a
+    /// newer format.
+    #[serde(default)]
+    pub inbox_refused: Vec<String>,
 }
 
 /// How far through the download a join is.
@@ -403,6 +431,38 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
         }
     }
 
+    // Other devices' keys in, and this device's revocations out as markers,
+    // before the push publishes anything: publishing first would put back a
+    // key another device just revoked. Never on a silo with no keys file.
+    // The same step as core's `silentsilo-app` pass.
+    let mut marked: std::collections::HashSet<String> = std::collections::HashSet::new();
+    if silentsilo_vault::is_fido_enrolled(&root)
+        && let Ok(mut local) = load_fido_keys(&root)
+    {
+        let mut changed = false;
+        for target in &targets {
+            match sync::reconcile_key_envelopes(&*target.store, &kek, &mut local, now).await {
+                Ok(outcome) => {
+                    changed |= outcome.changed();
+                    marked.extend(outcome.marked);
+                }
+                Err(e) => crate::diagnostics::warn("keys", format_args!("{}: {e}", target.label)),
+            }
+        }
+        if changed
+            && let Err(e) = silentsilo_vault::save_fido_keys(
+                &root,
+                &local,
+                silentsilo_vault::Authority::Machine,
+            )
+        {
+            crate::diagnostics::warn(
+                "keys",
+                format_args!("could not save the reconciled keys: {e}"),
+            );
+        }
+    }
+
     // ── Out, to every target ────────────────────────────────────────
     // Each target is pushed to on its own: `push_ops` asks whether a record
     // is already there, and a wrapper answering for all of them would skip
@@ -439,13 +499,15 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
         )
         .await;
 
-        // A revocation storage has now confirmed: the tombstone has done its
-        // job and the local list can drop it.
+        // A revocation storage has now confirmed, with its marker in place
+        // for the other devices: the tombstone has done its job and the local
+        // list can drop it.
         if !outcome.revoked.is_empty()
             && let Some(list) = keys.as_mut()
         {
-            list.keys
-                .retain(|k| !outcome.revoked.contains(&k.credential_id));
+            list.keys.retain(|k| {
+                !(outcome.revoked.contains(&k.credential_id) && marked.contains(&k.credential_id))
+            });
             // Dropping tombstones only. The keys being forgotten here were
             // already retired, with whatever proof that took at the time, so
             // this takes nothing away that the silo still had.
@@ -552,6 +614,33 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
     silentsilo_vault::settle_blob_delivery(&root, &every_target).map_err(|e| e.to_string())?;
     record_target_outcomes(app, silo, &statuses, now)?;
 
+    // ── The inbox ───────────────────────────────────────────────────
+    //
+    // What a locked phone sent, recorded as files. After the push, so an
+    // item recorded by an earlier pass has had its record sent before it may
+    // leave the inbox. With more than one copy the content comes down too,
+    // for the next push to spread. Core's `silentsilo_app::inbox_import`.
+    let every_copy_reached = statuses.len() == every_target.len()
+        && statuses.iter().all(|s| s.failed.is_none() && !s.waiting);
+    let inbox_targets: Vec<silentsilo_app::inbox_import::InboxTarget<'_>> = targets
+        .iter()
+        .map(|t| silentsilo_app::inbox_import::InboxTarget {
+            store: &*t.store,
+            label: &t.label,
+            may_finish: every_copy_reached && t.role.allows_delete(),
+        })
+        .collect();
+    let inbox = silentsilo_app::inbox_import::import_inbox(
+        &OpenForImport { app, id: silo.id },
+        &|detail: &str| crate::diagnostics::warn("inbox", format_args!("{detail}")),
+        &root,
+        &inbox_targets,
+        &kek,
+        vault_id,
+        every_target.len() > 1,
+    )
+    .await;
+
     // ── Housekeeping ────────────────────────────────────────────────
     //
     // Content is fetched from whichever copy has it: a blob is the same
@@ -598,10 +687,12 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
             .map(|u| format!("{}: {}", u.key, u.error))
             .collect(),
         held_back,
+        inbox_imported: inbox.imported,
+        inbox_refused: inbox.refused,
     };
 
     // The file list is stale the moment remote changes land.
-    if report.ops_applied > 0 {
+    if report.ops_applied > 0 || report.inbox_imported > 0 {
         let _ = app.emit("vault-changed", ());
     }
 
