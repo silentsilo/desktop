@@ -11,9 +11,11 @@ import type { Os, SecurityKeyInfo } from "./types";
  */
 export const KIND_FIDO2 = "fido2";
 
-/** Whether a ceremony on this machine could end with the silo open. */
+/** Whether a ceremony on this machine could end with the silo open. The
+ * backend answers with core's rule; the kind is only the fallback for a
+ * backend that does not say. */
 export function usableHere(key: SecurityKeyInfo): boolean {
-  return (key.kind ?? KIND_FIDO2) === KIND_FIDO2;
+  return key.usable ?? (key.kind ?? KIND_FIDO2) === KIND_FIDO2;
 }
 
 /**

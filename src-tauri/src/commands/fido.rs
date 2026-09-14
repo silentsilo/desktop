@@ -547,16 +547,35 @@ pub async fn fido_add_key(
     Ok(stored)
 }
 
+/// One enrolled key as the interface lists it.
+#[derive(serde::Serialize)]
+pub struct ListedKey {
+    #[serde(flatten)]
+    key: StoredFidoCredential,
+    /// Whether a ceremony on this computer can end with the silo open, by
+    /// core's rule (kind, derivation and id shape), so the interface never
+    /// keeps a second, weaker copy of it.
+    usable: bool,
+}
+
 #[tauri::command]
-pub fn fido_list_keys(app: AppHandle) -> Result<Vec<StoredFidoCredential>, String> {
+pub fn fido_list_keys(app: AppHandle) -> Result<Vec<ListedKey>, String> {
     let root = vault_dir(&app)?;
     if !is_fido_enrolled(&root) {
         return Ok(Vec::new());
     }
     let keys = load_fido_keys(&root).map_err(|e| e.to_string())?;
+    let usable: std::collections::HashSet<&str> =
+        keys.usable().map(|k| k.credential_id.as_str()).collect();
     // Tombstones are bookkeeping, not keys: showing a removed key in the list
     // would read as the removal having failed.
-    Ok(keys.active().cloned().collect())
+    Ok(keys
+        .active()
+        .map(|k| ListedKey {
+            usable: usable.contains(k.credential_id.as_str()),
+            key: k.clone(),
+        })
+        .collect())
 }
 
 /// Renames one enrolled key.
@@ -826,6 +845,18 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
     for id in &keep {
         if !labelled.contains_key(id) {
             return Err(format!("{id} is not a key enrolled on this silo."));
+        }
+    }
+    // A key from another device cannot be touched here, so keeping it would
+    // fail at its ceremony. Said now, by name, before any prompt.
+    for id in &keep {
+        if !keys.usable().any(|k| &k.credential_id == id) {
+            let label = labelled.get(id).filter(|l| !l.is_empty());
+            return Err(format!(
+                "“{}” is a key from another device, so this computer cannot keep it. Leave it \
+                 unticked: it stops opening the silo, and can be added again from its own device.",
+                label.map(String::as_str).unwrap_or("That key")
+            ));
         }
     }
 
@@ -1210,6 +1241,20 @@ mod authenticator_choice_tests {
         );
         // A key this silo does not have decides nothing.
         assert_eq!(super::authenticator_of(&keys, "33cc"), None);
+    }
+
+    #[test]
+    fn a_listed_key_keeps_its_fields_flat_and_says_whether_it_is_usable() {
+        // The interface reads the key's own fields at the top level, as
+        // before `usable` existed.
+        let json = serde_json::to_value(super::ListedKey {
+            key: key(false),
+            usable: false,
+        })
+        .unwrap();
+        assert_eq!(json["credential_id"], "aa11");
+        assert_eq!(json["kind"], "fido2");
+        assert_eq!(json["usable"], false);
     }
 
     #[test]

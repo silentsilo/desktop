@@ -31,7 +31,7 @@ import type {
   Silo,
 } from "../lib/types";
 import { formatBytes, formatDate, formatDay } from "../lib/format";
-import { securityKeyDisplayName } from "../lib/keyName";
+import { securityKeyDisplayName, usableHere } from "../lib/keyName";
 import { AUTO_LOCK_OPTIONS_MINUTES } from "../lib/types";
 import { checkForUpdate, installUpdateAndRelaunch } from "../lib/updater";
 import { readAutostart, writeAutostart, type AutostartStatus } from "../lib/autostart";
@@ -417,7 +417,12 @@ export function SettingsPanel(props: Props) {
                       )}
                       <span className="hint">
                         {" "}
-                        · {k.platform ? "this computer only" : "portable"}
+                        ·{" "}
+                        {!usableHere(k)
+                          ? "another device"
+                          : k.platform
+                            ? "this computer only"
+                            : "portable"}
                         {/* Only when a person named the key: the fallback
                             name already carries the slot, and printing it
                             twice on one row read as two different keys. */}

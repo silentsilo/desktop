@@ -103,6 +103,9 @@ export type SecurityKeyInfo = {
   /** Built-in authenticator (Windows Hello, Touch ID) rather than a
    * removable key. Same strength, but it does not survive the machine. */
   platform: boolean;
+  /** Whether this computer can unlock with it, decided by the backend with
+   * core's rule. Optional because the mock backend predates the field. */
+  usable?: boolean;
 };
 
 export type Authenticator = "security-key" | "this-device";

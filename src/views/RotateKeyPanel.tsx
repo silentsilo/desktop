@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Os } from "../lib/platformStrings";
 import { AlertTriangle, KeyRound, RefreshCw } from "lucide-react";
-import { securityKeyDisplayName } from "../lib/keyName";
+import { securityKeyDisplayName, usableHere } from "../lib/keyName";
 import type { SecurityKeyInfo } from "../lib/types";
 
 type Props = {
@@ -41,7 +41,11 @@ export function RotateKeyPanel({
   // `fido_list_keys` returns the ones that still work, so there is nothing
   // to filter here.
   const active = keys;
-  const [keep, setKeep] = useState<string[]>(() => active.map((k) => k.credential_id));
+  // Only keys this computer can touch can be kept: rotation re-wraps with
+  // each one. A key from another device starts unticked and cannot be ticked.
+  const keepable = (ids: string[]) =>
+    ids.filter((id) => active.some((k) => k.credential_id === id && usableHere(k)));
+  const [keep, setKeep] = useState<string[]>(() => keepable(active.map((k) => k.credential_id)));
 
   /// The list changes while this panel is on screen: enrolling a key in the
   /// section above updates `keys` but not this state, and the fresh key then
@@ -52,7 +56,7 @@ export function RotateKeyPanel({
   const [knownIds, setKnownIds] = useState(idsNow);
   if (knownIds.join("\n") !== idsNow.join("\n")) {
     const appeared = idsNow.filter((id) => !knownIds.includes(id));
-    setKeep((prev) => [...prev.filter((id) => idsNow.includes(id)), ...appeared]);
+    setKeep((prev) => [...prev.filter((id) => idsNow.includes(id)), ...keepable(appeared)]);
     setKnownIds(idsNow);
   }
 
@@ -82,7 +86,7 @@ export function RotateKeyPanel({
           start this. Every other key stops opening the silo, so add them again afterwards.
         </p>
         <div className="actions">
-          {active.map((k) => (
+          {active.filter(usableHere).map((k) => (
             <button
               key={k.credential_id}
               type="button"
@@ -129,15 +133,17 @@ export function RotateKeyPanel({
               <input
                 type="checkbox"
                 checked={keep.includes(k.credential_id)}
-                disabled={busy}
+                disabled={busy || !usableHere(k)}
                 onChange={() => toggle(k.credential_id)}
               />
               <span>
                 {named(k)}
                 <span className="hint">
-                  {k.platform
-                    ? "Built into this computer"
-                    : "Removable key, needs to be plugged in"}
+                  {!usableHere(k)
+                    ? "From another device. This computer cannot keep it; add it again from that device afterwards."
+                    : k.platform
+                      ? "Built into this computer"
+                      : "Removable key, needs to be plugged in"}
                 </span>
               </span>
             </label>

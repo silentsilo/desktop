@@ -857,6 +857,23 @@ const handlers: Record<string, Handler> = {
       wrapped_dek: "cd",
       platform: true,
     },
+    // `?phonekey`: a silo that also holds a phone's key, which this
+    // computer lists but cannot use.
+    ...(flag("phonekey")
+      ? [
+          {
+            kind: "android-keystore",
+            credential_id: "5a".repeat(76),
+            public_key: "",
+            key_slot: 3,
+            rp_id: "silentsilo",
+            label: "Galaxy S23 Ultra",
+            wrapped_dek: "ef",
+            platform: true,
+            usable: false,
+          },
+        ]
+      : []),
   ],
   // Opening a browser is the one thing a mock must not really do.
   "plugin:opener|open_url": () => null,
