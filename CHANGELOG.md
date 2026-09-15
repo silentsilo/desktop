@@ -13,6 +13,8 @@ silo from opening needs a major version rather than a note.
   sync, and a key removed on one device stays removed on the others.
 - Photos, contacts and shared files a phone sent while its silo was locked
   are added to the silo by the sync, under Phone backup.
+- A login saved with a passkey from a phone can be edited and saved without
+  a password.
 
 ### Changed
 
