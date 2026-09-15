@@ -66,6 +66,10 @@ silo from opening needs a major version rather than a note.
   with a quote in front of it. Only the descriptive columns are guarded.
 - The save dialog names the full destination and says when it is on
   another computer; the macOS Quick Action quotes the app's path.
+- Turning the recovery code off did not stick: a second computer that still
+  held the code put it back in storage on its next sync. Turning it off now
+  leaves a marker every copy honours, and a code generated afterwards is
+  dated after it, even on a computer whose clock is behind.
 
 ## [1.0.0] - First public release
 

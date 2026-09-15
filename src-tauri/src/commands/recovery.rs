@@ -52,6 +52,15 @@ async fn require_org_key_if_controlled(app: &AppHandle, what: &str) -> Result<()
         .map(|_| ())
 }
 
+fn focused_kek(app: &AppHandle) -> Result<silentsilo_crypto::ContentKek, String> {
+    let state = app.state::<AppState>();
+    let guard = state.focused_session()?;
+    guard
+        .as_ref()
+        .map(|session| session.kek.clone())
+        .ok_or_else(|| "Unlock the silo first.".to_string())
+}
+
 #[tauri::command]
 pub fn recovery_status(app: AppHandle) -> Result<RecoveryStatus, String> {
     let root = vault_dir(&app)?;
@@ -97,16 +106,31 @@ pub async fn recovery_generate(app: AppHandle) -> Result<GeneratedRecovery, Stri
     // against removal while leaving this open would protect nothing.
     require_org_key_if_controlled(&app, "recovery code").await?;
 
-    let (code, envelope) = {
+    let (code, mut envelope, kek, root) = {
         let state = app.state::<AppState>();
         let guard = state.focused_session()?;
         let session = guard
             .as_ref()
             .ok_or_else(|| "Unlock the silo before creating a recovery code".to_string())?;
         let (code, envelope) = create_recovery_envelope(&session.dek).map_err(|e| e.to_string())?;
-        save_recovery_envelope(&session.paths.root, &envelope).map_err(|e| e.to_string())?;
-        (code, envelope)
+        (
+            code,
+            envelope,
+            session.kek.clone(),
+            session.paths.root.clone(),
+        )
     };
+    // Dated after any earlier "turned off", even on a device whose clock is
+    // behind the one that turned it off: the passes drop every code made at
+    // or before it.
+    for target in crate::state::silo_targets(&app) {
+        if let Ok(Some(off)) =
+            sync::revoked_at(&*target.store, &kek, sync::RECOVERY_MARKER_ID).await
+        {
+            envelope.created_at = envelope.created_at.max(off + 1);
+        }
+    }
+    save_recovery_envelope(&root, &envelope).map_err(|e| e.to_string())?;
 
     // Published to every target that takes writes, because the situation
     // this exists for is a machine that has never seen the vault, and a copy
@@ -144,8 +168,26 @@ pub async fn recovery_disable(app: AppHandle) -> Result<Vec<String>, String> {
     // Every target: an envelope left on the second one is a written-down
     // code that still opens the silo, which is the opposite of what was just
     // asked for.
+    //
+    // A marker first, on every copy: a device that still holds the envelope
+    // would otherwise publish it again on its next pass. It covers every
+    // envelope made up to now. Best effort on an append-only copy, which may
+    // refuse to overwrite an earlier marker.
+    let kek = focused_kek(&app)?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let off_at = load_recovery_envelope(&vault_dir(&app)?)
+        .map(|r| r.created_at.max(now))
+        .unwrap_or(now);
     let mut withheld = Vec::new();
     for target in crate::state::silo_targets(&app) {
+        if let Err(e) = sync::mark_recovery_disabled(&*target.store, &kek, off_at).await
+            && target.role.allows_delete()
+        {
+            return Err(e.to_string());
+        }
         if !target.role.allows_delete() {
             withheld.push(target.label);
             continue;

@@ -538,30 +538,13 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
     // Read once rather than per target: the same bytes go to each copy, and
     // the key file is re-read only when a revocation changes it.
     let kek_envelope = silentsilo_vault::wrap_kek_bytes(&kek, &dek).map_err(|e| e.to_string())?;
-    let mut recovery = silentsilo_vault::load_recovery_envelope(&root).ok();
-    // A code made on another device since is the silo's code now: kept here
-    // too, rather than this device's older one pushed back over it.
-    if let Some(local) = recovery.as_ref() {
-        let mut newest: Option<silentsilo_vault::RecoveryEnvelope> = None;
-        for target in &targets {
-            if let Ok(Some(found)) = sync::newer_recovery_envelope(&*target.store, local).await
-                && newest
-                    .as_ref()
-                    .is_none_or(|n| found.created_at > n.created_at)
-            {
-                newest = Some(found);
-            }
-        }
-        if let Some(newer) = newest {
-            match silentsilo_vault::save_recovery_envelope(&root, &newer) {
-                Ok(()) => recovery = Some(newer),
-                Err(e) => crate::diagnostics::warn(
-                    "recovery",
-                    format_args!("could not keep the newer code: {e}"),
-                ),
-            }
-        }
-    }
+    // Turned off elsewhere stays off; made elsewhere since is kept. The same
+    // step as core's `silentsilo-app` pass.
+    let recovery_targets: Vec<(&dyn ObjectStore, bool)> = targets
+        .iter()
+        .map(|t| (&*t.store, t.role.allows_delete()))
+        .collect();
+    let recovery = sync::settle_recovery_envelope(&recovery_targets, &kek, &root).await;
     let mut keys = load_fido_keys(&root).ok();
 
     for target in &targets {
