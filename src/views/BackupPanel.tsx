@@ -87,6 +87,8 @@ type Props = {
   /** Content the backup holds that this computer does not. */
   missingCount: number;
   missingBytes: number;
+  /** Files whose content no backup holds. */
+  absentCount?: number;
   /** What the content already here occupies, for the same sentence. */
   localBytes: number;
   /** A download-everything pass in flight, counted in files. */
@@ -114,6 +116,7 @@ export function BackupPanel({
   onActivity,
   missingCount,
   missingBytes,
+  absentCount = 0,
   localBytes,
   contentFetch,
   fullCopy,
@@ -389,6 +392,14 @@ export function BackupPanel({
             <HardDriveDownload size={16} />
             On this computer
           </h3>
+          {absentCount > 0 && (
+            <p className="hint">
+              {absentCount === 1
+                ? "1 file is missing: its content is on no backup and not on this computer."
+                : `${absentCount} files are missing: their content is on no backup and not on this computer.`}{" "}
+              They show as Missing in Files. A device that still has them uploads them when it syncs.
+            </p>
+          )}
           {missingCount > 0 ? (
             <>
               <p>

@@ -18,6 +18,8 @@ function describeSyncState(state: FileSyncState): string {
   if (state === "pending") return "On this computer, waiting to be backed up.";
   if (state === "uploading") return "On this computer, uploading to the backup now.";
   if (state === "downloading") return "In the backup, downloading to this computer now.";
+  if (state === "absent")
+    return "Missing. The backup does not hold this file's content and neither does this computer. If another device still has the file, open SilentSilo there and sync; otherwise it can be deleted.";
   return "In the backup only. It downloads when opened.";
 }
 

@@ -100,6 +100,8 @@ type Props = {
   /** Without backup storage every file is simply here, so no badge is shown. */
   syncConfigured: boolean;
   localBlobIds: Set<string>;
+  /** Content found on no backup. */
+  absentBlobIds?: Set<string>;
   unsyncedBlobIds: Set<string>;
   /** The step a running sync pass is on, to mark the file it moves. */
   syncProgress?: SyncProgress | null;
@@ -152,6 +154,7 @@ export function FilesExplorer(props: Props) {
     onToggleFavorite,
     syncConfigured,
     localBlobIds,
+    absentBlobIds,
     unsyncedBlobIds,
     syncProgress,
   } = props;
@@ -169,7 +172,8 @@ export function FilesExplorer(props: Props) {
       return syncProgress.phase === "uploading" ? "uploading" : "downloading";
     }
     if (unsyncedBlobIds.has(entry.blob_id)) return "pending";
-    return localBlobIds.has(entry.blob_id) ? "backed-up" : "remote-only";
+    if (localBlobIds.has(entry.blob_id)) return "backed-up";
+    return absentBlobIds?.has(entry.blob_id) ? "absent" : "remote-only";
   };
 
   const [searchQuery, setSearchQuery] = useState("");

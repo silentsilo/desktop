@@ -1664,6 +1664,9 @@ pub struct BlobStatus {
     /// names every blob the silo holds.
     missing: Vec<String>,
     missing_bytes: i64,
+    /// Content the silo lists that no backup holds either: asked for and
+    /// not found. Kept out of `missing`, which a download could still fix.
+    absent: Vec<String>,
     usage: silentsilo_vault::CacheUsage,
 }
 
@@ -1689,12 +1692,21 @@ pub async fn vault_blob_status(app: AppHandle) -> Result<BlobStatus, String> {
         };
 
         let local = list_local_blob_ids(&root);
+        let absent_ids: HashSet<Uuid> = silentsilo_vault::list_absent_blob_ids(&root)
+            .into_iter()
+            .collect();
+        let mut absent = Vec::new();
         let here: HashSet<Uuid> = local.iter().copied().collect();
 
         let mut missing = Vec::new();
         let mut missing_bytes = 0i64;
         for (blob_id, size) in sizes {
-            if !here.contains(&blob_id) {
+            if here.contains(&blob_id) {
+                continue;
+            }
+            if absent_ids.contains(&blob_id) {
+                absent.push(blob_id.to_string());
+            } else {
                 missing.push(blob_id.to_string());
                 missing_bytes += size;
             }
@@ -1703,10 +1715,14 @@ pub async fn vault_blob_status(app: AppHandle) -> Result<BlobStatus, String> {
         // Password attachments hold blobs the file tree never references, so
         // a recovery that only counted the tree would leave them behind.
         for attachment in attachments {
-            if !here.contains(&attachment.blob_id)
-                && !missing.contains(&attachment.blob_id.to_string())
-            {
-                missing.push(attachment.blob_id.to_string());
+            let id = attachment.blob_id.to_string();
+            if here.contains(&attachment.blob_id) || missing.contains(&id) || absent.contains(&id) {
+                continue;
+            }
+            if absent_ids.contains(&attachment.blob_id) {
+                absent.push(id);
+            } else {
+                missing.push(id);
                 missing_bytes += attachment.size_bytes;
             }
         }
@@ -1719,6 +1735,7 @@ pub async fn vault_blob_status(app: AppHandle) -> Result<BlobStatus, String> {
                 .collect(),
             missing,
             missing_bytes,
+            absent,
             usage: silentsilo_vault::cache_usage(&root),
         })
     })

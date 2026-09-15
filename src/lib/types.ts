@@ -150,6 +150,8 @@ export type BlobStatus = {
    * recovered, since it starts with the index and none of the content. */
   missing: string[];
   missing_bytes: number;
+  /** Content no backup holds either, found by asking: nothing to download. */
+  absent: string[];
   usage: {
     local_bytes: number;
     unsynced_bytes: number;
@@ -159,7 +161,14 @@ export type BlobStatus = {
 };
 
 /** Where a file's content currently is, from the user's point of view. */
-export type FileSyncState = "local-only" | "pending" | "backed-up" | "remote-only" | "uploading" | "downloading";
+export type FileSyncState =
+  | "local-only"
+  | "pending"
+  | "backed-up"
+  | "remote-only"
+  | "uploading"
+  | "downloading"
+  | "absent";
 
 /** Where a running sync pass is (`sync-progress`). Gone once it reports. */
 export type SyncProgress = {

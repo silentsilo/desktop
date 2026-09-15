@@ -1869,6 +1869,10 @@ textarea:focus {
   color: var(--text-dim);
 }
 
+.sync-absent {
+  color: var(--danger);
+}
+
 /* Moving now: the same cloud, pulsing, so a row being transferred stands
  * out without a spinner in every column. */
 .sync-uploading,

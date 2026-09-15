@@ -1,4 +1,4 @@
-import { CloudCheck, CloudDownload, CloudUpload } from "lucide-react";
+import { CloudAlert, CloudCheck, CloudDownload, CloudUpload } from "lucide-react";
 import type { FileSyncState } from "../lib/types";
 
 /**
@@ -41,6 +41,11 @@ const LOOK: Record<
     Icon: CloudDownload,
     label: "Downloading",
     title: "Downloading from the backup now.",
+  },
+  absent: {
+    Icon: CloudAlert,
+    label: "Missing",
+    title: "The content is on no backup and not on this computer, so it cannot be opened.",
   },
 };
 

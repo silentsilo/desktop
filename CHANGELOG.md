@@ -38,6 +38,12 @@ silo from opening needs a major version rather than a note.
   rebuild a 1.0.0 silo from its storage. This repository keeps the
   application, its OS integration and the frontend.
 
+### Fixed
+
+- A file whose content is on no backup and not on this computer shows as
+  Missing, and "Download everything" no longer offers it on every start.
+
+
 ## [1.0.0] - First public release
 
 The first public version of SilentSilo: a local-first, end-to-end encrypted

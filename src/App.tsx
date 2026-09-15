@@ -2192,6 +2192,10 @@ export default function App() {
     () => new Set(blobStatus?.local ?? []),
     [blobStatus],
   );
+  const absentBlobIds = useMemo(
+    () => new Set(blobStatus?.absent ?? []),
+    [blobStatus],
+  );
   const unsyncedBlobIds = useMemo(
     () => new Set(blobStatus?.unsynced ?? []),
     [blobStatus],
@@ -3258,6 +3262,7 @@ export default function App() {
             onClearSelection={clearSelection}
             syncConfigured={sync.configured}
             localBlobIds={localBlobIds}
+            absentBlobIds={absentBlobIds}
             unsyncedBlobIds={unsyncedBlobIds}
             syncProgress={syncProgress}
           />
@@ -3344,6 +3349,7 @@ export default function App() {
                 fullCopy={fullCopy}
                 onFullCopy={(on) => void setFullCopyEnabled(on)}
                 missingCount={blobStatus?.missing.length ?? 0}
+                absentCount={blobStatus?.absent.length ?? 0}
                 missingBytes={blobStatus?.missing_bytes ?? 0}
                 localBytes={blobStatus?.usage.local_bytes ?? 0}
                 contentFetch={contentFetch}
