@@ -80,12 +80,6 @@ if ((git tag --points-at HEAD) -notcontains $tag) {
     throw "HEAD is not tagged $tag. Tag first (see TUTORIAL-RELEASE.md), then build."
 }
 
-$secure = Read-Host "Updater signing key password" -AsSecureString
-$env:TAURI_SIGNING_PRIVATE_KEY = $keyFile
-$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD =
-    [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
-        [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
-
 try {
     # One release per run. Leftovers from an earlier tag would ride along in
     # the `gh release upload dist-release\*` step at the end and attach an
@@ -122,6 +116,8 @@ try {
     # Same gate as CI: a release build must never be the first time the test
     # suite runs.
     Write-Host "`n== Checks ==" -ForegroundColor Cyan
+    # The dependencies as the lockfile names them, before any of them runs.
+    npm ci; if (-not $?) { throw "npm ci failed" }
     npm run typecheck; if (-not $?) { throw "typecheck failed" }
     npm run lint;      if (-not $?) { throw "lint failed" }
     npm test;          if (-not $?) { throw "tests failed" }
@@ -129,6 +125,14 @@ try {
     cargo fmt --all -- --check; if (-not $?) { throw "cargo fmt failed" }
     cargo clippy --all-targets --locked -- -D warnings; if (-not $?) { throw "clippy failed" }
     cargo test --all --locked;  if (-not $?) { throw "cargo test failed" }
+
+    # Asked only now: the checks above run every dev dependency and every
+    # crate's build script, none of which needs the updater key's password.
+    $secure = Read-Host "Updater signing key password" -AsSecureString
+    $env:TAURI_SIGNING_PRIVATE_KEY = $keyFile
+    $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD =
+        [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
+            [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
 
     Write-Host "`n== Installer ==" -ForegroundColor Cyan
     # The Authenticode certificate lives on a hardware token, so a GitHub
@@ -228,7 +232,7 @@ try {
     # but `signer sign` would read as the key itself. Clear it so the explicit
     # -f flag is the only source.
     Remove-Item Env:\TAURI_SIGNING_PRIVATE_KEY -ErrorAction SilentlyContinue
-    npx --yes @tauri-apps/cli signer sign --private-key-path $keyFile `
+    npx --no-install tauri signer sign --private-key-path $keyFile `
         (Join-Path $out "silentsilo-extract-windows-x86_64.exe")
     if (-not $?) { throw "the updater signature for the windows extractor failed" }
 
@@ -290,7 +294,7 @@ try {
         $live = (Invoke-RestMethod "https://releases.silentsilo.com/windows/x86_64/0.0.0" -TimeoutSec 10).version
     } catch {}
     if ($live) {
-        npx --yes semver $version -r "> $live" | Out-Null
+        npx --no-install semver $version -r "> $live" | Out-Null
         if (-not $?) {
             throw "the endpoint already serves $live, and $version does not rank above it"
         }

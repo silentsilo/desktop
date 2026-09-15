@@ -68,8 +68,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
-
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       # The pin is the single source of truth for which core revision the app
       # was compiled against. Read from the manifest and the lockfile rather
       # than typed here, and the two must agree with each other and with what
@@ -104,11 +103,11 @@ jobs:
             exit 1
           fi
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           toolchain: 1.97.1
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           key: extract-${{ matrix.os }}
           workspaces: core-src
@@ -154,15 +153,23 @@ jobs:
       # so "is this the binary the project published" has to be answerable
       # without trusting GitHub. Verify with minisign against the public key
       # in tauri.conf.json, also published as SIGNING-PUBKEY.txt in core.
+      # The signer comes from the lockfile, not from whatever npm serves
+      # today: it runs with the updater key in its environment.
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --ignore-scripts
       - name: Sign it
         shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npx --yes @tauri-apps/cli signer sign "dist/${{ matrix.asset }}"
+        run: npx --no-install tauri signer sign "dist/${{ matrix.asset }}"
 
       - name: Attach it to the draft
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -211,17 +218,17 @@ jobs:
     # which is a queue on Apple's side and not a local step.
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: package-lock.json
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           toolchain: 1.97.1
           targets: aarch64-apple-darwin,x86_64-apple-darwin
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           key: macos-app
       - run: npm ci
@@ -334,7 +341,7 @@ jobs:
 
       - name: Keep the unsigned build as an artifact
         if: steps.apple.outputs.signed == 'false'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: macos-app-unsigned
           path: dist-macos/
@@ -359,7 +366,7 @@ jobs:
 
       - name: Attach the signed build to the draft
         if: ${{ steps.apple.outputs.signed == 'true' && startsWith(github.ref, 'refs/tags/') }}
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -419,16 +426,16 @@ jobs:
             librsvg2-dev libxdo-dev libdbus-1-dev libudev-dev libssl-dev \
             xdg-utils patchelf squashfs-tools libgdk-pixbuf-2.0-dev
 
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: package-lock.json
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           toolchain: 1.97.1
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           key: linux-app
       - run: npm ci
@@ -482,14 +489,14 @@ jobs:
               echo "already signed: $file"
             else
               echo "signing: $file"
-              npx --yes @tauri-apps/cli signer sign "$file"
+              npx --no-install tauri signer sign "$file"
             fi
           done
           ls -l dist-linux
 
       # Kept whatever the trigger was. On a manual run this is the whole
       # point; on a tag it is the copy to look at while the draft is checked.
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: linux-app
           path: dist-linux/
@@ -513,7 +520,7 @@ jobs:
 
       - name: Attach to the draft
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:

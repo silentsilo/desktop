@@ -34,7 +34,8 @@ for (const block of lock.split("[[package]]").slice(1)) {
   if (!CORE.includes(name)) continue;
   seen.add(name);
   const source = /^source = "(.+)"$/m.exec(block)?.[1];
-  if (!source?.startsWith("git+https://github.com/silentsilo/core")) {
+  // The repository exactly: a prefix would also pass `silentsilo/core-fork`.
+  if (!/^git\+https:\/\/github\.com\/silentsilo\/core(\.git)?[?#]/.test(source ?? "")) {
     bad.push(`${name}: ${source ?? "no source (a local path or a patch)"}`);
   }
 }
