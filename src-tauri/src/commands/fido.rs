@@ -3,7 +3,7 @@ use std::time::Duration;
 use silentsilo_fido::Authenticator;
 use silentsilo_sync as sync;
 use silentsilo_vault::{
-    StoredFidoCredential, StoredFidoKeys, VaultSession, dek_path, is_fido_enrolled, load_fido_keys,
+    StoredFidoCredential, StoredFidoKeys, VaultSession, is_fido_enrolled, load_fido_keys,
     save_fido_keys, wrap_dek_bytes,
 };
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -382,7 +382,9 @@ pub async fn fido_enroll_primary(
 
     // Commit: from here on the vault is FIDO-only — the device secret alone
     // no longer decrypts it.
-    std::fs::write(dek_path(&root), &envelope_bytes).map_err(|e| e.to_string())?;
+    // Replaced whole or not at all: a crash half way through a plain write
+    // left an envelope nothing opens, before any key was recorded.
+    silentsilo_vault::save_wrapped_dek_bytes(&root, &envelope_bytes).map_err(|e| e.to_string())?;
     let (kind, derivation) = kind_and_derivation(authenticator);
     save_fido_keys(
         &root,
@@ -586,7 +588,7 @@ pub fn fido_list_keys(app: AppHandle) -> Result<Vec<ListedKey>, String> {
 /// envelopes, and the label rides along with them.
 #[tauri::command]
 pub fn fido_rename_key(app: AppHandle, credential_id: String, label: String) -> Result<(), String> {
-    let root = vault_dir(&app)?;
+    let root = crate::state::unlocked_silo(&app)?.path;
     let mut keys = load_fido_keys(&root).map_err(|e| e.to_string())?;
     let label = label.trim();
     if label.is_empty() {
@@ -628,7 +630,7 @@ pub async fn fido_remove_key(
     app: AppHandle,
     credential_id: String,
 ) -> Result<RemoveKeyOutcome, String> {
-    let root = vault_dir(&app)?;
+    let root = crate::state::unlocked_silo(&app)?.path;
     let mut keys = load_fido_keys(&root).map_err(|e| e.to_string())?;
     let credential_id = credential_id.trim().to_string();
 

@@ -280,6 +280,9 @@ pub fn run() {
         .expect("error while running SilentSilo")
         .run(|app_handle, event| {
             if matches!(event, RunEvent::ExitRequested { .. }) {
+                // The 45-second timer dies with the process, so a copied
+                // password would otherwise outlive the app.
+                let _ = silentsilo_shell::clear_secret_clipboard_now();
                 let state = app_handle.state::<AppState>();
                 flush_vault_snapshot(state.clone());
                 // Every silo that is open, not just the one on screen: each

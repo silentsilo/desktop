@@ -13,13 +13,16 @@ type Props = {
   entry: PasswordEntry;
   now: number;
   copied: boolean;
+  /** An entry that asks for a key before its secrets shows the code only
+   * once revealed; copying still goes through that ask. */
+  hidden?: boolean;
   onCopy: (code: string) => void;
 };
 
 /** Live-updating 6(+)-digit TOTP code for one entry. Recomputes only when
  * the current time-step "bucket" changes, not on every tick, since the
  * code itself doesn't change within a period. */
-export function TotpDisplay({ entry, now, copied, onCopy }: Props) {
+export function TotpDisplay({ entry, now, copied, hidden = false, onCopy }: Props) {
   const period = entry.totp_period ?? DEFAULT_TOTP_PERIOD;
   const digits = entry.totp_digits ?? DEFAULT_TOTP_DIGITS;
   const algorithm = entry.totp_algorithm ?? DEFAULT_TOTP_ALGORITHM;
@@ -48,7 +51,7 @@ export function TotpDisplay({ entry, now, copied, onCopy }: Props) {
   return (
     <div className="pw-field-row">
       <span className="pw-field-label">Code</span>
-      <span className="pw-field-value pw-mask pw-totp-code">{grouped || "······"}</span>
+      <span className="pw-field-value pw-mask pw-totp-code">{(!hidden && grouped) || "······"}</span>
       <span
         className="pw-totp-ring"
         style={{ "--pw-totp-frac": String(secondsLeft / period) } as React.CSSProperties}

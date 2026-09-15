@@ -129,6 +129,7 @@ pub async fn recovery_generate(app: AppHandle) -> Result<GeneratedRecovery, Stri
 /// the ordinary answer and means the code is genuinely gone.
 #[tauri::command]
 pub async fn recovery_disable(app: AppHandle) -> Result<Vec<String>, String> {
+    crate::state::unlocked_silo(&app)?;
     // Same reasoning as regenerating: turning recovery off entirely is the
     // blunter version of the same lockout.
     require_org_key_if_controlled(&app, "recovery code").await?;
@@ -196,6 +197,8 @@ pub async fn vault_unlock_with_recovery(
         let vfs = Vfs::new(&session);
         vfs.ensure_initialized().map_err(|e| e.to_string())?;
         let meta = vfs.meta().map_err(|e| e.to_string())?;
+        // As every other unlock does: plaintext a crash left behind goes now.
+        crate::commands::vault::wipe_open_scratch(&session.paths.root);
         crate::state::open_focused_session(&app, session)?;
         Ok(meta)
     })

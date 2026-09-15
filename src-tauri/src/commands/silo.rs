@@ -172,7 +172,48 @@ fn plan_new_silo(
             path.display()
         ));
     }
+    // A folder that holds anything else is refused too. The silo would share
+    // it, and removing the silo with its files later would take everything
+    // else in there with it.
+    if location.is_some()
+        && std::fs::read_dir(&path).is_ok_and(|mut entries| entries.next().is_some())
+    {
+        return Err(format!(
+            "{} is not empty. Pick an empty folder.",
+            path.display()
+        ));
+    }
     Ok(path)
+}
+
+/// What SilentSilo writes at the top of a silo folder. Removing a silo with
+/// its files removes these and nothing else: a silo made before empty
+/// folders were required may share its folder with the user's own files.
+fn is_silo_entry(name: &str) -> bool {
+    matches!(name, "blobs" | "keys" | "silo.json" | "vault.salt")
+        || name.starts_with("vault.db.enc")
+        || name.starts_with("master.dek.enc")
+        || name.starts_with("content.kek.enc")
+}
+
+/// Deletes a silo's own files from `root`, then `root` itself if that left
+/// it empty.
+fn remove_silo_files(root: &std::path::Path) -> std::io::Result<()> {
+    for entry in std::fs::read_dir(root)? {
+        let entry = entry?;
+        if !is_silo_entry(&entry.file_name().to_string_lossy()) {
+            continue;
+        }
+        if entry.file_type()?.is_dir() {
+            std::fs::remove_dir_all(entry.path())?;
+        } else {
+            std::fs::remove_file(entry.path())?;
+        }
+    }
+    if std::fs::read_dir(root)?.next().is_none() {
+        std::fs::remove_dir(root)?;
+    }
+    Ok(())
 }
 
 /// Creates a silo and makes it the open one.
@@ -474,7 +515,7 @@ fn silo_forget_impl(app: &AppHandle, id: String, delete_files: bool) -> Result<(
     }
 
     if delete_files && entry.path.exists() {
-        std::fs::remove_dir_all(&entry.path).map_err(|e| {
+        remove_silo_files(&entry.path).map_err(|e| {
             format!("removed from the list, but the files could not be deleted: {e}")
         })?;
     }
@@ -744,6 +785,49 @@ mod creation_plan_tests {
         )
         .unwrap();
         assert!(derived.starts_with("D:/silos"), "{derived:?}");
+    }
+
+    #[test]
+    fn a_chosen_folder_with_anything_in_it_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("thesis.docx"), b"mine").unwrap();
+        let plan = plan_new_silo(
+            "Work",
+            Some(dir.path().to_str().unwrap()),
+            &SiloRegistry::default(),
+            Path::new("D:/silos"),
+        );
+        assert!(plan.unwrap_err().contains("not empty"));
+    }
+
+    #[test]
+    fn removing_a_silo_with_its_files_leaves_what_else_shares_the_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("Documents");
+        std::fs::create_dir_all(root.join("blobs")).unwrap();
+        std::fs::create_dir_all(root.join("keys")).unwrap();
+        for name in [
+            "vault.db.enc",
+            "vault.db.enc.bak",
+            "vault.salt",
+            "silo.json",
+            "master.dek.enc",
+        ] {
+            std::fs::write(root.join(name), b"x").unwrap();
+        }
+        std::fs::write(root.join("thesis.docx"), b"mine").unwrap();
+
+        super::remove_silo_files(&root).unwrap();
+        let left: Vec<String> = std::fs::read_dir(&root)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(left, vec!["thesis.docx".to_string()]);
+
+        std::fs::remove_file(root.join("thesis.docx")).unwrap();
+        std::fs::write(root.join("vault.salt"), b"x").unwrap();
+        super::remove_silo_files(&root).unwrap();
+        assert!(!root.exists(), "an emptied folder goes too");
     }
 
     #[test]

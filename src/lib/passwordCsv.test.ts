@@ -383,11 +383,13 @@ describe("entriesToCsv", () => {
     expect(csv).toContain('"say ""hi"""');
   });
 
-  it("neutralises spreadsheet formula injection", () => {
-    // A password beginning with = would be evaluated as a formula when the
-    // exported file is opened in Excel or Sheets.
-    const csv = entriesToCsv([entry({ password: "=1+1" })]);
+  it("neutralises spreadsheet formula injection without changing a password", () => {
+    // A name beginning with = would be evaluated as a formula when the
+    // exported file is opened in Excel or Sheets. A password is exported as
+    // it is: the importer on the other side would keep the quote.
+    const csv = entriesToCsv([entry({ service: "=1+1", password: "=2+2" })]);
     expect(csv).toContain("'=1+1");
+    expect(csv).toContain(",=2+2,");
   });
 
   it("ends with a newline", () => {

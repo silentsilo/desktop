@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 
@@ -13,7 +14,11 @@ export async function checkForUpdate(): Promise<UpdateCheckResult> {
   return { available: true, version: update.version, body: update.body ?? null, update };
 }
 
-/** Downloads and installs in one step, then relaunches into the new version. */
+/**
+ * Downloads, locks every open silo, installs, then relaunches into the new
+ * version. On Windows the installer ends this process outright, with no exit
+ * event, so a silo left open would leave its decrypted working copy on disk.
+ */
 export async function installUpdateAndRelaunch(
   update: Update,
   onProgress?: (downloaded: number, contentLength: number | null) => void,
@@ -21,7 +26,7 @@ export async function installUpdateAndRelaunch(
   let downloaded = 0;
   let contentLength: number | null = null;
 
-  await update.downloadAndInstall((event) => {
+  await update.download((event) => {
     switch (event.event) {
       case "Started":
         contentLength = event.data.contentLength ?? null;
@@ -35,5 +40,7 @@ export async function installUpdateAndRelaunch(
     }
   });
 
+  await invoke("vault_lock", { id: null });
+  await update.install();
   await relaunch();
 }

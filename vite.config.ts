@@ -17,7 +17,9 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
   },
-  envPrefix: ["VITE_", "TAURI_"],
+  // Only Tauri's build facts, never TAURI_SIGNING_*: a variable matching the
+  // prefix can end up in the bundle.
+  envPrefix: ["VITE_", "TAURI_ENV_"],
   test: {
     // The unit tests only. Without the fence, vitest's default glob would
     // also collect the Playwright specs in e2e/, which import a runner it

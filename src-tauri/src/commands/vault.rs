@@ -589,7 +589,7 @@ pub fn vault_list_folder(
     state: State<AppState>,
 ) -> Result<Vec<VaultEntry>, String> {
     let folder_id = Uuid::parse_str(&folder_id).map_err(|e| e.to_string())?;
-    with_vfs(&state, |_session, vfs| vfs.list_folder(folder_id))
+    crate::state::with_vfs_untouched(&state, |_session, vfs| vfs.list_folder(folder_id))
 }
 
 #[tauri::command]
@@ -1567,7 +1567,7 @@ pub async fn password_open_attachment(
 #[tauri::command]
 pub async fn password_delete_attachment(app: AppHandle, blob_id: String) -> Result<(), String> {
     let blob_id = Uuid::parse_str(&blob_id).map_err(|e| e.to_string())?;
-    let root = vault_dir(&app)?;
+    let root = crate::state::unlocked_silo(&app)?.path;
     silentsilo_vault::remove_blob_from_cache(&root, blob_id).map_err(|e| e.to_string())
 }
 
@@ -1783,7 +1783,7 @@ pub struct ProtectedFolderView {
 /// each other.
 #[tauri::command]
 pub fn protected_folders_add(app: AppHandle, path: String) -> Result<(), String> {
-    let silo = crate::state::active_silo(&app)?;
+    let silo = crate::state::unlocked_silo(&app)?;
     let source = PathBuf::from(&path);
     if !source.is_dir() {
         return Err("That is not a folder on this computer.".into());

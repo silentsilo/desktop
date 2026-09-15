@@ -241,6 +241,7 @@ export function EntryDetail({
               <TotpDisplay
                 entry={entry}
                 now={now}
+                hidden={entry.require_reauth === true && !revealed}
                 copied={copiedId === `t-${entry.id}`}
                 onCopy={(code) => onCopyTotp(entry, code)}
               />

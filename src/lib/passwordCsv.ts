@@ -235,11 +235,12 @@ export function csvToEntries(text: string, now: () => number = Date.now): Import
   return { format, entries, skipped };
 }
 
-function escapeCsvField(value: string): string {
+function escapeCsvField(value: string, exact = false): string {
   // Leading =/+/-/@ make spreadsheet apps evaluate the cell as a formula;
-  // prefixing a quote keeps an exported password like "=2+2" readable as
-  // text instead of silently becoming 4 when reopened in Excel.
-  const guarded = /^[=+\-@]/.test(value) ? `'${value}` : value;
+  // prefixing a quote keeps a name like "=HYPERLINK(...)" inert when the file
+  // is opened in Excel. Not for a password or a TOTP secret: another
+  // manager importing the file would store the quote as part of it.
+  const guarded = !exact && /^[=+\-@]/.test(value) ? `'${value}` : value;
   return /[",\n\r]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
 }
 
@@ -266,16 +267,14 @@ export function entriesToCsv(entries: PasswordEntry[]): string {
   for (const entry of entries) {
     lines.push(
       [
-        entry.service,
-        entry.url,
-        entry.username,
-        entry.password,
-        entry.totp_secret ?? "",
-        entry.category,
-        entry.notes,
-      ]
-        .map((field) => escapeCsvField(field ?? ""))
-        .join(","),
+        escapeCsvField(entry.service ?? ""),
+        escapeCsvField(entry.url ?? ""),
+        escapeCsvField(entry.username ?? ""),
+        escapeCsvField(entry.password ?? "", true),
+        escapeCsvField(entry.totp_secret ?? "", true),
+        escapeCsvField(entry.category ?? ""),
+        escapeCsvField(entry.notes ?? ""),
+      ].join(","),
     );
   }
 

@@ -22,9 +22,13 @@ pub fn register_context_menu(exe_path: &Path) -> std::io::Result<()> {
     let contents = workflow_root.join("Contents");
     std::fs::create_dir_all(&contents)?;
 
+    // Single-quoted, with any quote in the path closed and reopened: inside
+    // double quotes a `$` or a backtick in the install path would run as a
+    // command every time the action is used.
+    let quoted = format!("'{}'", exe_str.replace('\'', r"'\''"));
     let shell_script = format!(
         r#"for f in "$@"; do
-  "{exe_str}" --upload "$f"
+  {quoted} --upload "$f"
 done
 "#
     );

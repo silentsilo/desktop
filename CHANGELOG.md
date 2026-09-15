@@ -44,7 +44,28 @@ silo from opening needs a major version rather than a note.
 
 - A file whose content is on no backup and not on this computer shows as
   Missing, and "Download everything" no longer offers it on every start.
-
+- Installing an update on Windows ended the app without locking open
+  silos, leaving their decrypted working copies on disk. Every silo locks
+  before the installer starts, and a copied secret is cleared on quit.
+- Creating a silo in a folder you picked no longer accepts a folder with
+  other files in it, and removing a silo with its files deletes only what
+  SilentSilo wrote there.
+- The sync pass does not compact or sweep after a pass that could not read
+  every record, checks the snapshot horizon against what it received rather
+  than what it wrote, and keeps a newer recovery code made on another
+  device instead of pushing its own back over it.
+- A blank secret in the storage settings is kept only for the same server
+  and account, and Test connection needs the silo unlocked.
+- Removing or renaming a key, turning the recovery code off, removing a
+  storage copy and adding a protected folder need the silo unlocked.
+- Refreshing the file list after another device's changes no longer counts
+  as use, so auto-lock still happens while other devices sync.
+- A one-time code on an entry that asks for a key first is hidden until the
+  entry is revealed.
+- A password or TOTP secret starting with `=`, `+`, `-` or `@` was exported
+  with a quote in front of it. Only the descriptive columns are guarded.
+- The save dialog names the full destination and says when it is on
+  another computer; the macOS Quick Action quotes the app's path.
 
 ## [1.0.0] - First public release
 

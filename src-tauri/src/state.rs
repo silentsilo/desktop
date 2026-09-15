@@ -66,6 +66,23 @@ pub fn vault_dir(app: &AppHandle) -> Result<PathBuf, String> {
     active_silo(app).map(|silo| silo.path)
 }
 
+/// The active silo, only while it is unlocked. For commands that change
+/// what protects it or where it backs up: none of those should work for
+/// whoever sits at a locked app.
+pub fn unlocked_silo(app: &AppHandle) -> Result<SiloEntry, String> {
+    let silo = active_silo(app)?;
+    let state = app.state::<AppState>();
+    let open = state
+        .sessions
+        .lock()
+        .map_err(|e| e.to_string())?
+        .contains_key(&silo.id);
+    if !open {
+        return Err("Unlock the silo first.".into());
+    }
+    Ok(silo)
+}
+
 pub fn active_silo(app: &AppHandle) -> Result<SiloEntry, String> {
     app.state::<AppState>()
         .active_silo
@@ -392,6 +409,23 @@ where
 {
     let id = focused_id(state)?;
     with_session_id(state, id, f)
+}
+
+/// [`with_vfs`] for a read that does not count as use. The listing is also
+/// refreshed whenever a sync pass applies another device's changes, and a
+/// silo whose other devices kept changing it never reached its idle lock.
+/// A person browsing is still counted: the window reports their input.
+pub fn with_vfs_untouched<F, T>(state: &State<AppState>, f: F) -> Result<T, String>
+where
+    F: FnOnce(&VaultSession, &Vfs<'_>) -> CoreResult<T>,
+{
+    let id = focused_id(state)?;
+    let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
+    let session = sessions
+        .get(&id)
+        .ok_or_else(|| CoreError::VaultLocked.to_string())?;
+    let vfs = Vfs::new(session);
+    f(session, &vfs).map_err(|e| e.to_string())
 }
 
 /// Short-lock access to one specific open silo, named by id.

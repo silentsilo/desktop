@@ -64,6 +64,8 @@ export function ShellDownloadDialog(props: Props) {
   };
 
   const dirName = targetDir.replace(/[/\\]+$/, "").split(/[/\\]/).pop() || targetDir;
+  // A share on another machine gets plaintext over the network: said so.
+  const onNetwork = targetDir.startsWith("\\\\") || targetDir.startsWith("//");
   const currentLabel = folder ? (folder.path === "/" ? "Silo root" : folder.name) : "";
   const cardRef = useModal(busy ? undefined : onCancel);
 
@@ -85,8 +87,9 @@ export function ShellDownloadDialog(props: Props) {
         </div>
         <div className="modal-body">
           <p className="hint">
-            Pick what to save into <strong>{dirName}</strong>. The copies written there are not
-            encrypted.
+            Pick what to save into <strong title={targetDir}>{dirName}</strong> ({targetDir}). The
+            copies written there are not encrypted.
+            {onNetwork && " This folder is on another computer, and the files travel there unencrypted."}
           </p>
           <div className="browser-nav">
             <button

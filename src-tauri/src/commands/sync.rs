@@ -430,7 +430,33 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
     let horizon = sync::lowest_snapshot_horizon(&stores)
         .await
         .map_err(|e| e.to_string())?;
-    if horizon > 0 && applied_through <= horizon {
+    // What this device received, not the highest record it holds: its own
+    // records count in the latter, and a device that wrote many offline
+    // looked current while missing what others folded into a snapshot.
+    // Before a complete fetch has recorded a watermark, the old bound. The
+    // same check as core's `silentsilo-app` pass.
+    let received = {
+        let state = app.state::<AppState>();
+        let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
+        sessions
+            .get(&silo.id)
+            .and_then(|s| silentsilo_vfs::snapshot::received_through(&s.conn).ok())
+            .flatten()
+    };
+    let known_through = received.unwrap_or(applied_through);
+    let mut behind = false;
+    if horizon > local_horizon && known_through <= horizon {
+        // The listing's word for the horizon is only a name; a snapshot
+        // copied under a higher one would ask for a rebuild on every pass.
+        let mut verified: Option<u64> = None;
+        for target in &targets {
+            if let Ok(found) = sync::verified_snapshot_horizon(&*target.store, &dek).await {
+                verified = Some(verified.map_or(found, |v| v.min(found)));
+            }
+        }
+        behind = verified.is_some_and(|v| v > local_horizon && known_through <= v);
+    }
+    if behind {
         return Ok(announce(
             app,
             silo,
@@ -459,8 +485,10 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
                     },
                 ));
             }
-            // Current, or nothing published yet to compare against.
-            Ok(_) => break,
+            Ok(Some(true)) => break,
+            // Nothing there to compare against: a new silo, or a copy caught
+            // in the middle of an SFTP overwrite. The next copy is asked.
+            Ok(None) => continue,
             // Unreachable: ask the next copy rather than deciding blind.
             Err(_) => continue,
         }
@@ -510,7 +538,30 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
     // Read once rather than per target: the same bytes go to each copy, and
     // the key file is re-read only when a revocation changes it.
     let kek_envelope = silentsilo_vault::wrap_kek_bytes(&kek, &dek).map_err(|e| e.to_string())?;
-    let recovery = silentsilo_vault::load_recovery_envelope(&root).ok();
+    let mut recovery = silentsilo_vault::load_recovery_envelope(&root).ok();
+    // A code made on another device since is the silo's code now: kept here
+    // too, rather than this device's older one pushed back over it.
+    if let Some(local) = recovery.as_ref() {
+        let mut newest: Option<silentsilo_vault::RecoveryEnvelope> = None;
+        for target in &targets {
+            if let Ok(Some(found)) = sync::newer_recovery_envelope(&*target.store, local).await
+                && newest
+                    .as_ref()
+                    .is_none_or(|n| found.created_at > n.created_at)
+            {
+                newest = Some(found);
+            }
+        }
+        if let Some(newer) = newest {
+            match silentsilo_vault::save_recovery_envelope(&root, &newer) {
+                Ok(()) => recovery = Some(newer),
+                Err(e) => crate::diagnostics::warn(
+                    "recovery",
+                    format_args!("could not keep the newer code: {e}"),
+                ),
+            }
+        }
+    }
     let mut keys = load_fido_keys(&root).ok();
 
     for target in &targets {
@@ -591,6 +642,9 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
     // independent, which is what makes reading the same record twice free.
     let mut incoming = Vec::new();
     let mut unreadable: Vec<sync::UnreadableOp> = Vec::new();
+    let mut fetch_failed = false;
+    let mut misplaced: Vec<String> = Vec::new();
+    let mut listed_through = 0u64;
     for target in &targets {
         match sync::fetch_missing_ops_reporting(
             &*target.store,
@@ -608,8 +662,11 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
             Ok(mut got) => {
                 incoming.append(&mut got.records);
                 unreadable.append(&mut got.unreadable);
+                misplaced.append(&mut got.misplaced);
+                listed_through = listed_through.max(got.listed_through);
             }
             Err(e) => {
+                fetch_failed = true;
                 if let Some(status) = statuses.iter_mut().find(|s| s.id == target.id.to_string())
                     && status.failed.is_none()
                 {
@@ -620,9 +677,22 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
     }
     // An object unreadable on one copy but fetched intact from another is
     // not a hole in the log.
+    for key in &misplaced {
+        crate::diagnostics::warn(
+            "sync",
+            format_args!("{key} holds a record under another name; skipped"),
+        );
+    }
     let fetched_ids: std::collections::HashSet<Uuid> = incoming.iter().map(|r| r.op_id).collect();
     unreadable.retain(|u| u.op_id.is_none_or(|id| !fetched_ids.contains(&id)));
     let (incoming, held_back) = sync::usable_prefix(incoming, &unreadable);
+    // Everything every copy holds was read and nothing is held back. Only
+    // then may compaction and the sweep act on what this device believes
+    // the silo holds, and only then does the received watermark move.
+    let view_complete = !fetch_failed
+        && unreadable.is_empty()
+        && held_back == 0
+        && targets.len() == every_target.len();
     let fetched = incoming.len();
     for u in &unreadable {
         crate::diagnostics::warn(
@@ -638,6 +708,10 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
             .get(&silo.id)
             .ok_or_else(|| "Vault locked mid-sync".to_string())?;
         let report = replay(&session.conn, incoming).map_err(|e| e.to_string())?;
+        if view_complete {
+            silentsilo_vfs::snapshot::record_received_through(&session.conn, listed_through)
+                .map_err(|e| e.to_string())?;
+        }
 
         // Written down per target, after the write and never before: a
         // record noted as delivered without having arrived is one this
@@ -724,14 +798,24 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
     // `publish_compaction` guarantees for the target it is given. A target
     // that fails keeps its whole log, which is safe: it simply has more
     // history than it needs.
-    let compacted = run_compaction(app, silo, &targets, &dek, vault_id).await?;
+    //
+    // With a record held back, unreadable, or on a copy that could not be
+    // read, what this device believes is referenced is short: content others
+    // added would look orphaned and records missing here would be pruned.
+    let compacted = if view_complete {
+        run_compaction(app, silo, &targets, &dek, vault_id).await?
+    } else {
+        0
+    };
 
     // The sweep exists to delete, so an append-only target is skipped
     // outright rather than swept and refused. Content that nothing
     // references staying there for ever is what that role means, and the
     // Copies panel says so instead of the sweep pretending to run.
-    for target in targets.iter().filter(|t| t.role.allows_delete()) {
-        run_blob_sweep(app, silo, &*target.store, target.id).await?;
+    if view_complete {
+        for target in targets.iter().filter(|t| t.role.allows_delete()) {
+            run_blob_sweep(app, silo, &*target.store, target.id).await?;
+        }
     }
 
     let report = SyncReport {
