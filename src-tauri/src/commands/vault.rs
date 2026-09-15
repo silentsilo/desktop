@@ -972,8 +972,10 @@ async fn ensure_blobs_local(app: &AppHandle, blob_ids: &[Uuid]) -> Result<(), St
     }
     let stores: Vec<(Uuid, &dyn silentsilo_store::ObjectStore)> =
         targets.iter().map(|t| (t.id, &*t.store)).collect();
+    let every_copy = crate::state::active_silo(app)
+        .is_ok_and(|silo| silentsilo_vault::load_targets(silo.id).len() == targets.len());
     for id in missing {
-        silentsilo_sync::fetch_blob_from_targets(&stores, &root, id)
+        silentsilo_sync::fetch_blob_from_targets(&stores, &root, id, every_copy)
             .await
             .map_err(|e| format!("could not download the file content: {e}"))?;
     }

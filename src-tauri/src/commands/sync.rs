@@ -711,10 +711,9 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
         targets.iter().map(|t| (t.id, &*t.store)).collect();
     // Content remembered as on no copy is asked about again, in case a
     // device that still had it has uploaded it since.
-    if every_copy_reached {
-        sync::recheck_absent_blobs(&reachable, &silo.path).await;
-    }
-    let pulled = fetch_missing_for_full_copy(app, silo, &reachable).await;
+    sync::recheck_absent_blobs(&reachable, &silo.path).await;
+    let every_copy_reached = every_copy_reached && targets.len() == every_target.len();
+    let pulled = fetch_missing_for_full_copy(app, silo, &reachable, every_copy_reached).await;
     // What came down, from the inbox or for the full copy, is on the copy it
     // came from, and no longer counts as waiting to back up there.
     if pulled > 0 || inbox.imported > 0 {
@@ -848,6 +847,7 @@ async fn fetch_missing_for_full_copy(
     app: &AppHandle,
     silo: &SiloEntry,
     stores: &[(Uuid, &dyn ObjectStore)],
+    every_copy: bool,
 ) -> usize {
     if !silentsilo_vault::keep_full_copy(&silo.path) {
         return 0;
@@ -891,7 +891,7 @@ async fn fetch_missing_for_full_copy(
         // bytes are damaged, held every later blob back on every pass
         // afterwards: a device asked to keep a full copy never became one
         // and never said why.
-        match sync::fetch_blob_from_targets(stores, &silo.path, blob_id).await {
+        match sync::fetch_blob_from_targets(stores, &silo.path, blob_id, every_copy).await {
             Ok(_) => fetched += 1,
             Err(e) => crate::diagnostics::warn(
                 "sync",
@@ -1131,7 +1131,10 @@ pub async fn sync_fetch_blob(
         return Err("That file isn't on this device, and no backup storage is connected.".into());
     }
     let stores: Vec<(Uuid, &dyn ObjectStore)> = targets.iter().map(|t| (t.id, &*t.store)).collect();
-    sync::fetch_blob_from_targets(&stores, &silo.path, blob_id)
+    // A copy that would not open is missing from `targets`, and may be the
+    // one that holds it.
+    let every_copy = targets.len() == silentsilo_vault::load_targets(silo.id).len();
+    sync::fetch_blob_from_targets(&stores, &silo.path, blob_id, every_copy)
         .await
         .map_err(|e| e.to_string())?;
     settle_fetched(&silo);
