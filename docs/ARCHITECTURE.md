@@ -60,7 +60,7 @@ sequenceDiagram
     participant T as each target
     P->>DB: read owed-per-target, dek, kek, base horizon, known op ids
     P->>T: lowest snapshot horizon
-    Note over P: behind the horizon? → needs_rebuild, stop
+    Note over P: received through the horizon or less, and the snapshot there genuine? → needs_rebuild, stop
     P->>T: does keys/content.kek open under our DEK?
     Note over P: no? → needs_rejoin, stop before pushing anything
     P->>T: reconcile key envelopes: add keys enrolled elsewhere, honour revocation markers
@@ -70,8 +70,8 @@ sequenceDiagram
     P->>DB: replay, mark_delivered per reached target, settle delivery
     P->>T: inbox import (items a locked phone sent), finish items recorded earlier
     P->>T: full-copy fetch (any target that has the blob)
-    P->>T: compaction if due (publish snapshot everywhere, then prune)
-    P->>T: orphan sweep (deletable targets, two-pass, daily)
+    P->>T: compaction if due, only when every copy was read and nothing held back
+    P->>T: orphan sweep (deletable targets, two-pass, daily), same condition
 ```
 
 - **Push before pull**: a record that exists only locally has no other
@@ -85,7 +85,16 @@ sequenceDiagram
 - **Unreadable objects hold back, not wedge**: replay stops below the first
   unreadable Lamport value, because applying past a hole turns the missing
   record's dependents into `Obsolete`, which is permanent. The rest of the
-  silo keeps syncing; the objects are reported and retried.
+  silo keeps syncing; the objects are reported and retried. A record that
+  opens but sits under another record's name is a copy storage made, and is
+  skipped.
+- **Compaction and the sweep need the whole picture**: both act on what
+  this device believes is referenced, so a pass with a record held back, an
+  unreadable object, or a copy it could not read runs neither. The same
+  complete passes record `received_through`, the highest Lamport value
+  storage listed, which is what the horizon check compares against: the
+  highest local record counts this device's own writes and hid a device
+  that wrote a lot offline.
 - **Ops before blobs on push, and on the same push**: a visible file whose
   content has not arrived self-corrects next pass; content with no record
   looks like an orphan and gets swept. Same reasoning gives the join order
