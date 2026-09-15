@@ -544,6 +544,7 @@ const handlers: Record<string, Handler> = {
     unsynced: ["44444444-4444-4444-4444-444444444444"],
     missing: ["55555555-5555-5555-5555-555555555555"],
     missing_bytes: 4_194_304,
+    absent: [],
     usage: {
       local_bytes: 2_408_192,
       unsynced_bytes: 8_192,
