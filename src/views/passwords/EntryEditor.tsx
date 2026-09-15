@@ -183,7 +183,9 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
   if (draft.service.trim().length === 0) {
     missingForSave.push(type === "login" ? "a service name" : "a name");
   }
-  if (type === "login" && draft.password.trim().length === 0) {
+  // A login saved with a passkey from the phone signs in without a password.
+  const hasPasskey = Boolean((draft as Record<string, unknown>).passkey);
+  if (type === "login" && draft.password.trim().length === 0 && !hasPasskey) {
     missingForSave.push("a password");
   }
   if (type === "card" && (draft.card_number ?? "").trim().length === 0) {
