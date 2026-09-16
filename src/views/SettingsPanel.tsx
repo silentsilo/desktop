@@ -307,6 +307,9 @@ export function SettingsPanel(props: Props) {
               >
                 <Icon size={14} aria-hidden className="settings-rail-icon" />
                 <span className="view-rail-label">{item.label}</span>
+                {item.id === "updates" && updateState.phase === "available" && (
+                  <span className="tab-badge tab-badge-update rail-update-badge">New</span>
+                )}
               </button>
             </div>
           );
@@ -834,10 +837,13 @@ export function SettingsPanel(props: Props) {
             </h3>
             <p>Current version: v{__APP_VERSION__}</p>
             {updateState.phase === "available" && (
-              <p className="hint success-msg">
-                <CheckCircle2 size={14} />
-                Version {updateState.version} is available.
-              </p>
+              <div className="update-available" role="status">
+                <DownloadCloud size={16} aria-hidden />
+                <span>
+                  <strong>Version {updateState.version} is available.</strong> Every open silo
+                  locks before it installs, and the app restarts on its own.
+                </span>
+              </div>
             )}
             {updateState.phase === "up-to-date" && (
               <p className="hint success-msg">

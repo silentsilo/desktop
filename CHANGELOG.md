@@ -9,6 +9,9 @@ silo from opening needs a major version rather than a note.
 
 ### Added
 
+- An update the daily check found is marked on Settings in the sidebar, and
+  Settings opens on Updates while it waits. Nothing is marked when automatic
+  checks are turned off.
 - Keys enrolled on another device, such as a phone, now appear here after a
   sync, and a key removed on one device stays removed on the others.
 - Photos, contacts and shared files a phone sent while its silo was locked

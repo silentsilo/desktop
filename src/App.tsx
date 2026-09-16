@@ -231,6 +231,10 @@ export default function App() {
     version: string;
     update: Update;
   } | null>(null);
+  /// What the sidebar badges. Only while automatic checks are on: someone
+  /// who turned them off asked not to be told, and a manual check shows its
+  /// answer inside Settings.
+  const pendingUpdate = autoUpdateEnabled ? (backgroundUpdate?.version ?? null) : null;
 
   /// The fallback a silo without its own timeout follows. Read here and
   /// shown as a label in Settings, which belongs to one silo and so has no
@@ -3154,7 +3158,13 @@ export default function App() {
       )}
       <AppShell
         view={view}
-        onView={setView}
+        onView={(next) => {
+          if (next === "settings" && pendingUpdate && view !== "settings") {
+            setSettingsSection("updates");
+          }
+          setView(next);
+        }}
+        updateAvailable={pendingUpdate}
         onLock={() => void lockSilo()}
         storage={
           blobStatus

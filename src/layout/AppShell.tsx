@@ -99,6 +99,8 @@ type Props = {
   statusSummary?: string;
   siloName: string;
   onSwitchSilo: () => void;
+  /** The version an update check found and nobody has installed yet. */
+  updateAvailable?: string | null;
 };
 
 /** Views that lay out their own panes rather than scrolling as a page. */
@@ -140,6 +142,7 @@ export function AppShell({
   statusSummary,
   siloName,
   onSwitchSilo,
+  updateAvailable = null,
 }: Props) {
   const [preferCollapsed, setPreferCollapsed] = useState(
     () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true"
@@ -188,8 +191,11 @@ export function AppShell({
             const badgeCount =
               item.id === "trash" ? trashCount : item.id === "health" ? healthCount : 0;
             const badgeLabel = badgeCount > 99 ? "99+" : String(badgeCount);
+            const updateDot = item.id === "settings" && updateAvailable !== null;
             const title =
-              badgeCount === 0
+              updateDot
+                ? `${item.title} (version ${updateAvailable} is available)`
+                : badgeCount === 0
                 ? item.title
                 : item.id === "health"
                   ? // "to look at", the Health page's own wording: the count
@@ -211,9 +217,13 @@ export function AppShell({
                   {collapsed && badgeCount > 0 && (
                     <span className="tab-badge tab-badge-dot" aria-hidden />
                   )}
+                  {collapsed && updateDot && (
+                    <span className="tab-badge tab-badge-dot tab-badge-update" aria-hidden />
+                  )}
                 </span>
                 {!collapsed && <span className="tab-label">{item.label}</span>}
                 {!collapsed && badgeCount > 0 && <span className="tab-badge">{badgeLabel}</span>}
+                {!collapsed && updateDot && <span className="tab-badge tab-badge-update">Update</span>}
               </button>
             );
           })}

@@ -879,6 +879,11 @@ const handlers: Record<string, Handler> = {
   ],
   // Opening a browser is the one thing a mock must not really do.
   "plugin:opener|open_url": () => null,
+  // `?mock=unlocked&update` offers a newer version, for the update badge.
+  "plugin:updater|check": () =>
+    flag("update")
+      ? { rid: 1, currentVersion: "1.0.0", version: "1.1.0", date: null, body: "", rawJson: {} }
+      : null,
 
   // Event subscriptions: the app registers several at mount, and a
   // rejection there takes the whole tree down before anything renders.

@@ -617,6 +617,32 @@ textarea:focus {
   line-height: 1;
 }
 
+.tab-badge-update {
+  background: var(--accent);
+}
+
+.rail-update-badge {
+  margin-left: auto;
+}
+
+.update-available {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-size: 0.85rem;
+  margin: 0 0 0.5rem;
+}
+
+.update-available svg {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: var(--accent);
+}
+
 .tab-badge-dot {
   position: absolute;
   top: -2px;
