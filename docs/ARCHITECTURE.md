@@ -71,7 +71,7 @@ sequenceDiagram
     P->>T: inbox import (items a locked phone sent), finish items recorded earlier
     P->>T: full-copy fetch (any target that has the blob)
     P->>T: compaction if due, only when every copy was read and nothing held back
-    P->>T: orphan sweep (deletable targets, two-pass, daily), same condition
+    P->>T: orphan sweep (deletable targets, daily, 30-day grace) and restore of missing content, same condition
 ```
 
 - **Push before pull**: a record that exists only locally has no other
@@ -95,6 +95,14 @@ sequenceDiagram
   storage listed, which is what the horizon check compares against: the
   highest local record counts this device's own writes and hid a device
   that wrote a lot offline.
+- **The sweep waits 30 days and puts content back**: a candidate is deleted
+  only when an earlier sweep saw it unreferenced and this device first saw
+  that 30 days ago (`blob_gc_seen`). A device that has not synced can still
+  move a file over content the others stopped referencing. The same listing
+  uploads content a row here points at and the target lacks, from the cache
+  or another copy (`silentsilo_sync::restore_missing_blobs`), counted in
+  `blobs_restored`. Content no row references is never sent, so emptying the
+  trash is not undone. The step matches core's `silentsilo-app` pass.
 - **Ops before blobs on push, and on the same push**: a visible file whose
   content has not arrived self-corrects next pass; content with no record
   looks like an orphan and gets swept. Same reasoning gives the join order

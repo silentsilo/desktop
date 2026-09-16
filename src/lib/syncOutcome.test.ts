@@ -73,6 +73,12 @@ describe("a pass that moved something", () => {
     );
   });
 
+  it("says when missing content went back to a copy", () => {
+    expect(describeSync(report({ blobs_restored: 2 }))).toBe(
+      "2 missing files put back in the backup",
+    );
+  });
+
   it("puts a stale device ahead of every counter", () => {
     const r = report({ needs_rebuild: true, ops_pushed: 9 });
     expect(describeSync(r)).toContain("too far behind");

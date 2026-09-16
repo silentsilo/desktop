@@ -31,6 +31,8 @@ export type SyncReport = {
   ops_applied: number;
   blobs_uploaded: number;
   blobs_failed: number;
+  /// Content a file points at that a copy had lost, put back this pass.
+  blobs_restored?: number;
   renamed: string[];
   needs_rebuild: boolean;
   /// The silo's key was rotated from another device and this one was not
@@ -66,6 +68,9 @@ export function describeSync(r: SyncReport): string {
   if (r.blobs_uploaded > 0)
     parts.push(`${r.blobs_uploaded} file${r.blobs_uploaded === 1 ? "" : "s"} backed up`);
   if (r.blobs_failed > 0) parts.push(`${r.blobs_failed} failed, will retry`);
+  const restored = r.blobs_restored ?? 0;
+  if (restored > 0)
+    parts.push(`${restored} missing file${restored === 1 ? "" : "s"} put back in the backup`);
   const unreadable = r.unreadable?.length ?? 0;
   if (unreadable > 0)
     parts.push(

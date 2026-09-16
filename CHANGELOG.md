@@ -77,6 +77,14 @@ silo from opening needs a major version rather than a note.
   held the code put it back in storage on its next sync. Turning it off now
   leaves a marker every copy honours, and a code generated afterwards is
   dated after it, even on a computer whose clock is behind.
+- A file moved on a computer that had not yet received another computer's
+  edit or deletion of it could lose its content. Content a file still points
+  at and a backup no longer holds is put back, from this computer or from
+  another backup.
+- Deleted content is removed from backup storage 30 days after nothing
+  points at it rather than at once, so a computer that has not synced for a
+  while can still reach it. Emptying the trash frees that space a month
+  later.
 
 ## [1.0.0] - First public release
 

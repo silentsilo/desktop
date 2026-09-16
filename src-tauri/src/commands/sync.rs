@@ -98,6 +98,10 @@ pub struct SyncReport {
     /// the status line can say why a quiet pass moved gigabytes.
     pub blobs_fetched: usize,
     pub blobs_failed: usize,
+    /// Content a file points at that a copy had lost, put back from this
+    /// device or another copy.
+    #[serde(default)]
+    pub blobs_restored: usize,
     /// Entries another device's changes forced a rename on, so the UI can
     /// tell the user rather than letting a file quietly change name.
     pub renamed: Vec<String>,
@@ -795,9 +799,12 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
     // outright rather than swept and refused. Content that nothing
     // references staying there for ever is what that role means, and the
     // Copies panel says so instead of the sweep pretending to run.
+    let mut blobs_restored = 0;
     if view_complete {
+        let sessions = &app.state::<AppState>().inner().sessions;
         for target in targets.iter().filter(|t| t.role.allows_delete()) {
-            run_blob_sweep(app, silo, &*target.store, target.id).await?;
+            blobs_restored +=
+                run_blob_sweep(sessions, silo, (target.id, &*target.store), &reachable).await?;
         }
     }
 
@@ -810,6 +817,7 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
         blobs_uploaded,
         blobs_fetched: pulled,
         blobs_failed,
+        blobs_restored,
         renamed: replayed
             .renamed
             .iter()
@@ -1051,25 +1059,37 @@ async fn run_compaction(
 /// has been wasted for a day is no worse than storage wasted for a minute.
 const BLOB_SWEEP_INTERVAL_SECS: i64 = 24 * 60 * 60;
 
-/// Deletes superseded content, at most once a day, and only what was
-/// already unreferenced last time. Runs after a successful pass, when the
-/// referenced set is trustworthy. Errors are swallowed: housekeeping.
+/// How long content stays in storage after this device first saw nothing
+/// point at it. A device that has not synced meanwhile can still write a
+/// record naming it: a move made on top of an edit or a purge it had not
+/// received copies the old content's id. The same span as the compaction
+/// margin, past which such a device has to rebuild anyway.
+const BLOB_SWEEP_GRACE_SECS: i64 = 30 * 24 * 60 * 60;
+
+type Sessions = std::sync::Mutex<std::collections::HashMap<Uuid, VaultSession>>;
+
+/// Deletes content nothing references, at most once a day, and only what
+/// was unreferenced on an earlier sweep and for the whole grace period. The
+/// same listing puts back content a file points at that the target lost.
+/// Runs after a successful pass, when the referenced set is trustworthy.
+/// Errors are swallowed: housekeeping. Returns how many blobs went back.
+/// The same step as core's `silentsilo-app` pass, fed the session map.
 async fn run_blob_sweep(
-    app: &AppHandle,
+    sessions: &Sessions,
     silo: &SiloEntry,
-    store: &dyn ObjectStore,
-    target: Uuid,
-) -> Result<(), String> {
+    target: (Uuid, &dyn ObjectStore),
+    reachable: &[(Uuid, &dyn ObjectStore)],
+) -> Result<usize, String> {
+    let (target, store) = target;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
 
     let plan = {
-        let state = app.state::<AppState>();
-        let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
+        let sessions = sessions.lock().map_err(|e| e.to_string())?;
         let Some(session) = sessions.get(&silo.id) else {
-            return Ok(());
+            return Ok(0);
         };
         // Every read here gives up rather than failing the pass: a missing
         // bookkeeping table once turned this `?` into a sync that failed a
@@ -1083,35 +1103,61 @@ async fn run_blob_sweep(
             ),
             Ok(true)
         ) {
-            return Ok(());
+            return Ok(0);
         }
         // Attachments included: they have no row in `files`, so the bare
         // tree set reads them as orphans and the sweep deletes them.
-        let (Ok(referenced), Ok(candidates)) = (
+        let (Ok(referenced), Ok(first_seen)) = (
             Vfs::new(session).referenced_blobs_with_attachments(),
-            silentsilo_vfs::snapshot::gc_candidates(&session.conn, target),
+            silentsilo_vfs::snapshot::gc_first_seen(&session.conn, target, now),
         ) else {
-            return Ok(());
+            return Ok(0);
         };
-        (referenced, candidates)
+        (referenced, first_seen)
+    };
+    let (referenced, first_seen) = plan;
+    // Only a candidate past its grace may go on this sweep.
+    let due: std::collections::HashSet<Uuid> = first_seen
+        .iter()
+        .filter(|(_, seen)| now - **seen >= BLOB_SWEEP_GRACE_SECS)
+        .map(|(id, _)| *id)
+        .collect();
+
+    let Ok(outcome) = sync::sweep_orphan_blobs(store, &referenced, &due).await else {
+        return Ok(0);
     };
 
-    let Ok(outcome) = sync::sweep_orphan_blobs(store, &plan.0, &plan.1).await else {
-        return Ok(());
+    let listed: std::collections::HashSet<Uuid> = outcome.listed.iter().copied().collect();
+    let mut missing: Vec<Uuid> = referenced.difference(&listed).copied().collect();
+    missing.sort();
+    let restored = if missing.is_empty() {
+        0
+    } else {
+        let others: Vec<(Uuid, &dyn ObjectStore)> = reachable
+            .iter()
+            .filter(|(id, _)| *id != target)
+            .copied()
+            .collect();
+        let put_back =
+            sync::restore_missing_blobs((target, store), &others, &silo.path, &missing).await;
+        put_back.restored.len()
     };
 
-    let state = app.state::<AppState>();
-    let mut sessions = state.sessions.lock().map_err(|e| e.to_string())?;
+    let mut sessions = sessions.lock().map_err(|e| e.to_string())?;
     let Some(session) = sessions.get_mut(&silo.id) else {
         // Locked while the listing ran. The candidate set is not written, so
         // the next sweep starts these blobs over at first sighting, which is
         // the safe direction.
-        return Ok(());
+        return Ok(restored);
     };
-    let seen = outcome.candidates.into_iter().collect();
-    let _ = silentsilo_vfs::snapshot::set_gc_candidates(&mut session.conn, target, &seen);
+    let seen = outcome
+        .candidates
+        .into_iter()
+        .map(|id| (id, first_seen.get(&id).copied().unwrap_or(now)))
+        .collect();
+    let _ = silentsilo_vfs::snapshot::set_gc_first_seen(&mut session.conn, target, &seen);
     let _ = silentsilo_vfs::snapshot::record_sweep(&session.conn, target, now);
-    Ok(())
+    Ok(restored)
 }
 
 /// Rebuilds this device from the silo's current state.
@@ -1916,4 +1962,146 @@ async fn open_one(
         .map_err(|e| e.to_string())?;
     silentsilo_crypto::verify_blob(&path, &key, blob_id).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    /// One unlocked silo in a session map, as the pass sees it.
+    struct Silo {
+        _dir: tempfile::TempDir,
+        silo: SiloEntry,
+        sessions: Sessions,
+    }
+
+    impl Silo {
+        fn new() -> Self {
+            let dir = tempfile::tempdir().unwrap();
+            let root = dir.path().join("silo");
+            let session = VaultSession::provision(root.clone(), Uuid::new_v4(), "s").unwrap();
+            Vfs::new(&session).ensure_initialized().unwrap();
+            let silo = SiloEntry {
+                id: Uuid::new_v4(),
+                name: "Sweep".into(),
+                path: root,
+                last_opened: 0,
+                auto_lock_minutes: None,
+            };
+            let sessions = Sessions::default();
+            sessions.lock().unwrap().insert(silo.id, session);
+            Self {
+                _dir: dir,
+                silo,
+                sessions,
+            }
+        }
+
+        fn sql(&self, statement: &str) {
+            let sessions = self.sessions.lock().unwrap();
+            sessions[&self.silo.id].conn.execute(statement, []).unwrap();
+        }
+
+        /// Content in this device's cache, with a file pointing at it.
+        fn file(&self, name: &str) -> Uuid {
+            let blob = self.cached();
+            let sessions = self.sessions.lock().unwrap();
+            let vfs = Vfs::new(&sessions[&self.silo.id]);
+            let root = vfs.root_folder_id().unwrap();
+            vfs.add_file(root, name, blob, 5, "00", None, "key")
+                .unwrap();
+            blob
+        }
+
+        /// Content in this device's cache that nothing points at.
+        fn cached(&self) -> Uuid {
+            let blob = Uuid::new_v4();
+            let path = silentsilo_vault::VaultPaths::new(self.silo.path.clone()).blob_path(blob);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, b"bytes").unwrap();
+            blob
+        }
+
+        /// A sweep due now, as it is once a day.
+        fn sweep(
+            &self,
+            target: (Uuid, &dyn ObjectStore),
+            all: &[(Uuid, &dyn ObjectStore)],
+        ) -> usize {
+            self.sql("DELETE FROM vault_meta WHERE key LIKE 'blob_sweep_at:%'");
+            tauri::async_runtime::block_on(run_blob_sweep(&self.sessions, &self.silo, target, all))
+                .unwrap()
+        }
+    }
+
+    fn store(path: &Path) -> Box<dyn ObjectStore> {
+        silentsilo_store::StoreConfig::Folder {
+            path: path.to_path_buf(),
+        }
+        .open()
+        .unwrap()
+    }
+
+    fn put(storage: &Path, blob: Uuid) {
+        std::fs::create_dir_all(storage.join("blobs")).unwrap();
+        std::fs::write(storage.join(format!("blobs/{blob}.sslo")), b"bytes").unwrap();
+    }
+
+    fn in_storage(storage: &Path, blob: Uuid) -> bool {
+        storage.join(format!("blobs/{blob}.sslo")).is_file()
+    }
+
+    #[test]
+    fn content_a_file_points_at_is_put_back_from_this_device() {
+        let silo = Silo::new();
+        let storage = tempfile::tempdir().unwrap();
+        let target = (Uuid::new_v4(), store(storage.path()));
+        let blob = silo.file("report.txt");
+
+        let all = [(target.0, &*target.1)];
+        assert_eq!(silo.sweep(all[0], &all), 1);
+        assert!(in_storage(storage.path(), blob));
+        assert_eq!(silo.sweep(all[0], &all), 0);
+    }
+
+    #[test]
+    fn content_one_copy_lost_comes_back_from_the_other() {
+        let silo = Silo::new();
+        let first = tempfile::tempdir().unwrap();
+        let second = tempfile::tempdir().unwrap();
+        let (a, b) = (store(first.path()), store(second.path()));
+        let all = [(Uuid::new_v4(), &*a), (Uuid::new_v4(), &*b)];
+        let blob = silo.file("report.txt");
+        put(second.path(), blob);
+        silentsilo_vault::remove_blob_from_cache(&silo.silo.path, blob).unwrap();
+
+        assert_eq!(silo.sweep(all[0], &all), 1);
+        assert!(in_storage(first.path(), blob));
+    }
+
+    #[test]
+    fn unreferenced_content_waits_out_the_grace_and_is_never_put_back() {
+        let silo = Silo::new();
+        let storage = tempfile::tempdir().unwrap();
+        let target = store(storage.path());
+        let all = [(Uuid::new_v4(), &*target)];
+        // Still in this device's cache, as after emptying the trash.
+        let blob = silo.cached();
+        put(storage.path(), blob);
+
+        for _ in 0..3 {
+            silo.sweep(all[0], &all);
+        }
+        assert!(in_storage(storage.path(), blob), "deleted inside the grace");
+
+        silo.sql("UPDATE blob_gc_seen SET first_seen = first_seen - 31 * 24 * 60 * 60");
+        silo.sweep(all[0], &all);
+        assert!(!in_storage(storage.path(), blob), "never reclaimed");
+        assert_eq!(silo.sweep(all[0], &all), 0);
+        assert!(
+            !in_storage(storage.path(), blob),
+            "unreferenced content put back"
+        );
+    }
 }

@@ -272,6 +272,7 @@ const handlers: Record<string, Handler> = {
     ops_applied: 0,
     blobs_uploaded: 0,
     blobs_failed: 0,
+    blobs_restored: 0,
     renamed: [],
     needs_rebuild: flag("behind"),
     compacted: 0,
