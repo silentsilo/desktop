@@ -100,9 +100,12 @@ pub struct SiloReport {
     /// `None` when the enrolled keys cannot be read at all.
     pub keys: Option<KeyCounts>,
     pub recovery_envelope: bool,
-    /// A decrypted index left in the machine-local scratch directory. Its
-    /// presence means the last session did not close cleanly.
+    /// The ciphered working copy in the machine-local scratch directory. A
+    /// lock keeps it, so its presence alone says nothing.
     pub working_copy: Option<FileFact>,
+    /// A WAL beside the copy, or a plaintext copy of an older release: the
+    /// last session did not lock, or one is open now.
+    pub session_left_open: bool,
     pub sync_provider: Option<String>,
     pub disk_free_bytes: Option<u64>,
     pub disk_total_bytes: Option<u64>,
@@ -135,7 +138,10 @@ pub fn report_for(app_version: String, name: String, root: &Path) -> SiloReport 
     let working_copy = paths
         .db_path()
         .exists()
-        .then(|| fact("vault.db (working copy)", &paths.db_path()));
+        .then(|| fact("vault.sqlcipher (working copy)", &paths.db_path()));
+    // A lock folds the WAL in and closes, which deletes it.
+    let session_left_open =
+        paths.work_dir().join("vault.sqlcipher-wal").exists() || paths.legacy_db_path().exists();
 
     let space = silentsilo_shell::disk_space::space_at(root);
 
@@ -163,6 +169,7 @@ pub fn report_for(app_version: String, name: String, root: &Path) -> SiloReport 
         keys,
         recovery_envelope: silentsilo_vault::load_recovery_envelope(root).is_ok(),
         working_copy,
+        session_left_open,
         sync_provider: silentsilo_vault::detect_sync_provider(root).map(str::to_string),
         disk_free_bytes: space.as_ref().map(|s| s.available),
         disk_total_bytes: space.as_ref().map(|s| s.total),
@@ -276,21 +283,36 @@ mod tests {
         assert!(report.silo_id.is_none(), "no marker, so no id to report");
         assert!(!report.recovery_envelope);
         assert!(report.working_copy.is_none());
+        assert!(!report.session_left_open);
     }
 
     #[test]
-    fn a_leftover_working_copy_is_named() {
-        // The plaintext index outliving its session means the last run did
-        // not close cleanly, which is worth seeing before unlocking.
+    fn a_working_copy_kept_by_a_lock_is_not_a_crash() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = VaultPaths::new(dir.path().to_path_buf());
+        paths.ensure_work_dir().unwrap();
+        std::fs::write(paths.db_path(), b"a locked silo").unwrap();
+
+        let report = report_for("1.0.0".into(), "Personal".into(), dir.path());
+
+        let copy = report.working_copy.expect("the copy must be reported");
+        assert!(copy.present);
+        assert_eq!(copy.bytes, Some(13));
+        assert!(!report.session_left_open);
+    }
+
+    #[test]
+    fn a_session_that_never_locked_is_named() {
+        // A WAL beside the copy means the last run did not close cleanly,
+        // which is worth seeing before unlocking.
         let dir = tempfile::tempdir().unwrap();
         let paths = VaultPaths::new(dir.path().to_path_buf());
         paths.ensure_work_dir().unwrap();
         std::fs::write(paths.db_path(), b"a crashed session").unwrap();
+        std::fs::write(paths.work_dir().join("vault.sqlcipher-wal"), b"wal").unwrap();
 
         let report = report_for("1.0.0".into(), "Personal".into(), dir.path());
 
-        let copy = report.working_copy.expect("the leftover must be reported");
-        assert!(copy.present);
-        assert_eq!(copy.bytes, Some(17));
+        assert!(report.session_left_open);
     }
 }

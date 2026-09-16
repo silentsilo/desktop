@@ -741,9 +741,9 @@ pub struct RotateOutcome {
 
 /// Puts a rotation's new key in force, together with the snapshot under it.
 ///
-/// The two have to move as one. The plaintext working copy is wiped when the
-/// silo locks, so `vault.db.enc` is all that survives, and a silo whose key
-/// says one thing and whose snapshot says another opens exactly never.
+/// The two have to move as one. Without its working copy `vault.db.enc` is
+/// all a silo has, and a silo whose key says one thing and whose snapshot
+/// says another opens exactly never.
 /// Ordered so that the only gap a crash can land in is recoverable: the
 /// staged snapshot is written first, the keys commit, then the staged file
 /// is renamed into place. Dying between the last two leaves the new key in

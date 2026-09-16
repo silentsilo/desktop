@@ -34,6 +34,7 @@ export type SiloReport = {
   keys: KeyCounts | null;
   recovery_envelope: boolean;
   working_copy: FileFact | null;
+  session_left_open: boolean;
   sync_provider: string | null;
   disk_free_bytes: number | null;
   disk_total_bytes: number | null;
@@ -66,6 +67,19 @@ function describeDisk(free: number | null, total: number | null): string {
 
 /** The whole report as text to paste into a message. Nothing is added here,
  *  so the rule about what is safe to show lives in one place. */
+/** The working copy line, with `sep` between its parts. */
+export function describeWorkingCopy(r: SiloReport, sep: string): string {
+  if (r.working_copy === null) {
+    return r.session_left_open ? "left by a session that did not lock" : "none";
+  }
+  const state = r.session_left_open
+    ? "left by a session that did not lock"
+    : "kept from the last lock, ciphered";
+  return [state, formatBytes(r.working_copy.bytes ?? 0), reportTime(r.working_copy.modified)].join(
+    sep
+  );
+}
+
 export function siloReportText(r: SiloReport): string {
   const f = r.formats;
   return [
@@ -84,11 +98,7 @@ export function siloReportText(r: SiloReport): string {
     "",
     `Keys          ${describeKeys(r.keys)}`,
     `Recovery      ${r.recovery_envelope ? "envelope present" : "no envelope"}`,
-    `Working copy  ${
-      r.working_copy === null
-        ? "none, the last session closed cleanly"
-        : `left behind, ${formatBytes(r.working_copy.bytes ?? 0)}, ${reportTime(r.working_copy.modified)}`
-    }`,
+    `Working copy  ${describeWorkingCopy(r, ", ")}`,
     `Folder sync   ${r.sync_provider ?? "none detected"}`,
     `Disk          ${describeDisk(r.disk_free_bytes, r.disk_total_bytes)}`,
   ].join("\n");

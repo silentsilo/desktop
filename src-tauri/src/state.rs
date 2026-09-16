@@ -12,9 +12,9 @@ use uuid::Uuid;
 
 /// The most silos that may be unlocked at the same time.
 ///
-/// Each open silo means a decrypted working database on disk and a set of
-/// keys in memory, so the number of them is the size of what a compromised
-/// process gets while the user is unlocked. Switching between silos all day
+/// Each open silo means a decrypted index and a set of keys in memory, so
+/// the number of them is the size of what a compromised process gets while
+/// the user is unlocked. Switching between silos all day
 /// would otherwise leave every one of them open, which is not something a
 /// person would choose deliberately.
 pub const MAX_OPEN_SILOS: usize = 3;
@@ -297,9 +297,10 @@ impl AppState {
         Ok(())
     }
 
-    /// Removes the decrypted scratch of every silo that is not open, the one
-    /// just closed and any a crash or kill left behind. Returns how many
-    /// survived because another application still holds a file in them.
+    /// Removes the plaintext scratch of every silo that is not open, the one
+    /// just closed and any a crash or kill left behind, keeping their
+    /// ciphered working copies. Returns how many still hold plaintext because
+    /// another application holds a file in them.
     pub fn sweep_scratch(&self) -> usize {
         let roots: Vec<std::path::PathBuf> = self
             .sessions
@@ -332,19 +333,17 @@ fn stalest(ids: impl Iterator<Item = Uuid>, touched: &HashMap<Uuid, Instant>) ->
     ids.min_by_key(|id| touched.get(id).copied())
 }
 
-/// Snapshots a session and clears the plaintext it was working through.
+/// Snapshots a session and clears the plaintext it was working through. The
+/// ciphered working copy stays, so the next unlock reuses it.
 ///
-/// The session is dropped before the working copy is removed: Windows will
-/// not delete a file that still has an open handle, so the order here is the
-/// difference between locking a silo and leaving its decrypted database on
-/// disk.
+/// The session is dropped before anything is removed: Windows will not
+/// delete a file that still has an open handle.
 fn close_one(session: VaultSession) {
-    if let Err(e) = session.backup_locally() {
+    if let Err(e) = session.seal_for_lock() {
         crate::diagnostics::warn("lock", format_args!("local snapshot failed: {e}"));
     }
     let paths = session.paths.clone();
     drop(session);
-    crate::commands::vault::wipe_open_scratch(&paths.root);
     silentsilo_vault::wipe_plaintext_working_copy(&paths);
 }
 

@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { useModal } from "../hooks/useModal";
 import { formatBytes } from "../lib/format";
-import { type SiloReport, reportTime, siloReportText } from "../lib/siloReport";
+import {
+  type SiloReport,
+  describeWorkingCopy,
+  reportTime,
+  siloReportText,
+} from "../lib/siloReport";
 
 type Props = {
   report: SiloReport;
@@ -92,13 +97,7 @@ export function SiloReportDialog({ report, onClose }: Props) {
           </div>
           <div className="info-row">
             <span className="info-label">Working copy</span>
-            <span>
-              {report.working_copy === null
-                ? "none, the last session closed cleanly"
-                : `left behind · ${formatBytes(report.working_copy.bytes ?? 0)} · ${reportTime(
-                    report.working_copy.modified
-                  )}`}
-            </span>
+            <span>{describeWorkingCopy(report, " · ")}</span>
           </div>
           {report.sync_provider && (
             <div className="info-row">

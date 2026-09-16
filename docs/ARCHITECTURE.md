@@ -130,8 +130,9 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    U["unlock (FIDO / device secret / recovery code)"] --> WC{"working copy on disk<br/>and passes quick_check?"}
-    WC -->|"yes (a crash left it)"| ADOPT["adopt it, refresh vault.db.enc + .bak,<br/>drop stale .next"]
+    U["unlock (FIDO / device secret / recovery code)"] --> WC{"working copy opens and its<br/>fingerprint matches vault.db.enc?"}
+    WC -->|"yes, marked by a lock"| REUSE["reuse it as it stands"]
+    WC -->|"yes, not marked (a crash)"| ADOPT["quick_check, refresh vault.db.enc + .bak,<br/>drop stale .next"]
     WC -->|no| DEC{"vault.db.enc decrypts?"}
     DEC -->|yes| OPEN[open + integrity check]
     DEC -->|no| NEXT{"vault.db.enc.next?<br/>(rotation died before rename)"}
@@ -141,12 +142,15 @@ flowchart TD
     BAK -->|no| REPAIR["vault_repair_from_storage:<br/>rebuild in place from any copy,<br/>recovery code as the door, blobs kept"]
     OPEN --> SESSION["session: conn + dek + kek in memory"]
     ADOPT --> SESSION
+    REUSE --> SESSION
     PROMOTE --> SESSION
-    SESSION --> LOCK["lock: snapshot to .enc + .bak,<br/>drop conn, wipe workdir"]
+    SESSION --> LOCK["lock: snapshot to .enc + .bak, mark the copy,<br/>drop conn, wipe plaintext, keep the ciphered copy"]
 ```
 
-The working copy wins over the snapshot because it exists only after a
-crash (lock wipes it) and holds everything since the last lock. Up to three
+The working copy wins over the snapshot while its fingerprint matches: it
+holds the snapshot or more, everything since the last lock after a crash.
+Anything else that wrote `vault.db.enc` gets a fresh export (core's
+ARCHITECTURE.md, "The working copy outlives the lock"). Up to three
 silos stay open (`MAX_OPEN_SILOS`), least-recently-used evicted; every way
 in funnels through `open_focused_session`. Long operations snapshot the
 session's cheap parts (`SessionSnapshot`) and take the sessions mutex only
@@ -174,8 +178,8 @@ The checklist, in order:
    shapes are read by field; `src/lib/errors.ts` matches on substrings of
    Rust error messages. Change the frontend in the same commit.
 3. **Does it change the session or lock lifecycle?** State the invariant it
-   preserves: a lock leaves no decrypted working copy behind, the snapshot is
-   written before the session is dropped, and every open silo is flushed on
+   preserves: a lock leaves nothing decrypted behind (only the ciphered copy
+   and its sealed key), the snapshot is written before the session is dropped, and every open silo is flushed on
    exit, not just the focused one.
 4. **Run the whole CI sequence locally, from the workspace root**, in the
    order `.github/workflows/ci.yml` runs it, with `--locked` on every cargo

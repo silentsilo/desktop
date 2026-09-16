@@ -292,8 +292,9 @@ pub fn run() {
                 let state = app_handle.state::<AppState>();
                 flush_vault_snapshot(state.clone());
                 // Every silo that is open, not just the one on screen: each
-                // has a decrypted working copy, and leaving any of them
-                // behind is the thing this exists to prevent.
+                // has keys in memory and may have opened files on disk, and
+                // leaving any of them behind is the thing this exists to
+                // prevent.
                 for id in state.open_silo_ids() {
                     let _ = state.close_session(id);
                 }

@@ -23,6 +23,7 @@ function report(overrides: Partial<SiloReport> = {}): SiloReport {
     keys: { total: 3, platform: 1, portable: 2, revoked: 1 },
     recovery_envelope: true,
     working_copy: null,
+    session_left_open: false,
     sync_provider: null,
     disk_free_bytes: 1024 * 1024 * 1024,
     disk_total_bytes: 4 * 1024 * 1024 * 1024,
@@ -56,16 +57,18 @@ describe("siloReportText", () => {
     expect(text).toContain("cannot be read");
   });
 
-  it("names a working copy left behind, because it explains the last crash", () => {
-    const text = siloReportText(
-      report({ working_copy: { name: "vault.db", present: true, bytes: 2048, modified: 1755700000 } })
-    );
-    expect(text).toContain("left behind");
+  const copy = { name: "vault.sqlcipher", present: true, bytes: 2048, modified: 1755700000 };
+
+  it("names a session that did not lock, because it explains the last crash", () => {
+    const text = siloReportText(report({ working_copy: copy, session_left_open: true }));
+    expect(text).toContain("left by a session that did not lock");
     expect(text).toContain("2 KB");
   });
 
-  it("reports a clean shutdown as such", () => {
-    expect(siloReportText(report())).toContain("the last session closed cleanly");
+  it("reports a copy a lock kept as such", () => {
+    const text = siloReportText(report({ working_copy: copy }));
+    expect(text).toContain("kept from the last lock");
+    expect(text).not.toContain("did not lock");
   });
 
   it("counts keys without naming any of them", () => {

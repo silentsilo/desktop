@@ -73,7 +73,8 @@ not the data.
 Because everything a silo needs is inside its folder, a silo can live on an
 external drive, be copied to another machine, or be restored from a backup as
 a unit. Nothing decrypted is ever written there: the working copy lives in a
-machine-local directory and is wiped when the silo locks. A silo folder is
+machine-local directory, ciphered, and files you open are wiped when the silo
+locks. A silo folder is
 therefore safe to put anywhere, including a folder a cloud client is syncing.
 
 That last case works as a backup for **one** computer. It cannot serve two:

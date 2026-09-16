@@ -364,7 +364,7 @@ pub async fn vault_repair_from_storage(
     crate::commands::fido::run_blocking(move || {
         let mut session = session;
         plan.apply(&mut session.conn).map_err(|e| e.to_string())?;
-        session.backup_locally().map_err(|e| e.to_string())?;
+        session.seal_for_lock().map_err(|e| e.to_string())?;
         // Left locked: the caller unlocks normally next, and until then no
         // plaintext may outlive this call.
         let paths = session.paths.clone();
