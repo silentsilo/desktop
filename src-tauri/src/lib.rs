@@ -121,6 +121,9 @@ pub fn run() {
             sync_in_flight: std::sync::atomic::AtomicBool::new(false),
         })
         .setup(move |app| {
+            // Nothing is unlocked yet, so any decrypted scratch on disk is
+            // what a crash, a kill or a power cut left behind.
+            let _ = silentsilo_vault::wipe_work_dirs_except(&[]);
             let _ = ensure_os_integration();
             // Before the tray, so a first run that is also the first boot
             // has the Run entry in place whatever happens next.
@@ -148,7 +151,7 @@ pub fn run() {
             // quitting: the app keeps running in the tray so shell "Upload to
             // SilentSilo" actions don't cold-start it (and re-prompt for the
             // security key). Real exit goes through the tray's Quit or the OS
-            // shutting down (ExitRequested below).
+            // shutting down (ExitRequested and Exit below).
             //
             // Only where there is a tray. On a desktop without one, most of
             // all GNOME without the AppIndicator extension, hiding the window
@@ -279,7 +282,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while running SilentSilo")
         .run(|app_handle, event| {
-            if matches!(event, RunEvent::ExitRequested { .. }) {
+            // `Exit` too: a Windows logoff or shutdown ends the loop through
+            // WM_ENDSESSION without ever asking, and the silos would stay open
+            // on disk. Running twice is harmless, the second finds none open.
+            if matches!(event, RunEvent::ExitRequested { .. } | RunEvent::Exit) {
                 // The 45-second timer dies with the process, so a copied
                 // password would otherwise outlive the app.
                 let _ = silentsilo_shell::clear_secret_clipboard_now();

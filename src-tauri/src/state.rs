@@ -293,7 +293,25 @@ impl AppState {
         if let Some(session) = closed {
             close_one(session);
         }
+        self.sweep_scratch();
         Ok(())
+    }
+
+    /// Removes the decrypted scratch of every silo that is not open, the one
+    /// just closed and any a crash or kill left behind. Returns how many
+    /// survived because another application still holds a file in them.
+    pub fn sweep_scratch(&self) -> usize {
+        let roots: Vec<std::path::PathBuf> = self
+            .sessions
+            .lock()
+            .map(|s| {
+                s.values()
+                    .map(|session| session.paths.root.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let open: Vec<&std::path::Path> = roots.iter().map(|r| r.as_path()).collect();
+        silentsilo_vault::wipe_work_dirs_except(&open)
     }
 
     pub fn open_silo_ids(&self) -> Vec<Uuid> {

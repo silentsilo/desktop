@@ -558,9 +558,19 @@ pub async fn vault_lock(app: AppHandle, id: Option<String>) -> Result<(), String
         for id in ids {
             state.close_session(id)?;
         }
+        tell_if_scratch_survived(&app, state.sweep_scratch());
         Ok(())
     })
     .await
+}
+
+/// A file opened from a silo is still held by another application, so its
+/// decrypted copy could not be deleted. Every later lock and the next start
+/// try again; the user is the one who can close it now.
+fn tell_if_scratch_survived(app: &AppHandle, left: usize) {
+    if left > 0 {
+        let _ = app.emit("scratch-still-open", left);
+    }
 }
 
 /// Locks every open silo, used when the workstation locks or suspends:
@@ -573,6 +583,7 @@ pub fn lock_all_silos(app: &AppHandle) {
     for id in state.open_silo_ids() {
         let _ = state.close_session(id);
     }
+    tell_if_scratch_survived(app, state.sweep_scratch());
     let _ = app.emit("silos-locked", ());
 }
 

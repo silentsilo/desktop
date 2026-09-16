@@ -42,6 +42,13 @@ silo from opening needs a major version rather than a note.
 
 ### Fixed
 
+- Signing out of Windows or shutting it down, including the restart after an
+  update, left open silos' decrypted working copies on disk: the app is ended
+  without being asked to quit. Every silo now locks on the way out.
+- Decrypted copies a crash, a kill or a power cut left behind are deleted
+  when the app starts, and after every lock, including those of silos that
+  are never opened again. A file still open in another app when its silo
+  locks is reported instead of silently kept.
 - A file whose content is on no backup and not on this computer shows as
   Missing, and "Download everything" no longer offers it on every start.
 - Installing an update on Windows ended the app without locking open

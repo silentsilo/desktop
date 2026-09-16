@@ -348,6 +348,18 @@ export default function App() {
     [],
   );
 
+  // A file opened from a silo is still open in another app, so its
+  // decrypted copy stayed on disk after the lock.
+  useEventSubscription(
+    () =>
+      listen("scratch-still-open", () => {
+        toasts.error(
+          "A file opened from a silo is still open in another app, so its copy could not be deleted. Close that app; SilentSilo deletes the copy at the next lock or start.",
+        );
+      }),
+    [toasts],
+  );
+
   // Suppress the native WebView right-click menu everywhere by default —
   // only the file explorer wires up a real context menu (folder/file
   // actions); other screens have no use for a right-click menu at all.
