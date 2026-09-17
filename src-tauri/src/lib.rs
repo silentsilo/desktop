@@ -73,6 +73,47 @@ fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
     Ok(())
 }
 
+/// Edge's autofill and its password manager must never see this page.
+///
+/// The whole password store is in the renderer while a silo is open, and
+/// every field the user types into carries silo content: usernames, storage
+/// endpoints, S3 keys, a revealed password, the recovery code. WebView2
+/// ships with `IsGeneralAutofillEnabled` and `IsPasswordAutosaveEnabled` on,
+/// and both write to the profile's own unencrypted store outside the silo.
+/// `autoComplete="off"` in the React code is the second half of this; the
+/// setting is the half a page cannot forget.
+///
+/// `ICoreWebView2Settings4` has shipped since WebView2 1.0.774.44 (2021). An
+/// older runtime fails the cast and leaves the defaults, which is why the
+/// markup carries the attributes too.
+#[cfg(windows)]
+fn disable_webview_autofill(window: &tauri::WebviewWindow) {
+    use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings4;
+    use windows_core::Interface;
+
+    let result = window.with_webview(|webview| {
+        // SAFETY: COM calls on the controller Tauri hands over, made on the
+        // thread that owns the webview, before the page is interactive.
+        let outcome = unsafe {
+            webview
+                .controller()
+                .CoreWebView2()
+                .and_then(|core| core.Settings())
+                .and_then(|settings| settings.cast::<ICoreWebView2Settings4>())
+                .and_then(|settings| {
+                    settings.SetIsGeneralAutofillEnabled(false)?;
+                    settings.SetIsPasswordAutosaveEnabled(false)
+                })
+        };
+        if let Err(e) = outcome {
+            diagnostics::warn("webview", format_args!("autofill left enabled: {e}"));
+        }
+    });
+    if let Err(e) = result {
+        diagnostics::warn("webview", format_args!("autofill left enabled: {e}"));
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Before anything else loads. These policies are inherited and cannot be
@@ -124,6 +165,12 @@ pub fn run() {
             // Nothing is unlocked yet, so any decrypted scratch on disk is
             // what a crash, a kill or a power cut left behind.
             let _ = silentsilo_vault::wipe_work_dirs_except(&[]);
+            // Before the window is shown, so no field exists yet for Edge to
+            // remember.
+            #[cfg(windows)]
+            if let Some(window) = app.get_webview_window("main") {
+                disable_webview_autofill(&window);
+            }
             let _ = ensure_os_integration();
             // Before the tray, so a first run that is also the first boot
             // has the Run entry in place whatever happens next.

@@ -49,6 +49,14 @@ ssh-key = { version = "0.7.0-rc.11", default-features = false, features = ["ed25
 # Only for the background sync timer; Tauri already runs on this runtime.
 tokio = { version = "1", features = ["time"] }
 
+# Edge's own autofill and password manager are turned off on the WebView2
+# settings interface, which has no Tauri wrapper. `windows-core` is only for
+# the QueryInterface cast to `ICoreWebView2Settings4`; both crates are already
+# in the tree under tauri.
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.38"
+windows-core = "0.61"
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

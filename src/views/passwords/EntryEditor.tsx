@@ -209,6 +209,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
       <span>{label}</span>
       <input
         type="text"
+        autoComplete="off"
         placeholder={placeholder}
         value={(draft[key] as string | undefined) ?? ""}
         onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
@@ -226,6 +227,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
           <span>{type === "login" ? "Service" : "Name"}</span>
           <input
             type="text"
+            autoComplete="off"
             placeholder={
               type === "login"
                 ? "e.g. GitHub, Gmail"
@@ -293,6 +295,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
               <span>Private key</span>
               <textarea
                 rows={5}
+                autoComplete="off"
                 placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
                 spellCheck={false}
                 value={draft.ssh_private_key ?? ""}
@@ -303,6 +306,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
               <span>Public key</span>
               <textarea
                 rows={2}
+                autoComplete="off"
                 placeholder="ssh-ed25519 …"
                 spellCheck={false}
                 value={draft.ssh_public_key ?? ""}
@@ -319,6 +323,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
           <span>Username / Email</span>
           <input
             type="text"
+            autoComplete="off"
             placeholder="your@email.com"
             value={draft.username}
             onChange={(e) => setDraft({ ...draft, username: e.target.value })}
@@ -329,6 +334,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
           <div className="pw-password-input-row">
             <input
               type={passwordVisible ? "text" : "password"}
+              autoComplete="off"
               value={draft.password}
               onChange={(e) => setDraft({ ...draft, password: e.target.value })}
             />
@@ -460,6 +466,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
           <span>URL</span>
           <input
             type="url"
+            autoComplete="off"
             placeholder="https://example.com"
             value={draft.url}
             onChange={(e) => setDraft({ ...draft, url: e.target.value })}
@@ -544,6 +551,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
           <span>Notes</span>
           <textarea
             rows={type === "note" ? 10 : 6}
+            autoComplete="off"
             placeholder={
               type === "note" ? "The note itself" : "Anything else worth keeping with this entry"
             }
