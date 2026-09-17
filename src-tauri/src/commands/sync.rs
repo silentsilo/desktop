@@ -716,6 +716,18 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
         // Written down per target, after the write and never before: a
         // record noted as delivered without having arrived is one this
         // device will never offer again.
+        //
+        // All of it in one transaction. `mark_delivered` inserts a row per
+        // record and starts no transaction of its own, so a target owed
+        // thousands of records paid for thousands of commits, every one of
+        // them with the sessions mutex held and the window waiting behind it.
+        // Rolling back on the way out is the safe direction: nothing is
+        // marked, and the next pass offers the records again, finds them
+        // already in storage and marks them then.
+        let delivery = session
+            .conn
+            .unchecked_transaction()
+            .map_err(|e| e.to_string())?;
         for target in &targets {
             let reached = statuses
                 .iter()
@@ -726,6 +738,7 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
                     .map_err(|e| e.to_string())?;
             }
         }
+        delivery.commit().map_err(|e| e.to_string())?;
         report
     };
 
@@ -2115,6 +2128,61 @@ mod tests {
         assert!(
             !in_storage(storage.path(), blob),
             "unreferenced content put back"
+        );
+    }
+
+    /// The delivery rows survive being written inside one transaction.
+    ///
+    /// `mark_delivered` starts no transaction of its own, and a rusqlite
+    /// `Transaction` rolls back when it is dropped rather than committed. So
+    /// wrapping the loop to save one commit per record is exactly the kind of
+    /// change that quietly marks nothing and leaves the pass re-offering the
+    /// whole log for ever.
+    #[test]
+    fn one_transaction_around_mark_delivered_still_commits_the_rows() {
+        let silo = Silo::new();
+        silo.file("a.txt");
+        silo.file("b.txt");
+        let target = Uuid::new_v4();
+
+        let sessions = silo.sessions.lock().unwrap();
+        let conn = &sessions[&silo.silo.id].conn;
+        let owed = pending_ops_for(conn, target).unwrap();
+        assert!(owed.len() >= 2, "two files are owed, got {}", owed.len());
+
+        let delivery = conn.unchecked_transaction().unwrap();
+        mark_delivered(conn, target, &owed).unwrap();
+        delivery.commit().unwrap();
+
+        assert!(
+            pending_ops_for(conn, target).unwrap().is_empty(),
+            "the target still looks owed after a committed delivery"
+        );
+    }
+
+    /// And the other direction, which is why rolling back on the way out is
+    /// the safe failure: a target that was written to but not marked is
+    /// offered the same records next pass, which finds them already there.
+    #[test]
+    fn a_delivery_transaction_dropped_part_way_marks_nothing() {
+        let silo = Silo::new();
+        silo.file("a.txt");
+        let target = Uuid::new_v4();
+
+        let sessions = silo.sessions.lock().unwrap();
+        let conn = &sessions[&silo.silo.id].conn;
+        let owed = pending_ops_for(conn, target).unwrap();
+
+        {
+            let delivery = conn.unchecked_transaction().unwrap();
+            mark_delivered(conn, target, &owed).unwrap();
+            drop(delivery);
+        }
+
+        assert_eq!(
+            pending_ops_for(conn, target).unwrap().len(),
+            owed.len(),
+            "a delivery that did not commit must leave the records owed"
         );
     }
 }

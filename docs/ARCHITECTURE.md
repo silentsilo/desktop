@@ -139,7 +139,11 @@ sequenceDiagram
   `pushed`/`synced` mean "every configured target has it", which is the only
   meaning that makes local pruning and eviction safe. Removing a target
   drops its rows; a target added later is owed everything, including
-  history.
+  history. Core's `mark_delivered` inserts a row per record and opens no
+  transaction, so the pass wraps the whole per-target loop in one: a target
+  owed a long history otherwise paid for a commit per record with the
+  sessions mutex held. A delivery that does not commit leaves the records
+  owed, which the next pass settles by finding them already in storage.
 
 ## Session and lock lifecycle
 
