@@ -172,37 +172,60 @@ pub struct BackupTargetView {
 /// the screen a network round trip per copy, and the answer would still be
 /// about this moment rather than about the backlog, which is what the user
 /// is actually asking.
-#[tauri::command(async)]
-pub fn backup_targets_list(app: AppHandle) -> Result<Vec<BackupTargetView>, String> {
-    let silo = crate::state::active_silo(&app)?;
+/// On the blocking pool: reading the saved list is a keyring round trip per
+/// target, and the numbers come from the database behind the sessions mutex,
+/// which a sync pass holds. The panel refreshes on every pass, so this is
+/// asked most often at exactly the moment the lock is busiest.
+#[tauri::command]
+pub async fn backup_targets_list(app: AppHandle) -> Result<Vec<BackupTargetView>, String> {
+    crate::commands::fido::run_blocking(move || backup_targets_list_impl(&app)).await
+}
+
+fn backup_targets_list_impl(app: &AppHandle) -> Result<Vec<BackupTargetView>, String> {
+    let silo = crate::state::active_silo(app)?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
 
-    let state = app.state::<crate::state::AppState>();
-    let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
-    let session = sessions.get(&silo.id);
+    // The settings first, with no lock held. Reading them means decrypting a
+    // stored secret per target, which has nothing to ask the open silo, and
+    // doing it under the mutex held the lock for the length of the keyring.
+    let targets = silentsilo_vault::load_targets(silo.id);
 
-    Ok(silentsilo_vault::load_targets(silo.id)
+    // Then one short locked section for the numbers, three cheap queries per
+    // target and nothing else in it.
+    //
+    // A locked silo still lists its targets: the question "where does this
+    // back up to" is worth answering without a password. What cannot be
+    // answered is how far behind each one is, and 0 is the honest stand-in
+    // for "not known right now".
+    let numbers: Vec<(i64, usize, i64)> = {
+        let state = app.state::<crate::state::AppState>();
+        let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
+        match sessions.get(&silo.id) {
+            Some(s) => targets
+                .iter()
+                .map(|target| {
+                    let id = target.config.target_id();
+                    (
+                        silentsilo_vfs::target_last_success(&s.conn, id).unwrap_or(0),
+                        silentsilo_vfs::pending_count_for(&s.conn, id).unwrap_or(0),
+                        silentsilo_vfs::target_retry_in(&s.conn, id, now).unwrap_or(0),
+                    )
+                })
+                .collect(),
+            None => vec![(0, 0, 0); targets.len()],
+        }
+    };
+
+    Ok(targets
         .into_iter()
+        .zip(numbers)
         .enumerate()
-        .map(|(index, target)| {
-            let id = target.config.target_id();
-            // A locked silo still lists its targets: the question "where does
-            // this back up to" is worth answering without a password. What
-            // cannot be answered is how far behind each one is, and 0 is the
-            // honest stand-in for "not known right now".
-            let (last_success, ops_behind, retry_in) = match session {
-                Some(s) => (
-                    silentsilo_vfs::target_last_success(&s.conn, id).unwrap_or(0),
-                    silentsilo_vfs::pending_count_for(&s.conn, id).unwrap_or(0),
-                    silentsilo_vfs::target_retry_in(&s.conn, id, now).unwrap_or(0),
-                ),
-                None => (0, 0, 0),
-            };
-            BackupTargetView {
-                id: id.to_string(),
+        .map(
+            |(index, (target, (last_success, ops_behind, retry_in)))| BackupTargetView {
+                id: target.config.target_id().to_string(),
                 label: target.label,
                 config: StoreConfigView::from(&target.config),
                 primary: index == 0,
@@ -210,8 +233,8 @@ pub fn backup_targets_list(app: AppHandle) -> Result<Vec<BackupTargetView>, Stri
                 ops_behind,
                 retry_in,
                 archive: !target.role.allows_delete(),
-            }
-        })
+            },
+        )
         .collect())
 }
 
