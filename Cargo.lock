@@ -5744,7 +5744,7 @@ dependencies = [
 
 [[package]]
 name = "silentsilo"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "hex",
  "rand 0.9.5",
@@ -5864,7 +5864,7 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-shell"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "block2",
  "dirs",

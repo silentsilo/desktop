@@ -7,6 +7,11 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+## [1.1.0] - Phones, and computers that agree
+
+Windows only, like 1.0.0. The Android app and this release share a silo;
+update every computer before adding a phone.
+
 ### Added
 
 - An update the daily check found is marked on Settings in the sidebar, and
@@ -21,10 +26,18 @@ silo from opening needs a major version rather than a note.
 
 ### Changed
 
-- Core is pinned at a commit on the way to 1.4.0, and the release will pin
-  that tag. Nothing a silo contains changed in a way 1.0.0 cannot read; it
-  brings the Secure Enclave and Android key kinds, the CTAP backend's
-  usage-page lookup, key reconciliation, the inbox and `silentsilo-app`.
+- Built on core 1.5.0. Nothing a silo holds changed in a way 1.0.0 cannot
+  read, and 1.0.0 still opens a silo this version has used.
+- Update every computer that uses the same silo. A computer still on 1.0.0
+  can stop receiving other devices' changes after meeting some of them, and
+  content only it holds can be lost when it cleans up storage. It picks
+  everything up again once it updates.
+- The working copy of a silo's index is now encrypted on disk while the
+  silo is open and kept encrypted after it locks, so nothing readable is
+  left behind by a crash, a forced quit or a power cut. Unlocking a silo you
+  have opened on this computer before is faster than in 1.0.0; the first
+  unlock after the update takes longer while the index is rebuilt.
+- Locking a silo in which nothing changed no longer rewrites its snapshot.
 - On macOS a key enrolled with the built-in authenticator is recorded as a
   Secure Enclave key rather than a FIDO2 credential, and every prompt names
   Touch ID where it used to name Windows Hello. Windows builds behave as
@@ -88,6 +101,14 @@ silo from opening needs a major version rather than a note.
   points at it rather than at once, so a computer that has not synced for a
   while can still reach it. Emptying the trash frees that space a month
   later.
+- An edit made on one computer while another emptied the trash holding that
+  file is kept, as a copy at the top of the silo, instead of being lost.
+- Changes made here are written so that a computer still on 1.0.0 can apply
+  them, where before some stopped it from syncing.
+- The first unlock after an update that rebuilds the index took up to half a
+  minute on a large silo; it is now several times faster.
+- A silo locked straight after its key was changed failed to open again on
+  that computer.
 
 ## [1.0.0] - First public release
 
