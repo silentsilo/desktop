@@ -109,6 +109,25 @@ update every computer before adding a phone.
   minute on a large silo; it is now several times faster.
 - A silo locked straight after its key was changed failed to open again on
   that computer.
+- Edge's autofill and its password manager are turned off inside the app's
+  window, so nothing typed there, a revealed password included, can reach
+  the browser's own unencrypted store. Crash reporting is off as well: a
+  crash dump of the window would hold the decrypted password store.
+- "Delete permanently" said nothing about the 30 days your storage keeps
+  the content, or about an edit made on another computer at the same time
+  coming back as a copy. Both dialogs say so now, and deleting a credential
+  with attached files names the same 30 days.
+- "Everything is backed up" counted records only, so a silo whose records
+  had all been sent read as finished while a file was still queued or its
+  upload had failed. The backup page now counts both, and a silo backed up
+  to a folder, a WebDAV share or an SFTP server no longer reported zero
+  records waiting whatever was queued.
+- Saving several files, or a folder, replaced files of the same name in the
+  destination without asking. It asks once, and leaves them alone unless
+  told otherwise.
+- Uninstalling left the Explorer menu entries behind, doing nothing on a
+  right-click. They go now, with the queue files beside them, and the
+  uninstaller says your silos are never deleted. README lists what stays.
 
 ## [1.0.0] - First public release
 
