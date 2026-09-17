@@ -869,7 +869,11 @@ export function PasswordsPanel({
       {pendingDelete && (
         <ConfirmDialog
           title="Delete this item?"
-          message={`"${pendingDelete.service}" is removed from every device on the next sync. Items deleted here do not go to the trash.`}
+          message={`"${pendingDelete.service}" is removed from every device on the next sync. Items deleted here do not go to the trash.${
+            (pendingDelete.attachments ?? []).length > 0
+              ? " Your storage keeps the attached files for 30 days before housekeeping removes them."
+              : ""
+          }`}
           confirmLabel="Delete"
           danger
           busy={busy}

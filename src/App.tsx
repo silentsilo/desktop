@@ -103,14 +103,22 @@ type ConfirmResult = { ok: boolean; option: boolean };
 /// Remembers that the user declined the recovery-code step, so it is offered
 /// once rather than at every unlock. The nudge in Settings stays regardless.
 
-/// Added to both delete-for-good dialogs. Purging removes the current
-/// content at once, but blobs left behind by earlier content replacements
-/// are collected a sweep or two later, since a sweep only deletes what was
-/// unreferenced on the previous pass too. Saying nothing would tell someone
-/// their old draft is gone at a moment when it is not.
-const SUPERSEDED_NOTE =
-  " If a file's content was ever replaced, its earlier versions are cleared" +
-  " by a later housekeeping pass rather than right now.";
+/// Added to both delete-for-good dialogs. Three things "permanently" gets
+/// wrong, and the dialog is the last moment any of them can be said.
+///
+/// The record goes at once, the content does not. A sweep deletes a blob
+/// only when an earlier pass already saw it unreferenced and this device
+/// first saw that 30 days ago, so a device that has been offline can still
+/// move a file over content the others stopped referencing. Blobs left
+/// behind by earlier content replacements wait the same 30 days.
+///
+/// And a purge keeps an edit its author could not have seen: a change made
+/// on another device before the purge reached it comes back as a file of
+/// its own, a copy of the one that was deleted.
+const RETENTION_NOTE =
+  " Your storage keeps the content for 30 days before housekeeping removes" +
+  " it, earlier versions of a replaced file included. An edit someone made" +
+  " on another device at the same time comes back as a copy.";
 
 /// Added when the silo has a copy the app never deletes from, where
 /// "permanently" is false in the one place it has to be true: the entry
@@ -1924,7 +1932,7 @@ export default function App() {
         : "";
     const confirmed = await askConfirm(
       "Delete permanently?",
-      `This deletes ${what} for good. It cannot be undone.${foldersNote}${SUPERSEDED_NOTE}${archiveNote(archiveTargets)}`,
+      `This deletes ${what} for good. It cannot be undone.${foldersNote}${RETENTION_NOTE}${archiveNote(archiveTargets)}`,
       { confirmLabel: deleteForGoodLabel(archiveTargets), danger: true },
     );
     if (!confirmed) return;
@@ -1949,7 +1957,7 @@ export default function App() {
     if (trashEntries.length === 0) return;
     const confirmed = await askConfirm(
       "Empty the trash?",
-      `This deletes ${trashEntries.length} ${trashEntries.length === 1 ? "item" : "items"} for good. It cannot be undone.${SUPERSEDED_NOTE}${archiveNote(archiveTargets)}`,
+      `This deletes ${trashEntries.length} ${trashEntries.length === 1 ? "item" : "items"} for good. It cannot be undone.${RETENTION_NOTE}${archiveNote(archiveTargets)}`,
       { confirmLabel: deleteForGoodLabel(archiveTargets), danger: true },
     );
     if (!confirmed) return;
