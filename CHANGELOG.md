@@ -7,6 +7,16 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+### Fixed
+
+- The window no longer stops responding while a long job runs. Every command
+  the app answers now runs off the thread that draws the window, the places
+  that held the silo's lock while talking to the keyring or the disk no
+  longer do, and a target owed a long history is written down in one go
+  rather than a database commit per record. The progress counters update
+  once a frame instead of once per object, so Stop answers while a copy of
+  hundreds of thousands of files is running.
+
 ## [1.1.0] - Phones, and computers that agree
 
 Windows only, like 1.0.0. The Android app and this release share a silo;

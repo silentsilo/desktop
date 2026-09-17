@@ -9,6 +9,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { useEventSubscription } from "./hooks/useEventSubscription";
 import { useToasts } from "./hooks/useToasts";
 import { useJobs } from "./hooks/useJobs";
+import { coalesceLatest } from "./lib/coalesce";
 import { mapPool, uploadConcurrency } from "./lib/pool";
 import { breadcrumbSegments, formatBytes } from "./lib/format";
 import type {
@@ -371,13 +372,20 @@ export default function App() {
 
   // What a running sync pass is moving, for the status bar and the row it
   // concerns. The pass's report clears it.
+  //
+  // Coalesced to one update per frame: this sets state on the whole app, and
+  // a pass over a large silo reports often enough that a render per event is
+  // the window spending its frames on a line of text. Only the newest
+  // counts, since every earlier one is already wrong.
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+  const syncTicker = useMemo(() => coalesceLatest<SyncProgress>(setSyncProgress), []);
+  useEffect(() => syncTicker.stop, [syncTicker]);
   useEventSubscription(
     () =>
       listen<SyncProgress>("sync-progress", (event) => {
-        setSyncProgress(event.payload);
+        syncTicker.push(event.payload);
       }),
-    [],
+    [syncTicker],
   );
 
   // Rust locks every silo when the workstation locks or suspends. The screen
@@ -498,6 +506,9 @@ export default function App() {
     () =>
       listen<SyncReport>("sync-report", (event) => {
         const report = event.payload;
+        // Ahead of the clear, or a frame still holding the last step would
+        // land after the pass ended and put the progress line back.
+        syncTicker.stop();
         setSyncProgress(null);
         if (report.needs_rebuild) {
           setNeedsRebuild(report.silo_id ?? null);
@@ -531,7 +542,7 @@ export default function App() {
           );
         }
       }),
-    [toasts],
+    [toasts, syncTicker],
   );
 
   /// This device was away long enough that the changes it is missing have

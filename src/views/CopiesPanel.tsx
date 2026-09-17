@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Copy, HardDrive, Laptop, Plus, Trash2, Truck, X } from "lucide-react";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useEventSubscription } from "../hooks/useEventSubscription";
+import { coalesceLatest, coalesceRuns } from "../lib/coalesce";
 import { formatAppError } from "../lib/errors";
 import {
   copyState,
@@ -92,17 +93,31 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
     void refresh();
   }, [refresh]);
 
+  // One refresh at a time, with one more run for whatever arrived while it
+  // was in flight. A seed ends with a sync pass, and a pass per open silo
+  // reports in a burst; a call per report is a queue of round trips that all
+  // read the same state and only the last of which anyone reads.
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+  const queueRefresh = useMemo(() => coalesceRuns(() => refreshRef.current()), []);
+
+  // Filling a copy emits one of these per object, and the volumes this
+  // exists for run to hundreds of thousands. Every value but the newest is
+  // already stale by the time a frame could draw it, so only the newest is
+  // kept: without this the panel re-rendered once per object, and the Stop
+  // button was competing with its own progress line for frames.
+  const seedTicker = useMemo(() => coalesceLatest<[number, number]>(setSeedProgress), []);
+  useEffect(() => seedTicker.stop, [seedTicker]);
   useEventSubscription(
-    () =>
-      listen<[number, number]>("seed-progress", (event) => setSeedProgress(event.payload)),
-    [],
+    () => listen<[number, number]>("seed-progress", (event) => seedTicker.push(event.payload)),
+    [seedTicker],
   );
 
   // Every pass, not only the ones started from this screen. What each copy
   // is doing changes when the background sync finishes, and reading it once
   // on mount is why a copy that had just caught up still read as behind
   // until the page was left and reopened.
-  useEventSubscription(() => listen("sync-report", () => void refresh()), [refresh]);
+  useEventSubscription(() => listen("sync-report", () => queueRefresh()), [queueRefresh]);
 
   const add = async () => {
     const missing = missingStoreFields(draft, false);
@@ -195,6 +210,10 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
       }
     } finally {
       setSeeding(null);
+      // Stopped before the reset, or a frame still holding the last count
+      // would land after it and leave the next run starting from the old
+      // numbers.
+      seedTicker.stop();
       setSeedProgress(null);
       setSeedCancelling(false);
     }
