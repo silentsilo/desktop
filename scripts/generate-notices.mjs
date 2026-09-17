@@ -21,7 +21,22 @@ const OURS = /^silentsilo(-|$)/;
 /** What a licence file is called, in rough order of how likely it is. */
 const LICENCE_FILE = /^(LICENSE|LICENCE|COPYING|NOTICE|UNLICENSE)([-.].*)?$/i;
 
-function licenceTexts(dir) {
+/** Where a crate keeps its own code rather than someone else's project. */
+const NOT_VENDORED = new Set([
+  "src",
+  "tests",
+  "test",
+  "benches",
+  "examples",
+  "doc",
+  "docs",
+  "target",
+  "node_modules",
+  ".git",
+  ".github",
+]);
+
+function filesIn(dir, prefix = "") {
   let entries;
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -32,12 +47,40 @@ function licenceTexts(dir) {
     .filter((e) => e.isFile() && LICENCE_FILE.test(e.name))
     .map((e) => {
       try {
-        return { name: e.name, text: fs.readFileSync(path.join(dir, e.name), "utf8").trim() };
+        return {
+          name: `${prefix}${e.name}`,
+          text: fs.readFileSync(path.join(dir, e.name), "utf8").trim(),
+        };
       } catch {
         return null;
       }
     })
     .filter((t) => t && t.text.length > 0);
+}
+
+/**
+ * Every licence text a component ships, its own and the ones it vendors.
+ *
+ * One level down as well as the root, because a `-sys` crate carries the C
+ * project it builds in a subdirectory of its own, under that project's
+ * licence rather than the crate's. `libsqlite3-sys` declares MIT for the
+ * Rust bindings and compiles `sqlcipher/sqlite3.c`, which is Zetetic's
+ * BSD-3-Clause and has to travel with the binary: scanning the root alone
+ * left that licence out of this file entirely.
+ */
+function licenceTexts(dir) {
+  const texts = filesIn(dir);
+  let subdirs;
+  try {
+    subdirs = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return texts;
+  }
+  for (const entry of subdirs) {
+    if (!entry.isDirectory() || NOT_VENDORED.has(entry.name.toLowerCase())) continue;
+    texts.push(...filesIn(path.join(dir, entry.name), `${entry.name}/`));
+  }
+  return texts;
 }
 
 function rustComponents() {
@@ -98,11 +141,14 @@ const components = [...rustComponents(), ...nodeComponents()].sort((a, b) =>
 // megabytes of the same MIT paragraph, hiding the copyright lines.
 const bodies = new Map();
 for (const c of components) {
-  c.refs = c.texts.map(({ name, text }) => {
+  // Deduplicated: a vendored subdirectory often ships the same text as the
+  // crate root, and "see [30] [30]" reads like a mistake.
+  const refs = c.texts.map(({ name, text }) => {
     const key = createHash("sha256").update(text).digest("hex");
     if (!bodies.has(key)) bodies.set(key, { index: bodies.size + 1, name, text });
     return bodies.get(key).index;
   });
+  c.refs = [...new Set(refs)];
 }
 
 /** Standard text for the few components that declare a licence and ship no

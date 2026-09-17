@@ -70,6 +70,20 @@ if (Test-Path (Join-Path $repoRoot ".cargo\config.toml")) {
 node scripts\check-lockfile.mjs
 if (-not $?) { throw "Cargo.lock does not point at silentsilo/core" }
 
+# The notices ship inside the installer and say they were generated from the
+# resolved graph, so a lockfile that moved after them makes that sentence
+# false: 1.0.0 shipped a file with no OpenSSL and no SQLCipher in it. Commit
+# dates rather than file times, because a fresh clone gives every file the
+# same mtime. Both changed in one commit is fine; the lockfile changing after
+# is not.
+$noticesAt = [int](git log -1 --format=%ct -- THIRD-PARTY-NOTICES.txt)
+foreach ($lock in 'Cargo.lock', 'package-lock.json') {
+    $lockAt = [int](git log -1 --format=%ct -- $lock)
+    if ($lockAt -gt $noticesAt) {
+        throw "THIRD-PARTY-NOTICES.txt is older than $lock. Run 'npm run notices', commit, retag, then build."
+    }
+}
+
 # A release build answers for the tag, so it must be built from the tag: a
 # dirty tree or a HEAD the tag does not point at produces an installer whose
 # source can never be named again, and nothing downstream detects it.
