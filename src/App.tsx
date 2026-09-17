@@ -3381,6 +3381,8 @@ export default function App() {
                 missingCount={blobStatus?.missing.length ?? 0}
                 absentCount={blobStatus?.absent.length ?? 0}
                 missingBytes={blobStatus?.missing_bytes ?? 0}
+                unsyncedCount={blobStatus?.usage.unsynced_count ?? 0}
+                unsyncedBytes={blobStatus?.usage.unsynced_bytes ?? 0}
                 localBytes={blobStatus?.usage.local_bytes ?? 0}
                 contentFetch={contentFetch}
                 onFetchAllContent={() => void fetchAllContent()}

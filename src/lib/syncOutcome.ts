@@ -6,6 +6,8 @@
 /// running pushes nothing either. Reading all three as "up to date" is what
 /// this file exists to prevent.
 
+import { formatBytes } from "./format";
+
 /// How one target fared. The pass reports this per target because a target
 /// that got nothing is the whole story of the pass.
 export type TargetStatus = {
@@ -47,6 +49,36 @@ export type SyncReport = {
   /// Records waiting because an unreadable object sits below them.
   held_back?: number;
 };
+
+/// The backup card's standing line: what is still owed, if anything.
+///
+/// Records and file content travel separately, records first, so a pass can
+/// deliver every record and still leave a file behind, from a queue it has
+/// not reached or an upload that failed. The card counted records alone and
+/// said "Everything is backed up" over content that exists on this computer
+/// only. Content leads the sentence: a record that has not gone out is a
+/// name and a size, a blob that has not gone out is the file itself.
+export function backupHeadline(
+  pendingOps: number,
+  unsyncedCount: number,
+  unsyncedBytes: number,
+  lastSyncAt: number | null,
+): string {
+  const changes = (n: number) => `${n} change${n === 1 ? "" : "s"}`;
+  if (unsyncedCount > 0) {
+    const one = unsyncedCount === 1;
+    const files = `${unsyncedCount} file${one ? "" : "s"}`;
+    const size = unsyncedBytes > 0 ? ` (${formatBytes(unsyncedBytes)})` : "";
+    const ops = pendingOps > 0 ? ` ${changes(pendingOps)} still to send too.` : "";
+    return `${files}${size} not backed up yet. The next pass retries ${one ? "it" : "them"}.${ops}`;
+  }
+  if (pendingOps > 0) {
+    return `${changes(pendingOps)} waiting to be sent.`;
+  }
+  return lastSyncAt
+    ? "Everything is backed up."
+    : "Connected. The first pass runs in the background.";
+}
 
 export type Status =
   | { kind: "idle" }

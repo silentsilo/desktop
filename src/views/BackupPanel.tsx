@@ -15,7 +15,7 @@ import type { StoreConfigView } from "../lib/types";
 import { formatAppError } from "../lib/errors";
 import { formatBytes } from "../lib/format";
 import { detectPreset } from "../lib/s3Presets";
-import { syncOutcome, type Status, type SyncReport } from "../lib/syncOutcome";
+import { backupHeadline, syncOutcome, type Status, type SyncReport } from "../lib/syncOutcome";
 import { ConfirmDialog } from "./ConfirmDialog";
 import {
   EMPTY_STORE_DRAFT,
@@ -87,6 +87,14 @@ type Props = {
   /** Content the backup holds that this computer does not. */
   missingCount: number;
   missingBytes: number;
+  /**
+   * Content this computer holds that the backup does not, whether it is
+   * still queued or an upload failed. The headline counted records only,
+   * so a silo with every record delivered and a file that never uploaded
+   * read as "Everything is backed up".
+   */
+  unsyncedCount: number;
+  unsyncedBytes: number;
   /** Files whose content no backup holds. */
   absentCount?: number;
   /** What the content already here occupies, for the same sentence. */
@@ -116,6 +124,8 @@ export function BackupPanel({
   onActivity,
   missingCount,
   missingBytes,
+  unsyncedCount,
+  unsyncedBytes,
   absentCount = 0,
   localBytes,
   contentFetch,
@@ -150,6 +160,16 @@ export function BackupPanel({
         return;
       }
       setConnected(true);
+      // Before the branches, not inside the S3 one. Asking only there left
+      // a folder, a WebDAV share or an SFTP server reading "Everything is
+      // backed up" with records still queued, because `pending` never moved
+      // off its initial zero.
+      try {
+        const s = await invoke<{ pending_ops: number }>("sync_status");
+        setPending(s.pending_ops);
+      } catch {
+        setPending(0);
+      }
       if (stored.kind === "folder") {
         setDraft((prev) => ({ ...prev, kind: "folder", folder: stored.path }));
         setWhere(stored.path);
@@ -186,12 +206,6 @@ export function BackupPanel({
         return;
       }
       setWhere(stored.prefix ? `${stored.bucket}/${stored.prefix}` : stored.bucket);
-      try {
-        const s = await invoke<{ pending_ops: number }>("sync_status");
-        setPending(s.pending_ops);
-      } catch {
-        setPending(0);
-      }
       setDraft((prev) => ({
         ...prev,
         kind: "s3",
@@ -303,13 +317,12 @@ export function BackupPanel({
             {connected ? (
               <>
                 <h3>Backing up to {where}</h3>
-                <p>
-                  {pending > 0
-                    ? `${pending} change${pending === 1 ? "" : "s"} waiting to be sent.`
-                    : lastSyncAt
-                      ? "Everything is backed up."
-                      : "Connected. The first pass runs in the background."}
-                </p>
+                {/* File content is asked about separately from records,
+                    because it goes separately: records are pushed first and
+                    the blobs follow, so a pass can deliver every record and
+                    still leave a file behind. "Everything is backed up" is
+                    only true when both queues are empty. */}
+                <p>{backupHeadline(pending, unsyncedCount, unsyncedBytes, lastSyncAt)}</p>
               </>
             ) : (
               <>

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { describeSync, syncOutcome, type SyncReport, type TargetStatus } from "./syncOutcome";
+import {
+  backupHeadline,
+  describeSync,
+  syncOutcome,
+  type SyncReport,
+  type TargetStatus,
+} from "./syncOutcome";
 
 function report(over: Partial<SyncReport> = {}): SyncReport {
   return {
@@ -162,5 +168,33 @@ describe("the pass as a status", () => {
     const r = report({ needs_rejoin: true });
     expect(syncOutcome(r, "").kind).toBe("error");
     expect(describeSync(r)).toContain("rejoin");
+  });
+});
+
+describe("the backup card's standing line", () => {
+  it("does not claim everything is backed up while content is still owed", () => {
+    expect(backupHeadline(0, 2, 8_192, 1_700_000_000_000)).toBe(
+      "2 files (8 KB) not backed up yet. The next pass retries them.",
+    );
+  });
+
+  it("names the records too when both queues have something in them", () => {
+    expect(backupHeadline(3, 1, 1_024, 1_700_000_000_000)).toBe(
+      "1 file (1 KB) not backed up yet. The next pass retries it. 3 changes still to send too.",
+    );
+  });
+
+  it("falls back to the record count when every blob has gone out", () => {
+    expect(backupHeadline(1, 0, 0, 1_700_000_000_000)).toBe("1 change waiting to be sent.");
+  });
+
+  it("says everything is backed up only when both queues are empty", () => {
+    expect(backupHeadline(0, 0, 0, 1_700_000_000_000)).toBe("Everything is backed up.");
+  });
+
+  it("does not promise anything before the first pass has run", () => {
+    expect(backupHeadline(0, 0, 0, null)).toBe(
+      "Connected. The first pass runs in the background.",
+    );
   });
 });
