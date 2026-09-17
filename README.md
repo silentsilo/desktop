@@ -139,6 +139,37 @@ at the same bucket, and touch a security key already enrolled on the first.
 Its tree is rebuilt by replaying the log. There is no snapshot to download,
 and no step where anything is readable in transit.
 
+## Uninstalling
+
+A silo is a folder you chose, and uninstalling never touches it. Nothing in
+your backup storage is touched either. What the uninstaller does remove,
+whatever you answer on its one question:
+
+- the application itself, from its install folder
+- the Explorer menu entries (*Add to SilentSilo*, *Save here from SilentSilo*)
+- the sign-in entry that starts it, so Windows stops trying to run it
+- `%LOCALAPPDATA%\SilentSilo\upload-queue.txt` and `download-queue.txt`,
+  which hold the paths of whatever was last right-clicked
+
+Ticking **Delete the application data** also removes:
+
+- `%APPDATA%\com.silentsilo.desktop`, the list of silos this computer keeps
+  (names and folder paths). Losing it costs the list, not the data: the app
+  finds a silo again from its folder.
+- `%LOCALAPPDATA%\SilentSilo`, the encrypted working copies and the cache
+- `%LOCALAPPDATA%\com.silentsilo.desktop`, WebView2's profile for this app
+
+Two things stay behind in either case, and have to be removed by hand if you
+want them gone:
+
+- **Your silo folders.** Deleting one deletes that silo, and no copy of the
+  files is kept anywhere else unless you set one up. There is no undo.
+- **Windows Credential Manager** keeps this computer's device secret and any
+  storage credentials you saved. Open *Credential Manager* → *Windows
+  Credentials* and remove the entries ending in `.com.silentsilo.desktop`.
+  Removing them stops this computer opening a silo without a security key, so
+  do it after the silo folders, not before.
+
 ## Dev
 
 ```bash
