@@ -164,6 +164,16 @@ crates are in core's map.
 
 - **The desktop app is free and stays that way; wording is accountability,
   never warranty.** Every copy change goes through that filter.
+- **`additionalBrowserArgs` repeats flags nobody wrote here.** Setting it
+  replaces wry's own default (`--disable-features=msWebOOUI,msPdfOOUI,
+  msSmartScreenProtection`) rather than adding to it, so those three are
+  copied in alongside `--disable-crash-reporter` and `--disable-breakpad`.
+  Drop them and WebView2 gets back its out-of-process UI and SmartScreen.
+  The crash flags are there because the whole decrypted password store is in
+  the renderer while a silo is open, and a WebView2 crash dump is that
+  memory on disk, then on its way to Microsoft. Edge's autofill and password
+  autosave are turned off next to them, in `lib.rs`, over
+  `ICoreWebView2Settings4`.
 
 ## Changing things
 
