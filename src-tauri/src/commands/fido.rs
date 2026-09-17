@@ -560,7 +560,7 @@ pub struct ListedKey {
     usable: bool,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn fido_list_keys(app: AppHandle) -> Result<Vec<ListedKey>, String> {
     let root = vault_dir(&app)?;
     if !is_fido_enrolled(&root) {
@@ -586,7 +586,7 @@ pub fn fido_list_keys(app: AppHandle) -> Result<Vec<ListedKey>, String> {
 /// otherwise offers a slot number and twelve hex characters. Local only,
 /// as far as this command goes; the next sync pass republishes the key
 /// envelopes, and the label rides along with them.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn fido_rename_key(app: AppHandle, credential_id: String, label: String) -> Result<(), String> {
     let root = crate::state::unlocked_silo(&app)?.path;
     let mut keys = load_fido_keys(&root).map_err(|e| e.to_string())?;
@@ -995,7 +995,7 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
 /// Cheap and local: the presence of a staged key is the whole answer. The UI
 /// asks on unlock, because a silo in this state syncs against storage that is
 /// part-way converted and every pass will look broken until it is finished.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_rotation_pending(app: AppHandle) -> Result<bool, String> {
     Ok(silentsilo_vault::rotation::rotation_pending(&vault_dir(
         &app,

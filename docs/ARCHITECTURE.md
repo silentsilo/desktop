@@ -48,6 +48,21 @@ parameter names, their event names and payload shapes, and the error strings
 `src/lib/errors.ts` matches on. None of those may change without changing
 the frontend in the same commit.
 
+**No command runs on the main thread.** Tauri puts a plain
+`#[tauri::command] fn` on the thread that owns the window and pumps its
+messages, so anything that command waits for is a window that stops
+redrawing and stops taking clicks. Every command here is either an `async
+fn` or carries `#[tauri::command(async)]`, which is why commands that borrow
+`State<'_, AppState>` all return `Result`. The waits are not hypothetical:
+the sessions mutex is held across a replay, the keyring and DPAPI are a
+round trip per stored target, and the clipboard is taken by sleeping between
+retries. The handful with no bound at all (`app_bootstrap` enumerating
+authenticators, `full_copy_status` walking the blob directory, `sync_status`
+and `backup_targets_list` polled while a pass holds the lock,
+`copy_secret_to_clipboard`) go further and run their body through
+`run_blocking`, so they occupy a pool thread rather than one of the async
+runtime's workers, which is where the sync pass's network work lives.
+
 ## Sync pass anatomy
 
 `commands/sync.rs::run_sync_pass`, in this exact order, each step placed

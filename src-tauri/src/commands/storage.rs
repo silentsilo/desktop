@@ -47,7 +47,7 @@ pub async fn sftp_probe_host_key(host: String, port: u16) -> Result<String, Stri
 }
 
 /// `None` when backup hasn't been set up.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn s3_get_config(app: AppHandle) -> Result<Option<StoreConfigView>, String> {
     Ok(crate::state::silo_store_config(&app).map(|c| StoreConfigView::from(&c)))
 }
@@ -126,7 +126,7 @@ pub async fn s3_test_config(app: AppHandle, config: StoreConfigInput) -> Result<
 /// Forgets the connection details. What is already in storage is left alone
 /// — it is the user's storage, and deleting their data because they
 /// disconnected would be the wrong default.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn s3_disconnect(app: AppHandle) -> Result<(), String> {
     let silo = crate::state::unlocked_silo(&app)?;
     // Every target, not just the first: "disconnect" means this silo stops
@@ -172,7 +172,7 @@ pub struct BackupTargetView {
 /// the screen a network round trip per copy, and the answer would still be
 /// about this moment rather than about the backlog, which is what the user
 /// is actually asking.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn backup_targets_list(app: AppHandle) -> Result<Vec<BackupTargetView>, String> {
     let silo = crate::state::active_silo(&app)?;
     let now = std::time::SystemTime::now()
@@ -344,7 +344,7 @@ pub async fn backup_target_seed(app: AppHandle, from: String, to: String) -> Res
 /// Safe by construction: what already landed stays landed, and the next run
 /// skips it and carries on. The flag is reset by `backup_target_seed` itself
 /// at the start of each run.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn cancel_seed(state: tauri::State<crate::state::AppState>) {
     state
         .seed_cancelled
@@ -367,7 +367,7 @@ pub async fn backup_target_protection(
 /// Stops backing up to one target. What is already there is left alone: it is
 /// the user's storage, and deleting their copy because they stopped writing
 /// to it would be the wrong default.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn backup_target_remove(app: AppHandle, id: String) -> Result<(), String> {
     let silo = crate::state::unlocked_silo(&app)?;
     let targets: Vec<_> = silentsilo_vault::load_targets(silo.id)

@@ -79,7 +79,7 @@ impl AddPlan {
 }
 
 /// Every silo this machine knows about, most recently used first.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn silo_list(app: AppHandle, state: State<'_, AppState>) -> Result<Vec<SiloView>, String> {
     let registry = load_registry(&app_data_dir(&app)?);
     let open = state.open_silo_ids();
@@ -100,13 +100,13 @@ pub fn silo_list(app: AppHandle, state: State<'_, AppState>) -> Result<Vec<SiloV
 /// everything there is ciphertext, but not a second computer's copy, since
 /// two machines rewriting one snapshot file produce a conflict copy rather
 /// than a merge. That is what the operation log in a bucket is for.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn silo_sync_provider_at(path: String) -> Option<String> {
     silentsilo_vault::detect_sync_provider(&PathBuf::from(path)).map(str::to_string)
 }
 
 /// Where a new silo would go unless the user says otherwise.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn silo_default_location(app: AppHandle, name: String) -> Result<String, String> {
     Ok(available_path(&default_silo_parent(&app), &name)
         .to_string_lossy()
@@ -338,7 +338,7 @@ pub async fn silo_open(
 /// The switcher needs this to know which ones it can move to without asking
 /// for a key, and the Explorer verbs need it to know whether to ask where
 /// something should go.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn silo_open_list(app: AppHandle, state: State<'_, AppState>) -> Result<Vec<SiloView>, String> {
     let registry = load_registry(&app_data_dir(&app)?);
     let mut open: Vec<SiloView> = state
@@ -369,7 +369,7 @@ pub struct SiloIdleView {
     pub auto_lock_minutes: Option<u32>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn silo_idle_status(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -389,14 +389,14 @@ pub fn silo_idle_status(
 /// work but not reading: someone scrolling a folder for ten minutes issues
 /// none and would be locked out mid-read. Only the silo on screen counts;
 /// the others go on counting down.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn silo_touch(state: State<'_, AppState>) -> Result<(), String> {
     crate::state::touch(&state, crate::state::focused_id(&state)?);
     Ok(())
 }
 
 /// Sets how long a silo may sit unused before it locks itself.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn silo_set_auto_lock(app: AppHandle, id: String, minutes: Option<u32>) -> Result<(), String> {
     let id = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
     let app_data = app_data_dir(&app)?;
@@ -416,13 +416,13 @@ pub fn silo_set_auto_lock(app: AppHandle, id: String, minutes: Option<u32>) -> R
 /// a decision to lock it, or switching between two silos would cost a key
 /// tap in each direction. Locking is what the Lock button and each silo's
 /// own timeout are for.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn silo_blur(state: State<'_, AppState>) -> Result<(), String> {
     *state.active_silo.lock().map_err(|e| e.to_string())? = None;
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn silo_rename(app: AppHandle, id: String, name: String) -> Result<(), String> {
     let id = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
     let name = name.trim().to_string();
@@ -527,7 +527,7 @@ fn silo_forget_impl(app: &AppHandle, id: String, delete_files: bool) -> Result<(
 ///
 /// The credentials travel inside the folder, so a silo copied from another
 /// machine or restored from a backup can be picked up as-is.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn silo_add_existing(
     app: AppHandle,
     path: String,

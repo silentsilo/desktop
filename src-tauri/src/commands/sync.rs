@@ -169,18 +169,23 @@ pub struct SyncStatus {
     pub archive_targets: usize,
 }
 
-/// Cheap enough to poll: reads local state only, never touches the network.
+/// Never touches the network, but it does read the stored settings (a
+/// keyring round trip per target) and count rows behind the sessions lock,
+/// and the window polls it every twenty seconds. On the blocking pool, so a
+/// poll that lands while a pass holds the lock waits there rather than in
+/// front of the message loop.
 #[tauri::command]
-pub fn sync_status(app: AppHandle, state: State<AppState>) -> Result<SyncStatus, String> {
-    let configured = crate::state::silo_store_config(&app).is_some();
-    let guard = state.focused_session()?;
-    let pending = match guard.as_ref() {
-        Some(session) => pending_count(&session.conn).map_err(|e| e.to_string())?,
-        None => 0,
-    };
+pub async fn sync_status(app: AppHandle) -> Result<SyncStatus, String> {
+    crate::commands::fido::run_blocking(move || sync_status_impl(&app)).await
+}
+
+fn sync_status_impl(app: &AppHandle) -> Result<SyncStatus, String> {
+    let configured = crate::state::silo_store_config(app).is_some();
     // Read from the saved list rather than by opening anything: this is
     // polled, and a role is a setting, not a question for the network.
-    let archive_targets = crate::state::active_silo(&app)
+    // Before the lock, because it is disk and keyring work that has nothing
+    // to ask the open silo.
+    let archive_targets = crate::state::active_silo(app)
         .map(|silo| {
             silentsilo_vault::load_targets(silo.id)
                 .iter()
@@ -188,6 +193,14 @@ pub fn sync_status(app: AppHandle, state: State<AppState>) -> Result<SyncStatus,
                 .count()
         })
         .unwrap_or(0);
+    let pending = {
+        let state = app.state::<AppState>();
+        let guard = state.focused_session()?;
+        match guard.as_ref() {
+            Some(session) => pending_count(&session.conn).map_err(|e| e.to_string())?,
+            None => 0,
+        }
+    };
     Ok(SyncStatus {
         configured,
         pending_ops: pending,
@@ -1736,7 +1749,7 @@ pub async fn vault_verify(app: AppHandle, deep: bool) -> Result<Vec<VerifyTarget
 ///
 /// Read-only work, so stopping loses nothing but the answer. The flag is
 /// reset by `vault_verify` itself at the start of each run.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn cancel_verify(state: State<AppState>) {
     state.verify_cancelled.store(true, Ordering::Relaxed);
 }

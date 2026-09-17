@@ -38,11 +38,19 @@ pub struct AppBootstrap {
     silo: Option<crate::commands::silo::SiloView>,
 }
 
+/// Asks the authenticators what they can do, which walks the USB bus and can
+/// take seconds with a key that is slow to answer. On the blocking pool, not
+/// the async workers: a sync pass is often in flight while the picker loads.
 #[tauri::command]
-pub fn app_bootstrap(app: AppHandle, state: State<AppState>) -> Result<AppBootstrap, String> {
+pub async fn app_bootstrap(app: AppHandle) -> Result<AppBootstrap, String> {
+    run_blocking(move || app_bootstrap_impl(&app)).await
+}
+
+fn app_bootstrap_impl(app: &AppHandle) -> Result<AppBootstrap, String> {
+    let state = app.state::<AppState>();
     // "Provisioned" is now per-silo: the app can know about several and have
     // none of them open, which is the state the picker exists for.
-    let silo = crate::state::active_silo(&app).ok();
+    let silo = crate::state::active_silo(app).ok();
     let provisioned = silo
         .as_ref()
         .is_some_and(|s| silentsilo_vault::is_provisioned(s.id));
@@ -185,7 +193,7 @@ fn emit_import_progress(app: &AppHandle, progress: ImportProgress) {
     let _ = app.emit("import-progress", progress);
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn cancel_import(state: State<AppState>) {
     state.import_cancelled.store(true, Ordering::Relaxed);
 }
@@ -194,7 +202,7 @@ pub fn cancel_import(state: State<AppState>) {
 /// (folder import, paste). Separate from `cancel_import` so nested calls —
 /// e.g. `vault_paste_paths` importing a folder as one of its items — don't
 /// clobber a cancellation the outer call is still checking for.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reset_import_cancel(state: State<AppState>) {
     state.import_cancelled.store(false, Ordering::Relaxed);
 }
@@ -589,12 +597,12 @@ pub fn lock_all_silos(app: &AppHandle) {
 
 /// The focused silo's metadata, for a silo that is already unlocked, so
 /// switching to it does not ask again for a key already presented.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_meta(state: State<AppState>) -> Result<VaultMeta, String> {
     with_vfs(&state, |_session, vfs| vfs.meta())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_list_folder(
     folder_id: String,
     state: State<AppState>,
@@ -603,7 +611,7 @@ pub fn vault_list_folder(
     crate::state::with_vfs_untouched(&state, |_session, vfs| vfs.list_folder(folder_id))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_root_folder(state: State<AppState>) -> Result<FolderEntry, String> {
     with_vfs(&state, |_session, vfs| {
         let id = vfs.root_folder_id()?;
@@ -611,13 +619,13 @@ pub fn vault_root_folder(state: State<AppState>) -> Result<FolderEntry, String> 
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_get_folder(folder_id: String, state: State<AppState>) -> Result<FolderEntry, String> {
     let folder_id = Uuid::parse_str(&folder_id).map_err(|e| e.to_string())?;
     with_vfs(&state, |_session, vfs| vfs.get_folder(folder_id))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_folder_by_path(path: String, state: State<AppState>) -> Result<FolderEntry, String> {
     with_vfs(&state, |_session, vfs| vfs.folder_by_path(&path))
 }
@@ -627,12 +635,12 @@ pub fn vault_folder_by_path(path: String, state: State<AppState>) -> Result<Fold
 /// Capped rather than paginated: nobody scrolls past fifty results, and a
 /// query matching thousands means the user should type more, not that the
 /// UI should render them all.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_search(query: String, state: State<AppState>) -> Result<Vec<SearchHit>, String> {
     with_vfs(&state, |_, vfs| vfs.search_entries(&query, 50))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_list_all_folders(state: State<AppState>) -> Result<Vec<FolderEntry>, String> {
     with_vfs(&state, |_session, vfs| vfs.list_all_folders())
 }
@@ -640,7 +648,7 @@ pub fn vault_list_all_folders(state: State<AppState>) -> Result<Vec<FolderEntry>
 /// Stars or unstars one entry. `kind` is what the explorer already knows
 /// about the row, rather than something to be guessed by looking the id up
 /// in both tables.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_set_favorite(
     id: String,
     kind: String,
@@ -655,12 +663,12 @@ pub fn vault_set_favorite(
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_list_favorites(state: State<AppState>) -> Result<Vec<SearchHit>, String> {
     with_vfs(&state, |_session, vfs| vfs.list_favorites())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_list_devices(state: State<AppState>) -> Result<Vec<DeviceInfo>, String> {
     with_vfs(&state, |_session, vfs| vfs.list_devices())
 }
@@ -670,7 +678,7 @@ pub fn vault_list_devices(state: State<AppState>) -> Result<Vec<DeviceInfo>, Str
 /// Read straight from the local operation log, so it costs one query and
 /// nothing is stored for it. See `silentsilo_vfs::activity` for what this is
 /// and, more importantly, what it is not.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_activity(
     query: silentsilo_vfs::activity::ActivityQuery,
     state: State<AppState>,
@@ -685,7 +693,7 @@ pub fn vault_activity(
     silentsilo_vfs::activity::page(&session.conn, &query).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_set_device_label(
     device_id: String,
     label: String,
@@ -796,7 +804,7 @@ pub async fn vault_paste_paths(
     .await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_create_folder(
     parent_id: String,
     name: String,
@@ -806,7 +814,7 @@ pub fn vault_create_folder(
     with_vfs(&state, |_session, vfs| vfs.create_folder(parent_id, &name))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_rename_file(
     file_id: String,
     new_name: String,
@@ -816,7 +824,7 @@ pub fn vault_rename_file(
     with_vfs(&state, |_session, vfs| vfs.rename_file(file_id, &new_name))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_rename_folder(
     folder_id: String,
     new_name: String,
@@ -828,30 +836,30 @@ pub fn vault_rename_folder(
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_trash_file(file_id: String, state: State<AppState>) -> Result<(), String> {
     let file_id = Uuid::parse_str(&file_id).map_err(|e| e.to_string())?;
     with_vfs(&state, |_session, vfs| vfs.trash_file(file_id))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_trash_folder(folder_id: String, state: State<AppState>) -> Result<(), String> {
     let folder_id = Uuid::parse_str(&folder_id).map_err(|e| e.to_string())?;
     with_vfs(&state, |_session, vfs| vfs.trash_folder(folder_id))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_list_trash(state: State<AppState>) -> Result<Vec<TrashItem>, String> {
     with_vfs(&state, |_session, vfs| vfs.list_trash())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_restore_file(file_id: String, state: State<AppState>) -> Result<FileEntry, String> {
     let file_id = Uuid::parse_str(&file_id).map_err(|e| e.to_string())?;
     with_vfs(&state, |_session, vfs| vfs.restore_file(file_id))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_restore_folder(
     folder_id: String,
     state: State<AppState>,
@@ -1065,7 +1073,7 @@ fn unwrap_export_key(
 ///
 /// A name the export would refuse anyway (`safe_join`) fails here too,
 /// rather than being reported as clash-free and then rejected.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn export_clashes(dest_dir: String, names: Vec<String>) -> Result<Vec<String>, String> {
     let dest = PathBuf::from(&dest_dir);
     let mut clashes = Vec::new();
@@ -1082,7 +1090,7 @@ pub fn export_clashes(dest_dir: String, names: Vec<String>) -> Result<Vec<String
 /// The whole subtree, because the export merges into a directory of the
 /// same name rather than replacing it: only the files that collide are at
 /// risk, and naming the directory alone would overstate what is lost.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_export_folder_clashes(
     app: AppHandle,
     folder_id: String,
@@ -1354,7 +1362,7 @@ pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), Stri
 /// Entries live as rows in the encrypted index rather than as a file in the
 /// tree. Nothing decrypted touches the disk on this path: the rows come
 /// straight out of the open database.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_read_passwords(state: State<AppState>) -> Result<String, String> {
     let session_guard = state.focused_session()?;
     let session = session_guard
@@ -1370,7 +1378,7 @@ pub fn vault_read_passwords(state: State<AppState>) -> Result<String, String> {
 }
 
 /// Creates or replaces one entry, keyed by the id the panel generated.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_upsert_password(
     id: String,
     json: String,
@@ -1404,9 +1412,14 @@ pub fn vault_upsert_password(
 /// clipboard API is the wrong tool: what it writes is retained by
 /// Clipboard History, which persists to disk, and by Cloud Clipboard,
 /// which syncs it to the user's other machines.
+///
+/// On the blocking pool because taking the clipboard means waiting for
+/// whoever holds it, which `silentsilo-shell` does by sleeping between
+/// retries for up to a fifth of a second.
 #[tauri::command]
-pub fn copy_secret_to_clipboard(app: AppHandle, text: String) -> Result<(), String> {
-    silentsilo_shell::set_secret_clipboard(&text)?;
+pub async fn copy_secret_to_clipboard(app: AppHandle, text: String) -> Result<(), String> {
+    let copied = text.clone();
+    run_blocking(move || silentsilo_shell::set_secret_clipboard(&copied)).await?;
 
     // Cleared only if it is still ours: by the time this fires the user has
     // often copied something else, and wiping that would be the app reaching
@@ -1438,7 +1451,7 @@ fn take_back_clipboard(app: &AppHandle) {
 }
 
 /// Removes one entry outright. There is no trash for logins.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_delete_password(id: String, state: State<AppState>) -> Result<(), String> {
     let id = Uuid::parse_str(&id).map_err(|e| format!("invalid entry id: {e}"))?;
     let session_guard = state.focused_session()?;
@@ -1505,7 +1518,7 @@ pub struct SshKeypair {
 /// Generates an ed25519 keypair in OpenSSH format for an SSH-key entry. In
 /// Rust because WebCrypto has no OpenSSH serialisation and the ssh-key
 /// crate is already in the tree. Ed25519 only.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ssh_generate_keypair() -> Result<SshKeypair, String> {
     use ssh_key::private::{Ed25519Keypair, KeypairData};
     use ssh_key::{HashAlg, LineEnding, PrivateKey};
@@ -1836,7 +1849,7 @@ pub struct ProtectedScanReport {
     pub skipped: usize,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn protected_folders_list(app: AppHandle) -> Result<Vec<ProtectedFolderView>, String> {
     let silo = crate::state::active_silo(&app)?;
     Ok(silentsilo_vault::load_protected(&silo.path)
@@ -1861,7 +1874,7 @@ pub struct ProtectedFolderView {
 /// The target inside the silo is decided here rather than by the caller, so
 /// two folders with the same name on different drives cannot land on top of
 /// each other.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn protected_folders_add(app: AppHandle, path: String) -> Result<(), String> {
     let silo = crate::state::unlocked_silo(&app)?;
     let source = PathBuf::from(&path);
@@ -1895,7 +1908,7 @@ pub fn protected_folders_add(app: AppHandle, path: String) -> Result<(), String>
 
 /// Stops keeping a copy. What was already imported stays: this is an archive,
 /// and removing a folder from the list is not a request to delete anything.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn protected_folders_remove(app: AppHandle, path: String) -> Result<(), String> {
     let silo = crate::state::active_silo(&app)?;
     let mut list = silentsilo_vault::load_protected(&silo.path).map_err(|e| e.to_string())?;
@@ -2083,21 +2096,33 @@ pub struct FullCopyStatus {
     pub missing_bytes: i64,
 }
 
+/// On the blocking pool: the blob directory is walked whole, which on a silo
+/// of any size is thousands of directory entries, and the listing it compares
+/// against is read under the sessions lock.
 #[tauri::command]
-pub fn full_copy_status(app: AppHandle, state: State<AppState>) -> Result<FullCopyStatus, String> {
-    let silo = crate::state::active_silo(&app)?;
-    let session_guard = state.focused_session()?;
-    let session = session_guard
-        .as_ref()
-        .ok_or_else(|| CoreError::VaultLocked.to_string())?;
+pub async fn full_copy_status(app: AppHandle) -> Result<FullCopyStatus, String> {
+    run_blocking(move || full_copy_status_impl(&app)).await
+}
 
+fn full_copy_status_impl(app: &AppHandle) -> Result<FullCopyStatus, String> {
+    let silo = crate::state::active_silo(app)?;
+    // The walk first, with no lock held: it is the long half, and it asks the
+    // filesystem rather than the silo.
     let here: HashSet<Uuid> = list_local_blob_ids(&silo.path).into_iter().collect();
+    let sizes = {
+        let state = app.state::<AppState>();
+        let session_guard = state.focused_session()?;
+        let session = session_guard
+            .as_ref()
+            .ok_or_else(|| CoreError::VaultLocked.to_string())?;
+        Vfs::new(session)
+            .list_blob_sizes()
+            .map_err(|e| e.to_string())?
+    };
+
     let mut missing = 0usize;
     let mut missing_bytes = 0i64;
-    for (blob_id, size) in Vfs::new(session)
-        .list_blob_sizes()
-        .map_err(|e| e.to_string())?
-    {
+    for (blob_id, size) in sizes {
         if !here.contains(&blob_id) {
             missing += 1;
             missing_bytes += size;
@@ -2116,7 +2141,7 @@ pub fn full_copy_status(app: AppHandle, state: State<AppState>) -> Result<FullCo
 /// Turning it off keeps whatever is already here. It stops promising, it does
 /// not start deleting: a setting that emptied the disk when switched would be
 /// a trap, and the space is reclaimed by the cache limit in its own time.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_full_copy(app: AppHandle, enabled: bool) -> Result<(), String> {
     let silo = crate::state::active_silo(&app)?;
     silentsilo_vault::set_keep_full_copy(&silo.path, enabled).map_err(|e| e.to_string())

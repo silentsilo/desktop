@@ -61,7 +61,7 @@ fn focused_kek(app: &AppHandle) -> Result<silentsilo_crypto::ContentKek, String>
         .ok_or_else(|| "Unlock the silo first.".to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn recovery_status(app: AppHandle) -> Result<RecoveryStatus, String> {
     let root = vault_dir(&app)?;
     if !has_recovery_code(&root) {

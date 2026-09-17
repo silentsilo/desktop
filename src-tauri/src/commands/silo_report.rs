@@ -177,7 +177,7 @@ pub fn report_for(app_version: String, name: String, root: &Path) -> SiloReport 
 }
 
 /// What the picker's info button reads.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn silo_report(app: AppHandle, id: String) -> Result<SiloReport, String> {
     let silo_id = Uuid::parse_str(&id).map_err(|_| "unknown silo".to_string())?;
     let registry = silentsilo_vault::load_registry(&app_data_dir(&app)?);

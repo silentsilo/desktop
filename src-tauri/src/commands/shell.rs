@@ -8,7 +8,7 @@ use tauri::{AppHandle, Emitter, Manager};
 /// Paths queued by the OS shell "Add to SilentSilo" action since the last
 /// time this was called. Draining (not just peeking) so a picked-up batch
 /// isn't shown twice.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn shell_upload_queue_pending() -> Result<Vec<String>, String> {
     drain_upload_queue().map_err(|e| e.to_string())
 }
@@ -16,7 +16,7 @@ pub fn shell_upload_queue_pending() -> Result<Vec<String>, String> {
 /// The target directory queued by the OS shell "Save here from SilentSilo"
 /// action (right-click on empty space in a folder or on the Desktop), if
 /// any, since the last time this was called.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn shell_download_queue_pending() -> Result<Option<String>, String> {
     drain_download_queue().map_err(|e| e.to_string())
 }
@@ -24,7 +24,7 @@ pub fn shell_download_queue_pending() -> Result<Option<String>, String> {
 /// File/folder paths currently on the OS clipboard (e.g. from Ctrl+C in
 /// Explorer), for the file explorer's Ctrl+V "paste to upload". Empty if the
 /// clipboard holds anything other than files (plain text, an image, ...).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn clipboard_file_paths() -> Vec<String> {
     read_clipboard_file_paths()
 }
@@ -40,7 +40,7 @@ pub struct AutostartStatus {
 
 /// Read from the OS rather than from a setting the app keeps, so turning
 /// autostart off in Task Manager's Startup tab is reflected here.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn autostart_status() -> AutostartStatus {
     AutostartStatus {
         supported: autostart_supported(),
@@ -48,7 +48,7 @@ pub fn autostart_status() -> AutostartStatus {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn autostart_set(enabled: bool) -> Result<(), String> {
     set_autostart(enabled).map_err(|e| e.to_string())
 }
