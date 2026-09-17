@@ -37,6 +37,12 @@ const silos = [
 
 const ROOT_ID = "00000000-0000-0000-0000-0000000000ff";
 
+/// Where the save pickers pretend to point, and what is already sitting
+/// there. Two of the silo's own file names, so the overwrite question has
+/// something to name and the "save the rest" path still writes something.
+const MOCK_SAVE_DIR = "D:\\Saved";
+const MOCK_ALREADY_ON_DISK = new Set(["Passport scan.pdf", "Archive 2019.zip"]);
+
 /// Which entries are starred. Mutable so the context menu's star does
 /// something here rather than looking broken.
 const starred = new Set<string>(["33333333-3333-3333-3333-333333333333"]);
@@ -885,6 +891,29 @@ const handlers: Record<string, Handler> = {
   ],
   // Opening a browser is the one thing a mock must not really do.
   "plugin:opener|open_url": () => null,
+
+  // ── Saving a copy out of the silo ──────────────────────────────────
+  //
+  // The pickers answer with a fixed destination, and the clash commands
+  // pretend that folder already holds some of what is about to be written.
+  // Without these the whole save flow ended at the first picker, so the
+  // overwrite question had nowhere to appear.
+  "plugin:dialog|open": (args) =>
+    args.options && (args.options as { directory?: boolean }).directory
+      ? MOCK_SAVE_DIR
+      : [`${MOCK_SAVE_DIR}\\something.txt`],
+  "plugin:dialog|save": () => `${MOCK_SAVE_DIR}\\Passport scan.pdf`,
+  export_clashes: (args) =>
+    ((args.names as string[]) ?? []).filter((name) => MOCK_ALREADY_ON_DISK.has(name)),
+  vault_export_folder_clashes: () => [
+    "Invoices\\january.pdf",
+    "Invoices\\february.pdf",
+    "Invoices\\march.pdf",
+    "Invoices\\april.pdf",
+  ],
+  vault_export_file: () => null,
+  vault_export_folder: (args) => (args.skipExisting ? 3 : 7),
+  "plugin:path|join": (args) => ((args.paths as string[]) ?? []).join("\\"),
   // `?mock=unlocked&update` offers a newer version, for the update badge.
   "plugin:updater|check": () =>
     flag("update")

@@ -36,6 +36,7 @@ import type {
 import { AUTO_LOCK_OPTIONS_MINUTES } from "./lib/types";
 import { silosToLock } from "./lib/autoLock";
 import { decideConfirmSlot } from "./lib/confirmSlot";
+import { overwriteConfirmLabel, overwriteMessage } from "./lib/overwrite";
 import { PasswordRefreshGate } from "./lib/passwordRefresh";
 import { syncOutcome, type SyncReport } from "./lib/syncOutcome";
 import { securityKeyDisplayName } from "./lib/keyName";
@@ -178,6 +179,37 @@ export default function App() {
     ) => askConfirmWith(title, message, opts).then((r) => r.ok),
     [askConfirmWith],
   );
+  /**
+   * The one overwrite question a multi-file or folder save asks.
+   *
+   * Asked before the first write, once, with the harsher half as a box on
+   * the same dialog: the same shape as removing a silo, and for the same
+   * reason. Answering per file would interrupt a save already under way,
+   * and a run of twenty files would be twenty dialogs.
+   *
+   * Returns null when the user backed out, otherwise whether the files
+   * already on disk are to be replaced.
+   */
+  const askOverwrite = async (
+    clashes: string[],
+    total?: number,
+  ): Promise<{ replace: boolean } | null> => {
+    if (clashes.length === 0) return { replace: false };
+    const { ok, option } = await askConfirmWith(
+      clashes.length === 1 ? "That file is already there" : "Some files are already there",
+      overwriteMessage(clashes, total),
+      {
+        confirmLabel: overwriteConfirmLabel(clashes.length, total),
+        option: {
+          label: clashes.length === 1 ? "Replace it instead" : "Replace them instead",
+          hint: "The copies on this computer are overwritten, and that cannot be undone.",
+        },
+      },
+    );
+    if (!ok) return null;
+    return { replace: option };
+  };
+
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
   const [meta, setMeta] = useState<VaultMeta | null>(null);
   const [currentFolder, setCurrentFolder] = useState<FolderEntry | null>(null);
@@ -1780,6 +1812,40 @@ export default function App() {
   const confirmShellDownload = async (selection: VaultEntry[]) => {
     if (!pendingShellDownloadTarget || selection.length === 0) return;
     const destDir = pendingShellDownloadTarget;
+
+    // The same question the in-app save asks, for the same reason: this
+    // writes into a folder the user was already standing in, so a name that
+    // matches is more likely here than anywhere else.
+    let replace: boolean;
+    let skipFiles = new Set<string>();
+    try {
+      const fileClashes = await invoke<string[]>("export_clashes", {
+        destDir,
+        names: selection.filter((e) => e.kind === "file").map((e) => e.name),
+      });
+      const clashes = [...fileClashes];
+      for (const entry of selection) {
+        if (entry.kind !== "folder") continue;
+        clashes.push(
+          ...(await invoke<string[]>("vault_export_folder_clashes", {
+            folderId: entry.id,
+            destDir,
+          })),
+        );
+      }
+      const answer = await askOverwrite(clashes);
+      if (!answer) {
+        setPendingShellDownloadTarget(null);
+        return;
+      }
+      replace = answer.replace;
+      if (!replace) skipFiles = new Set(fileClashes);
+    } catch (e) {
+      toasts.error(e);
+      setPendingShellDownloadTarget(null);
+      return;
+    }
+
     setShellDownloadBusy(true);
     try {
       let count = 0;
@@ -1790,8 +1856,10 @@ export default function App() {
             count += await invoke<number>("vault_export_folder", {
               folderId: entry.id,
               destDir,
+              skipExisting: !replace,
             });
           } else {
+            if (skipFiles.has(entry.name)) continue;
             const destPath = await join(destDir, entry.name);
             await invoke("vault_export_file", { fileId: entry.id, destPath });
             count += 1;
@@ -2036,11 +2104,26 @@ export default function App() {
     const dest = typeof destDir === "string" ? destDir : destDir[0];
     if (!dest) return;
 
+    let skip = new Set<string>();
+    try {
+      const clashes = await invoke<string[]>("export_clashes", {
+        destDir: dest,
+        names: files.map((f) => f.name),
+      });
+      const answer = await askOverwrite(clashes, files.length);
+      if (!answer) return;
+      if (!answer.replace) skip = new Set(clashes);
+    } catch (e) {
+      toasts.error(e);
+      return;
+    }
+
     begin("transfer");
     let saved = 0;
     let failure: unknown = null;
     try {
       for (const file of files) {
+        if (skip.has(file.name)) continue;
         const destPath = await join(dest, file.name);
         try {
           await invoke("vault_export_file", { fileId: file.id, destPath });
@@ -2055,6 +2138,8 @@ export default function App() {
       }
       if (saved > 0) {
         toasts.success(saved === 1 ? "Saved 1 file." : `Saved ${saved} files.`);
+      } else if (!failure) {
+        toasts.info("Nothing was saved. Every file was already there.");
       }
       if (failure) {
         toasts.error(failure);
@@ -2070,6 +2155,20 @@ export default function App() {
     const dest = typeof destDir === "string" ? destDir : destDir[0];
     if (!dest) return;
 
+    let replace: boolean;
+    try {
+      const clashes = await invoke<string[]>("vault_export_folder_clashes", {
+        folderId: folder.id,
+        destDir: dest,
+      });
+      const answer = await askOverwrite(clashes);
+      if (!answer) return;
+      replace = answer.replace;
+    } catch (e) {
+      toasts.error(e);
+      return;
+    }
+
     begin("transfer");
     setUploadProgress(`Saving “${folder.name}”…`);
     const unlisten = await listen<number>("export-progress", (event) => {
@@ -2081,8 +2180,13 @@ export default function App() {
       const count = await invoke<number>("vault_export_folder", {
         folderId: folder.id,
         destDir: dest,
+        skipExisting: !replace,
       });
-      toasts.success(count === 1 ? "Saved 1 file." : `Saved ${count} files.`);
+      if (count === 0) {
+        toasts.info("Nothing was saved. Every file was already there.");
+      } else {
+        toasts.success(count === 1 ? "Saved 1 file." : `Saved ${count} files.`);
+      }
     } catch (e) {
       toasts.error(e);
     } finally {

@@ -1055,16 +1055,82 @@ fn unwrap_export_key(
         .map_err(|_| "This content's key could not be read, so it cannot be opened.".to_string())
 }
 
+/// Which of `names` are already in `dest_dir`.
+///
+/// Saving a single file goes through the system's save dialog, which asks
+/// about an existing name itself. Saving several does not, and used to
+/// replace whatever had the same name without a word. Asked once, before
+/// the first write: answering per file mid-run would put a dialog between
+/// the user and a save they already started.
+///
+/// A name the export would refuse anyway (`safe_join`) fails here too,
+/// rather than being reported as clash-free and then rejected.
+#[tauri::command]
+pub fn export_clashes(dest_dir: String, names: Vec<String>) -> Result<Vec<String>, String> {
+    let dest = PathBuf::from(&dest_dir);
+    let mut clashes = Vec::new();
+    for name in names {
+        if safe_join(&dest, &name)?.try_exists().unwrap_or(false) {
+            clashes.push(name);
+        }
+    }
+    Ok(clashes)
+}
+
+/// The files a folder export would write over, relative to `dest_dir`.
+///
+/// The whole subtree, because the export merges into a directory of the
+/// same name rather than replacing it: only the files that collide are at
+/// risk, and naming the directory alone would overstate what is lost.
+#[tauri::command]
+pub fn vault_export_folder_clashes(
+    app: AppHandle,
+    folder_id: String,
+    dest_dir: String,
+) -> Result<Vec<String>, String> {
+    let folder_id = Uuid::parse_str(&folder_id).map_err(|e| e.to_string())?;
+    let root = PathBuf::from(&dest_dir);
+    let state = app.state::<AppState>();
+    let session_guard = state.focused_session()?;
+    let session = session_guard
+        .as_ref()
+        .ok_or_else(|| CoreError::VaultLocked.to_string())?;
+    let vfs = Vfs::new(session);
+    let folder = vfs.get_folder(folder_id).map_err(|e| e.to_string())?;
+    let dest_base = safe_join(&root, &folder.name)?;
+    let mut plan = Vec::new();
+    plan_export(&vfs, folder_id, &dest_base, &mut plan)?;
+    Ok(plan
+        .iter()
+        .filter_map(|item| match item {
+            ExportItem::File { dest, .. } => Some(dest),
+            ExportItem::Dir(_) => None,
+        })
+        .filter(|dest| dest.try_exists().unwrap_or(false))
+        .map(|dest| {
+            dest.strip_prefix(&root)
+                .unwrap_or(dest)
+                .to_string_lossy()
+                .to_string()
+        })
+        .collect())
+}
+
 /// Recursively decrypt a folder (and all its subfolders/files) into
 /// `dest_dir`, downloading any cloud-only blobs on demand. The folder
 /// itself is recreated as a subdirectory of `dest_dir` (matching normal
 /// "download folder" behavior — you pick a destination, not the final
 /// path). Returns the number of files exported.
+///
+/// `skip_existing` is the answer to the question `vault_export_folder_clashes`
+/// fed: files already on disk are left as they are, and the count that comes
+/// back counts what was actually written.
 #[tauri::command]
 pub async fn vault_export_folder(
     app: AppHandle,
     folder_id: String,
     dest_dir: String,
+    skip_existing: bool,
 ) -> Result<u32, String> {
     let folder_id = Uuid::parse_str(&folder_id).map_err(|e| e.to_string())?;
 
@@ -1110,6 +1176,9 @@ pub async fn vault_export_folder(
                     blob_id,
                     wrapped_key,
                 } => {
+                    if skip_existing && dest.try_exists().unwrap_or(false) {
+                        continue;
+                    }
                     let key = unwrap_export_key(wrapped_key, &snapshot.kek)?;
                     decrypt_blob(&paths.blob_path(*blob_id), dest, &key, *blob_id)
                         .map_err(|e| e.to_string())?;

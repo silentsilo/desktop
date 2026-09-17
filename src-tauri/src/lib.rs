@@ -283,6 +283,8 @@ pub fn run() {
             commands::vault::vault_export_file,
             commands::vault::vault_open_file,
             commands::vault::vault_export_folder,
+            commands::vault::vault_export_folder_clashes,
+            commands::vault::export_clashes,
             commands::vault::vault_read_passwords,
             commands::vault::vault_upsert_password,
             commands::vault::vault_delete_password,

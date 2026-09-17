@@ -43,7 +43,7 @@ session map and the event names the frontend listens to. `silentsilo-shell`
 is the only crate here that talks to the operating system, and it is the one
 a port to another desktop platform rewrites.
 
-The 107 commands are the whole contract with the frontend, along with their
+The 109 commands are the whole contract with the frontend, along with their
 parameter names, their event names and payload shapes, and the error strings
 `src/lib/errors.ts` matches on. None of those may change without changing
 the frontend in the same commit.
