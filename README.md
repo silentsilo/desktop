@@ -208,6 +208,18 @@ setup that feeds them.
 runs the whole CI sequence for this repository. `-RustOnly` skips the
 frontend half.
 
+Use it rather than a bare `cargo test`. Several tests create a silo's work
+directory, which is derived from the silo's path and lives outside it, so an
+unguarded run leaves a uuid-named directory in
+`%LOCALAPPDATA%\SilentSilo\work\open` for every run, in the place a real
+silo's scratch goes. The script points `SILENTSILO_TEST_WORK_BASE` at
+`target\test-work` and clears it afterwards; CI does the same with the
+runner's temp. Set the variable yourself if you run cargo directly:
+
+```powershell
+$env:SILENTSILO_TEST_WORK_BASE = "$PWD\target\test-work"
+```
+
 ### Platform notes
 
 Security-key access uses a different backend per OS (both are real, working

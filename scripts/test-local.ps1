@@ -43,7 +43,31 @@ if (-not $RustOnly) {
 
 Invoke-Step 'fmt' { cargo fmt --all -- --check }
 Invoke-Step 'clippy' { cargo clippy --all-targets --locked -- -D warnings }
-Invoke-Step 'cargo test' { cargo test --all --locked }
-Invoke-Step 'cargo check' { cargo check --all --locked }
+
+# Working copies go under target\, not under the real %LOCALAPPDATA%.
+#
+# Several tests build a VaultPaths over a tempdir and call ensure_work_dir,
+# and the work directory is derived from the silo path rather than kept
+# inside it, so it lands in whatever `work_base()` answers. Left to itself
+# that is %LOCALAPPDATA%\SilentSilo\work\open, where a fresh uuid-named
+# directory per run accumulates forever next to the ones a real silo uses.
+# Debug builds only, which is what a test run is; a release build has no
+# switch that moves plaintext anywhere.
+#
+# Core does the same through a committed .cargo\config.toml. Here that file
+# is gitignored (it is where the local [patch] at a core checkout goes), so
+# it is set per run instead. `cargo test` typed by hand still writes to the
+# real one; see README, "Dev".
+$workBase = Join-Path $root 'target\test-work'
+$previousWorkBase = $env:SILENTSILO_TEST_WORK_BASE
+$env:SILENTSILO_TEST_WORK_BASE = $workBase
+try {
+    Invoke-Step 'cargo test' { cargo test --all --locked }
+    Invoke-Step 'cargo check' { cargo check --all --locked }
+}
+finally {
+    $env:SILENTSILO_TEST_WORK_BASE = $previousWorkBase
+    if (Test-Path $workBase) { Remove-Item -Recurse -Force $workBase }
+}
 
 Write-Host "`nAll green." -ForegroundColor Green

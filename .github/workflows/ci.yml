@@ -43,7 +43,15 @@ jobs:
       # that does not exist here. This is the cheap half of that guard; the
       # `lockfile-guard` job is the half that says what actually happened.
       - run: cargo clippy --all-targets --locked -- -D warnings
+      # Working copies under the runner's temp, not under the real
+      # %LOCALAPPDATA%. Several tests call `ensure_work_dir` over a tempdir,
+      # and the work directory is derived from the silo path rather than
+      # kept inside it, so without this each run leaves a uuid-named
+      # directory behind in the place a real silo's plaintext scratch goes.
+      # Read by debug builds only, which is what a test run is.
       - run: cargo test --all --locked
+        env:
+          SILENTSILO_TEST_WORK_BASE: ${{ runner.temp }}/silentsilo-test-work
       - run: cargo check --all --locked
 
   # The core crates must come from silentsilo/core, by git, at the pinned tag.
