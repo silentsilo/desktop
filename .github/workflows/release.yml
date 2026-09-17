@@ -291,25 +291,63 @@ jobs:
       # Two build steps rather than one with empty variables: the bundler
       # treats a set-but-empty APPLE_CERTIFICATE as a certificate to import,
       # and fails on it.
+      #
+      # Neither carries the updater key. `tauri build` runs vite, every npm
+      # plugin, every cargo build script and the bundler, and the key was in
+      # the environment of all of them: one compromised dependency anywhere
+      # in that tree could read the key that signs updates for every install.
+      # `createUpdaterArtifacts: false` is what lets it out, since the
+      # bundler refuses to make an updater artifact it cannot sign, so the
+      # .app.tar.gz is made and signed in the two steps below instead. The
+      # Apple secrets stay here: codesigning and notarisation happen inside
+      # `tauri build` and there is no separate step to move them to.
       - name: Build, unsigned
         if: steps.apple.outputs.signed == 'false'
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npx tauri build --ci --target universal-apple-darwin -- --locked
+        run: npx tauri build --ci --target universal-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":false}}' -- --locked
 
       - name: Build, sign and notarise
         if: steps.apple.outputs.signed == 'true'
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npx tauri build --ci --target universal-apple-darwin -- --locked
+        run: npx tauri build --ci --target universal-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":false}}' -- --locked
+
+      # The archive the macOS updater downloads, which the bundler would
+      # otherwise have made: a gzipped tar of the .app, taken from the
+      # directory holding it so the .app is at the root of the archive.
+      #
+      # After notarisation, never before: the ticket is stapled into the
+      # .app, and an archive made first would carry an app Gatekeeper asks
+      # Apple about. `COPYFILE_DISABLE` because bsdtar otherwise writes an
+      # AppleDouble `._` file beside every entry, which unpacks into the
+      # installed app as litter nobody put there.
+      - name: Archive the app for the updater
+        shell: bash
+        env:
+          COPYFILE_DISABLE: 1
+        run: |
+          out=target/universal-apple-darwin/release/bundle/macos
+          app=$(cd "$out" && ls -d *.app)
+          tar -C "$out" -czf "$out/$app.tar.gz" "$app"
+          ls -l "$out"
+
+      # The one step that sees the updater key. `--no-install` so the signer
+      # is the one the lockfile pins rather than whatever npm serves today:
+      # it runs with the key in its environment.
+      - name: Sign the updater archive
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          out=target/universal-apple-darwin/release/bundle/macos
+          archive=$(ls "$out"/*.app.tar.gz)
+          npx --no-install tauri signer sign "$archive"
+          [ -f "$archive.sig" ] || { echo "::error::no signature for $archive"; exit 1; }
 
       # The workspace root is the repository root, so cargo and the bundler
       # write to target\, not to src-tauri\target\. The staging directory is
@@ -443,22 +481,26 @@ jobs:
       # `APPIMAGE_EXTRACT_AND_RUN` because the AppImage tooling mounts itself
       # through FUSE by default, and a container has no FUSE. Without it the
       # AppImage step fails and the deb beside it never gets built.
+      #
+      # No updater key here. `tauri build` runs vite, every npm plugin, every
+      # cargo build script and the bundler, and the key was in the
+      # environment of all of them: one compromised dependency anywhere in
+      # that tree could read the key that signs updates for every install.
+      # `createUpdaterArtifacts: false` is what lets it out, since the
+      # bundler refuses to make an updater artifact it cannot sign. The
+      # signing step below is the only place the key appears.
       - name: Build
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPIMAGE_EXTRACT_AND_RUN: 1
-        run: npx tauri build --ci -- --locked
+        run: npx tauri build --ci --config '{"bundle":{"createUpdaterArtifacts":false}}' -- --locked
 
       # The tree is listed before anything is copied out of it, so a missing
       # file is a readable log line rather than a glob that matched nothing.
       #
       # Linux has no updater archive: unlike macOS, where the updater
       # downloads a .app.tar.gz, here it downloads the .deb or the .AppImage
-      # itself, and the bundler signs each of them in place. So the
-      # signatures are copied out alongside their files rather than made
-      # again, and tolerantly, because the step below answers for anything
-      # that arrives without one.
+      # itself. The build above makes neither signature, so both are made in
+      # the step after this one.
       - name: Collect the bundle
         shell: bash
         run: |
@@ -468,16 +510,16 @@ jobs:
           mkdir -p dist-linux
           cp "$out"/deb/*.deb dist-linux/
           cp "$out"/appimage/*.AppImage dist-linux/
-          cp "$out"/deb/*.deb.sig dist-linux/ 2>/dev/null || true
-          cp "$out"/appimage/*.AppImage.sig dist-linux/ 2>/dev/null || true
           ls -l dist-linux
 
-      # The updater can install a .deb through pkexec, so the .deb needs a
-      # signature like everything else it might download. Only if the
-      # bundler did not already make one: whether it does is the sort of
-      # thing that changes between versions, and having two answers for the
-      # same file is worse than either.
-      - name: Sign anything the bundler left unsigned
+      # The one step that sees the updater key. The updater can install a
+      # .deb through pkexec, so the .deb needs a signature like everything
+      # else it might download. `--no-install` so the signer is the one the
+      # lockfile pins rather than whatever npm serves today: it runs with the
+      # key in its environment. A file that ends up without a signature fails
+      # the job rather than reaching the draft, since an asset the manifest
+      # points at and cannot prove is an update nobody can install.
+      - name: Sign the bundles
         shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -491,6 +533,7 @@ jobs:
               echo "signing: $file"
               npx --no-install tauri signer sign "$file"
             fi
+            [ -f "$file.sig" ] || { echo "::error::no signature for $file"; exit 1; }
           done
           ls -l dist-linux
 
