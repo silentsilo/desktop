@@ -549,7 +549,7 @@ jobs:
       # release too, so attaching to a tag that has already been published
       # would put it back in draft and 404 every asset URL.
       - name: Refuse to attach to a published release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && vars.SHIP_LINUX == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -561,8 +561,12 @@ jobs:
           fi
           echo "release is $state, safe to attach"
 
+      # Linux is built on every tag and kept as the artifact above, but it
+      # reaches the release only once the repository variable SHIP_LINUX is
+      # "true": Windows, Linux and macOS debut together at one version, so a
+      # Linux bundle on a Windows-only release would be a launch nobody chose.
       - name: Attach to the draft
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && vars.SHIP_LINUX == 'true'
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
