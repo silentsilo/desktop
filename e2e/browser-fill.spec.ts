@@ -11,6 +11,10 @@ test("a fill for the site the login was saved for asks plainly", async ({ page }
   await expect(dialog.getByText("github.com", { exact: true })).toBeVisible();
   await expect(dialog.locator("dd").nth(1)).toContainText("GitHub");
   await expect(dialog.getByRole("alert")).toHaveCount(0);
+  // It says what the app knows, not who asked.
+  await expect(dialog).toContainText(
+    "A fill request from your browser for github.com. If you did not just click SilentSilo in the browser, choose Cancel.",
+  );
 
   await dialog.getByRole("button", { name: "Fill", exact: true }).click();
   await expect(dialog).toBeHidden();

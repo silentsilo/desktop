@@ -1,38 +1,43 @@
 //! The browser extension's whole view of a silo: login entries, and of each
-//! only its label, username, saved address and password.
+//! only its label, username, saved address and, once a fill is confirmed,
+//! its password.
 //!
 //! This is the one place the extension's requests reach the vault, and it
 //! makes exactly one call there, `list_passwords`. Files, folders, notes,
 //! one-time codes, passkeys, attachments and protected folders are not read
 //! by this module and so cannot appear in an answer; the tests at the end
 //! hold the rest of `browser/` to never reaching the vault another way.
+//!
+//! `list_passwords` decrypts every entry, secrets included. Listing keeps
+//! the metadata and wipes the rest at once; the one password a fill needs is
+//! read again only after the person confirmed. A listing that never
+//! decrypts the secrets belongs in core (a follow-up, see ARCHITECTURE.md).
 
 use silentsilo_vault::VaultSession;
 use silentsilo_vfs::Vfs;
 use uuid::Uuid;
 use zeroize::{Zeroize, Zeroizing};
 
-/// One login entry, reduced to what a fill needs.
+/// One login entry, reduced to what a list and a confirmation show. No
+/// password: see [`secret`].
 pub struct Login {
     pub id: Uuid,
     pub label: String,
     pub username: String,
     /// The address it was saved for, free text as the entry keeps it.
     pub url: String,
-    password: String,
-}
-
-impl Login {
-    pub fn password(&self) -> &str {
-        &self.password
-    }
 }
 
 impl Drop for Login {
     fn drop(&mut self) {
-        self.password.zeroize();
         self.username.zeroize();
     }
+}
+
+/// What a confirmed fill sends, wiped when dropped.
+pub struct Secret {
+    pub username: Zeroizing<String>,
+    pub password: Zeroizing<String>,
 }
 
 /// The row as stored, read field by field. Everything else in it, notes and
@@ -49,31 +54,59 @@ struct Row {
     url: String,
 }
 
-/// Every login in the open silo that has a password to fill. An entry with
-/// no `type` is a login: that is what every entry was before the others.
-pub fn read(session: &VaultSession) -> Result<Vec<Login>, String> {
-    let mut rows = Vfs::new(session)
-        .list_passwords()
-        .map_err(|e| e.to_string())?;
-    let logins = rows.iter().filter_map(|row| login_of(row)).collect();
-    for row in &mut rows {
-        row.zeroize();
+impl Row {
+    /// A login with a password to fill. An entry with no `type` is a
+    /// login: that is what every entry was before the others.
+    fn fillable(&self) -> bool {
+        self.kind.as_deref().is_none_or(|kind| kind == "login") && !self.password.is_empty()
     }
-    Ok(logins)
 }
 
-fn login_of(json: &str) -> Option<Login> {
-    let mut row = Zeroizing::new(serde_json::from_str::<Row>(json).ok()?);
-    if row.kind.as_deref().is_some_and(|kind| kind != "login") || row.password.is_empty() {
-        return None;
+/// Every entry in the open silo, parsed, each wiped when dropped. The raw
+/// JSON is wiped before this returns.
+fn rows(session: &VaultSession) -> Result<Vec<Zeroizing<Row>>, String> {
+    let mut raw = Vfs::new(session)
+        .list_passwords()
+        .map_err(|e| e.to_string())?;
+    let rows = raw
+        .iter()
+        .filter_map(|json| serde_json::from_str::<Row>(json).ok())
+        .map(Zeroizing::new)
+        .collect();
+    for json in &mut raw {
+        json.zeroize();
     }
-    Some(Login {
-        id: Uuid::parse_str(&row.id).ok()?,
-        label: std::mem::take(&mut row.service),
-        username: std::mem::take(&mut row.username),
-        url: std::mem::take(&mut row.url),
-        password: std::mem::take(&mut row.password),
-    })
+    Ok(rows)
+}
+
+/// Every login in the open silo that has a password to fill, without the
+/// password.
+pub fn read(session: &VaultSession) -> Result<Vec<Login>, String> {
+    Ok(rows(session)?
+        .iter_mut()
+        .filter(|row| row.fillable())
+        .filter_map(|row| {
+            Some(Login {
+                id: Uuid::parse_str(&row.id).ok()?,
+                label: std::mem::take(&mut row.service),
+                username: std::mem::take(&mut row.username),
+                url: std::mem::take(&mut row.url),
+            })
+        })
+        .collect())
+}
+
+/// The username and password of one login, read fresh. `None` when it is
+/// gone or no longer a login with a password.
+pub fn secret(session: &VaultSession, id: Uuid) -> Result<Option<Secret>, String> {
+    Ok(rows(session)?
+        .iter_mut()
+        .find(|row| Uuid::parse_str(&row.id).ok() == Some(id))
+        .filter(|row| row.fillable())
+        .map(|row| Secret {
+            username: Zeroizing::new(std::mem::take(&mut row.username)),
+            password: Zeroizing::new(std::mem::take(&mut row.password)),
+        }))
 }
 
 #[cfg(test)]
@@ -191,6 +224,7 @@ mod tests {
                 reference: refs.issue(Uuid::nil(), 0, login.id),
                 label: &login.label,
                 username: &login.username,
+                site: None,
             })
             .collect();
         String::from_utf8(protocol::list_answer("1", kind, None, &items)).unwrap()
@@ -204,8 +238,36 @@ mod tests {
         labels.sort();
         assert_eq!(labels, ["Bank", "GitHub"]);
         let github = logins.iter().find(|l| l.label == "GitHub").unwrap();
-        assert_eq!(github.password(), "gh-secret");
         assert_eq!(github.url, "https://github.com/login");
+
+        let secret = secret(&silo.session, github.id).unwrap().unwrap();
+        assert_eq!(secret.password.as_str(), "gh-secret");
+        assert_eq!(secret.username.as_str(), "alex@example.com");
+        assert!(
+            super::secret(&silo.session, Uuid::new_v4())
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    /// A note or a passkey-only entry has no password to hand out, even by
+    /// its id.
+    #[test]
+    fn only_a_login_with_a_password_has_a_secret() {
+        let silo = silo();
+        let rows = rows(&silo.session).unwrap();
+        for row in rows.iter().filter(|row| !row.fillable()) {
+            let id = Uuid::parse_str(&row.id).unwrap();
+            assert!(
+                secret(&silo.session, id).unwrap().is_none(),
+                "{}",
+                row.service
+            );
+        }
+        assert!(
+            rows.iter().any(|row| !row.fillable()),
+            "the silo has such entries"
+        );
     }
 
     #[test]
@@ -229,15 +291,16 @@ mod tests {
         let github = parse_origin("https://github.com").unwrap().unwrap();
         let mut answers = vec![
             answer_text(&protocol::logins_for(&logins, &github), "logins"),
-            answer_text(&protocol::search(&logins, "a"), "search"),
-            answer_text(&protocol::search(&logins, "e"), "search"),
+            answer_text(&protocol::search(&logins, "al"), "search"),
+            answer_text(&protocol::search(&logins, "ex"), "search"),
         ];
         for login in &logins {
+            let secret = secret(&silo.session, login.id).unwrap().unwrap();
             answers.push(
                 String::from_utf8(protocol::fill_answer(
                     "4",
-                    &login.username,
-                    login.password(),
+                    &secret.username,
+                    &secret.password,
                 ))
                 .unwrap(),
             );

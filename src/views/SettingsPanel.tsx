@@ -883,10 +883,17 @@ export function SettingsPanel(props: Props) {
                 Allow the SilentSilo browser extension
                 <span className="hint">
                   Every fill is confirmed in this window with {platform.builtIn} or your security
-                  key. Turned off, the extension cannot reach SilentSilo at all.
+                  key, so the silo needs one of them set up under Security keys. Turned off, the
+                  extension cannot reach SilentSilo at all.
                 </span>
               </span>
             </label>
+            {browserExtension?.supported && securityKeys.length === 0 && (
+              <p className="hint is-error">
+                This silo has no security key or {platform.builtIn} set up, so the browser cannot
+                fill anything from it. Add one under Security keys first.
+              </p>
+            )}
             {browserExtension && !browserExtension.supported && (
               <p className="hint">Not available on this system yet.</p>
             )}

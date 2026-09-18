@@ -1472,6 +1472,12 @@ pub async fn fido_reverify(app: AppHandle) -> Result<(), String> {
     verify_presence(&app, "show this entry").await
 }
 
+/// Whether the focused silo has a security key or Windows Hello enrolled,
+/// the only things [`verify_presence`] can ask.
+pub(crate) fn presence_check_enrolled(app: &AppHandle) -> bool {
+    vault_dir(app).is_ok_and(|root| is_fido_enrolled(&root))
+}
+
 /// The ceremony behind `fido_reverify`, shared with the browser fill so both
 /// ask the same thing before a secret leaves the app. `purpose` completes
 /// "Confirm with Windows Hello to …".

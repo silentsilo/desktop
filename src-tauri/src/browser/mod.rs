@@ -5,14 +5,17 @@
 //! answered from the focused silo's login entries only (see `logins.rs`,
 //! the one module that reads the vault), and a fill waits for the user to
 //! confirm in this window and pass the same key check as revealing a
-//! protected entry. The contract is `docs/PROTOCOL.md` in silentsilo/browser.
+//! protected entry. Only the host installed beside the app may connect
+//! (`ClientCheck`), and what it may ask is rationed (`limits.rs`). The
+//! contract is `docs/PROTOCOL.md` in silentsilo/browser.
 
+mod limits;
 mod logins;
 mod protocol;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use silentsilo_shell::browser_pipe::Frame;
@@ -22,20 +25,44 @@ use uuid::Uuid;
 
 use crate::commands::fido::run_blocking;
 use crate::state::AppState;
-use logins::Login;
+use limits::{Bucket, ConnectionLimits, Cooldown};
+use logins::{Login, Secret};
 use protocol::{Code, Failure, Item, Request};
 
 /// How long a fill waits for the person, key check included.
 const FILL_TIMEOUT: Duration = Duration::from_secs(90);
 
 const GONE: &str = "This browser request is no longer waiting.";
+const TOO_MANY: &str = "Too many requests from the browser. Wait a moment.";
+const COOLING_DOWN: &str = "A fill was just declined. Wait a few seconds before asking again.";
 
-#[derive(Default)]
 pub struct BrowserBridge {
     server: Mutex<Option<Server>>,
     refs: Mutex<protocol::RefTable>,
     /// The one fill waiting for confirmation. A second one is `busy`.
     pending: Mutex<Option<Pending>>,
+    /// `logins` and `search` across every connection.
+    lookups: Mutex<Bucket>,
+    /// Set when a fill is declined or times out.
+    cooldown: Mutex<Cooldown>,
+}
+
+impl Default for BrowserBridge {
+    fn default() -> Self {
+        Self {
+            server: Mutex::default(),
+            refs: Mutex::default(),
+            pending: Mutex::default(),
+            lookups: Mutex::new(limits::lookups_overall()),
+            cooldown: Mutex::default(),
+        }
+    }
+}
+
+/// What one pipe connection has used, kept for as long as it stays open.
+#[derive(Default)]
+pub struct Connection {
+    limits: Mutex<ConnectionLimits>,
 }
 
 // Only Windows serves the pipe; elsewhere nothing builds one.
@@ -131,9 +158,9 @@ async fn start(app: &AppHandle) -> Result<(), String> {
     }
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
-        let handler = move |_: Arc<()>, frame: Frame| {
+        let handler = move |connection: Arc<Connection>, frame: Frame| {
             let app = handle.clone();
-            async move { answer(&app, frame).await }
+            async move { answer(&app, &connection, frame).await }
         };
         let warn = |warning: String| crate::diagnostics::warn("browser", warning);
         if let Err(e) = server.run(handler, warn).await {
@@ -243,7 +270,7 @@ pub fn browser_fill_cancel(app: AppHandle, request_id: String) -> Result<(), Str
 }
 
 /// One request in, one answer out. Never logs what it was asked.
-async fn answer(app: &AppHandle, frame: Frame) -> Vec<u8> {
+async fn answer(app: &AppHandle, connection: &Connection, frame: Frame) -> Vec<u8> {
     let bytes = match frame {
         Frame::Message(bytes) => bytes,
         Frame::TooLarge => {
@@ -259,11 +286,32 @@ async fn answer(app: &AppHandle, frame: Frame) -> Vec<u8> {
     };
     let result = match request {
         Request::Status => Ok(status(app, &id).await),
-        Request::Logins { origin } => list_logins(app, &id, &origin).await,
-        Request::Search { query } => search(app, &id, &query).await,
-        Request::Fill { origin, reference } => fill(app, &id, &origin, &reference).await,
+        Request::Logins { origin } => match lookup_allowed(app, connection) {
+            Ok(()) => list_logins(app, &id, &origin).await,
+            Err(failure) => Err(failure),
+        },
+        Request::Search { query } => match lookup_allowed(app, connection) {
+            Ok(()) => search(app, &id, &query).await,
+            Err(failure) => Err(failure),
+        },
+        Request::Fill { origin, reference } => {
+            fill(app, connection, &id, &origin, &reference).await
+        }
     };
     result.unwrap_or_else(|failure| protocol::error_answer(&id, &failure))
+}
+
+/// A `logins` or `search` within both this connection's ration and the
+/// app-wide one.
+fn lookup_allowed(app: &AppHandle, connection: &Connection) -> Result<(), Failure> {
+    let now = Instant::now();
+    let bridge = app.state::<BrowserBridge>();
+    let mine = lock(&connection.limits).lookups.take(now);
+    if mine && lock(&bridge.lookups).take(now) {
+        Ok(())
+    } else {
+        Err(Failure::with(Code::Busy, TOO_MANY))
+    }
 }
 
 enum Access {
@@ -328,27 +376,44 @@ async fn status(app: &AppHandle, id: &str) -> Vec<u8> {
     }
 }
 
-/// The silo's logins, read on the blocking pool: the sessions lock is
-/// shared with every command, and an async worker should not wait on it.
-async fn read_logins(app: &AppHandle, silo: Uuid) -> Result<Vec<Login>, Failure> {
+/// Runs `read` against the silo's session on the blocking pool: the
+/// sessions lock is shared with every command, and an async worker should
+/// not wait on it.
+async fn with_session<T: Send + 'static>(
+    app: &AppHandle,
+    silo: Uuid,
+    read: impl FnOnce(&silentsilo_vault::VaultSession) -> Result<T, String> + Send + 'static,
+) -> Result<T, Failure> {
     let app = app.clone();
-    let read = run_blocking(move || {
+    let result = run_blocking(move || {
         let state = app.state::<AppState>();
         let sessions = lock(&state.sessions);
         match sessions.get(&silo) {
-            Some(session) => logins::read(session).map(Some),
+            Some(session) => read(session).map(Some),
             None => Ok(None),
         }
     })
     .await;
-    match read {
-        Ok(Some(logins)) => Ok(logins),
+    match result {
+        Ok(Some(value)) => Ok(value),
         Ok(None) => Err(Code::Locked.into()),
         Err(_) => Err(Failure::with(
             Code::Locked,
             "SilentSilo could not read this silo's logins.",
         )),
     }
+}
+
+/// The silo's logins, without their passwords.
+async fn read_logins(app: &AppHandle, silo: Uuid) -> Result<Vec<Login>, Failure> {
+    with_session(app, silo, logins::read).await
+}
+
+/// One login's username and password, read fresh once a fill is confirmed.
+async fn read_secret(app: &AppHandle, silo: Uuid, entry: Uuid) -> Result<Secret, Failure> {
+    with_session(app, silo, move |session| logins::secret(session, entry))
+        .await?
+        .ok_or(Failure::new(Code::UnknownRef))
 }
 
 fn items_answer(
@@ -361,12 +426,16 @@ fn items_answer(
 ) -> Vec<u8> {
     let bridge = app.state::<BrowserBridge>();
     let mut refs = lock(&bridge.refs);
+    // A search result says where it was saved, so the popup can name a
+    // login meant for another site before anyone asks to fill it.
+    let with_site = kind == "search";
     let items: Vec<Item> = found
         .iter()
         .map(|login| Item {
             reference: refs.issue(silo, epoch, login.id),
             label: &login.label,
             username: &login.username,
+            site: with_site.then(|| protocol::saved_site_shown(&login.url)),
         })
         .collect();
     protocol::list_answer(id, kind, origin, &items)
@@ -432,8 +501,31 @@ fn bring_to_front(app: &AppHandle) {
     }
 }
 
+/// Whether the focused silo has a key check a fill can ask for, off the
+/// async workers: it reads the silo's key file.
+async fn authenticator_enrolled(app: &AppHandle) -> bool {
+    let app = app.clone();
+    run_blocking(move || Ok(crate::commands::vault::presence_check_enrolled(&app)))
+        .await
+        .unwrap_or(false)
+}
+
+/// Whether a fill may raise the dialog now: not while it is cooling down
+/// after a cancel, and not past this connection's ration.
+fn fill_allowed(app: &AppHandle, connection: &Connection) -> Result<(), Failure> {
+    let now = Instant::now();
+    if lock(&app.state::<BrowserBridge>().cooldown).active(now) {
+        return Err(Failure::with(Code::Busy, COOLING_DOWN));
+    }
+    if !lock(&connection.limits).fills.take(now) {
+        return Err(Failure::with(Code::Busy, TOO_MANY));
+    }
+    Ok(())
+}
+
 async fn fill(
     app: &AppHandle,
+    connection: &Connection,
     id: &str,
     origin: &str,
     reference: &str,
@@ -445,6 +537,12 @@ async fn fill(
         ));
     };
     let (silo, epoch) = open(app).await?;
+    // Said before the dialog, not after it: without a key or Windows Hello
+    // the confirmation could never pass.
+    if !authenticator_enrolled(app).await {
+        return Err(Code::NoAuthenticator.into());
+    }
+    fill_allowed(app, connection)?;
     let entry = {
         let bridge = app.state::<BrowserBridge>();
         let mut refs = lock(&bridge.refs);
@@ -489,7 +587,12 @@ async fn fill(
     let _ = app.emit("browser-fill-request", &prompt);
     bring_to_front(app);
 
-    wait_for_decision(app, decided, epoch).await?;
+    if let Err(failure) = wait_for_decision(app, decided, epoch).await {
+        if failure.code == Code::Cancelled {
+            lock(&app.state::<BrowserBridge>().cooldown).start(Instant::now());
+        }
+        return Err(failure);
+    }
 
     // Confirmed. The silo must still be the one the ref was issued in, and
     // the login still there; only now is its password read.
@@ -497,12 +600,12 @@ async fn fill(
     if (now_silo, now_epoch) != (silo, epoch) {
         return Err(Code::UnknownRef.into());
     }
-    let logins = read_logins(app, silo).await?;
-    let login = logins
-        .iter()
-        .find(|login| login.id == entry)
-        .ok_or(Failure::new(Code::UnknownRef))?;
-    Ok(protocol::fill_answer(id, &login.username, login.password()))
+    let secret = read_secret(app, silo, entry).await?;
+    Ok(protocol::fill_answer(
+        id,
+        &secret.username,
+        &secret.password,
+    ))
 }
 
 async fn wait_for_decision(

@@ -274,35 +274,57 @@ flowchart LR
   is the app's own. Any other client is disconnected unread and the refusal
   goes to the diagnostics log. A release built without signing therefore
   admits no host.
+- **What a client may ask is rationed** (`browser/limits.rs`). `logins` and
+  `search` share a bucket of 20 per connection, one more per second, and one
+  of 60 across all connections, one more per half second. A `search` under
+  two characters finds nothing. `fill` has 3 per connection, one more per 20
+  seconds. After a fill is declined or times out, no fill dialog opens for
+  10 seconds, whoever asks. Past any of these the answer is `busy`.
 - **The extension sees logins and nothing else.** `browser/logins.rs` is
   the only module in `browser/` that reaches the vault, and its one call is
-  `list_passwords`. It keeps label, username, saved address and password of
-  entries whose type is `login` and which have a password; files, folders,
-  notes, one-time codes, attachments, cards and protected folders are never
-  read, so no answer can name them. A test there holds the rest of
-  `browser/` to that (it fails if `mod.rs` or `protocol.rs` mention the file
-  API), and another puts a file in a silo and checks that searching for its
-  exact name finds nothing and that no answer contains it.
+  `list_passwords`. It keeps label, username and saved address of entries
+  whose type is `login` and which have a password; files, folders, notes,
+  one-time codes, attachments, cards and protected folders are never read,
+  so no answer can name them. A test there holds the rest of `browser/` to
+  that (it fails if `mod.rs` or `protocol.rs` mention the file API), and
+  another puts a file in a silo and checks that searching for its exact name
+  finds nothing and that no answer contains it.
+- **Passwords stay out of listings, mostly.** `list_passwords` decrypts
+  every entry, secrets included, on every `logins`, `search` and `fill`.
+  The listing keeps the metadata and wipes the parsed rows and the JSON at
+  once; the one password a fill sends is read again, by entry id, only after
+  the confirmation and the key check passed. A listing that never decrypts
+  the secrets needs a metadata-only query in core; that is a follow-up, not
+  something desktop can do alone.
 - **Matching** (`browser/protocol.rs`): only `https:` tabs, plus `http:` on
   `localhost` and loopback addresses; any other scheme gets an empty list.
   A login matches when the host of its saved address equals the tab's host,
   or one is `www.` plus the other. No parent domains, no look-alikes, no
-  guessing from the label. A port the saved address names must match. The
-  saved address is free text, so one without a scheme is read as `https://`,
-  and an `android://` identity names no site.
+  guessing from the label. Ports must be equal: an address without one means
+  its scheme's default (443, or 80 for `http://`), never any port, and an
+  `http://` address also matches the same host over https on 443. On
+  loopback, where each port is another program, the ports must be written
+  the same (`localhost` matches only a tab without a port). The saved
+  address is free text, so one without a scheme is read as `https://`, and
+  an `android://` identity names no site. A `search` result carries `site`,
+  where its login was saved for, so the popup can say so before a fill.
 - **Refs** are random tokens mapped to entry ids, scoped to the focused silo
   and to `AppState::session_epoch`, which moves on every unlock, lock and
   focus change. A ref from before any of those is `unknown-ref`.
-- **A fill is confirmed here, every time.** The request brings the window to
-  the front, above other windows while it waits, and shows
-  `BrowserFillDialog`: the site, the login, and in words when the login was
-  saved for another site (it came from `search`). Fill runs
-  `commands::vault::verify_presence`, the same Windows Hello or security key
-  check `fido_reverify` uses for a protected entry, whatever that entry's own
-  setting; no grace period. Only once it passes is the entry read again and
-  its password written to the pipe, in a buffer sized up front and wiped
-  after the write. One fill waits at a time (`busy`), for 90 seconds
-  (`cancelled`); a lock or focus change while it waits ends it.
+- **A fill is confirmed here, every time.** A silo with no security key and
+  no Windows Hello enrolled is answered `no-authenticator` at once, since
+  the check below could never pass; Settings says so beside the toggle. The
+  request brings the window to the front, above other windows while it
+  waits, and shows `BrowserFillDialog`: a fill request from the browser for
+  the site, the login, and in words when the login was saved for another
+  site (it came from `search`). It does not claim the extension sent it: the
+  app cannot know that (below). Fill runs `commands::vault::verify_presence`,
+  the same Windows Hello or security key check `fido_reverify` uses for a
+  protected entry, whatever that entry's own setting; no grace period. Only
+  once it passes is the password read and written to the pipe, in a buffer
+  sized up front and wiped after the write. One fill waits at a time
+  (`busy`), for 90 seconds (`cancelled`); a lock or focus change while it
+  waits ends it.
 - **Installed as an externalBin**, merged in by `build-release-local.ps1`
   through `src-tauri/tauri.browser-host.json` rather than kept in
   `tauri.conf.json`: tauri-build requires an externalBin to exist on every
@@ -325,10 +347,12 @@ as if they did.
   inject into the browser or into the host, or drive the host's stdin after
   starting it from a real browser. The app then sees a legitimate client.
   What stands between such a request and a password is the person: the
-  dialog names the site and the login, and needs Windows Hello or the key.
-  Someone who confirms a fill they did not start hands it over.
-- **Labels and usernames can still be listed** by such code: `logins` and
-  `search` answer whatever the host relays.
+  dialog names the site and the login, says the request came from the
+  browser rather than from the extension, and needs Windows Hello or the
+  key. Someone who confirms a fill they did not start hands it over.
+- **Labels and usernames can still be listed**, slowly. The rations bound
+  how fast; they do not make the list secret from a process that runs as
+  this user and waits.
 - **The install is per-user.** The app, the host and the manifest live in a
   folder this user can write, so a same-user process can replace or patch
   them. The signer check refuses a host that is not signed like the app; it

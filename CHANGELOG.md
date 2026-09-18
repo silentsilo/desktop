@@ -16,7 +16,8 @@ silo from opening needs a major version rather than a note.
   entries only, never files, notes or codes. The installer registers a small
   native messaging host for it; uninstalling removes the registration. The
   app talks only to that host, signed like the app, and the host only to
-  Chrome or Edge and to this app.
+  Chrome or Edge and to this app. Filling needs a security key or Windows
+  Hello on the silo.
 
 ## [1.1.0] - Phones, and computers that agree
 

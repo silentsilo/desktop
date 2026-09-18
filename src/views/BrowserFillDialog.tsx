@@ -117,7 +117,12 @@ function FillCard({
           <h3 className="modal-title">Fill a login in your browser?</h3>
         </div>
         <div className="modal-body">
-          <p>The SilentSilo extension asks to fill this login on the page open in your browser.</p>
+          {/* Says only what the app knows: the request came through the
+              browser channel. Another program of this user can send one too. */}
+          <p>
+            A fill request from your browser for {prompt.site}. If you did not just click
+            SilentSilo in the browser, choose Cancel.
+          </p>
           <dl className="browser-fill-facts">
             <dt>Site</dt>
             <dd>{prompt.site}</dd>

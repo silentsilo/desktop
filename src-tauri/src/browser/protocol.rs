@@ -16,6 +16,10 @@ use super::logins::Login;
 /// At most this many answers to a `search`.
 pub const SEARCH_LIMIT: usize = 20;
 
+/// A shorter `search` finds nothing: one letter would list most of a silo
+/// in a few requests.
+pub const SEARCH_MIN_CHARS: usize = 2;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Code {
     Locked,
@@ -24,6 +28,7 @@ pub enum Code {
     Cancelled,
     BadRequest,
     Busy,
+    NoAuthenticator,
 }
 
 impl Code {
@@ -35,6 +40,7 @@ impl Code {
             Code::Cancelled => "cancelled",
             Code::BadRequest => "bad-request",
             Code::Busy => "busy",
+            Code::NoAuthenticator => "no-authenticator",
         }
     }
 
@@ -46,6 +52,9 @@ impl Code {
             Code::Cancelled => "The fill was not confirmed.",
             Code::BadRequest => "SilentSilo could not read the request.",
             Code::Busy => "Another fill is waiting for confirmation in SilentSilo.",
+            Code::NoAuthenticator => {
+                "This silo has no security key or Windows Hello set up, so no fill can be confirmed."
+            }
         }
     }
 }
@@ -118,7 +127,11 @@ pub fn parse_request(bytes: &[u8]) -> Result<(String, Request), (String, Failure
 pub struct Site {
     host: String,
     /// Explicit or the scheme's default.
-    port: Option<u16>,
+    port: u16,
+    /// Only when the origin names one other than its scheme's default.
+    explicit_port: Option<u16>,
+    https: bool,
+    loopback: bool,
     /// `host` or `host:port`, for the confirmation.
     pub shown: String,
 }
@@ -144,7 +157,14 @@ pub fn parse_origin(origin: &str) -> Result<Option<Site>, ()> {
     if !fillable {
         return Ok(None);
     }
-    Ok(Some(site_of(&url)))
+    Ok(Some(Site {
+        host: url.host_str().unwrap_or_default().to_string(),
+        port: url.port_or_known_default().unwrap_or(0),
+        explicit_port: url.port(),
+        https: url.scheme() == "https",
+        loopback: is_loopback(url.host()),
+        shown: shown(&url),
+    }))
 }
 
 fn is_loopback(host: Option<Host<&str>>) -> bool {
@@ -156,16 +176,13 @@ fn is_loopback(host: Option<Host<&str>>) -> bool {
     }
 }
 
-fn site_of(url: &Url) -> Site {
-    let host = url.host_str().unwrap_or_default().to_string();
-    let shown = match url.port() {
+/// `host`, or `host:port` when the address names a port other than its
+/// scheme's default.
+fn shown(url: &Url) -> String {
+    let host = url.host_str().unwrap_or_default();
+    match url.port() {
         Some(port) => format!("{host}:{port}"),
-        None => host.clone(),
-    };
-    Site {
-        port: url.port_or_known_default(),
-        host,
-        shown,
+        None => host.to_string(),
     }
 }
 
@@ -176,8 +193,14 @@ fn site_of(url: &Url) -> Site {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SavedSite {
     host: String,
+    /// Explicit or the scheme's default; an address without a scheme is
+    /// read as `https://`.
+    port: u16,
     /// Only when the address names one other than its scheme's default.
-    port: Option<u16>,
+    explicit_port: Option<u16>,
+    /// Saved as `http://`, so the same host over https on its default port
+    /// is the usual upgrade, not another site.
+    http: bool,
     pub shown: String,
 }
 
@@ -196,23 +219,39 @@ pub fn saved_site(address: &str) -> Option<SavedSite> {
         None => Url::parse(&format!("https://{address}")).ok()?,
     };
     let host = url.host_str().filter(|h| !h.is_empty())?.to_string();
-    let site = site_of(&url);
     Some(SavedSite {
         host,
-        port: url.port(),
-        shown: site.shown,
+        port: url.port_or_known_default()?,
+        explicit_port: url.port(),
+        http: url.scheme() == "http",
+        shown: shown(&url),
     })
 }
 
 impl SavedSite {
     /// The whole matching rule. The hosts are equal, or one is `www.` plus
-    /// the other; nothing else, so no parent domains and no look-alikes. A
-    /// port the address names must be the tab's port.
+    /// the other; nothing else, so no parent domains and no look-alikes.
+    ///
+    /// The ports are equal too. An address without one means its scheme's
+    /// default (443, or 80 for `http://`), never any port; an `http://`
+    /// address also matches the same host over https on 443. On localhost
+    /// and loopback addresses, where each port is another program, the
+    /// ports must be written the same: `localhost:3000` is only `:3000`, and
+    /// `localhost` only a tab with no port.
     pub fn matches(&self, tab: &Site) -> bool {
         let same_host = self.host == tab.host
             || self.host.strip_prefix("www.") == Some(tab.host.as_str())
             || tab.host.strip_prefix("www.") == Some(self.host.as_str());
-        same_host && self.port.is_none_or(|port| Some(port) == tab.port)
+        let same_port = if tab.loopback {
+            self.explicit_port == tab.explicit_port
+        } else {
+            self.port == tab.port
+                || (self.http
+                    && self.explicit_port.is_none()
+                    && tab.https
+                    && tab.explicit_port.is_none())
+        };
+        same_host && same_port
     }
 }
 
@@ -241,11 +280,11 @@ pub fn logins_for<'a>(logins: &'a [Login], tab: &Site) -> Vec<&'a Login> {
     found
 }
 
-/// Logins whose label or username contains the query, ignoring case. An
-/// empty query finds nothing: the popup asks only once something is typed.
+/// Logins whose label or username contains the query, ignoring case. A
+/// query under [`SEARCH_MIN_CHARS`] finds nothing.
 pub fn search<'a>(logins: &'a [Login], query: &str) -> Vec<&'a Login> {
     let query = query.trim().to_lowercase();
-    if query.is_empty() {
+    if query.chars().count() < SEARCH_MIN_CHARS {
         return Vec::new();
     }
     let mut found: Vec<&Login> = logins
@@ -342,6 +381,15 @@ pub struct Item<'a> {
     pub reference: String,
     pub label: &'a str,
     pub username: &'a str,
+    /// In `search` answers only: where the login was saved for.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub site: Option<String>,
+}
+
+/// The `site` of a `search` result: the host of the saved address, with its
+/// port when it names one, or empty when it names no site.
+pub fn saved_site_shown(address: &str) -> String {
+    saved_site(address).map(|s| s.shown).unwrap_or_default()
 }
 
 #[derive(Serialize)]
@@ -480,12 +528,71 @@ mod tests {
 
     #[test]
     fn a_saved_port_must_be_the_tab_port() {
+        assert!(saved_for("https://example.com:443", "https://example.com"));
+        assert!(saved_for("example.com:8443", "https://example.com:8443"));
+        assert!(!saved_for("example.com:8443", "https://example.com"));
+        assert!(!saved_for("example.com:8443", "https://example.com:9443"));
+    }
+
+    /// No port written is the default port, not any port.
+    #[test]
+    fn a_saved_address_without_a_port_means_the_default_one() {
+        assert!(saved_for("example.com", "https://example.com"));
+        assert!(saved_for("https://example.com", "https://example.com:443"));
+        assert!(!saved_for("example.com", "https://example.com:8443"));
+        assert!(!saved_for(
+            "https://example.com/login",
+            "https://example.com:8443"
+        ));
+        // An http:// address is the same site once it moved to https.
+        assert!(saved_for("http://example.com", "https://example.com"));
+        assert!(!saved_for("http://example.com", "https://example.com:8443"));
+        assert!(!saved_for("http://example.com:8080", "https://example.com"));
+    }
+
+    /// On loopback every port is another program: the ports are written the
+    /// same or it is not a match.
+    #[test]
+    fn on_loopback_the_port_is_exact() {
         assert!(saved_for("localhost:3000", "http://localhost:3000"));
         assert!(!saved_for("localhost:3000", "http://localhost:4000"));
         assert!(!saved_for("localhost:3000", "http://localhost"));
-        assert!(saved_for("https://example.com:443", "https://example.com"));
-        assert!(!saved_for("example.com:8443", "https://example.com"));
-        assert!(saved_for("example.com", "https://example.com:8443"));
+        assert!(!saved_for("localhost", "http://localhost:3000"));
+        assert!(!saved_for("http://localhost", "http://localhost:8080"));
+        assert!(saved_for("localhost", "http://localhost"));
+        assert!(saved_for(
+            "http://127.0.0.1:8080/app",
+            "http://127.0.0.1:8080"
+        ));
+        assert!(!saved_for("127.0.0.1", "http://127.0.0.1:8080"));
+        assert!(!saved_for("[::1]:5000", "http://[::1]:5001"));
+    }
+
+    #[test]
+    fn a_search_needs_two_characters() {
+        let logins = [Login {
+            id: Uuid::new_v4(),
+            label: "Bank".into(),
+            username: "alex".into(),
+            url: "bank.example".into(),
+        }];
+        assert!(search(&logins, "b").is_empty());
+        assert!(search(&logins, " b ").is_empty());
+        assert!(search(&logins, "").is_empty());
+        assert_eq!(search(&logins, "ba").len(), 1);
+        assert_eq!(search(&logins, "AL").len(), 1);
+    }
+
+    #[test]
+    fn a_search_result_names_where_it_was_saved() {
+        assert_eq!(
+            saved_site_shown("https://bank.example/login"),
+            "bank.example"
+        );
+        assert_eq!(saved_site_shown("localhost:3000"), "localhost:3000");
+        assert_eq!(saved_site_shown("https://example.com:443"), "example.com");
+        assert_eq!(saved_site_shown(""), "");
+        assert_eq!(saved_site_shown("android://cert@com.example"), "");
     }
 
     #[test]
@@ -572,6 +679,7 @@ mod tests {
             reference: "c1f0".into(),
             label: "GitHub",
             username: "alex@example.com",
+            site: None,
         }];
         let v: serde_json::Value = serde_json::from_slice(&list_answer(
             "2",
@@ -585,6 +693,25 @@ mod tests {
             serde_json::json!({"id":"2","type":"logins","origin":"https://github.com",
                 "logins":[{"ref":"c1f0","label":"GitHub","username":"alex@example.com"}]})
         );
+
+        let items = [Item {
+            reference: "c1f0".into(),
+            label: "Bank",
+            username: "alex",
+            site: Some("bank.example".into()),
+        }];
+        let v: serde_json::Value =
+            serde_json::from_slice(&list_answer("3", "search", None, &items)).unwrap();
+        assert_eq!(
+            v,
+            serde_json::json!({"id":"3","type":"search",
+                "logins":[{"ref":"c1f0","label":"Bank","username":"alex","site":"bank.example"}]})
+        );
+
+        let v: serde_json::Value =
+            serde_json::from_slice(&error_answer("4", &Failure::new(Code::NoAuthenticator)))
+                .unwrap();
+        assert_eq!(v["code"], "no-authenticator");
 
         let v: serde_json::Value =
             serde_json::from_slice(&fill_answer("4", "alex", "p\"w\u{1}")).unwrap();
@@ -607,6 +734,7 @@ mod tests {
                 reference: format!("{n:032}"),
                 label: &long,
                 username: "u",
+                site: None,
             })
             .collect();
         let body = list_answer("3", "search", None, &items);
