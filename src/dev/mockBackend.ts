@@ -147,8 +147,14 @@ function mockFillPrompt() {
       };
 }
 
-/// Settings > Browser extension, off as it ships.
-let browserExtension = { supported: true, enabled: false, running: false };
+/// Settings > Browser extension, off as it ships. `?nohost` is a build
+/// without the native host.
+let browserExtension = {
+  supported: true,
+  bundled: !flag("nohost"),
+  enabled: false,
+  running: false,
+};
 
 // ── Events ──────────────────────────────────────────────────────────
 //

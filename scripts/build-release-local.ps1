@@ -65,18 +65,16 @@ if (Test-Path (Join-Path $repoRoot ".cargo\config.toml")) {
     throw ".cargo\config.toml exists. It patches the core crates to a local checkout; remove it, run cargo check to restore Cargo.lock, then build."
 }
 
-# The browser host lets in the extension ids compiled into it. A release
-# must name at least one store id, and never the development one: its key is
-# public, so anyone can build an extension that carries it. Checked here so a
-# long build does not start for nothing, and again on the built host below.
-$origins = Get-Content crates\silentsilo-browser-host\allowed-origins.json -Raw | ConvertFrom-Json
-$storeIds = @(@($origins.chrome_web_store) + @($origins.edge_add_ons) | Where-Object { $_ })
-$devIds = @((Get-Content crates\silentsilo-browser-host\allowed-origins.dev.json -Raw | ConvertFrom-Json).allowed_origins)
-if ($storeIds.Count -eq 0) {
-    throw "allowed-origins.json names no Chrome Web Store or Edge Add-ons id. The browser host would let no extension in."
-}
-foreach ($id in $storeIds) {
-    if ($devIds -contains $id) { throw "allowed-origins.json holds the development id $id." }
+# The browser host lets in the extension ids compiled into it. With no store
+# id yet the release goes out without it; an entry that is the development id
+# (its key is public) or not a plain extension origin stops the build. Checked
+# here so a long build does not start for nothing, and again on the built
+# host below.
+. (Join-Path $PSScriptRoot "browser-host-release.ps1")
+$shipHost = (Get-BrowserHostPlan -OriginsPath crates\silentsilo-browser-host\allowed-origins.json `
+        -DevPath crates\silentsilo-browser-host\allowed-origins.dev.json) -eq "ship"
+if (-not $shipHost) {
+    Write-Host "No store id in allowed-origins.json: this release ships without the browser extension host." -ForegroundColor Yellow
 }
 
 # Says which core revision this installer will contain, and refuses a lockfile
@@ -188,18 +186,23 @@ try {
     # the installer hooks register it. It is merged in here rather than kept
     # in tauri.conf.json because tauri-build insists the file exists on
     # every compile of the app, CI's cargo check included. Copied fresh each
-    # time: Tauri skips a sidecar that already carries a signature.
-    cargo build -p silentsilo-browser-host --release --locked
-    if (-not $?) { throw "browser host build failed" }
-    # The built host judges itself: no development id, no dev-extension
-    # feature, at least one store id.
-    & "target\release\silentsilo-browser-host.exe" --check-release
-    if ($LASTEXITCODE -ne 0) { throw "the browser host is not fit to ship (see above)" }
+    # time: Tauri skips a sidecar that already carries a signature. Left out
+    # entirely while no store id exists (see above).
     $sidecar = "src-tauri\binaries\silentsilo-browser-host-x86_64-pc-windows-msvc.exe"
-    New-Item -ItemType Directory -Force -Path (Split-Path $sidecar) | Out-Null
-    Copy-Item "target\release\silentsilo-browser-host.exe" $sidecar -Force
+    $tauriConfigs = @("--config", "src-tauri/tauri.signing.json")
+    if ($shipHost) {
+        cargo build -p silentsilo-browser-host --release --locked
+        if (-not $?) { throw "browser host build failed" }
+        # The built host judges itself: no development id, no dev-extension
+        # feature, at least one store id.
+        & "target\release\silentsilo-browser-host.exe" --check-release
+        if ($LASTEXITCODE -ne 0) { throw "the browser host is not fit to ship (see above)" }
+        New-Item -ItemType Directory -Force -Path (Split-Path $sidecar) | Out-Null
+        Copy-Item "target\release\silentsilo-browser-host.exe" $sidecar -Force
+        $tauriConfigs += @("--config", "src-tauri/tauri.browser-host.json")
+    }
 
-    npx tauri build --config src-tauri/tauri.signing.json --config src-tauri/tauri.browser-host.json
+    npx tauri build @tauriConfigs
     if (-not $?) { throw "tauri build failed" }
 
     # The workspace root is the repository root, so cargo writes to .\target,
@@ -354,9 +357,9 @@ try {
     Write-Host "`n== Signatures ==" -ForegroundColor Cyan
     # The browser host is checked where Tauri signed it, before it was packed:
     # it ships inside the installer, not beside it.
-    foreach ($path in @((Join-Path $out $setup.Name),
-                        (Join-Path $out "silentsilo-extract-windows-x86_64.exe"),
-                        (Join-Path $repoRoot $sidecar))) {
+    $signed = @((Join-Path $out $setup.Name), (Join-Path $out "silentsilo-extract-windows-x86_64.exe"))
+    if ($shipHost) { $signed += Join-Path $repoRoot $sidecar }
+    foreach ($path in $signed) {
         $name = Split-Path $path -Leaf
         if (-not (Test-Path $path)) { throw "$name is missing" }
         $signature = Get-AuthenticodeSignature $path

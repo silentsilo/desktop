@@ -1,5 +1,5 @@
 {
-  "comment": "The store builds of the extension that a release host lets in. Each entry is chrome-extension://<32-letter id>/ with the trailing slash. Put the Chrome Web Store id in chrome_web_store and the Edge Add-ons id in edge_add_ons once each listing exists. build-release-local.ps1 and the host's --check-release refuse a release while both lists are empty, or when either holds the development id from allowed-origins.dev.json.",
+  "comment": "The store builds of the extension that a release host lets in. Each entry is chrome-extension://<32-letter id>/ with the trailing slash. Put the Chrome Web Store id in chrome_web_store and the Edge Add-ons id in edge_add_ons once each listing exists. While both lists are empty, build-release-local.ps1 ships the app without the host. It refuses a list holding the development id from allowed-origins.dev.json or anything but a plain extension origin, and the host's --check-release refuses a host with no store id.",
   "chrome_web_store": [],
   "edge_add_ons": []
 }

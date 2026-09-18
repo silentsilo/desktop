@@ -226,10 +226,19 @@ flowchart LR
   reproduce from the public key in the extension's dev manifest, so only
   debug builds and builds with the `dev-extension` feature let it in.
   `--check-release` fails a host that lets the dev id in or names no store
-  id; `build-release-local.ps1` runs it on the built host and checks the
-  JSON before it starts, and a unit test keeps the dev id out of the release
-  file. `--write-manifest` writes the same list into the manifest the
-  browser reads.
+  id. `build-release-local.ps1` checks the JSON before it starts
+  (`browser-host-release.ps1`, the same rule as `release_verdict`): both
+  store lists empty means the release ships without the host, so a desktop
+  release never waits for a store listing; the dev id or anything but a
+  plain extension origin stops the build. When the host ships, the script
+  runs `--check-release` on the built binary. A unit test keeps the dev id
+  out of the release file. `--write-manifest` writes the same list into the
+  manifest the browser reads.
+- **No host, no pipe.** When `silentsilo-browser-host.exe` is not beside the
+  app, Settings shows "The browser extension is not part of this build."
+  instead of the toggle, and the pipe is never opened, whatever the saved
+  setting says. In development, `cargo build -p silentsilo-browser-host`
+  puts it beside the debug app.
 - **The host checks who started it** (release builds only; tests start it
   from cargo). Its parent must be `chrome.exe` or `msedge.exe` under
   `<Program Files, Program Files (x86) or %LOCALAPPDATA%>\Google\Chrome*\Application`
@@ -333,8 +342,8 @@ flowchart LR
   `--write-manifest` and point
   `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.silentsilo.desktop`
   and the Edge equivalent at the manifest; the uninstaller removes both keys
-  and the manifest. A plain `npm run tauri:build` has no host, and the hooks
-  skip it.
+  and the manifest. A plain `npm run tauri:build`, or a release made while
+  the store lists are empty, has no host, and the hooks skip it.
 
 ### What these checks do not stop
 

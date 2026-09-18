@@ -393,6 +393,8 @@ export type BrowserFillPrompt = {
 export type BrowserExtensionStatus = {
   /** Windows only for now. */
   supported: boolean;
+  /** Whether the native host shipped with this build. */
+  bundled: boolean;
   enabled: boolean;
   /** Whether the pipe is actually open, which "enabled" alone does not say. */
   running: boolean;

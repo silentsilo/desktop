@@ -97,6 +97,9 @@ pub struct FillPrompt {
 pub struct ExtensionStatus {
     /// Windows only for now: the host and its registration are Windows's.
     supported: bool,
+    /// Whether the host sits beside the app. A release built before the
+    /// extension has a store id ships without it.
+    bundled: bool,
     enabled: bool,
     running: bool,
 }
@@ -115,9 +118,28 @@ impl BrowserBridge {
     }
 }
 
-/// Opens the pipe at startup when the setting is on.
+const NOT_BUNDLED: &str = "The browser extension is not part of this build.";
+
+/// Whether `silentsilo-browser-host.exe` sits beside this executable. Without
+/// it nothing could reach the pipe, so the pipe is never opened.
+#[cfg(windows)]
+fn host_bundled() -> bool {
+    std::env::current_exe()
+        .map(|exe| {
+            exe.with_file_name(silentsilo_shell::browser_pipe::HOST_EXE)
+                .is_file()
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(not(windows))]
+fn host_bundled() -> bool {
+    false
+}
+
+/// Opens the pipe at startup when the setting is on and the host is there.
 pub fn start_if_enabled(app: &AppHandle) {
-    if !cfg!(windows) || !silentsilo_shell::browser_pipe::extension_enabled() {
+    if !cfg!(windows) || !silentsilo_shell::browser_pipe::extension_enabled() || !host_bundled() {
         return;
     }
     let app = app.clone();
@@ -132,6 +154,9 @@ pub fn start_if_enabled(app: &AppHandle) {
 async fn start(app: &AppHandle) -> Result<(), String> {
     use silentsilo_shell::browser_pipe::{ClientCheck, PipeServer};
 
+    if !host_bundled() {
+        return Err(NOT_BUNDLED.into());
+    }
     let bridge = app.state::<BrowserBridge>();
     if bridge.running() {
         return Ok(());
@@ -188,6 +213,7 @@ pub fn stop(app: &AppHandle) {
 fn status_of(app: &AppHandle) -> ExtensionStatus {
     ExtensionStatus {
         supported: cfg!(windows),
+        bundled: host_bundled(),
         enabled: silentsilo_shell::browser_pipe::extension_enabled(),
         running: app.state::<BrowserBridge>().running(),
     }
@@ -206,6 +232,9 @@ pub async fn browser_extension_set(
 ) -> Result<ExtensionStatus, String> {
     if enabled && !cfg!(windows) {
         return Err("The browser extension is available on Windows only for now.".into());
+    }
+    if enabled && !host_bundled() {
+        return Err(NOT_BUNDLED.into());
     }
     silentsilo_shell::browser_pipe::set_extension_enabled(enabled).map_err(|e| e.to_string())?;
     if enabled {

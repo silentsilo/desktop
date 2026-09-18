@@ -872,37 +872,43 @@ export function SettingsPanel(props: Props) {
               Browser extension
             </h3>
             <p>Lets the browser extension fill passwords. It cannot see your files.</p>
-            <label className="s3-checkbox">
-              <input
-                type="checkbox"
-                checked={browserExtension?.enabled ?? false}
-                disabled={busy || browserExtensionBusy || !browserExtension?.supported}
-                onChange={(e) => void toggleBrowserExtension(e.target.checked)}
-              />
-              <span>
-                Allow the SilentSilo browser extension
-                <span className="hint">
-                  Every fill is confirmed in this window with {platform.builtIn} or your security
-                  key, so the silo needs one of them set up under Security keys. Turned off, the
-                  extension cannot reach SilentSilo at all.
-                </span>
-              </span>
-            </label>
-            {browserExtension?.supported && securityKeys.length === 0 && (
-              <p className="hint is-error">
-                This silo has no security key or {platform.builtIn} set up, so the browser cannot
-                fill anything from it. Add one under Security keys first.
-              </p>
+            {browserExtension?.supported && !browserExtension.bundled ? (
+              <p className="hint">The browser extension is not part of this build.</p>
+            ) : (
+              <>
+                <label className="s3-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={browserExtension?.enabled ?? false}
+                    disabled={busy || browserExtensionBusy || !browserExtension?.supported}
+                    onChange={(e) => void toggleBrowserExtension(e.target.checked)}
+                  />
+                  <span>
+                    Allow the SilentSilo browser extension
+                    <span className="hint">
+                      Every fill is confirmed in this window with {platform.builtIn} or your security
+                      key, so the silo needs one of them set up under Security keys. Turned off, the
+                      extension cannot reach SilentSilo at all.
+                    </span>
+                  </span>
+                </label>
+                {browserExtension?.supported && securityKeys.length === 0 && (
+                  <p className="hint is-error">
+                    This silo has no security key or {platform.builtIn} set up, so the browser cannot
+                    fill anything from it. Add one under Security keys first.
+                  </p>
+                )}
+                {browserExtension && !browserExtension.supported && (
+                  <p className="hint">Not available on this system yet.</p>
+                )}
+                {browserExtension?.enabled && !browserExtension.running && !browserExtensionError && (
+                  <p className="hint is-error">
+                    On, but the channel to the browser is not open. Turn it off and on again.
+                  </p>
+                )}
+                {browserExtensionError && <p className="hint is-error">{browserExtensionError}</p>}
+              </>
             )}
-            {browserExtension && !browserExtension.supported && (
-              <p className="hint">Not available on this system yet.</p>
-            )}
-            {browserExtension?.enabled && !browserExtension.running && !browserExtensionError && (
-              <p className="hint is-error">
-                On, but the channel to the browser is not open. Turn it off and on again.
-              </p>
-            )}
-            {browserExtensionError && <p className="hint is-error">{browserExtensionError}</p>}
           </div>
         )}
 

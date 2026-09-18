@@ -95,6 +95,31 @@ pub fn this_build_release_problems() -> Vec<String> {
     release_problems(&store_origins(), &dev_origins(), DEV_ALLOWED)
 }
 
+/// What a release does with the host.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ReleaseVerdict {
+    /// Built, bundled, signed and registered.
+    Ship,
+    /// No store id yet: the release goes out without the host.
+    LeaveOut,
+    /// Not fit to ship, for these reasons.
+    Refuse(Vec<String>),
+}
+
+/// The rule `build-release-local.ps1` applies before it builds anything.
+/// Empty store lists leave the host out rather than block the release.
+pub fn release_verdict(store: &[String], dev: &[String], dev_allowed: bool) -> ReleaseVerdict {
+    if store.is_empty() {
+        return ReleaseVerdict::LeaveOut;
+    }
+    let problems = release_problems(store, dev, dev_allowed);
+    if problems.is_empty() {
+        ReleaseVerdict::Ship
+    } else {
+        ReleaseVerdict::Refuse(problems)
+    }
+}
+
 /// `chrome-extension://<id>/` with a 32-letter id in `a`..`p`, the only
 /// shape an allowed origin takes. Anything else, a wildcard included, is
 /// never allowed.
@@ -374,12 +399,36 @@ mod tests {
         );
     }
 
-    /// Runs under `cargo test --release`: a release build of this tree must
-    /// pass its own check, which it cannot while the store lists are empty.
+    #[test]
+    fn empty_store_lists_leave_the_host_out() {
+        let dev = [DEV_ID.to_string()];
+        assert_eq!(release_verdict(&[], &dev, false), ReleaseVerdict::LeaveOut);
+        assert_eq!(
+            release_verdict(&[STORE_ID.to_string()], &dev, false),
+            ReleaseVerdict::Ship
+        );
+        for bad in [DEV_ID, "chrome-extension://*/"] {
+            let verdict = release_verdict(&[STORE_ID.to_string(), bad.to_string()], &dev, false);
+            assert!(matches!(verdict, ReleaseVerdict::Refuse(_)), "{bad}");
+        }
+        assert!(matches!(
+            release_verdict(&[STORE_ID.to_string()], &dev, true),
+            ReleaseVerdict::Refuse(_)
+        ));
+    }
+
+    /// Runs under `cargo test --release`: this tree either ships its host
+    /// or leaves it out (no store id yet), and is never refused.
     #[cfg(not(any(debug_assertions, feature = "dev-extension")))]
     #[test]
-    fn this_release_build_is_fit_to_ship() {
-        assert_eq!(this_build_release_problems(), Vec::<String>::new());
+    fn this_release_build_ships_the_host_or_leaves_it_out() {
+        let verdict = release_verdict(&store_origins(), &dev_origins(), DEV_ALLOWED);
+        assert!(!matches!(verdict, ReleaseVerdict::Refuse(_)), "{verdict:?}");
+        if store_origins().is_empty() {
+            assert_eq!(verdict, ReleaseVerdict::LeaveOut);
+        } else {
+            assert_eq!(this_build_release_problems(), Vec::<String>::new());
+        }
     }
 
     #[test]

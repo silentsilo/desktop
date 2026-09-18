@@ -44,3 +44,13 @@ test("the setting says the extension cannot see files, and starts off", async ({
   await toggle.check();
   await expect(toggle).toBeChecked();
 });
+
+test("a build without the host says so and offers no toggle", async ({ page }) => {
+  await page.goto("/?mock=unlocked&nohost");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Browser extension" }).click();
+  await expect(page.getByText("The browser extension is not part of this build.")).toBeVisible();
+  await expect(
+    page.getByRole("checkbox", { name: /Allow the SilentSilo browser extension/ }),
+  ).toHaveCount(0);
+});
