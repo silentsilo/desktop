@@ -10,6 +10,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # The copied secret is held in memory until a lock takes it back.
 zeroize = { workspace = true }
+# The browser extension's pipe. Already in the tree under tauri; the app
+# runs this crate's server on the same runtime.
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt", "sync", "time"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
@@ -19,6 +22,8 @@ windows = { version = "0.61", features = [
     "Win32_System_DataExchange",
     "Win32_System_Memory",
     "Win32_Graphics_Gdi",
+    "Win32_Security",
+    "Win32_Security_Authorization",
     "Win32_System_LibraryLoader",
     "Win32_System_Ole",
     "Win32_System_Power",
@@ -28,6 +33,9 @@ windows = { version = "0.61", features = [
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["io-util", "macros", "rt-multi-thread"] }
 
 [target."cfg(unix)".dependencies]
 libc = "0.2"

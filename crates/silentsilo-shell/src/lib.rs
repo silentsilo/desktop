@@ -1,6 +1,7 @@
 //! OS shell integration — CLI args and single-instance upload queue.
 
 mod autostart;
+pub mod browser_pipe;
 mod cli;
 mod clipboard;
 pub mod disk_space;

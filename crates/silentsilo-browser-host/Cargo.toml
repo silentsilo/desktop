@@ -1,0 +1,22 @@
+[package]
+name = "silentsilo-browser-host"
+description = "Native messaging host for the SilentSilo browser extension"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Started by the browser, one process per extension connection. It relays
+# frames between the browser's stdio and the app's pipe and nothing else, so
+# the browser never starts the app, with its webview, to pass a message.
+[[bin]]
+name = "silentsilo-browser-host"
+path = "src/main.rs"
+
+[dependencies]
+silentsilo-shell = { workspace = true }
+serde_json = "1"
+tokio = { version = "1", features = ["io-std", "io-util", "macros", "net", "rt", "sync", "time"] }
+zeroize = { workspace = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread"] }

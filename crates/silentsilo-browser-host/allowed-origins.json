@@ -1,0 +1,6 @@
+{
+  "comment": "The extensions allowed to reach SilentSilo. The one list: the host checks its caller against it and writes it into the native messaging manifest. Each entry is chrome-extension://<32-letter id>/ with the trailing slash. The id below is the development build's, pinned by the public key in silentsilo/browser's dev manifest; the Chrome Web Store and Edge Add-ons ids are added here once the listings exist.",
+  "allowed_origins": [
+    "chrome-extension://acgmibddhpnmaegpegjcibekcnihpfic/"
+  ]
+}

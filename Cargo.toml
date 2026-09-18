@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "src-tauri",
     "crates/silentsilo-shell",
+    "crates/silentsilo-browser-host",
 ]
 
 [workspace.package]
