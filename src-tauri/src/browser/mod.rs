@@ -103,14 +103,16 @@ pub fn start_if_enabled(app: &AppHandle) {
 
 #[cfg(windows)]
 async fn start(app: &AppHandle) -> Result<(), String> {
-    use silentsilo_shell::browser_pipe::PipeServer;
+    use silentsilo_shell::browser_pipe::{ClientCheck, PipeServer};
 
     let bridge = app.state::<BrowserBridge>();
     if bridge.running() {
         return Ok(());
     }
     let (stop, stop_rx) = watch::channel(false);
-    let server = PipeServer::bind(stop_rx)
+    // Only the host beside this executable, signed like it in a release.
+    let check = ClientCheck::host_beside_this_exe().map_err(|e| e.to_string())?;
+    let server = PipeServer::bind(stop_rx, check)
         .await
         .map_err(|e| format!("The browser extension's channel could not be opened: {e}"))?;
     let alive = Arc::new(AtomicBool::new(true));
@@ -129,11 +131,12 @@ async fn start(app: &AppHandle) -> Result<(), String> {
     }
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
-        let handler = move |frame: Frame| {
+        let handler = move |_: Arc<()>, frame: Frame| {
             let app = handle.clone();
             async move { answer(&app, frame).await }
         };
-        if let Err(e) = server.run(handler).await {
+        let warn = |warning: String| crate::diagnostics::warn("browser", warning);
+        if let Err(e) = server.run(handler, warn).await {
             crate::diagnostics::warn("browser", format_args!("channel stopped: {e}"));
         }
         alive.store(false, Ordering::SeqCst);

@@ -86,64 +86,48 @@ fn setting_path() -> std::path::PathBuf {
 }
 
 #[cfg(windows)]
-pub use imp::{PipeServer, current_user_sid, pipe_name};
+pub use imp::{ClientCheck, HOST_EXE, PipeServer, current_user_sid, pipe_name};
 
 #[cfg(windows)]
 mod imp {
     use std::future::Future;
     use std::io;
+    use std::os::windows::io::AsRawHandle;
+    use std::path::PathBuf;
+    use std::sync::{Arc, OnceLock};
     use std::time::Duration;
 
-    use ::windows::Win32::Foundation::{CloseHandle, HANDLE, HLOCAL, LocalFree};
+    use ::windows::Win32::Foundation::{HLOCAL, LocalFree};
     use ::windows::Win32::Security::Authorization::{
-        ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
-        SDDL_REVISION_1,
+        ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
     };
-    use ::windows::Win32::Security::{
-        GetTokenInformation, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES, TOKEN_QUERY, TOKEN_USER,
-        TokenUser,
-    };
-    use ::windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
-    use ::windows::core::{HSTRING, PWSTR};
+    use ::windows::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
+    use ::windows::core::HSTRING;
     use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
-    use tokio::sync::{mpsc, watch};
+    use tokio::sync::{Semaphore, mpsc, watch};
     use tokio::task::JoinSet;
     use zeroize::Zeroize;
 
     use super::{Frame, read_frame, write_frame};
+    use crate::win_process;
+
+    pub use crate::win_process::current_user_sid;
 
     /// At most this many connections at once. The browser starts one host
     /// per port, and an extension needs one or two.
     const MAX_INSTANCES: usize = 16;
 
-    /// The SID of the user this process runs as, `S-1-5-21-…`.
-    pub fn current_user_sid() -> io::Result<String> {
-        // SAFETY: plain Win32 calls on this process's own token. The buffer
-        // is u64-aligned for TOKEN_USER, sized by the first call, and the
-        // SID it points into lives inside it until the string is copied out.
-        unsafe {
-            let mut token = HANDLE::default();
-            OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token)?;
-            let mut len = 0u32;
-            let _ = GetTokenInformation(token, TokenUser, None, 0, &mut len);
-            let mut buf = vec![0u64; (len as usize).div_ceil(8)];
-            let got = GetTokenInformation(
-                token,
-                TokenUser,
-                Some(buf.as_mut_ptr().cast()),
-                len,
-                &mut len,
-            );
-            let _ = CloseHandle(token);
-            got?;
-            let user = &*(buf.as_ptr() as *const TOKEN_USER);
-            let mut text = PWSTR::null();
-            ConvertSidToStringSidW(user.User.Sid, &mut text)?;
-            let sid = text.to_string();
-            let _ = LocalFree(Some(HLOCAL(text.0.cast())));
-            sid.map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-        }
-    }
+    /// Requests one connection may have in progress. Past that the server
+    /// stops reading from it until one finishes.
+    const MAX_IN_FLIGHT: usize = 4;
+
+    /// How long the server waits before trying again to create an instance
+    /// (all of them taken, say), doubling up to the second value.
+    const RETRY_FIRST: Duration = Duration::from_millis(100);
+    const RETRY_MAX: Duration = Duration::from_secs(5);
+
+    /// The host's file name, installed beside the app.
+    pub const HOST_EXE: &str = "silentsilo-browser-host.exe";
 
     /// `\\.\pipe\silentsilo-browser-<SID>`. Per user, so two people signed
     /// in to one machine never reach each other's app.
@@ -154,9 +138,73 @@ mod imp {
         ))
     }
 
+    /// Which process may talk to the app over the pipe: this user's, running
+    /// one executable, and in release builds signed with the same
+    /// certificate as the app itself.
+    #[derive(Clone, Debug)]
+    pub struct ClientCheck {
+        pub image: PathBuf,
+        pub same_signer: bool,
+    }
+
+    impl ClientCheck {
+        /// The host installed beside this executable. Its signature is
+        /// checked in release builds only: a debug build is unsigned.
+        pub fn host_beside_this_exe() -> io::Result<Self> {
+            Ok(Self {
+                image: std::env::current_exe()?.with_file_name(HOST_EXE),
+                same_signer: cfg!(not(debug_assertions)),
+            })
+        }
+
+        /// Whether the process `pid` passes, or why not.
+        pub fn admit(&self, pid: u32) -> Result<(), String> {
+            let fail = |what: &str, e: io::Error| format!("{what}: {e}");
+            let user = win_process::user_sid(pid).map_err(|e| fail("client user", e))?;
+            if user != current_user_sid().map_err(|e| fail("own user", e))? {
+                return Err("the client runs as another user".into());
+            }
+            let image = win_process::image_path(pid).map_err(|e| fail("client image", e))?;
+            if !win_process::same_file(&image, &self.image) {
+                return Err(format!(
+                    "the client is {}, not {}",
+                    image.display(),
+                    self.image.display()
+                ));
+            }
+            if self.same_signer {
+                let theirs =
+                    win_process::signer(&image).map_err(|e| fail("client signature", e))?;
+                if own_signer()? != &theirs.certificate {
+                    return Err(format!(
+                        "the client is signed by {}, not with this app's certificate",
+                        theirs.name
+                    ));
+                }
+            }
+            Ok(())
+        }
+    }
+
+    /// This executable's signing certificate, read once.
+    fn own_signer() -> Result<&'static Vec<u8>, String> {
+        static OWN: OnceLock<Result<Vec<u8>, String>> = OnceLock::new();
+        OWN.get_or_init(|| {
+            let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+            win_process::signer(&exe)
+                .map(|s| s.certificate)
+                .map_err(|e| format!("this app's own signature: {e}"))
+        })
+        .as_ref()
+        .map_err(Clone::clone)
+    }
+
     /// A security descriptor granting the current user, and nobody else,
     /// full access. `P` protects the DACL from inheriting anything.
-    struct UserOnly(PSECURITY_DESCRIPTOR);
+    struct UserOnly {
+        sd: PSECURITY_DESCRIPTOR,
+        sid: String,
+    }
 
     // SAFETY: the descriptor is immutable once built and only read by
     // CreateNamedPipe; LocalFree on drop is the only other use.
@@ -177,18 +225,21 @@ mod imp {
                     None,
                 )?;
             }
-            Ok(Self(sd))
+            Ok(Self {
+                sd,
+                sid: sid.to_string(),
+            })
         }
 
         fn create(&self, name: &str, first: bool) -> io::Result<NamedPipeServer> {
             let mut attributes = SECURITY_ATTRIBUTES {
                 nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
-                lpSecurityDescriptor: self.0.0,
+                lpSecurityDescriptor: self.sd.0,
                 bInheritHandle: false.into(),
             };
             // SAFETY: `attributes` is a valid SECURITY_ATTRIBUTES whose
             // descriptor lives as long as `self`.
-            unsafe {
+            let pipe = unsafe {
                 ServerOptions::new()
                     .first_pipe_instance(first)
                     .reject_remote_clients(true)
@@ -196,8 +247,18 @@ mod imp {
                     .create_with_security_attributes_raw(
                         name,
                         (&mut attributes as *mut SECURITY_ATTRIBUTES).cast(),
-                    )
+                    )?
+            };
+            // A later instance joins whatever pipe holds the name. Had every
+            // instance of ours closed and another user created the name
+            // meanwhile, this one would be theirs.
+            if !first && win_process::owner_sid(pipe.as_raw_handle())? != self.sid {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "the pipe name is held by another user",
+                ));
             }
+            Ok(pipe)
         }
     }
 
@@ -205,7 +266,7 @@ mod imp {
         fn drop(&mut self) {
             // SAFETY: allocated by ConvertStringSecurityDescriptorToSecurityDescriptorW.
             unsafe {
-                let _ = LocalFree(Some(HLOCAL(self.0.0)));
+                let _ = LocalFree(Some(HLOCAL(self.sd.0)));
             }
         }
     }
@@ -215,16 +276,25 @@ mod imp {
         name: String,
         descriptor: UserOnly,
         first: NamedPipeServer,
+        check: ClientCheck,
         stop: watch::Receiver<bool>,
     }
 
     impl PipeServer {
-        /// Creates the first instance. Fails when the name is already taken,
-        /// which is either this app still closing a previous server (retried
-        /// for a moment) or another program squatting on it (refused: the
-        /// extension would be talking to it).
-        pub async fn bind(stop: watch::Receiver<bool>) -> io::Result<Self> {
-            let name = pipe_name()?;
+        /// Creates the first instance under this user's name. Fails when
+        /// the name is already taken, which is either this app still closing
+        /// a previous server (retried for a moment) or another program
+        /// squatting on it (refused: the extension would be talking to it).
+        pub async fn bind(stop: watch::Receiver<bool>, check: ClientCheck) -> io::Result<Self> {
+            Self::bind_at(pipe_name()?, stop, check).await
+        }
+
+        /// [`bind`](Self::bind) under another name, for tests.
+        pub async fn bind_at(
+            name: String,
+            stop: watch::Receiver<bool>,
+            check: ClientCheck,
+        ) -> io::Result<Self> {
             let descriptor = UserOnly::new(&current_user_sid()?)?;
             let mut last = None;
             for _ in 0..10 {
@@ -234,6 +304,7 @@ mod imp {
                             name,
                             descriptor,
                             first,
+                            check,
                             stop,
                         });
                     }
@@ -246,40 +317,111 @@ mod imp {
 
         /// Serves until `stop` turns true. Each connection runs as its own
         /// task, and each request on it as another, so a fill waiting for the
-        /// user does not hold up a status on the same connection. Every frame
+        /// user does not hold up a status on the same connection. A client
+        /// that fails the [`ClientCheck`] is disconnected unread. Every frame
         /// written is wiped afterwards: a fill answer carries a password.
-        pub async fn run<H, F>(self, handler: H) -> io::Result<()>
+        ///
+        /// `S` is state kept per connection and handed to every request on
+        /// it, for limits that belong to one client. `warn` hears about
+        /// refused clients and instances that could not be created.
+        pub async fn run<S, H, F, W>(self, handler: H, warn: W) -> io::Result<()>
         where
-            H: Fn(Frame) -> F + Clone + Send + Sync + 'static,
+            S: Default + Send + Sync + 'static,
+            H: Fn(Arc<S>, Frame) -> F + Clone + Send + Sync + 'static,
             F: Future<Output = Vec<u8>> + Send + 'static,
+            W: Fn(String) + Clone + Send + Sync + 'static,
         {
             let Self {
                 name,
                 descriptor,
                 first,
+                check,
                 mut stop,
             } = self;
-            let mut waiting = first;
+            let mut waiting = Some(first);
             loop {
+                let pipe = match waiting.take() {
+                    Some(pipe) => pipe,
+                    None => match next_instance(&descriptor, &name, &mut stop, &warn).await? {
+                        Some(pipe) => pipe,
+                        None => return Ok(()),
+                    },
+                };
                 // A connect error is a client that left before it was
                 // accepted. The instance is spent either way, and the
                 // connection task below ends on its first read.
                 tokio::select! {
-                    _ = waiting.connect() => {}
+                    _ = pipe.connect() => {}
                     _ = stop.changed() => return Ok(()),
                 }
-                let next = descriptor.create(&name, false)?;
-                let pipe = std::mem::replace(&mut waiting, next);
-                tokio::spawn(connection(pipe, handler.clone(), stop.clone()));
+                tokio::spawn(connection::<S, H, F, W>(
+                    pipe,
+                    handler.clone(),
+                    check.clone(),
+                    warn.clone(),
+                    stop.clone(),
+                ));
             }
         }
     }
 
-    async fn connection<H, F>(pipe: NamedPipeServer, handler: H, mut stop: watch::Receiver<bool>)
-    where
-        H: Fn(Frame) -> F + Clone + Send + Sync + 'static,
+    /// The next instance to wait on. Creating one fails while every
+    /// instance is taken; the server tries again, more slowly each time,
+    /// rather than giving the name up. `None` when stopped, an error when
+    /// the name turned out to be another user's.
+    async fn next_instance<W: Fn(String)>(
+        descriptor: &UserOnly,
+        name: &str,
+        stop: &mut watch::Receiver<bool>,
+        warn: &W,
+    ) -> io::Result<Option<NamedPipeServer>> {
+        let mut delay = RETRY_FIRST;
+        let mut warned = false;
+        loop {
+            match descriptor.create(name, false) {
+                Ok(pipe) => return Ok(Some(pipe)),
+                Err(e) if e.kind() == io::ErrorKind::PermissionDenied => return Err(e),
+                Err(e) => {
+                    if !warned {
+                        warn(format!("waiting to open another connection: {e}"));
+                        warned = true;
+                    }
+                }
+            }
+            tokio::select! {
+                _ = tokio::time::sleep(delay) => {}
+                _ = stop.changed() => return Ok(None),
+            }
+            delay = (delay * 2).min(RETRY_MAX);
+        }
+    }
+
+    async fn connection<S, H, F, W>(
+        pipe: NamedPipeServer,
+        handler: H,
+        check: ClientCheck,
+        warn: W,
+        mut stop: watch::Receiver<bool>,
+    ) where
+        S: Default + Send + Sync + 'static,
+        H: Fn(Arc<S>, Frame) -> F + Clone + Send + Sync + 'static,
         F: Future<Output = Vec<u8>> + Send + 'static,
+        W: Fn(String) + Clone + Send + Sync + 'static,
     {
+        // Who is on the other end, before a single byte is read.
+        let admitted = match win_process::pipe_client_pid(pipe.as_raw_handle()) {
+            Ok(pid) => tokio::task::spawn_blocking(move || check.admit(pid))
+                .await
+                .unwrap_or_else(|e| Err(e.to_string())),
+            Err(e) => Err(format!("no client process: {e}")),
+        };
+        if let Err(reason) = admitted {
+            warn(format!("refused a connection: {reason}"));
+            return;
+        }
+
+        let state = Arc::new(S::default());
+        let in_flight = Arc::new(Semaphore::new(MAX_IN_FLIGHT));
         let (mut reader, mut writer) = tokio::io::split(pipe);
         let (tx, mut rx) = mpsc::channel::<Vec<u8>>(8);
         let mut requests = JoinSet::new();
@@ -294,17 +436,27 @@ mod imp {
         };
         let read = async move {
             loop {
+                // At most MAX_IN_FLIGHT requests at once: the next frame is
+                // read only when one of them has finished.
+                let permit = tokio::select! {
+                    permit = in_flight.clone().acquire_owned() => permit,
+                    _ = stop.changed() => break,
+                };
+                let Ok(permit) = permit else { break };
                 let frame = tokio::select! {
                     frame = read_frame(&mut reader) => frame,
                     _ = stop.changed() => break,
                 };
                 let Ok(Some(frame)) = frame else { break };
                 let handler = handler.clone();
+                let state = state.clone();
                 let tx = tx.clone();
                 requests.spawn(async move {
-                    let answer = handler(frame).await;
+                    let answer = handler(state, frame).await;
                     let _ = tx.send(answer).await;
+                    drop(permit);
                 });
+                while requests.try_join_next().is_some() {}
             }
             // The other side left, or the server is stopping: a fill still
             // waiting for confirmation has nobody left to answer to.
@@ -420,12 +572,12 @@ mod tests {
         use std::os::windows::io::AsRawHandle;
 
         let (stop, stop_rx) = tokio::sync::watch::channel(false);
-        let Ok(server) = PipeServer::bind(stop_rx.clone()).await else {
+        let Ok(server) = PipeServer::bind(stop_rx.clone(), this_process()).await else {
             eprintln!("skipped: the app's browser pipe is open on this machine");
             return;
         };
         assert!(
-            PipeServer::bind(stop_rx).await.is_err(),
+            PipeServer::bind(stop_rx, this_process()).await.is_err(),
             "a second server took the name"
         );
 
@@ -479,5 +631,207 @@ mod tests {
             pipe_name().unwrap(),
             format!(r"\\.\pipe\silentsilo-browser-{sid}")
         );
+    }
+    /// A check that admits this test process and nothing else.
+    #[cfg(windows)]
+    fn this_process() -> ClientCheck {
+        ClientCheck {
+            image: std::env::current_exe().unwrap(),
+            same_signer: false,
+        }
+    }
+
+    #[cfg(windows)]
+    fn test_pipe_name(what: &str) -> String {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        format!(
+            r"\\.\pipe\silentsilo-test-{what}-{}-{nanos}",
+            std::process::id()
+        )
+    }
+
+    type Warnings = std::sync::Arc<std::sync::Mutex<Vec<String>>>;
+
+    /// Echoes each request back, counting them.
+    #[cfg(windows)]
+    async fn serve_echo(
+        name: &str,
+        check: ClientCheck,
+    ) -> (
+        tokio::sync::watch::Sender<bool>,
+        std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        Warnings,
+    ) {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::{Arc, Mutex};
+
+        let (stop, stop_rx) = tokio::sync::watch::channel(false);
+        let server = PipeServer::bind_at(name.to_string(), stop_rx, check)
+            .await
+            .unwrap();
+        let handled = Arc::new(AtomicUsize::new(0));
+        let warnings: Warnings = Arc::new(Mutex::new(Vec::new()));
+        let (count, heard) = (handled.clone(), warnings.clone());
+        tokio::spawn(server.run(
+            move |_: Arc<()>, frame: Frame| {
+                let count = count.clone();
+                async move {
+                    count.fetch_add(1, Ordering::SeqCst);
+                    match frame {
+                        Frame::Message(body) => body,
+                        Frame::TooLarge => Vec::new(),
+                    }
+                }
+            },
+            move |warning: String| heard.lock().unwrap().push(warning),
+        ));
+        (stop, handled, warnings)
+    }
+
+    #[cfg(windows)]
+    fn open_client(
+        name: &str,
+    ) -> std::io::Result<tokio::net::windows::named_pipe::NamedPipeClient> {
+        tokio::net::windows::named_pipe::ClientOptions::new().open(name)
+    }
+
+    /// Opens a client, waiting out the moment between instances.
+    #[cfg(windows)]
+    async fn connect(name: &str) -> tokio::net::windows::named_pipe::NamedPipeClient {
+        for _ in 0..300 {
+            match open_client(name) {
+                Ok(client) => return client,
+                Err(_) => tokio::time::sleep(std::time::Duration::from_millis(50)).await,
+            }
+        }
+        panic!("the server never took a client");
+    }
+
+    #[cfg(windows)]
+    async fn round_trip(
+        client: &mut tokio::net::windows::named_pipe::NamedPipeClient,
+        body: &[u8],
+    ) -> std::io::Result<Option<Frame>> {
+        write_frame(client, body).await?;
+        tokio::time::timeout(std::time::Duration::from_secs(5), read_frame(client))
+            .await
+            .map_err(|_| std::io::Error::from(std::io::ErrorKind::TimedOut))?
+    }
+
+    #[cfg(windows)]
+    fn host_elsewhere() -> ClientCheck {
+        ClientCheck {
+            image: std::env::current_exe().unwrap().with_file_name(HOST_EXE),
+            same_signer: false,
+        }
+    }
+
+    /// A process that is not the host is disconnected before its request
+    /// is read.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn a_client_that_is_not_the_host_is_turned_away_unread() {
+        let name = test_pipe_name("refuse");
+        let (stop, handled, warnings) = serve_echo(&name, host_elsewhere()).await;
+        let mut client = connect(&name).await;
+        let answer = round_trip(&mut client, br#"{"id":"1","type":"search","query":"ba"}"#).await;
+        assert!(
+            !matches!(answer, Ok(Some(Frame::Message(_)))),
+            "a refused client got an answer: {answer:?}"
+        );
+        assert_eq!(handled.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert!(
+            warnings
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|w| w.contains("refused")),
+            "the refusal is reported"
+        );
+        let _ = stop.send(true);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn the_host_check_names_the_reason() {
+        let reason = host_elsewhere().admit(std::process::id()).unwrap_err();
+        assert!(reason.contains(HOST_EXE), "{reason}");
+        assert_eq!(this_process().admit(std::process::id()), Ok(()));
+    }
+
+    /// With every instance taken the server cannot create the next one. It
+    /// keeps trying instead of giving the name up, and serves again once a
+    /// client leaves.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn the_server_outlasts_a_full_house() {
+        let name = test_pipe_name("full");
+        let (stop, _, _) = serve_echo(&name, this_process()).await;
+        let mut clients = Vec::new();
+        for _ in 0..16 {
+            let mut client = connect(&name).await;
+            let echoed = round_trip(&mut client, b"hello").await.unwrap();
+            assert_eq!(echoed, Some(Frame::Message(b"hello".to_vec())));
+            clients.push(client);
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        assert!(
+            open_client(&name).is_err(),
+            "a seventeenth connection got in"
+        );
+
+        drop(clients.pop());
+        let mut late = connect(&name).await;
+        let echoed = round_trip(&mut late, b"again").await.unwrap();
+        assert_eq!(echoed, Some(Frame::Message(b"again".to_vec())));
+        let _ = stop.send(true);
+    }
+
+    /// A connection has at most four requests in progress; the fifth is not
+    /// read until one of them ends.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn one_connection_has_at_most_four_requests_in_progress() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let name = test_pipe_name("inflight");
+        let (stop, stop_rx) = tokio::sync::watch::channel(false);
+        let server = PipeServer::bind_at(name.clone(), stop_rx, this_process())
+            .await
+            .unwrap();
+        let started = Arc::new(AtomicUsize::new(0));
+        let (release, released) = tokio::sync::watch::channel(false);
+        let count = started.clone();
+        tokio::spawn(server.run(
+            move |_: Arc<()>, _frame: Frame| {
+                let count = count.clone();
+                let mut released = released.clone();
+                async move {
+                    count.fetch_add(1, Ordering::SeqCst);
+                    let _ = released.wait_for(|r| *r).await;
+                    b"done".to_vec()
+                }
+            },
+            |_| {},
+        ));
+        let mut client = connect(&name).await;
+        for _ in 0..6 {
+            write_frame(&mut client, b"wait").await.unwrap();
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        assert_eq!(started.load(Ordering::SeqCst), 4);
+        let _ = release.send(true);
+        for _ in 0..6 {
+            assert_eq!(
+                read_frame(&mut client).await.unwrap(),
+                Some(Frame::Message(b"done".to_vec()))
+            );
+        }
+        assert_eq!(started.load(Ordering::SeqCst), 6);
+        let _ = stop.send(true);
     }
 }

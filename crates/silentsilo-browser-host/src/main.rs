@@ -2,17 +2,22 @@
 //! for the SilentSilo extension.
 //!
 //! Run by the browser as `silentsilo-browser-host <extension origin>`. It
-//! refuses any extension not in `allowed-origins.json`, then relays whole
-//! frames between stdio and the app's pipe until either side closes. When
-//! the pipe is not there it answers `app-not-running` itself. It never
-//! starts the app.
+//! refuses any extension not in its allowed list and, in a release build,
+//! any start that did not come from Chrome or Edge. Then it opens the app's
+//! pipe, checks the app is what serves it, and relays whole frames between
+//! stdio and the pipe until either side closes. When the pipe is not there,
+//! or is not the app's, it answers `app-not-running` itself. It never starts
+//! the app.
 //!
 //! `silentsilo-browser-host --write-manifest` writes the manifest the
 //! browser reads, beside the executable. The installer runs it.
+//! `--check-release` says whether this build is fit to ship.
 
 use std::process::ExitCode;
 
-use silentsilo_browser_host::{MANIFEST_FILE, allowed_origins, caller_allowed, manifest};
+use silentsilo_browser_host::{
+    MANIFEST_FILE, allowed_origins, caller_allowed, manifest, this_build_release_problems,
+};
 
 fn main() -> ExitCode {
     silentsilo_shell::harden_process();
@@ -20,9 +25,18 @@ fn main() -> ExitCode {
     if first == "--write-manifest" {
         return write_manifest();
     }
+    if first == "--check-release" {
+        return check_release();
+    }
     if !caller_allowed(&first, &allowed_origins()) {
         eprintln!("silentsilo-browser-host: this extension is not allowed");
         return ExitCode::from(2);
+    }
+    // Debug builds are started by tests, not by a browser.
+    #[cfg(all(windows, not(debug_assertions)))]
+    if let Err(reason) = silentsilo_browser_host::started_by_browser() {
+        eprintln!("silentsilo-browser-host: refused: {reason}");
+        return ExitCode::from(3);
     }
     relay::run()
 }
@@ -41,18 +55,37 @@ fn write_manifest() -> ExitCode {
     }
 }
 
+fn check_release() -> ExitCode {
+    let problems = this_build_release_problems();
+    for problem in &problems {
+        eprintln!("silentsilo-browser-host: not fit to ship: {problem}");
+    }
+    if problems.is_empty() {
+        println!("allowed: {}", allowed_origins().join(" "));
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
+}
+
 #[cfg(windows)]
 mod relay {
+    use std::os::windows::io::AsRawHandle;
     use std::process::ExitCode;
     use std::time::Duration;
 
-    use silentsilo_browser_host::{MALFORMED, TOO_LARGE, error_answer, not_running_answer};
+    use silentsilo_browser_host::{
+        MALFORMED, NOT_OURS, NOT_RUNNING, TOO_LARGE, error_answer, expected_server,
+        not_running_answer, verify_server,
+    };
     use silentsilo_shell::browser_pipe::{Frame, pipe_name, read_frame, write_frame};
     use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
     use tokio::sync::mpsc;
     use zeroize::Zeroize;
 
     const ERROR_PIPE_BUSY: i32 = 231;
+    /// The server may identify this client but never act as it.
+    const SECURITY_IDENTIFICATION: u32 = 0x0001_0000;
 
     pub fn run() -> ExitCode {
         let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
@@ -63,8 +96,15 @@ mod relay {
         };
         runtime.block_on(async {
             match connect().await {
-                Some(pipe) => bridge(pipe).await,
-                None => answer_alone().await,
+                Some(pipe) => match check(&pipe) {
+                    Ok(()) => bridge(pipe).await,
+                    Err(reason) => {
+                        eprintln!("silentsilo-browser-host: not the app's pipe: {reason}");
+                        drop(pipe);
+                        answer_alone(NOT_OURS).await;
+                    }
+                },
+                None => answer_alone(NOT_RUNNING).await,
             }
         });
         // Exited outright: the stdin reader sits in a blocking read the
@@ -77,7 +117,10 @@ mod relay {
     async fn connect() -> Option<NamedPipeClient> {
         let name = pipe_name().ok()?;
         for _ in 0..40 {
-            match ClientOptions::new().open(&name) {
+            match ClientOptions::new()
+                .security_qos_flags(SECURITY_IDENTIFICATION)
+                .open(&name)
+            {
                 Ok(pipe) => return Some(pipe),
                 Err(e) if e.raw_os_error() == Some(ERROR_PIPE_BUSY) => {
                     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -88,14 +131,25 @@ mod relay {
         None
     }
 
-    /// No app: each request gets `app-not-running`, until the browser
-    /// closes stdin.
-    async fn answer_alone() {
+    /// Nothing is written to the pipe before this passes: whoever made a
+    /// pipe of this name first would otherwise read the requests.
+    fn check(pipe: &NamedPipeClient) -> Result<(), String> {
+        let expected = expected_server().map_err(|e| e.to_string())?;
+        verify_server(pipe.as_raw_handle(), &expected)
+    }
+
+    /// No app to relay to: each request gets `app-not-running` with
+    /// `message`, until the browser closes stdin.
+    async fn answer_alone(message: &str) {
         let mut stdin = tokio::io::stdin();
         let mut stdout = tokio::io::stdout();
         while let Ok(Some(frame)) = read_frame(&mut stdin).await {
             let answer = match frame {
-                Frame::Message(request) => not_running_answer(&request),
+                Frame::Message(mut request) => {
+                    let answer = not_running_answer(&request, message);
+                    request.zeroize();
+                    answer
+                }
                 Frame::TooLarge => error_answer("", "bad-request", TOO_LARGE),
             };
             if write_frame(&mut stdout, &answer).await.is_err() {

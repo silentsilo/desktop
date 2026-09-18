@@ -14,7 +14,9 @@ silo from opening needs a major version rather than a note.
   logins saved for the site in the open tab and fill one, after you confirm
   in this window with Windows Hello or your security key. It sees login
   entries only, never files, notes or codes. The installer registers a small
-  native messaging host for it; uninstalling removes the registration.
+  native messaging host for it; uninstalling removes the registration. The
+  app talks only to that host, signed like the app, and the host only to
+  Chrome or Edge and to this app.
 
 ## [1.1.0] - Phones, and computers that agree
 

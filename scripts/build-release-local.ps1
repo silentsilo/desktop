@@ -65,6 +65,20 @@ if (Test-Path (Join-Path $repoRoot ".cargo\config.toml")) {
     throw ".cargo\config.toml exists. It patches the core crates to a local checkout; remove it, run cargo check to restore Cargo.lock, then build."
 }
 
+# The browser host lets in the extension ids compiled into it. A release
+# must name at least one store id, and never the development one: its key is
+# public, so anyone can build an extension that carries it. Checked here so a
+# long build does not start for nothing, and again on the built host below.
+$origins = Get-Content crates\silentsilo-browser-host\allowed-origins.json -Raw | ConvertFrom-Json
+$storeIds = @(@($origins.chrome_web_store) + @($origins.edge_add_ons) | Where-Object { $_ })
+$devIds = @((Get-Content crates\silentsilo-browser-host\allowed-origins.dev.json -Raw | ConvertFrom-Json).allowed_origins)
+if ($storeIds.Count -eq 0) {
+    throw "allowed-origins.json names no Chrome Web Store or Edge Add-ons id. The browser host would let no extension in."
+}
+foreach ($id in $storeIds) {
+    if ($devIds -contains $id) { throw "allowed-origins.json holds the development id $id." }
+}
+
 # Says which core revision this installer will contain, and refuses a lockfile
 # that points anywhere but silentsilo/core.
 node scripts\check-lockfile.mjs
@@ -177,6 +191,10 @@ try {
     # time: Tauri skips a sidecar that already carries a signature.
     cargo build -p silentsilo-browser-host --release --locked
     if (-not $?) { throw "browser host build failed" }
+    # The built host judges itself: no development id, no dev-extension
+    # feature, at least one store id.
+    & "target\release\silentsilo-browser-host.exe" --check-release
+    if ($LASTEXITCODE -ne 0) { throw "the browser host is not fit to ship (see above)" }
     $sidecar = "src-tauri\binaries\silentsilo-browser-host-x86_64-pc-windows-msvc.exe"
     New-Item -ItemType Directory -Force -Path (Split-Path $sidecar) | Out-Null
     Copy-Item "target\release\silentsilo-browser-host.exe" $sidecar -Force

@@ -1,0 +1,6 @@
+{
+  "comment": "The development build's id, pinned by the public key in silentsilo/browser's dev manifest. That key is public, so anyone can build an extension with this id. It is let in by debug builds, and by builds with the dev-extension feature, never by a release.",
+  "allowed_origins": [
+    "chrome-extension://acgmibddhpnmaegpegjcibekcnihpfic/"
+  ]
+}

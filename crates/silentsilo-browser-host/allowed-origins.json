@@ -1,6 +1,5 @@
 {
-  "comment": "The extensions allowed to reach SilentSilo. The one list: the host checks its caller against it and writes it into the native messaging manifest. Each entry is chrome-extension://<32-letter id>/ with the trailing slash. The id below is the development build's, pinned by the public key in silentsilo/browser's dev manifest; the Chrome Web Store and Edge Add-ons ids are added here once the listings exist.",
-  "allowed_origins": [
-    "chrome-extension://acgmibddhpnmaegpegjcibekcnihpfic/"
-  ]
+  "comment": "The store builds of the extension that a release host lets in. Each entry is chrome-extension://<32-letter id>/ with the trailing slash. Put the Chrome Web Store id in chrome_web_store and the Edge Add-ons id in edge_add_ons once each listing exists. build-release-local.ps1 and the host's --check-release refuse a release while both lists are empty, or when either holds the development id from allowed-origins.dev.json.",
+  "chrome_web_store": [],
+  "edge_add_ons": []
 }

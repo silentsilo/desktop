@@ -5,12 +5,28 @@
 use std::io::{Read, Write};
 use std::process::{Child, Command, Stdio};
 
-use silentsilo_shell::browser_pipe::{Frame, MAX_FRAME, PipeServer, pipe_name};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use silentsilo_browser_host::{NOT_OURS, NOT_RUNNING};
+use silentsilo_shell::browser_pipe::{ClientCheck, Frame, MAX_FRAME, PipeServer, pipe_name};
 
 const DEV: &str = "chrome-extension://acgmibddhpnmaegpegjcibekcnihpfic/";
+const HOST: &str = env!("CARGO_BIN_EXE_silentsilo-browser-host");
 
 fn host(origin: &str) -> Child {
-    Command::new(env!("CARGO_BIN_EXE_silentsilo-browser-host"))
+    host_expecting(origin, None)
+}
+
+/// The host, told (debug builds only) which executable serves the app's
+/// pipe. Without that it expects SilentSilo.exe beside itself.
+fn host_expecting(origin: &str, server: Option<&std::path::Path>) -> Child {
+    let mut command = Command::new(HOST);
+    command.env_remove("SILENTSILO_BROWSER_HOST_TEST_SERVER");
+    if let Some(server) = server {
+        command.env("SILENTSILO_BROWSER_HOST_TEST_SERVER", server);
+    }
+    command
         .arg(origin)
         .arg("--parent-window=0")
         .stdin(Stdio::piped())
@@ -70,6 +86,7 @@ fn without_the_app_it_answers_alone_and_with_it_it_relays() {
     let answer = receive(&mut child);
     assert_eq!(answer["id"], "1");
     assert_eq!(answer["code"], "app-not-running");
+    assert_eq!(answer["message"], NOT_RUNNING);
     send(
         &mut child,
         br#"{"id":"2","type":"logins","origin":"https://a.example"}"#,
@@ -78,23 +95,56 @@ fn without_the_app_it_answers_alone_and_with_it_it_relays() {
     drop(child.stdin.take());
     assert!(child.wait().unwrap().success());
 
-    // Listening: frames go through unread and come back, an oversized one
-    // is refused by the host, and the host leaves when stdin closes.
+    // Listening, but the pipe is served by a program the host does not
+    // expect (this test, not SilentSilo.exe beside the host): the host
+    // refuses it and writes nothing to it.
     let (stop, stop_rx) = tokio::sync::watch::channel(false);
-    let server = runtime.block_on(PipeServer::bind(stop_rx)).unwrap();
-    runtime.spawn(server.run(|frame: Frame| async move {
-        match frame {
-            Frame::Message(body) => {
-                let request: serde_json::Value = serde_json::from_slice(&body).unwrap();
-                serde_json::json!({ "id": request["id"], "type": "echo" })
-                    .to_string()
-                    .into_bytes()
+    let only_the_host = ClientCheck {
+        image: HOST.into(),
+        same_signer: false,
+    };
+    let server = runtime
+        .block_on(PipeServer::bind(stop_rx, only_the_host))
+        .unwrap();
+    let handled = Arc::new(AtomicUsize::new(0));
+    let count = handled.clone();
+    runtime.spawn(server.run(
+        move |_: Arc<()>, frame: Frame| {
+            count.fetch_add(1, Ordering::SeqCst);
+            async move {
+                match frame {
+                    Frame::Message(body) => {
+                        let request: serde_json::Value = serde_json::from_slice(&body).unwrap();
+                        serde_json::json!({ "id": request["id"], "type": "echo" })
+                            .to_string()
+                            .into_bytes()
+                    }
+                    Frame::TooLarge => b"{\"id\":\"\",\"type\":\"too-large\"}".to_vec(),
+                }
             }
-            Frame::TooLarge => b"{\"id\":\"\",\"type\":\"too-large\"}".to_vec(),
-        }
-    }));
+        },
+        |_| {},
+    ));
 
     let mut child = host(DEV);
+    send(&mut child, br#"{"id":"5","type":"status"}"#);
+    let answer = receive(&mut child);
+    assert_eq!(answer["id"], "5");
+    assert_eq!(answer["code"], "app-not-running");
+    assert_eq!(answer["message"], NOT_OURS);
+    drop(child.stdin.take());
+    assert!(child.wait().unwrap().success());
+    assert_eq!(
+        handled.load(Ordering::SeqCst),
+        0,
+        "a request reached a pipe that is not the app's"
+    );
+
+    // Served by the program the host expects: frames go through unread and
+    // come back, an oversized one is refused by the host, and the host
+    // leaves when stdin closes.
+    let this_test = std::env::current_exe().unwrap();
+    let mut child = host_expecting(DEV, Some(&this_test));
     send(&mut child, br#"{"id":"3","type":"status"}"#);
     let answer = receive(&mut child);
     assert_eq!(

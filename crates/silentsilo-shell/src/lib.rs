@@ -14,6 +14,8 @@ mod secret_clipboard;
 mod session_watch;
 mod tray;
 #[cfg(windows)]
+pub mod win_process;
+#[cfg(windows)]
 mod windows;
 
 pub use autostart::{autostart_enabled, autostart_supported, ensure_autostart, set_autostart};

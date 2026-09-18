@@ -219,13 +219,38 @@ flowchart LR
 - **The host** (`crates/silentsilo-browser-host`) is a separate small binary
   so the browser never starts the app, with its webview, to relay a message.
   The browser passes the calling extension's origin as the first argument;
-  the host refuses any origin not in `allowed-origins.json` before it opens
-  the pipe. That file is the one list: it is compiled into the host, and
-  `silentsilo-browser-host --write-manifest` writes the same list into the
-  manifest the browser reads. When nothing listens on the pipe, the host
-  answers `app-not-running` to each request itself and exits when stdin
-  closes. It never starts the app. It copies frames without parsing them
-  beyond the 64 KiB limit, and wipes each one after passing it on.
+  the host refuses any origin not in its list before it opens the pipe. The
+  list is compiled in. `allowed-origins.json` holds the store ids (Chrome
+  Web Store, Edge Add-ons; empty until the listings exist).
+  `allowed-origins.dev.json` holds the development id, which anyone can
+  reproduce from the public key in the extension's dev manifest, so only
+  debug builds and builds with the `dev-extension` feature let it in.
+  `--check-release` fails a host that lets the dev id in or names no store
+  id; `build-release-local.ps1` runs it on the built host and checks the
+  JSON before it starts, and a unit test keeps the dev id out of the release
+  file. `--write-manifest` writes the same list into the manifest the
+  browser reads.
+- **The host checks who started it** (release builds only; tests start it
+  from cargo). Its parent must be `chrome.exe` or `msedge.exe` under
+  `<Program Files, Program Files (x86) or %LOCALAPPDATA%>\Google\Chrome*\Application`
+  or `\Microsoft\Edge*\Application`, running as this user, with a valid
+  Authenticode signature from Google LLC or Microsoft Corporation. The
+  browsers start a host through `cmd.exe`, so a `cmd.exe` in a system
+  directory between the two is stepped over. A parent whose id was reused
+  (started after the host) fails. Anything else exits with code 3, before
+  the pipe is opened.
+- **The host checks the pipe is the app's** before writing to it. The pipe's
+  owner SID (`GetSecurityInfo`) and the server process's token user
+  (`GetNamedPipeServerProcessId`) must be this user, and the server's image
+  must be `SilentSilo.exe` in the host's own directory (debug builds may name
+  another through `SILENTSILO_BROWSER_HOST_TEST_SERVER`, for the tests).
+  The client opens with `SECURITY_IDENTIFICATION`, so a server can never
+  act as it. On any mismatch the host answers `app-not-running` to each
+  request with a message of its own, writes nothing to the pipe and never
+  relays. When nothing listens it answers `app-not-running` itself and
+  exits when stdin closes. It never starts the app. It copies frames without
+  parsing them beyond the 64 KiB limit, and wipes each one after passing it
+  on.
 - **The pipe** is `\.\pipe\silentsilo-browser-<user SID>`, created with a
   protected DACL granting the current user alone (`O:<SID>D:P(A;;GA;;;<SID>)`),
   remote clients rejected, and the first instance created with
@@ -235,8 +260,20 @@ flowchart LR
   (`%LOCALAPPDATA%\SilentSilo\browser-extension.json`, off by default). The
   server runs on the async runtime, one task per connection and one per
   request, so a fill waiting for the user does not hold up a `status` on the
-  same connection. It stops on exit and when the toggle goes off; a fill
-  still waiting then ends with its connection.
+  same connection; at most four requests per connection are in progress,
+  and the next frame is read only when one ends. When it cannot create the
+  next instance (all 16 taken) it retries with backoff up to 5 seconds
+  instead of stopping, since a stopped server would free the name. Each new
+  instance must be owned by this user, or the server stops. It stops on exit
+  and when the toggle goes off; a fill still waiting then ends with its
+  connection.
+- **The app checks who connected** (`ClientCheck`, before reading a byte).
+  `GetNamedPipeClientProcessId` gives the client; it must run as this user,
+  from `silentsilo-browser-host.exe` beside the app's own executable, and in
+  release builds carry an Authenticode signature whose signing certificate
+  is the app's own. Any other client is disconnected unread and the refusal
+  goes to the diagnostics log. A release built without signing therefore
+  admits no host.
 - **The extension sees logins and nothing else.** `browser/logins.rs` is
   the only module in `browser/` that reaches the vault, and its one call is
   `list_passwords`. It keeps label, username, saved address and password of
@@ -270,11 +307,38 @@ flowchart LR
   through `src-tauri/tauri.browser-host.json` rather than kept in
   `tauri.conf.json`: tauri-build requires an externalBin to exist on every
   compile of the app, CI's included. Tauri signs it with `signCommand` like
-  the app. The NSIS hooks run `--write-manifest` and point
+  the app, which is what the app's signer check compares. The NSIS hooks run
+  `--write-manifest` and point
   `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.silentsilo.desktop`
   and the Edge equivalent at the manifest; the uninstaller removes both keys
   and the manifest. A plain `npm run tauri:build` has no host, and the hooks
   skip it.
+
+### What these checks do not stop
+
+They make a forged request cost more than opening a pipe. They do not keep
+out code already running as the same user, and nothing here should be read
+as if they did.
+
+- **Same-user code can still ask for fills.** It can start the signed host
+  with a parent of its choosing (`PROC_THREAD_ATTRIBUTE_PARENT_PROCESS`),
+  inject into the browser or into the host, or drive the host's stdin after
+  starting it from a real browser. The app then sees a legitimate client.
+  What stands between such a request and a password is the person: the
+  dialog names the site and the login, and needs Windows Hello or the key.
+  Someone who confirms a fill they did not start hands it over.
+- **Labels and usernames can still be listed** by such code: `logins` and
+  `search` answer whatever the host relays.
+- **The install is per-user.** The app, the host and the manifest live in a
+  folder this user can write, so a same-user process can replace or patch
+  them. The signer check refuses a host that is not signed like the app; it
+  cannot help once the app itself was replaced.
+- **The checks are made on files, by path.** Signatures are read from the
+  file at the process's image path, not from memory; revocation is not
+  checked online.
+- **Another user on the same machine** cannot open the pipe (the DACL), and
+  cannot stand in for it without the host noticing (owner, server user and
+  server image). An administrator can do anything.
 
 ## Looks wrong, is deliberate
 
