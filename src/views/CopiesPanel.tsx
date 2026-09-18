@@ -10,6 +10,9 @@ import {
   copyState,
   currentCopies,
   protectionWarning,
+  seedHeadline,
+  seedLabel,
+  seedPercent,
   type BackupTargetView,
   type Protection,
 } from "../lib/copies";
@@ -20,7 +23,7 @@ import {
   storeDraftPayload,
   type StoreDraft,
 } from "./StoreConfigForm";
-import type { StoreConfigView } from "../lib/types";
+import type { SeedProgress, StoreConfigView } from "../lib/types";
 
 /** A short phrase naming where a target points, for the row's title. */
 function whereIs(config: StoreConfigView): string {
@@ -69,7 +72,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
   /// for hours on the volumes it exists for, and a spinner with no number on
   /// it is what makes people pull the cable.
   const [seeding, setSeeding] = useState<string | null>(null);
-  const [seedProgress, setSeedProgress] = useState<[number, number] | null>(null);
+  const [seedProgress, setSeedProgress] = useState<SeedProgress | null>(null);
   const [seedCancelling, setSeedCancelling] = useState(false);
   /// The target Remove is asking about. Removing a copy is not destructive
   /// to data, but it silently stops a backup, which deserves one question.
@@ -101,15 +104,16 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
   refreshRef.current = refresh;
   const queueRefresh = useMemo(() => coalesceRuns(() => refreshRef.current()), []);
 
-  // Filling a copy emits one of these per object, and the volumes this
-  // exists for run to hundreds of thousands. Every value but the newest is
-  // already stale by the time a frame could draw it, so only the newest is
-  // kept: without this the panel re-rendered once per object, and the Stop
-  // button was competing with its own progress line for frames.
-  const seedTicker = useMemo(() => coalesceLatest<[number, number]>(setSeedProgress), []);
+  // Filling a copy reports as it goes, four times a second while one large
+  // object moves and once per object otherwise, and the volumes this exists
+  // for run to hundreds of thousands of objects. Every value but the newest
+  // is already stale by the time a frame could draw it, so only the newest
+  // is kept: without this the panel re-rendered once per report, and the
+  // Stop button was competing with its own progress line for frames.
+  const seedTicker = useMemo(() => coalesceLatest<SeedProgress>(setSeedProgress), []);
   useEffect(() => seedTicker.stop, [seedTicker]);
   useEventSubscription(
-    () => listen<[number, number]>("seed-progress", (event) => seedTicker.push(event.payload)),
+    () => listen<SeedProgress>("seed-progress", (event) => seedTicker.push(event.payload)),
     [seedTicker],
   );
 
@@ -316,7 +320,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                     )}
                     {seeding === target.id
                       ? seedProgress
-                        ? `${seedProgress[0]} of ${seedProgress[1]}…`
+                        ? seedLabel(seedProgress)
                         : "Copying…"
                       : "Fill from the first copy"}
                   </button>
@@ -349,16 +353,11 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
         })}
       </ul>
 
-      {seeding !== null && seedProgress && seedProgress[1] > 0 && (
+      {seeding !== null && seedProgress && seedProgress.objects_total > 0 && (
         <div className="progress-row" role="status">
-          <p className="hint">
-            Copying: {seedProgress[0]} of {seedProgress[1]} objects.
-          </p>
+          <p className="hint">{seedHeadline(seedProgress)}</p>
           <div className="progress-track">
-            <div
-              className="progress-fill"
-              style={{ width: `${Math.min(100, (seedProgress[0] / seedProgress[1]) * 100)}%` }}
-            />
+            <div className="progress-fill" style={{ width: `${seedPercent(seedProgress)}%` }} />
           </div>
         </div>
       )}

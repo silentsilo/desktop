@@ -117,6 +117,30 @@ let createdSilo: (typeof silos)[number] | null = null;
 /// the enrolment screen and into the explorer.
 let enrolledAtRuntime = false;
 
+/// Set by `cancel_seed`, read by the fake fill below, so Stop does here what
+/// it does against the real backend: the run ends and the command rejects
+/// with the bare string the panel matches on.
+let seedCancelled = false;
+
+// ── Events ──────────────────────────────────────────────────────────
+//
+// The real backend reports a long job as it goes, and the two screens that
+// draw those reports (the Copies panel and the status bar) cannot be looked
+// at without them. Each `listen` hands over a callback id; firing it is all
+// an emit is.
+
+/// Callback ids per event name.
+const listeners = new Map<string, Set<number>>();
+/// What each subscription id stands for, so `unlisten` can undo it.
+const subscriptions = new Map<number, { event: string; handler: number }>();
+
+function emit(event: string, payload: unknown) {
+  const w = window as unknown as Record<string, ((e: unknown) => void) | undefined>;
+  for (const handler of listeners.get(event) ?? []) {
+    w[`_${handler}`]?.({ event, id: handler, payload });
+  }
+}
+
 const handlers: Record<string, Handler> = {
   silo_open: (args) => {
     steppedInto = String(args.id ?? "");
@@ -277,18 +301,56 @@ const handlers: Record<string, Handler> = {
     args.prefix === "E891C"
       ? "6C1AF0DBD3E66DB4267118C543E2848818D:31337\n0000000000000000000000000000000000A:0"
       : "0000000000000000000000000000000000A:0",
-  sync_now: () => ({
-    configured: true,
-    ops_pushed: 0,
-    ops_fetched: 0,
-    ops_applied: 0,
-    blobs_uploaded: 0,
-    blobs_failed: 0,
-    blobs_restored: 0,
-    renamed: [],
-    needs_rebuild: flag("behind"),
-    compacted: 0,
-  }),
+  // `?keyreplaced` models a bucket whose content key was rolled back or
+  // overwritten, which needs someone with write access to the storage to
+  // reproduce and must never be reported as "rejoin".
+  sync_now: () => {
+    const report = {
+      silo_id: silos[0]!.id,
+      configured: true,
+      ops_pushed: 0,
+      ops_fetched: 0,
+      ops_applied: 0,
+      blobs_uploaded: 0,
+      blobs_failed: 0,
+      blobs_restored: 0,
+      renamed: [],
+      needs_rebuild: flag("behind"),
+      key_material_replaced: flag("keyreplaced"),
+      compacted: 0,
+      targets: [],
+    };
+    if (report.needs_rebuild || report.key_material_replaced) {
+      emit("sync-report", report);
+      return report;
+    }
+    // One large file going up: the blob count stands still for the whole of
+    // it and only the bytes move, which is what the status line shows now.
+    const TICKS = 20;
+    const bytesTotal = 1_610_612_736;
+    return new Promise((resolve) => {
+      let tick = 0;
+      const timer = setInterval(() => {
+        tick += 1;
+        emit("sync-progress", {
+          silo_id: silos[0]!.id,
+          phase: "uploading",
+          done: 2,
+          total: 3,
+          bytes_done: Math.round((tick / TICKS) * bytesTotal),
+          bytes_total: bytesTotal,
+          file_id: null,
+          name: "Archive 2019.zip",
+        });
+        if (tick >= TICKS) {
+          clearInterval(timer);
+          const finished = { ...report, ops_pushed: 3, blobs_uploaded: 1 };
+          emit("sync-report", finished);
+          resolve(finished);
+        }
+      }, 150);
+    });
+  },
   // Three imaginary files, so Ctrl+V exercises the import path (and the
   // disk-space check in front of it) without a real clipboard.
   clipboard_file_paths: () => ["C:\\tmp\\a.bin", "C:\\tmp\\b.bin", "C:\\tmp\\c.bin"],
@@ -318,10 +380,16 @@ const handlers: Record<string, Handler> = {
     };
   },
 
-  protected_folders_list: () => [
-    { path: "C:\\Users\\alex\\Documents\\Taxes", target: "/Taxes" },
-    { path: "D:\\Photos\\2026", target: "/2026" },
-  ],
+  // `?lockedfolders` is the locked silo: the list is sealed under the
+  // content key, so there is no answer to give, and the panel has to say so
+  // rather than draw an empty list.
+  protected_folders_list: () =>
+    flag("lockedfolders")
+      ? Promise.reject("Unlock the silo first.")
+      : [
+          { path: "C:\\Users\\alex\\Documents\\Taxes", target: "/Taxes" },
+          { path: "D:\\Photos\\2026", target: "/2026" },
+        ],
   protected_folders_add: () => null,
   protected_folders_remove: () => null,
   protected_folders_scan: () => ({ imported: 3, skipped: 1 }),
@@ -606,9 +674,45 @@ const handlers: Record<string, Handler> = {
     ];
   },
   backup_target_add: () => null,
+  // A fill that reports as it goes, including a stretch in the middle where
+  // one large blob is moving: the object count stands still there and only
+  // the bytes climb, which is the case the panel's progress line exists for.
   backup_target_seed: () => {
-    seededAt = Math.floor(Date.now() / 1000);
-    return 412;
+    seedCancelled = false;
+    const TICKS = 24;
+    const STALL_FROM = 8;
+    const STALL_TO = 16;
+    const objectsTotal = 500;
+    const bytesTotal = 4 * 1024 ** 3;
+    const objectsAt = (tick: number) => {
+      if (tick <= STALL_FROM) return Math.round((tick / STALL_FROM) * 80);
+      if (tick <= STALL_TO) return 80;
+      return Math.round(80 + ((tick - STALL_TO) / (TICKS - STALL_TO)) * (objectsTotal - 80));
+    };
+    return new Promise((resolve, reject) => {
+      let tick = 0;
+      const timer = setInterval(() => {
+        if (seedCancelled) {
+          clearInterval(timer);
+          // The bare string, as Tauri hands a command's error back. The
+          // panel compares it raw, before anything reformats it.
+          reject("cancelled");
+          return;
+        }
+        tick += 1;
+        emit("seed-progress", {
+          objects_done: objectsAt(tick),
+          objects_total: objectsTotal,
+          bytes_done: Math.round((tick / TICKS) * bytesTotal),
+          bytes_total: bytesTotal,
+        });
+        if (tick >= TICKS) {
+          clearInterval(timer);
+          seededAt = Math.floor(Date.now() / 1000);
+          resolve(412);
+        }
+      }, 150);
+    });
   },
   // Versioning without object lock, the case worth showing: it looks like
   // protection and is not, for the one operation that matters.
@@ -823,7 +927,10 @@ const handlers: Record<string, Handler> = {
   ],
   vault_rotate_resume: () => 640,
   cancel_verify: () => null,
-  cancel_seed: () => null,
+  cancel_seed: () => {
+    seedCancelled = true;
+    return null;
+  },
   // `?helloonly` cuts this to the built-in key alone, which is the state a
   // real machine is in until someone enrols a portable one: one key, the
   // Remove action disabled because it is the last, and the warning that
@@ -922,8 +1029,27 @@ const handlers: Record<string, Handler> = {
 
   // Event subscriptions: the app registers several at mount, and a
   // rejection there takes the whole tree down before anything renders.
-  "plugin:event|listen": () => nextListenerId++,
-  "plugin:event|unlisten": () => null,
+  // The callback id is kept, so the fake long jobs above can report progress
+  // the way the real pass does.
+  "plugin:event|listen": (args) => {
+    const event = String(args.event);
+    const handler = args.handler as number;
+    const set = listeners.get(event) ?? new Set<number>();
+    set.add(handler);
+    listeners.set(event, set);
+    const id = nextListenerId++;
+    subscriptions.set(id, { event, handler });
+    return id;
+  },
+  "plugin:event|unlisten": (args) => {
+    const id = args.eventId as number;
+    const sub = subscriptions.get(id);
+    if (sub) {
+      listeners.get(sub.event)?.delete(sub.handler);
+      subscriptions.delete(id);
+    }
+    return null;
+  },
 };
 
 let nextListenerId = 1;

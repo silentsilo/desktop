@@ -44,33 +44,86 @@ impl silentsilo_app::inbox_import::OpenSilo for OpenForImport<'_> {
     }
 }
 
+/// The four numbers a progress report carries, so the call does not take
+/// four bare integers in a row. The same shape core's pass uses.
+#[derive(Debug, Default, Clone, Copy)]
+struct ProgressStep {
+    done: usize,
+    total: usize,
+    bytes_done: u64,
+    bytes_total: u64,
+}
+
+impl ProgressStep {
+    /// A step counted in items rather than bytes.
+    fn counted(done: usize, total: usize) -> Self {
+        Self {
+            done,
+            total,
+            ..Self::default()
+        }
+    }
+}
+
+/// What the last blob report resolved to: the blob, and the file it belongs
+/// to if the silo lists one.
+type NamedBlob = Option<(Uuid, Option<(Uuid, String)>)>;
+
 /// Tells the window where a pass is (`sync-progress`), the same event the
 /// shared pass in `silentsilo-app` sends. A blob is named by its file, read
 /// from the session map directly so a background pass does not count as use.
+///
+/// `named` holds what the last report resolved, so a blob reporting its
+/// bytes several times looks its file up once: the lookup takes the session
+/// lock, and taking it four times a second for a gigabyte would put this
+/// reporting its own progress in front of everything else.
 fn report_progress(
     app: &AppHandle,
     silo_id: Uuid,
     phase: &'static str,
-    done: usize,
-    total: usize,
+    step: ProgressStep,
     blob_id: Option<Uuid>,
+    named: &mut NamedBlob,
 ) {
-    let file = blob_id.and_then(|blob| {
-        let state = app.state::<AppState>();
-        let sessions = state.sessions.lock().ok()?;
-        let session = sessions.get(&silo_id)?;
-        Vfs::new(session).file_for_blob(blob).ok().flatten()
-    });
+    let file = match blob_id {
+        None => None,
+        Some(blob) => {
+            if named.as_ref().is_none_or(|(seen, _)| *seen != blob) {
+                let found = (|| {
+                    let state = app.state::<AppState>();
+                    let sessions = state.sessions.lock().ok()?;
+                    let session = sessions.get(&silo_id)?;
+                    Vfs::new(session).file_for_blob(blob).ok().flatten()
+                })();
+                *named = Some((blob, found));
+            }
+            named.as_ref().and_then(|(_, file)| file.clone())
+        }
+    };
     let _ = app.emit(
         "sync-progress",
         silentsilo_app::SyncProgress {
             silo_id: silo_id.to_string(),
             phase,
-            done,
-            total,
+            done: step.done,
+            total: step.total,
+            bytes_done: step.bytes_done,
+            bytes_total: step.bytes_total,
             file_id: file.as_ref().map(|(id, _)| id.to_string()),
             name: file.map(|(_, name)| name),
         },
+    );
+}
+
+/// A phase counted in items, with no blob to name and so nothing to cache.
+fn report_counted(app: &AppHandle, silo_id: Uuid, phase: &'static str, done: usize, total: usize) {
+    report_progress(
+        app,
+        silo_id,
+        phase,
+        ProgressStep::counted(done, total),
+        None,
+        &mut None,
     );
 }
 
@@ -114,6 +167,14 @@ pub struct SyncReport {
     /// credential or the recovery code.
     #[serde(default)]
     pub needs_rejoin: bool,
+    /// The silo's content key in storage does not open with this device's
+    /// key, while the records beside it still do. A rotation cannot leave a
+    /// target that way, so the object was replaced or put back from an older
+    /// copy. Nothing was pushed, and rejoining would not help: the storage
+    /// is what has to be fixed. Separate from `needs_rejoin` because the
+    /// screen has to say something else entirely.
+    #[serde(default)]
+    pub key_material_replaced: bool,
     /// Records dropped from the bucket by a compaction this pass ran, so the
     /// status line can say the log got shorter rather than leaving the user
     /// wondering what the extra work was.
@@ -490,8 +551,8 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
     // key nobody else holds, and its stale KEK envelope would overwrite the
     // rotated one in the bucket. The first target that answers decides.
     for target in &targets {
-        match sync::key_still_current(&*target.store, &dek).await {
-            Ok(Some(false)) => {
+        match sync::kek_envelope_state(&*target.store, &dek).await {
+            Ok(sync::KekState::Rotated) => {
                 return Ok(announce(
                     app,
                     silo,
@@ -502,10 +563,34 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
                     },
                 ));
             }
-            Ok(Some(true)) => break,
+            // Records here open under this key and the content key does not,
+            // which no rotation produces. Rejoining reads the same object,
+            // so telling the user to rejoin would send them round a loop
+            // that cannot end.
+            Ok(sync::KekState::Replaced) => {
+                crate::diagnostics::warn(
+                    "keys",
+                    format_args!(
+                        "{}: the silo's content key there does not open with this device's key, \
+                         while the records beside it do. A rotation cannot do that, so the object \
+                         was replaced or put back from an older copy. Nothing was sent.",
+                        target.label
+                    ),
+                );
+                return Ok(announce(
+                    app,
+                    silo,
+                    SyncReport {
+                        configured: true,
+                        key_material_replaced: true,
+                        ..SyncReport::default()
+                    },
+                ));
+            }
+            Ok(sync::KekState::Current) => break,
             // Nothing there to compare against: a new silo, or a copy caught
             // in the middle of an SFTP overwrite. The next copy is asked.
-            Ok(None) => continue,
+            Ok(sync::KekState::Absent) => continue,
             // Unreachable: ask the next copy rather than deciding blind.
             Err(_) => continue,
         }
@@ -561,7 +646,16 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
         .iter()
         .map(|t| (&*t.store, t.role.allows_delete()))
         .collect();
-    let recovery = sync::settle_recovery_envelope(&recovery_targets, &kek, &root).await;
+    let settled = sync::settle_recovery_envelope(&recovery_targets, &kek, &root).await;
+    if settled.refused_unauthenticated {
+        crate::diagnostics::warn(
+            "recovery",
+            "a newer recovery envelope in storage carries no tag from this silo, so the code this \
+             device holds was kept. Check for a device still on an older release before changing \
+             the recovery code.",
+        );
+    }
+    let recovery = settled.envelope;
     let mut keys = load_fido_keys(&root).ok();
 
     for target in &targets {
@@ -574,6 +668,9 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
             base: base.as_ref(),
             vault_root: &root,
         };
+        // What the last blob report resolved to a file, so the several
+        // reports one large blob sends cost one lookup.
+        let mut named: NamedBlob = None;
         let outcome = sync::push_everything_to_reporting(
             &sync::TargetPush {
                 id: target.id,
@@ -585,14 +682,22 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
             &mut |step| match step {
                 sync::PushStep::Ops { done, total } => {
                     if worth_saying(done, total) {
-                        report_progress(app, silo.id, "sending-changes", done, total, None);
+                        report_counted(app, silo.id, "sending-changes", done, total);
                     }
                 }
-                sync::PushStep::Blob {
-                    done,
-                    total,
-                    blob_id,
-                } => report_progress(app, silo.id, "uploading", done, total, Some(blob_id)),
+                sync::PushStep::Blob(blob) => report_progress(
+                    app,
+                    silo.id,
+                    "uploading",
+                    ProgressStep {
+                        done: blob.done,
+                        total: blob.total,
+                        bytes_done: blob.bytes_done,
+                        bytes_total: blob.bytes_total,
+                    },
+                    Some(blob.blob_id),
+                    &mut named,
+                ),
             },
         )
         .await;
@@ -653,7 +758,7 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
             local_horizon,
             &mut |done, total| {
                 if worth_saying(done, total) {
-                    report_progress(app, silo.id, "fetching-changes", done, total, None);
+                    report_counted(app, silo.id, "fetching-changes", done, total);
                 }
             },
         )
@@ -717,10 +822,10 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
         // record noted as delivered without having arrived is one this
         // device will never offer again.
         //
-        // All of it in one transaction. `mark_delivered` inserts a row per
-        // record and starts no transaction of its own, so a target owed
-        // thousands of records paid for thousands of commits, every one of
-        // them with the sessions mutex held and the window waiting behind it.
+        // All of it in one transaction, across every target. Core's
+        // `mark_delivered` takes a savepoint of its own and nests inside
+        // this one, so the commit here is the only one the sessions mutex
+        // pays for however many targets are owed however long a history.
         // Rolling back on the way out is the safe direction: nothing is
         // marked, and the next pass offers the records again, finds them
         // already in storage and marks them then.
@@ -785,7 +890,7 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
         &kek,
         vault_id,
         every_target.len() > 1,
-        &|done: usize, total: usize| report_progress(app, silo.id, "importing", done, total, None),
+        &|done: usize, total: usize| report_counted(app, silo.id, "importing", done, total),
     )
     .await;
 
@@ -851,6 +956,7 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
             .collect(),
         needs_rebuild: false,
         needs_rejoin: false,
+        key_material_replaced: false,
         compacted,
         targets: statuses,
         skipped: false,
@@ -923,21 +1029,28 @@ fn record_target_outcomes(
     Ok(())
 }
 
-/// The silo's content KEK, or a refusal naming what is missing. A joining
-/// device must never mint one: a split KEK is a split no later sync
-/// repairs.
-async fn fetch_kek_or_refuse(
+/// The local half of a join: the silo folder, the content key it is opened
+/// under, the published key envelopes and the recovery envelope.
+///
+/// Core's code, not a copy of it, and every door into a silo on this device
+/// goes through here: the two joins and the repair. The reason is the
+/// envelopes. Nothing signs the `policy` field one carries, so an `org`
+/// planted on a key nobody can prove would refuse rotation and recovery-code
+/// changes on this device for good. Core keeps that claim only on the key
+/// that proved itself in this join and clears it everywhere else, and it
+/// drops revoked keys, implausible credential ids and any key a sealed
+/// marker names. A second implementation of that rule here would be a
+/// second thing to get wrong.
+///
+/// It never mints a content key either: a joining device that did would
+/// split the silo in a way no later sync repairs.
+pub(crate) async fn provision_joined_silo(
     store: &dyn ObjectStore,
-    dek: &silentsilo_crypto::MasterDek,
-) -> Result<silentsilo_crypto::ContentKek, String> {
-    let envelope = sync::fetch_content_kek(store)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| {
-            "This storage has no content key yet. Sync once from the computer that has              the silo, then set this one up."
-                .to_string()
-        })?;
-    silentsilo_vault::unwrap_kek_bytes(&envelope, dek).map_err(|e| e.to_string())
+    join: &silentsilo_app::flows::RecoveryJoin,
+    root: std::path::PathBuf,
+    device_secret: &str,
+) -> Result<VaultSession, String> {
+    silentsilo_app::flows::recovery_join_provision(store, join, root, device_secret).await
 }
 
 /// Downloads whatever this device is missing, when it is meant to hold a
@@ -978,14 +1091,15 @@ async fn fetch_missing_for_full_copy(
 
     let mut fetched = 0;
     let batch: Vec<Uuid> = missing.into_iter().take(FULL_COPY_FETCH_PER_PASS).collect();
+    let mut named: NamedBlob = None;
     for (done, blob_id) in batch.iter().copied().enumerate() {
         report_progress(
             app,
             silo.id,
             "downloading",
-            done,
-            batch.len(),
+            ProgressStep::counted(done, batch.len()),
             Some(blob_id),
+            &mut named,
         );
         // One object that will not come down must not stop the rest. It was
         // a `break`, so a single blob missing from the bucket, or one whose
@@ -1387,15 +1501,21 @@ pub async fn vault_join_from_storage(
     })
     .await?;
 
-    // Only the envelope belonging to the key that was actually touched can
-    // be unwrapped — falling back to another one would just fail later with
-    // a worse message.
-    let stored = keys
-        .find_by_credential_id(&unlock.credential_id)
-        .ok_or_else(|| "That security key isn't enrolled on this silo.".to_string())?
-        .clone();
-    let dek = silentsilo_vault::unwrap_dek_hex(&stored.wrapped_dek, &unlock.wrap_key)
-        .map_err(|_| "That security key could not unlock the silo.".to_string())?;
+    // Core opens the join with the key that was touched: only that key's
+    // envelope can be unwrapped, and it is the one key whose `policy` claim
+    // has been proven here. It also refuses a key a sealed revocation marker
+    // names, which a device that had not heard of the removal can republish.
+    let offer = silentsilo_app::flows::KeyJoinOffer {
+        vault_id,
+        keys: keys.keys.clone(),
+    };
+    let join = silentsilo_app::flows::key_join_open(
+        &*store,
+        &offer,
+        &hex::encode(&unlock.credential_id),
+        &unlock.wrap_key,
+    )
+    .await?;
 
     // From here on local state is created. Everything above could fail
     // without leaving anything behind.
@@ -1417,33 +1537,9 @@ pub async fn vault_join_from_storage(
     // without the user entering the details a second time.
     silentsilo_vault::save_s3_config(vault_id, &s3_config).map_err(|e| e.to_string())?;
 
-    // The silo's own content key wrapper, not one this device invents:
-    // everything already there is wrapped under it.
-    let kek = fetch_kek_or_refuse(&*store, &dek).await?;
-    let session =
-        VaultSession::provision_with_dek(root.clone(), vault_id, &device_secret, dek, kek)
-            .map_err(|e| e.to_string())?;
-
-    Vfs::new(&session)
-        .ensure_initialized()
-        .map_err(|e| e.to_string())?;
-
-    // The DEK envelope on disk is the FIDO-wrapped one, matching a device
-    // that enrolled its key here — so unlocking afterwards takes the normal
-    // path with no special case for joined devices.
-    silentsilo_vault::save_wrapped_dek_bytes(
-        &root,
-        &hex::decode(&stored.wrapped_dek).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())?;
-    // A silo arriving on this machine for the first time: the file is being
-    // created from what the bucket holds, so there is no earlier state to
-    // take anything away from.
-    silentsilo_vault::save_fido_keys(&root, &keys, silentsilo_vault::Authority::Machine)
-        .map_err(|e| e.to_string())?;
+    let session = provision_joined_silo(&*store, &join, root.clone(), &device_secret).await?;
 
     let dek_for_fetch = session.dek.clone();
-    session.backup_locally().map_err(|e| e.to_string())?;
     crate::commands::silo::adopt_joined_silo(&app, &state, entry)?;
 
     // The tree is rebuilt rather than copied. Two ways in, decided by the
@@ -2183,6 +2279,186 @@ mod tests {
             pending_ops_for(conn, target).unwrap().len(),
             owed.len(),
             "a delivery that did not commit must leave the records owed"
+        );
+    }
+}
+
+/// Both doors into a silo, against storage that lies about what its key
+/// envelopes may claim.
+///
+/// The `policy` on a published envelope is not signed by anything. Anyone who
+/// can write to the bucket can put `org` on a key nobody is able to prove,
+/// and a device that adopted it would refuse a key rotation and a new
+/// recovery code for good, asking every time for a ceremony with a key that
+/// does not exist. The rule lives in core; these hold this app to it.
+#[cfg(test)]
+mod join_tests {
+    use super::*;
+    use silentsilo_app::flows::{DeviceKey, KeyJoinOffer, key_join_open, recovery_join_begin};
+    use silentsilo_store::{FolderStore, StoreConfig};
+    use silentsilo_vault::{BackupTarget, TargetRole};
+
+    /// The published silo, plus what opens it.
+    struct Origin {
+        _dirs: Vec<tempfile::TempDir>,
+        storage: std::path::PathBuf,
+        code: String,
+    }
+
+    /// A pass needs somewhere to send to and somewhere to say things.
+    struct OneTarget(BackupTarget);
+
+    impl silentsilo_app::Host for OneTarget {
+        fn emit(&self, _event: silentsilo_app::AppEvent) {}
+        fn warn(&self, _area: &str, _detail: &str) {}
+        fn targets(&self, _silo_id: Uuid) -> Vec<BackupTarget> {
+            vec![self.0.clone()]
+        }
+    }
+
+    /// A silo with one key and one recovery code, synced to a folder.
+    async fn origin() -> Origin {
+        let storage = tempfile::tempdir().unwrap();
+        let silo_dir = tempfile::tempdir().unwrap();
+        let root = silo_dir.path().join("silo");
+        let vault_id = Uuid::new_v4();
+        let session = VaultSession::provision(root.clone(), vault_id, "secret-a").unwrap();
+        let vfs = Vfs::new(&session);
+        vfs.ensure_initialized().unwrap();
+        vfs.create_folder(vfs.root_folder_id().unwrap(), "Invoices")
+            .unwrap();
+
+        let (code, envelope) =
+            silentsilo_vault::create_recovery_envelope(&session.dek, &session.kek).unwrap();
+        silentsilo_vault::save_recovery_envelope(&root, &envelope).unwrap();
+        // A FIDO2-shaped key with a known wrap key, so the join needs no
+        // hardware and no ceremony.
+        silentsilo_app::flows::enrol_device_key(
+            &session,
+            &DeviceKey {
+                kind: silentsilo_vault::KIND_FIDO2.into(),
+                derivation: silentsilo_vault::DERIVATION_HMAC_V1.into(),
+                credential_id: "aa11".into(),
+                public_key: String::new(),
+                wrap_key: [7; 32],
+                label: "YubiKey".into(),
+            },
+        )
+        .unwrap();
+
+        let host = OneTarget(BackupTarget {
+            config: StoreConfig::Folder {
+                path: storage.path().to_path_buf(),
+            },
+            label: String::new(),
+            role: TargetRole::Working,
+        });
+        let state = silentsilo_app::AppState::default();
+        let silo = SiloEntry {
+            id: vault_id,
+            name: "A".into(),
+            path: root,
+            last_opened: 0,
+            auto_lock_minutes: None,
+        };
+        state.open_session(&host, silo.id, session).unwrap();
+        let report = silentsilo_app::run_sync_pass(&state, &host, &silo)
+            .await
+            .unwrap();
+        assert!(report.ops_pushed > 0, "{report:?}");
+
+        Origin {
+            storage: storage.path().to_path_buf(),
+            code,
+            _dirs: vec![storage, silo_dir],
+        }
+    }
+
+    /// Writes `org` into a published envelope, or plants a whole envelope
+    /// for a key that never existed. Both are one PUT for anyone who can
+    /// write to the storage.
+    async fn plant_org_policy(store: &FolderStore, id: &str) {
+        let object = format!("keys/{id}.env");
+        let mut envelope: serde_json::Value = match store.get(&object).await {
+            Ok(bytes) => serde_json::from_slice(&bytes).unwrap(),
+            Err(_) => {
+                let mut fake = serde_json::from_slice::<serde_json::Value>(
+                    &store.get("keys/aa11.env").await.unwrap(),
+                )
+                .unwrap();
+                fake["credential_id"] = id.into();
+                fake["wrapped_dek"] = "00".repeat(60).into();
+                fake
+            }
+        };
+        envelope["policy"] = silentsilo_vault::POLICY_ORG.into();
+        store
+            .put(&object, serde_json::to_vec(&envelope).unwrap())
+            .await
+            .unwrap();
+    }
+
+    /// No key is touched on this path, so nothing has proved anything: every
+    /// claim in storage goes.
+    #[tokio::test]
+    async fn a_recovery_join_keeps_no_policy_storage_planted() {
+        let origin = origin().await;
+        let store = FolderStore::new(origin.storage.clone());
+        plant_org_policy(&store, "aa11").await;
+        plant_org_policy(&store, "cc33").await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("joined");
+        let join = recovery_join_begin(&store, &origin.code).await.unwrap();
+        let session = provision_joined_silo(&store, &join, root.clone(), "secret-b")
+            .await
+            .unwrap();
+        drop(session);
+
+        let keys = silentsilo_vault::load_fido_keys(&root).unwrap();
+        assert!(
+            keys.keys.iter().any(|k| k.credential_id == "aa11"),
+            "the enrolled key still has to arrive: {:?}",
+            keys.keys
+        );
+        assert!(
+            !keys.is_org_controlled(),
+            "a planted policy survived a recovery join: {:?}",
+            keys.keys
+        );
+    }
+
+    /// One key was touched here and produced its wrap key, so its own claim
+    /// stands. Nothing else in the bucket gets to claim anything.
+    #[tokio::test]
+    async fn a_key_join_keeps_only_the_policy_of_the_key_that_proved_it() {
+        let origin = origin().await;
+        let store = FolderStore::new(origin.storage.clone());
+        plant_org_policy(&store, "aa11").await;
+        plant_org_policy(&store, "cc33").await;
+
+        let offer = KeyJoinOffer {
+            vault_id: Uuid::new_v4(),
+            keys: sync::fetch_key_envelopes(&store).await.unwrap(),
+        };
+        let join = key_join_open(&store, &offer, "aa11", &[7; 32])
+            .await
+            .unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("joined");
+        let session = provision_joined_silo(&store, &join, root.clone(), "secret-b")
+            .await
+            .unwrap();
+        drop(session);
+
+        let keys = silentsilo_vault::load_fido_keys(&root).unwrap();
+        let managed: Vec<String> = keys.managed().map(|k| k.credential_id.clone()).collect();
+        assert_eq!(
+            managed,
+            vec!["aa11".to_string()],
+            "only the key that was touched may keep its policy: {:?}",
+            keys.keys
         );
     }
 }

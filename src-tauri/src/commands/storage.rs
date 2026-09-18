@@ -308,8 +308,12 @@ pub async fn backup_target_seed(app: AppHandle, from: String, to: String) -> Res
     let outcome = silentsilo_sync::seed_target(
         &*source,
         &*dest,
-        &mut move |done, total| {
-            let _ = handle.emit("seed-progress", (done, total));
+        // Passed on whole: the object count stands still for the length of
+        // one large blob, and the bytes are what moves while it does. Core
+        // paces these at four a second, so there is no throttling to do
+        // here.
+        &mut move |progress: silentsilo_sync::SeedProgress| {
+            let _ = handle.emit("seed-progress", progress);
         },
         &|| {
             state
@@ -362,11 +366,13 @@ pub async fn backup_target_seed(app: AppHandle, from: String, to: String) -> Res
     Ok(outcome.copied)
 }
 
-/// Stops a running seed between objects.
+/// Stops a running seed.
 ///
-/// Safe by construction: what already landed stays landed, and the next run
-/// skips it and carries on. The flag is reset by `backup_target_seed` itself
-/// at the start of each run.
+/// Core asks this flag between objects and again on every progress report,
+/// so the stop lands inside a large object rather than after it. Safe by
+/// construction: what already landed stays landed, and the next run skips it
+/// and carries on. The flag is reset by `backup_target_seed` itself at the
+/// start of each run.
 #[tauri::command(async)]
 pub fn cancel_seed(state: tauri::State<crate::state::AppState>) {
     state

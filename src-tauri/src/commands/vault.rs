@@ -1849,10 +1849,14 @@ pub struct ProtectedScanReport {
     pub skipped: usize,
 }
 
+/// The list and the ledger are sealed under the content KEK, so reading
+/// either needs the silo open. An unlocked-only command rather than one that
+/// answers with an empty list: a list that reads as empty while locked is the
+/// app telling the user they protect nothing.
 #[tauri::command(async)]
 pub fn protected_folders_list(app: AppHandle) -> Result<Vec<ProtectedFolderView>, String> {
-    let silo = crate::state::active_silo(&app)?;
-    Ok(silentsilo_vault::load_protected(&silo.path)
+    let (silo, kek) = crate::state::unlocked_silo_with_kek(&app)?;
+    Ok(silentsilo_vault::load_protected(&silo.path, &kek)
         .map_err(|e| e.to_string())?
         .folders
         .into_iter()
@@ -1876,13 +1880,13 @@ pub struct ProtectedFolderView {
 /// each other.
 #[tauri::command(async)]
 pub fn protected_folders_add(app: AppHandle, path: String) -> Result<(), String> {
-    let silo = crate::state::unlocked_silo(&app)?;
+    let (silo, kek) = crate::state::unlocked_silo_with_kek(&app)?;
     let source = PathBuf::from(&path);
     if !source.is_dir() {
         return Err("That is not a folder on this computer.".into());
     }
 
-    let mut list = silentsilo_vault::load_protected(&silo.path).map_err(|e| e.to_string())?;
+    let mut list = silentsilo_vault::load_protected(&silo.path, &kek).map_err(|e| e.to_string())?;
     if list.folders.iter().any(|f| f.path == source) {
         return Ok(());
     }
@@ -1903,18 +1907,18 @@ pub fn protected_folders_add(app: AppHandle, path: String) -> Result<(), String>
         path: source,
         target,
     });
-    silentsilo_vault::save_protected(&silo.path, &list).map_err(|e| e.to_string())
+    silentsilo_vault::save_protected(&silo.path, &kek, &list).map_err(|e| e.to_string())
 }
 
 /// Stops keeping a copy. What was already imported stays: this is an archive,
 /// and removing a folder from the list is not a request to delete anything.
 #[tauri::command(async)]
 pub fn protected_folders_remove(app: AppHandle, path: String) -> Result<(), String> {
-    let silo = crate::state::active_silo(&app)?;
-    let mut list = silentsilo_vault::load_protected(&silo.path).map_err(|e| e.to_string())?;
+    let (silo, kek) = crate::state::unlocked_silo_with_kek(&app)?;
+    let mut list = silentsilo_vault::load_protected(&silo.path, &kek).map_err(|e| e.to_string())?;
     let removing = Path::new(&path);
     list.folders.retain(|f| f.path != removing);
-    silentsilo_vault::save_protected(&silo.path, &list).map_err(|e| e.to_string())
+    silentsilo_vault::save_protected(&silo.path, &kek, &list).map_err(|e| e.to_string())
 }
 
 /// Walks every protected folder and imports what has changed.
@@ -1925,13 +1929,14 @@ pub fn protected_folders_remove(app: AppHandle, path: String) -> Result<(), Stri
 #[tauri::command]
 pub async fn protected_folders_scan(app: AppHandle) -> Result<ProtectedScanReport, String> {
     run_blocking(move || {
-        let silo = crate::state::active_silo(&app)?;
-        let list = silentsilo_vault::load_protected(&silo.path).map_err(|e| e.to_string())?;
+        let (silo, kek) = crate::state::unlocked_silo_with_kek(&app)?;
+        let list = silentsilo_vault::load_protected(&silo.path, &kek).map_err(|e| e.to_string())?;
         if list.folders.is_empty() {
             return Ok(ProtectedScanReport::default());
         }
 
-        let seen = silentsilo_vault::protected::load_seen(&silo.path).map_err(|e| e.to_string())?;
+        let seen =
+            silentsilo_vault::protected::load_seen(&silo.path, &kek).map_err(|e| e.to_string())?;
         let state = app.state::<AppState>();
         let snapshot = crate::state::snapshot_focused_session(&state)?;
 
@@ -1958,6 +1963,7 @@ pub async fn protected_folders_scan(app: AppHandle) -> Result<ProtectedScanRepor
                         // missing until someone touched it again.
                         let _ = silentsilo_vault::protected::mark_seen(
                             &silo.path,
+                            &kek,
                             &item.source,
                             item.stat,
                         );

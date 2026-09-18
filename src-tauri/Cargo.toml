@@ -57,6 +57,11 @@ tokio = { version = "1", features = ["time"] }
 webview2-com = "0.38"
 windows-core = "0.61"
 
+# The join tests are async: they publish a silo to a folder and join it back.
+# The runtime is already in the tree under tauri, so this adds no crate.
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

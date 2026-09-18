@@ -170,12 +170,31 @@ export type FileSyncState =
   | "downloading"
   | "absent";
 
+/**
+ * How far filling one copy from another has got (`seed-progress`).
+ *
+ * Objects and bytes both: the object count stands still for minutes on one
+ * large blob, and the byte count alone hides that a thousand tiny records
+ * are what is left.
+ */
+export type SeedProgress = {
+  objects_done: number;
+  objects_total: number;
+  bytes_done: number;
+  bytes_total: number;
+};
+
 /** Where a running sync pass is (`sync-progress`). Gone once it reports. */
 export type SyncProgress = {
   silo_id: string;
   phase: "sending-changes" | "uploading" | "fetching-changes" | "downloading" | "importing";
   done: number;
   total: number;
+  /** How much of the file this step moves has moved, and how big it is. Both
+   * zero where the step is counted in items instead: a single large upload
+   * needs these, because `done` stands still for the whole of it. */
+  bytes_done: number;
+  bytes_total: number;
   file_id: string | null;
   name: string | null;
 };

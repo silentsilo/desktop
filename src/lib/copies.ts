@@ -1,4 +1,5 @@
-import type { StoreConfigView } from "./types";
+import { formatBytes } from "./format";
+import type { SeedProgress, StoreConfigView } from "./types";
 
 /**
  * One place this silo backs up to, as the backend reports it.
@@ -141,4 +142,43 @@ export function copyState(target: BackupTargetView, nowSeconds: number): CopySta
  */
 export function currentCopies(targets: BackupTargetView[], nowSeconds: number): number {
   return targets.filter((t) => copyState(t, nowSeconds).health === "current").length;
+}
+
+/**
+ * The line under a running fill.
+ *
+ * Both counts, because neither alone is enough: the object count stands
+ * still for the minutes one large blob takes, and the bytes alone hide that
+ * a thousand small records are what is left.
+ */
+export function seedHeadline(p: SeedProgress): string {
+  const objects = `${p.objects_done} of ${p.objects_total} object${
+    p.objects_total === 1 ? "" : "s"
+  }`;
+  if (p.bytes_total <= 0) return `Copying: ${objects}.`;
+  return `Copying: ${objects}, ${formatBytes(p.bytes_done)} of ${formatBytes(p.bytes_total)}.`;
+}
+
+/**
+ * The same thing in the width of a button, where one number is all there is
+ * room for. The bytes, because that is the one that moves while a large
+ * object goes across, which is the whole reason they are reported.
+ */
+export function seedLabel(p: SeedProgress): string {
+  if (p.bytes_total <= 0) return `${p.objects_done} of ${p.objects_total}…`;
+  return `${formatBytes(p.bytes_done)} of ${formatBytes(p.bytes_total)}…`;
+}
+
+/**
+ * How far along the bar is, 0 to 100.
+ *
+ * Bytes wherever there are any: they move during a large object, and an
+ * object skipped or failed is credited whole when it is done with, so the
+ * bar still ends where the object count does.
+ */
+export function seedPercent(p: SeedProgress): number {
+  const done = p.bytes_total > 0 ? p.bytes_done : p.objects_done;
+  const total = p.bytes_total > 0 ? p.bytes_total : p.objects_total;
+  if (total <= 0) return 0;
+  return Math.min(100, Math.max(0, (done / total) * 100));
 }

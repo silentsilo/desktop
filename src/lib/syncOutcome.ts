@@ -40,6 +40,11 @@ export type SyncReport = {
   /// The silo's key was rotated from another device and this one was not
   /// kept; it has to rejoin before it can sync again.
   needs_rejoin?: boolean;
+  /// The content key in storage does not open with this device's key, while
+  /// the records beside it do. No rotation can do that, so the object was
+  /// replaced or put back. Rejoining reads the same object, so this must
+  /// never be reported as a rejoin.
+  key_material_replaced?: boolean;
   compacted: number;
   targets: TargetStatus[];
   /// Another pass was already running and this one stood down.
@@ -91,6 +96,11 @@ export function describeSync(r: SyncReport): string {
   if (r.needs_rejoin) {
     return "This silo's key was changed from another device, and this device was not kept. Remove the silo here and rejoin it with a current security key or the recovery code.";
   }
+  // Never the rejoin wording: rejoining reads the same content key, so it
+  // would fail on the same object and leave the user going round a loop.
+  if (r.key_material_replaced) {
+    return "The content key in your backup storage does not match this silo, while the changes stored beside it do. A key change cannot leave it that way, so that one file was replaced or put back from an older copy. Nothing was sent. Restore that file from a copy of the storage, or point this silo at storage that still has the right one.";
+  }
   if (r.needs_rebuild) {
     return "This device is too far behind to catch up. It has to be set up again from the current state.";
   }
@@ -132,7 +142,7 @@ export function describeSync(r: SyncReport): string {
 export function syncOutcome(r: SyncReport, renamed: string): Status {
   // Not a per-target failure: nothing was attempted, and the message is the
   // whole outcome.
-  if (r.needs_rejoin) {
+  if (r.needs_rejoin || r.key_material_replaced) {
     return { kind: "error", message: describeSync(r) };
   }
   const targets = r.targets ?? [];

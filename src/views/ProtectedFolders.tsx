@@ -25,9 +25,14 @@ export function ProtectedFoldersPanel() {
   const refresh = useCallback(async () => {
     try {
       setFolders(await invoke<ProtectedFolder[]>("protected_folders_list"));
+      setError(null);
     } catch (e) {
+      // Left null rather than emptied. The list is sealed under the silo's
+      // content key, so a locked silo answers with an error and not with
+      // nothing: showing "No folders are being copied yet" under it would
+      // tell the user they protect nothing.
       setError(formatAppError(e));
-      setFolders([]);
+      setFolders(null);
     }
   }, []);
 

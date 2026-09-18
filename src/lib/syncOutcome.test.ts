@@ -169,6 +169,16 @@ describe("the pass as a status", () => {
     expect(syncOutcome(r, "").kind).toBe("error");
     expect(describeSync(r)).toContain("rejoin");
   });
+
+  it("a replaced content key is an error that never asks for a rejoin", () => {
+    // Rejoining reads the same object, so the rejoin sentence would send
+    // someone round a loop that cannot end. The storage is what has to be
+    // fixed, and the message has to say so.
+    const r = report({ key_material_replaced: true });
+    expect(syncOutcome(r, "").kind).toBe("error");
+    expect(describeSync(r)).toContain("replaced or put back");
+    expect(describeSync(r).toLowerCase()).not.toContain("rejoin");
+  });
 });
 
 describe("the backup card's standing line", () => {

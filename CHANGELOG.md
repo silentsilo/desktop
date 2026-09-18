@@ -5,18 +5,6 @@ Notable changes are documented here. The format follows
 onward the version follows semver, and anything that could stop an existing
 silo from opening needs a major version rather than a note.
 
-## [Unreleased]
-
-### Fixed
-
-- The window no longer stops responding while a long job runs. Every command
-  the app answers now runs off the thread that draws the window, the places
-  that held the silo's lock while talking to the keyring or the disk no
-  longer do, and a target owed a long history is written down in one go
-  rather than a database commit per record. The progress counters update
-  once a frame instead of once per object, so Stop answers while a copy of
-  hundreds of thousands of files is running.
-
 ## [1.1.0] - Phones, and computers that agree
 
 Windows only, like 1.0.0. The Android app and this release share a silo;
@@ -33,10 +21,16 @@ update every computer before adding a phone.
   are added to the silo by the sync, under Phone backup.
 - A login saved with a passkey from a phone can be edited and saved without
   a password.
+- Copying a silo into another storage shows bytes as well as objects, so a
+  single large file no longer looks like a stall, and Stop lands inside that
+  file instead of after it. What already copied stays, and running it again
+  carries on. A sync shows the bytes of the file it is uploading too.
+- S3 uploads a file over 16 MiB in parts, which lifts the 5 GiB limit a
+  single upload has.
 
 ### Changed
 
-- Built on core 1.5.0. Nothing a silo holds changed in a way 1.0.0 cannot
+- Built on core 1.6.0. Nothing a silo holds changed in a way 1.0.0 cannot
   read, and 1.0.0 still opens a silo this version has used.
 - Update every computer that uses the same silo. A computer still on 1.0.0
   can stop receiving other devices' changes after meeting some of them, and
@@ -138,6 +132,34 @@ update every computer before adding a phone.
 - Uninstalling left the Explorer menu entries behind, doing nothing on a
   right-click. They go now, with the queue files beside them, and the
   uninstaller says your silos are never deleted. README lists what stays.
+- The window no longer stops responding while a long job runs. Every command
+  the app answers now runs off the thread that draws the window, the places
+  that held the silo's lock while talking to the keyring or the disk no
+  longer do, and a target owed a long history is written down in one go
+  rather than a database commit per record. The progress counters update
+  once a frame instead of once per object, so Stop answers while a copy of
+  hundreds of thousands of files is running.
+- A storage copy could vanish from the list after it was added: Windows
+  Credential Manager refuses more than 2560 bytes, one SFTP target with its
+  private key passes that, and the app then read back the older, shorter
+  list. The two copies of the list can no longer disagree.
+
+### Security
+
+- Joining a silo, with a key, with the recovery code, or when repairing a
+  computer from storage, no longer trusts an "organisation" mark on the keys
+  it finds there. Whoever can write to the storage could plant one and block
+  key changes and recovery-code changes on that computer.
+- The list of protected folders and the record of what was imported from
+  them are encrypted. They named every mirrored file by its full path, in
+  the clear. The files from 1.0.0 are converted and removed the first time
+  the silo is opened, which is why that list now needs the silo unlocked.
+- The recovery code's envelope in storage is checked before it is adopted,
+  so storage can no longer bring back a code you turned off or replace it
+  with one that opens nothing.
+- An old copy of the silo's content key put back in storage is reported as
+  that, instead of telling every computer to join again, which could not
+  work.
 
 ## [1.0.0] - First public release
 

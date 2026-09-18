@@ -34,15 +34,20 @@ export type SyncIndicator = {
 function describeProgress(p: SyncProgress): string {
   const count = p.total > 1 ? ` ${Math.min(p.done + 1, p.total)} of ${p.total}` : "";
   const name = p.name ? `: ${p.name}` : "";
+  // One large file holds the count still for the whole of its upload, which
+  // is the case these bytes exist for. Zero on the phases counted in items,
+  // and then nothing is added.
+  const bytes =
+    p.bytes_total > 0 ? ` (${formatBytes(p.bytes_done)} of ${formatBytes(p.bytes_total)})` : "";
   switch (p.phase) {
     case "sending-changes":
       return `Sending changes${count}`;
     case "uploading":
-      return `Uploading${count}${name}`;
+      return `Uploading${count}${name}${bytes}`;
     case "fetching-changes":
       return `Getting changes${count}`;
     case "downloading":
-      return `Downloading${count}${name}`;
+      return `Downloading${count}${name}${bytes}`;
     case "importing":
       return `Adding from phone backup${count}`;
   }

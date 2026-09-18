@@ -970,8 +970,10 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
     // fail at the worst moment. Generated rather than offered: the silo has
     // just lost keys, so leaving it without a way back is the wrong
     // direction to fail in.
+    // The content KEK is the one key a rotation leaves alone, so the tag on
+    // the new envelope is the same one every other device verifies.
     let (recovery_code, envelope) =
-        silentsilo_vault::create_recovery_envelope(&new_dek).map_err(|e| e.to_string())?;
+        silentsilo_vault::create_recovery_envelope(&new_dek, &kek).map_err(|e| e.to_string())?;
     silentsilo_vault::save_recovery_envelope(&root, &envelope).map_err(|e| e.to_string())?;
     publish_recovery_envelope(&app, &envelope).await;
 
@@ -1028,7 +1030,7 @@ pub async fn vault_rotate_resume(
     app: AppHandle,
     credential: String,
 ) -> Result<ResumeOutcome, String> {
-    let (old_dek, root, vault_id, silo) = {
+    let (old_dek, kek, root, vault_id, silo) = {
         let silo = crate::state::active_silo(&app)?;
         let state = app.state::<AppState>();
         let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
@@ -1037,6 +1039,7 @@ pub async fn vault_rotate_resume(
             .ok_or_else(|| "Unlock the silo before finishing the key change".to_string())?;
         (
             session.dek.clone(),
+            session.kek.clone(),
             session.paths.root.clone(),
             session.vault_id.to_string(),
             silo,
@@ -1122,7 +1125,7 @@ pub async fn vault_rotate_resume(
     // `recovery_generate` publishes: the case this exists for is a machine
     // that has never seen the silo.
     let (recovery_code, recovery) =
-        silentsilo_vault::create_recovery_envelope(&new_dek).map_err(|e| e.to_string())?;
+        silentsilo_vault::create_recovery_envelope(&new_dek, &kek).map_err(|e| e.to_string())?;
     silentsilo_vault::save_recovery_envelope(&root, &recovery).map_err(|e| e.to_string())?;
     let unchanged_targets = publish_recovery_envelope(&app, &recovery).await;
 

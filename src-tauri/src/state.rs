@@ -83,6 +83,26 @@ pub fn unlocked_silo(app: &AppHandle) -> Result<SiloEntry, String> {
     Ok(silo)
 }
 
+/// The active silo and the content KEK of its open session.
+///
+/// For the files sealed beside the silo under that key: the protected folder
+/// list and its import ledger. They cannot be read at all while the silo is
+/// locked, so this says so rather than letting a command answer with an
+/// empty list, which would tell the user they protect nothing.
+pub fn unlocked_silo_with_kek(
+    app: &AppHandle,
+) -> Result<(SiloEntry, silentsilo_crypto::ContentKek), String> {
+    let silo = active_silo(app)?;
+    let state = app.state::<AppState>();
+    let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
+    let kek = sessions
+        .get(&silo.id)
+        .ok_or_else(|| "Unlock the silo first.".to_string())?
+        .kek
+        .clone();
+    Ok((silo, kek))
+}
+
 pub fn active_silo(app: &AppHandle) -> Result<SiloEntry, String> {
     app.state::<AppState>()
         .active_silo

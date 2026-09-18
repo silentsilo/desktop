@@ -76,8 +76,9 @@ sequenceDiagram
     P->>DB: read owed-per-target, dek, kek, base horizon, known op ids
     P->>T: lowest snapshot horizon
     Note over P: received through the horizon or less, and the snapshot there genuine? → needs_rebuild, stop
-    P->>T: does keys/content.kek open under our DEK?
-    Note over P: no? → needs_rejoin, stop before pushing anything
+    P->>T: does keys/content.kek open under our DEK? (kek_envelope_state)
+    Note over P: rotated away? → needs_rejoin, stop before pushing anything
+    Note over P: replaced, records still open? → key_material_replaced, stop
     P->>T: reconcile key envelopes: add keys enrolled elsewhere, honour revocation markers
     P->>T: push_everything_to: manifest, KEK, recovery, base snapshot, key envelopes, ops, blobs
     P->>T: fetch_missing_ops (op-id diff, above local base horizon)
@@ -129,6 +130,16 @@ sequenceDiagram
   tombstone is dropped only once its marker is in storage. The step is
   core's `silentsilo_sync::reconcile_key_envelopes`, run the same way as in
   `silentsilo-app`.
+- **A content key that will not open is two different things**, and
+  `kek_envelope_state` reads the records beside it to tell them apart. If
+  they do not open either, the silo's key was rotated and this device was
+  not kept: `needs_rejoin`, and the screen says to rejoin. If they still
+  open, no rotation produced that state, because a rotation re-seals the
+  records first and writes this object last. The object was replaced or put
+  back from an older copy, so the pass reports `key_material_replaced` and
+  the screen says the storage is what has to be fixed. Rejoining fetches the
+  same object and fails on it, which is why the two must never share a
+  message.
 - **The inbox imports after the push and pull**: an item recorded in one
   pass leaves the inbox only in a later pass that reached every target, so
   it is never gone from storage while its record exists on this machine
@@ -139,11 +150,21 @@ sequenceDiagram
   `pushed`/`synced` mean "every configured target has it", which is the only
   meaning that makes local pruning and eviction safe. Removing a target
   drops its rows; a target added later is owed everything, including
-  history. Core's `mark_delivered` inserts a row per record and opens no
-  transaction, so the pass wraps the whole per-target loop in one: a target
-  owed a long history otherwise paid for a commit per record with the
-  sessions mutex held. A delivery that does not commit leaves the records
-  owed, which the next pass settles by finding them already in storage.
+  history. Core's `mark_delivered` writes the whole list under a savepoint,
+  which nests inside the transaction this pass wraps the per-target loop in,
+  so one commit covers every target: a target owed a long history used to pay
+  for a commit per record with the sessions mutex held. A delivery that does
+  not commit leaves the records owed, which the next pass settles by finding
+  them already in storage.
+- **A pass reports bytes as well as items**: `sync-progress` carries
+  `bytes_done` and `bytes_total`, non-zero only while one blob is uploading,
+  because the blob count stands still for the whole of a large file. The file
+  a blob belongs to is looked up once per blob and reused across that blob's
+  reports: the lookup takes the sessions mutex, and four a second for a
+  gigabyte would put progress reporting in front of everything else. Filling
+  one copy from another (`backup_target_seed`) reports the same way on
+  `seed-progress`, and its Stop now lands inside an object rather than after
+  it.
 
 ## Session and lock lifecycle
 
@@ -183,6 +204,27 @@ crates are in core's map.
 
 - **The desktop app is free and stays that way; wording is accountability,
   never warranty.** Every copy change goes through that filter.
+- **Every door into a silo provisions through core, not through this app.**
+  The key join, the recovery-code join and `vault_repair_from_storage` all
+  end in `commands::sync::provision_joined_silo`, a call to core's
+  `flows::recovery_join_provision`. The app keeps its own part either side
+  (the ceremony, the registry entry, the keyring, the progress events) and
+  hands the rest over. The reason is the key envelopes in storage: nothing
+  signs the `policy` one claims, so an `org` planted by anyone who can write
+  to the bucket would refuse key rotation and a new recovery code on the
+  joined device for good, asking each time for a ceremony with a key that
+  does not exist. Core keeps that claim only on the key that proved itself
+  in this join, clears it everywhere else, and drops revoked keys and any a
+  sealed marker names. Three copies of that rule would be three things to
+  get wrong; `join_tests` in `commands/sync.rs` plants an `org` envelope and
+  holds both doors to it.
+- **The protected folders list refuses while the silo is locked.** The list
+  and its import ledger are sealed under the content KEK, so there is nothing
+  to read without an open session: `protected_folders_list`,
+  `protected_folders_remove` and the scan all take the KEK from the session
+  map and say "Unlock the silo first." otherwise. An empty list would tell
+  someone they protect nothing, and a ledger that reads as empty imports every
+  protected file a second time.
 - **`additionalBrowserArgs` repeats flags nobody wrote here.** Setting it
   replaces wry's own default (`--disable-features=msWebOOUI,msPdfOOUI,
   msSmartScreenProtection`) rather than adding to it, so those three are

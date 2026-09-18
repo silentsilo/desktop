@@ -112,7 +112,11 @@ pub async fn recovery_generate(app: AppHandle) -> Result<GeneratedRecovery, Stri
         let session = guard
             .as_ref()
             .ok_or_else(|| "Unlock the silo before creating a recovery code".to_string())?;
-        let (code, envelope) = create_recovery_envelope(&session.dek).map_err(|e| e.to_string())?;
+        // Tagged under the content KEK, which storage never sees: that tag
+        // is what lets the other devices tell this envelope from one a
+        // bucket writer put there.
+        let (code, envelope) =
+            create_recovery_envelope(&session.dek, &session.kek).map_err(|e| e.to_string())?;
         (
             code,
             envelope,
@@ -286,19 +290,8 @@ pub async fn vault_repair_from_storage(
         return Err("No backup storage for this silo could be reached.".into());
     };
 
-    let envelope = sync::fetch_recovery_envelope(store)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "No recovery code was set up for this silo.".to_string())?;
-    let dek = unwrap_with_code(&envelope, &code)
-        .map_err(|_| "That recovery code doesn't match this silo.".to_string())?;
-    let kek_envelope = sync::fetch_content_kek(store)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| {
-            "This storage has no content key, so there is nothing to rebuild.".to_string()
-        })?;
-    let kek = silentsilo_vault::unwrap_kek_bytes(&kek_envelope, &dek).map_err(|e| e.to_string())?;
+    // The code has to open the silo before anything local is touched.
+    let join = silentsilo_app::flows::recovery_join_begin(store, &code).await?;
 
     // From here local state is replaced. Blobs and the silo folder stay.
     let device_secret = {
@@ -307,55 +300,35 @@ pub async fn vault_repair_from_storage(
         rand::rng().fill_bytes(&mut bytes);
         hex::encode(bytes)
     };
-    let session = {
+    // The damaged snapshots go first: what follows writes new ones in their
+    // place, and a leftover one would be the file unlock tries next time.
+    {
         let root = root.clone();
-        let dek = dek.clone();
-        let device_secret = device_secret.clone();
         crate::commands::fido::run_blocking(move || {
-            let paths = silentsilo_vault::VaultPaths::new(root.clone());
+            let paths = silentsilo_vault::VaultPaths::new(root);
             let _ = std::fs::remove_file(paths.db_enc_path());
             let _ = std::fs::remove_file(paths.db_enc_backup_path());
             let _ = std::fs::remove_file(paths.db_enc_staged_path());
-            let session =
-                VaultSession::provision_with_dek(root.clone(), silo_id, &device_secret, dek, kek)
-                    .map_err(|e| e.to_string())?;
-            Vfs::new(&session)
-                .ensure_initialized()
-                .map_err(|e| e.to_string())?;
-            Ok(session)
+            Ok(())
         })
         .await?
     };
+    // The rebuild is the same one a join does, through the same function:
+    // the content key, the published key envelopes with nothing trusted that
+    // storage could have planted, and the recovery envelope.
+    let session =
+        crate::commands::sync::provision_joined_silo(store, &join, root.clone(), &device_secret)
+            .await?;
     silentsilo_vault::save_credentials(&silentsilo_vault::LocalVaultAuth {
         vault_id: silo.id,
         device_secret,
     })
     .map_err(|e| e.to_string())?;
 
-    // The published key envelopes, so the enrolled keys keep opening this
-    // device; the same re-wrap the recovery join does, for the same reason.
-    if let Ok(keys) = sync::fetch_key_envelopes(store).await
-        && !keys.is_empty()
-    {
-        if let Some(wrapped) = keys
-            .iter()
-            .find(|key| !key.wrapped_dek.is_empty())
-            .and_then(|key| hex::decode(&key.wrapped_dek).ok())
-        {
-            silentsilo_vault::save_wrapped_dek_bytes(&root, &wrapped).map_err(|e| e.to_string())?;
-        }
-        let _ = silentsilo_vault::save_fido_keys(
-            &root,
-            &silentsilo_vault::StoredFidoKeys { keys },
-            silentsilo_vault::Authority::Machine,
-        );
-    }
-    save_recovery_envelope(&root, &envelope).map_err(|e| e.to_string())?;
-
     // The same plan a join follows: snapshot plus tail on a compacted silo,
     // the whole log otherwise.
     let handle = app.clone();
-    let plan = sync::fetch_join_plan_reporting(store, &dek, &mut move |done, total| {
+    let plan = sync::fetch_join_plan_reporting(store, join.dek(), &mut move |done, total| {
         let _ = handle.emit("join-progress", (done, total));
     })
     .await
@@ -394,22 +367,13 @@ pub async fn vault_join_with_recovery(
     let s3_config = config.into_config(None)?;
     let store = s3_config.open().map_err(|e| e.to_string())?;
 
-    let manifest = sync::read_manifest(&*store)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "That bucket doesn't hold a silo.".to_string())?;
-    let envelope = sync::fetch_recovery_envelope(&*store)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "No recovery code was set up for this silo.".to_string())?;
-
-    let dek = unwrap_with_code(&envelope, &code)
-        .map_err(|_| "That recovery code doesn't match this silo.".to_string())?;
+    // Nothing local is touched yet: the bucket has to hold a silo, that silo
+    // has to have a published code, and the code has to open it.
+    let join = silentsilo_app::flows::recovery_join_begin(&*store, &code).await?;
 
     // Local state starts here. Everything above could fail without leaving
     // anything behind.
-    let entry =
-        crate::commands::silo::register_joined_silo(&app, manifest.vault_id, &name, location)?;
+    let entry = crate::commands::silo::register_joined_silo(&app, join.vault_id, &name, location)?;
     let root = entry.path.clone();
 
     let device_secret = {
@@ -419,63 +383,19 @@ pub async fn vault_join_with_recovery(
         hex::encode(bytes)
     };
     silentsilo_vault::save_credentials(&silentsilo_vault::LocalVaultAuth {
-        vault_id: manifest.vault_id,
+        vault_id: join.vault_id,
         device_secret: device_secret.clone(),
     })
     .map_err(|e| e.to_string())?;
-    silentsilo_vault::save_s3_config(manifest.vault_id, &s3_config).map_err(|e| e.to_string())?;
+    silentsilo_vault::save_s3_config(join.vault_id, &s3_config).map_err(|e| e.to_string())?;
 
-    let kek_envelope = sync::fetch_content_kek(&*store)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| {
-            "This storage has no content key yet, so there is nothing here to recover.".to_string()
-        })?;
-    let kek = silentsilo_vault::unwrap_kek_bytes(&kek_envelope, &dek).map_err(|e| e.to_string())?;
-    let session = VaultSession::provision_with_dek(
-        root.clone(),
-        manifest.vault_id,
-        &device_secret,
-        dek.clone(),
-        kek,
-    )
-    .map_err(|e| e.to_string())?;
-    Vfs::new(&session)
-        .ensure_initialized()
-        .map_err(|e| e.to_string())?;
-
-    // The key envelopes come down too, so the security keys still in the
-    // user's possession keep working on this machine. Without them the vault
-    // would be openable only by the recovery code from here on.
-    if let Ok(keys) = sync::fetch_key_envelopes(&*store).await
-        && !keys.is_empty()
-    {
-        // Re-wrap the local envelope under a security key, as joining from
-        // storage does. `provision_with_dek` wrapped it under this machine's
-        // device secret, which would leave a recovered silo with a second,
-        // weaker door: the folder plus that secret, no key touched. Nothing
-        // reads this file on the FIDO unlock path, so replacing it locks
-        // nobody out. Only when an envelope exists: a vault with no enrolled
-        // key still needs the device-secret door to open at all.
-        if let Some(envelope) = keys
-            .iter()
-            .find(|key| !key.wrapped_dek.is_empty())
-            .and_then(|key| hex::decode(&key.wrapped_dek).ok())
-        {
-            silentsilo_vault::save_wrapped_dek_bytes(&root, &envelope)
-                .map_err(|e| e.to_string())?;
-        }
-        // Same as the key-based join: this silo is being created here from
-        // the published envelopes, so nothing is being removed.
-        let _ = silentsilo_vault::save_fido_keys(
-            &root,
-            &silentsilo_vault::StoredFidoKeys { keys },
-            silentsilo_vault::Authority::Machine,
-        );
-    }
-    save_recovery_envelope(&root, &envelope).map_err(|e| e.to_string())?;
-
-    session.backup_locally().map_err(|e| e.to_string())?;
+    // The published key envelopes come down with it, so the security keys
+    // still in the user's possession keep working on this machine. No key
+    // was touched here, so none of them proved anything: every `policy` they
+    // claim is cleared. See `provision_joined_silo`.
+    let session =
+        crate::commands::sync::provision_joined_silo(&*store, &join, root.clone(), &device_secret)
+            .await?;
     crate::commands::silo::adopt_joined_silo(&app, &state, entry)?;
 
     // The same plan the key-based join follows, through the same function,
@@ -485,7 +405,7 @@ pub async fn vault_join_with_recovery(
     // where a silently partial result is worst, since there is nothing left
     // to compare it against.
     let handle = app.clone();
-    let plan = sync::fetch_join_plan_reporting(&*store, &dek, &mut move |done, total| {
+    let plan = sync::fetch_join_plan_reporting(&*store, join.dek(), &mut move |done, total| {
         let _ = handle.emit("join-progress", (done, total));
     })
     .await

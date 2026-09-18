@@ -4,8 +4,12 @@ import {
   currentCopies,
   describeDuration,
   protectionWarning,
+  seedHeadline,
+  seedLabel,
+  seedPercent,
   type BackupTargetView,
 } from "./copies";
+import type { SeedProgress } from "./types";
 
 const NOW = 1_800_000_000;
 
@@ -103,5 +107,42 @@ describe("protectionWarning", () => {
 
   it("stays quiet for a working target, whatever the bucket says", () => {
     expect(protectionWarning({ versioning: false, object_lock: false }, false)).toBe("");
+  });
+});
+
+describe("how far a fill has got", () => {
+  function seed(over: Partial<SeedProgress> = {}): SeedProgress {
+    return {
+      objects_done: 12,
+      objects_total: 500,
+      bytes_done: 1_073_741_824,
+      bytes_total: 4_294_967_296,
+      ...over,
+    };
+  }
+
+  it("says both counts, because one large object holds the other still", () => {
+    expect(seedHeadline(seed())).toBe("Copying: 12 of 500 objects, 1 GB of 4 GB.");
+  });
+
+  it("leaves the bytes out when the listing gave no sizes", () => {
+    expect(seedHeadline(seed({ bytes_done: 0, bytes_total: 0 }))).toBe(
+      "Copying: 12 of 500 objects.",
+    );
+  });
+
+  it("puts the moving number on the button, where only one fits", () => {
+    expect(seedLabel(seed())).toBe("1 GB of 4 GB…");
+    expect(seedLabel(seed({ bytes_done: 0, bytes_total: 0 }))).toBe("12 of 500…");
+  });
+
+  it("drives the bar off the bytes, and off the objects when there are none", () => {
+    expect(seedPercent(seed())).toBe(25);
+    expect(seedPercent(seed({ bytes_done: 0, bytes_total: 0, objects_done: 250 }))).toBe(50);
+    expect(seedPercent(seed({ objects_total: 0, bytes_done: 0, bytes_total: 0 }))).toBe(0);
+  });
+
+  it("never overshoots, whatever a retrying backend reports", () => {
+    expect(seedPercent(seed({ bytes_done: 9_999_999_999 }))).toBe(100);
   });
 });
