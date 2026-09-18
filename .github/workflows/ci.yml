@@ -69,6 +69,24 @@ jobs:
           node-version: "22"
       - run: node scripts/check-lockfile.mjs
 
+  # Known advisories against what the lockfile actually pins. Warnings for
+  # unsound and yanked crates only print. Ignores sit in .cargo/audit.toml,
+  # each with its reason. Pinned so a new cargo-audit release cannot turn the
+  # build red on its own.
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: audit
+      - run: cargo install cargo-audit --locked --version 0.22.2
+      - run: cargo audit
+
   # Evidence that the app still compiles off Windows. Not packaging, and not
   # a promise of a Linux or macOS build.
   #
