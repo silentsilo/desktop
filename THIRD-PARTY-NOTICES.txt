@@ -8,7 +8,7 @@ Each is listed with its version and its licence, and the full text of every
 licence follows, once per distinct text. Where a component ships its own
 copyright or NOTICE file, that file is what is reproduced here.
 
-Generated from the resolved dependency graph on 2026-09-17, for x86_64-pc-windows-msvc.
+Generated from the resolved dependency graph on 2026-09-18, for x86_64-pc-windows-msvc.
 Regenerate with: npm run notices
 
 Components: 539
@@ -167,12 +167,12 @@ aws-credential-types 1.3.0 (crate)
   source:  https://github.com/smithy-lang/smithy-rs
   text:    see [28]
 
-aws-lc-rs 1.17.3 (crate)
+aws-lc-rs 1.18.1 (crate)
   licence: ISC AND (Apache-2.0 OR ISC)
   source:  https://github.com/aws/aws-lc-rs
   text:    see [29]
 
-aws-lc-sys 0.43.0 (crate)
+aws-lc-sys 0.45.0 (crate)
   licence: ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0)
   source:  https://github.com/aws/aws-lc-rs
   text:    see [30]
@@ -427,7 +427,7 @@ cfg-if 1.0.4 (crate)
   source:  https://github.com/rust-lang/cfg-if
   text:    see [20] [49]
 
-chacha20 0.10.1 (crate)
+chacha20 0.10.2 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/RustCrypto/stream-ciphers
   text:    see [6] [12]
@@ -907,7 +907,7 @@ group 0.14.0 (crate)
   source:  https://github.com/zkcrypto/group
   text:    see [20] [5]
 
-h2 0.4.15 (crate)
+h2 0.4.19 (crate)
   licence: MIT
   source:  https://github.com/hyperium/h2
   text:    see [119]
@@ -1721,7 +1721,7 @@ rusticata-macros 4.1.0 (crate)
   source:  https://github.com/rusticata/rusticata-macros.git
   text:    see [20] [25]
 
-rustls 0.23.42 (crate)
+rustls 0.23.45 (crate)
   licence: Apache-2.0 OR ISC OR MIT
   source:  https://github.com/rustls/rustls
   text:    see [20] [135] [136]
@@ -1741,7 +1741,7 @@ rustls-platform-verifier 0.7.0 (crate)
   source:  https://github.com/rustls/rustls-platform-verifier
   text:    see [53] [225]
 
-rustls-webpki 0.103.13 (crate)
+rustls-webpki 0.103.15 (crate)
   licence: ISC
   source:  https://github.com/rustls/webpki
   text:    see [226]
@@ -2621,7 +2621,7 @@ winreg 0.55.0 (crate)
   source:  https://github.com/gentoo90/winreg-rs
   text:    see [295]
 
-wnaf 0.14.0 (crate)
+wnaf 0.14.1 (crate)
   licence: Apache-2.0 OR MIT
   source:  https://github.com/RustCrypto/elliptic-curves
   text:    see [6] [296]
