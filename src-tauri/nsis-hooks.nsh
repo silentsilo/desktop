@@ -20,6 +20,34 @@
 ; it. The full list of what stays is in README.md under "Uninstalling".
 !define MUI_UNCONFIRMPAGE_TEXT_TOP "Your silos stay where they are: uninstalling never deletes silo data, here or in your backup storage. The app and its Explorer menu entries go."
 
+; The browser extension's native host, silentsilo-browser-host.exe, is an
+; externalBin: Tauri installs it beside the app, signs it with the app, and
+; deletes it on uninstall. What Tauri does not do is tell the browsers about
+; it. The host writes its own manifest (`--write-manifest`, beside itself,
+; allowed extensions from crates/silentsilo-browser-host/allowed-origins.json,
+; the one list), and the two keys below point Chrome and Edge at it. HKCU,
+; like everything else here. A build without the host (a plain
+; `npm run tauri:build`) skips all of it.
+;
+; A host the browser still runs would hold its exe open and fail the copy,
+; so any left are ended first. It is a relay and holds nothing; the
+; extension reconnects.
+!macro NSIS_HOOK_PREINSTALL
+  nsExec::Exec '"$SYSDIR\taskkill.exe" /F /IM silentsilo-browser-host.exe'
+  Pop $0
+!macroend
+
+!macro NSIS_HOOK_POSTINSTALL
+  ${If} ${FileExists} "$INSTDIR\silentsilo-browser-host.exe"
+    nsExec::Exec '"$INSTDIR\silentsilo-browser-host.exe" --write-manifest'
+    Pop $0
+    ${If} ${FileExists} "$INSTDIR\silentsilo-browser-host.json"
+      WriteRegStr HKCU "Software\Google\Chrome\NativeMessagingHosts\com.silentsilo.desktop" "" "$INSTDIR\silentsilo-browser-host.json"
+      WriteRegStr HKCU "Software\Microsoft\Edge\NativeMessagingHosts\com.silentsilo.desktop" "" "$INSTDIR\silentsilo-browser-host.json"
+    ${EndIf}
+  ${EndIf}
+!macroend
+
 ; Autostart must not outlive the install: Windows keeps running a Run entry
 ; whose exe is gone, and the user gets an error box at every sign-in with no
 ; obvious way to trace it back to an app they removed.
@@ -53,6 +81,16 @@
   Delete "$LOCALAPPDATA\SilentSilo\shell-integration.json"
   Delete "$LOCALAPPDATA\SilentSilo\upload-queue.txt"
   Delete "$LOCALAPPDATA\SilentSilo\download-queue.txt"
+
+  ; The browsers stop being pointed at a host that is about to go. The
+  ; manifest is the host's own file, so Tauri does not know to delete it,
+  ; and a leftover file keeps the install folder from being removed. An
+  ; update puts both back in the post-install hook.
+  nsExec::Exec '"$SYSDIR\taskkill.exe" /F /IM silentsilo-browser-host.exe'
+  Pop $0
+  DeleteRegKey HKCU "Software\Google\Chrome\NativeMessagingHosts\com.silentsilo.desktop"
+  DeleteRegKey HKCU "Software\Microsoft\Edge\NativeMessagingHosts\com.silentsilo.desktop"
+  Delete "$INSTDIR\silentsilo-browser-host.json"
 !macroend
 
 ; The rest of the machine-local directory, under the same box that removes

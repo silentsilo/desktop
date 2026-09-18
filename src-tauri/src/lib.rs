@@ -1,3 +1,4 @@
+mod browser;
 mod commands;
 mod diagnostics;
 mod state;
@@ -160,7 +161,9 @@ pub fn run() {
             verify_cancelled: std::sync::atomic::AtomicBool::new(false),
             seed_cancelled: std::sync::atomic::AtomicBool::new(false),
             sync_in_flight: std::sync::atomic::AtomicBool::new(false),
+            session_epoch: std::sync::atomic::AtomicU64::new(0),
         })
+        .manage(browser::BrowserBridge::default())
         .setup(move |app| {
             // Nothing is unlocked yet, so any decrypted scratch on disk is
             // what a crash, a kill or a power cut left behind.
@@ -184,6 +187,9 @@ pub fn run() {
             commands::fido::bind_fido_parent_hwnd(app.handle());
             handle_shell_action(app.handle(), startup_args);
             commands::sync::spawn_auto_sync(app.handle().clone());
+            // Only when Settings > Browser extension is on; off, the pipe
+            // does not exist.
+            browser::start_if_enabled(app.handle());
 
             // Locking the workstation and walking away is the common way a
             // silo is left unattended, and the idle timer only notices
@@ -327,6 +333,11 @@ pub fn run() {
             commands::recovery::vault_unlock_with_recovery,
             commands::recovery::vault_join_with_recovery,
             commands::recovery::vault_repair_from_storage,
+            browser::browser_extension_status,
+            browser::browser_extension_set,
+            browser::browser_fill_pending,
+            browser::browser_fill_confirm,
+            browser::browser_fill_cancel,
         ])
         .build(tauri::generate_context!())
         .expect("error while running SilentSilo")
@@ -338,6 +349,7 @@ pub fn run() {
                 // The 45-second timer dies with the process, so a copied
                 // password would otherwise outlive the app.
                 let _ = silentsilo_shell::clear_secret_clipboard_now();
+                browser::stop(app_handle);
                 let state = app_handle.state::<AppState>();
                 flush_vault_snapshot(state.clone());
                 // Every silo that is open, not just the one on screen: each

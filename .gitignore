@@ -20,3 +20,7 @@ private/
 
 # Git history archives
 *.bundle
+
+# The browser extension's native host, copied here by build-release-local.ps1
+# for Tauri to bundle and sign as an externalBin. A build product.
+src-tauri/binaries/

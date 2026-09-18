@@ -375,3 +375,25 @@ export type SpaceReport = {
   wanted_bytes: number;
   headroom_bytes: number;
 };
+
+/** A fill the browser extension asked for, waiting for the person to say
+ * yes in this window. Carries no secret: the password is read by the Rust
+ * side only after the key check passes, and goes straight to the browser. */
+export type BrowserFillPrompt = {
+  request_id: string;
+  /** The tab's host, with its port when it has one. */
+  site: string;
+  label: string;
+  username: string;
+  /** Set when the login was not saved for this site, as a sentence. */
+  mismatch: string | null;
+};
+
+/** Settings > Browser extension. */
+export type BrowserExtensionStatus = {
+  /** Windows only for now. */
+  supported: boolean;
+  enabled: boolean;
+  /** Whether the pipe is actually open, which "enabled" alone does not say. */
+  running: boolean;
+};

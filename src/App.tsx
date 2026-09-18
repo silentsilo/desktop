@@ -68,6 +68,7 @@ import { CopiesPanel } from "./views/CopiesPanel";
 import { VerifyPanel } from "./views/VerifyPanel";
 import { ConfirmDialog } from "./views/ConfirmDialog";
 import { ShellUploadDialog } from "./views/ShellUploadDialog";
+import { BrowserFillDialog } from "./views/BrowserFillDialog";
 import { ShellDownloadDialog } from "./views/ShellDownloadDialog";
 import { TrashPanel } from "./views/TrashPanel";
 import { UnlockView } from "./views/UnlockView";
@@ -3279,6 +3280,8 @@ export default function App() {
           />
         )
       )}
+      {/* Last, so a fill the browser asks for sits above anything else open. */}
+      <BrowserFillDialog os={osOf(bootstrap)} />
       <AppShell
         view={view}
         onView={(next) => {

@@ -148,6 +148,10 @@ whatever you answer on its one question:
 - the application itself, from its install folder
 - the Explorer menu entries (*Add to SilentSilo*, *Save here from SilentSilo*)
 - the sign-in entry that starts it, so Windows stops trying to run it
+- the browser extension's registration: its host, the host's manifest, and
+  the Chrome and Edge keys named `com.silentsilo.desktop` under
+  `HKCU\Software\Google\Chrome\NativeMessagingHosts` and
+  `HKCU\Software\Microsoft\Edge\NativeMessagingHosts`
 - `%LOCALAPPDATA%\SilentSilo\upload-queue.txt` and `download-queue.txt`,
   which hold the paths of whatever was last right-clicked
 
@@ -156,7 +160,8 @@ Ticking **Delete the application data** also removes:
 - `%APPDATA%\com.silentsilo.desktop`, the list of silos this computer keeps
   (names and folder paths). Losing it costs the list, not the data: the app
   finds a silo again from its folder.
-- `%LOCALAPPDATA%\SilentSilo`, the encrypted working copies and the cache
+- `%LOCALAPPDATA%\SilentSilo`, the encrypted working copies, the cache and
+  the browser extension setting
 - `%LOCALAPPDATA%\com.silentsilo.desktop`, WebView2's profile for this app
 
 Two things stay behind in either case, and have to be removed by hand if you

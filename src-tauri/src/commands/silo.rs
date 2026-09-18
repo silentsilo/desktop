@@ -329,6 +329,7 @@ pub async fn silo_open(
     // presented.
     mark_silo_opened(&app, &entry)?;
     *state.active_silo.lock().map_err(|e| e.to_string())? = Some(entry.clone());
+    state.bump_epoch();
     crate::state::touch(&state, entry.id);
     Ok(SiloView::from(&entry))
 }
@@ -419,6 +420,7 @@ pub fn silo_set_auto_lock(app: AppHandle, id: String, minutes: Option<u32>) -> R
 #[tauri::command(async)]
 pub fn silo_blur(state: State<'_, AppState>) -> Result<(), String> {
     *state.active_silo.lock().map_err(|e| e.to_string())? = None;
+    state.bump_epoch();
     Ok(())
 }
 

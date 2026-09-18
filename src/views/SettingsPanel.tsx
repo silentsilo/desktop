@@ -8,6 +8,7 @@ import {
   Copy,
   DownloadCloud,
   ExternalLink,
+  Globe,
   HardDrive,
   Inbox,
   Info,
@@ -35,6 +36,8 @@ import { securityKeyDisplayName, usableHere } from "../lib/keyName";
 import { AUTO_LOCK_OPTIONS_MINUTES } from "../lib/types";
 import { checkForUpdate, installUpdateAndRelaunch } from "../lib/updater";
 import { readAutostart, writeAutostart, type AutostartStatus } from "../lib/autostart";
+import { readBrowserExtension, writeBrowserExtension } from "../lib/browserExtension";
+import type { BrowserExtensionStatus } from "../lib/types";
 import { formatAppError } from "../lib/errors";
 import { ActivityList } from "./ActivityList";
 import { ProtectedFoldersPanel } from "./ProtectedFolders";
@@ -114,6 +117,7 @@ const SECTIONS = [
   { id: "copies", group: "This silo", label: "Copies", icon: Copy },
   { id: "verify", group: "This silo", label: "Verification", icon: SearchCheck },
   { id: "startup", group: "Application", label: "Startup", icon: Power },
+  { id: "browser", group: "Application", label: "Browser extension", icon: Globe },
   { id: "updates", group: "Application", label: "Updates", icon: DownloadCloud },
   { id: "about", group: "Application", label: "About", icon: Info },
   { id: "danger", group: "Application", label: "Danger zone", icon: AlertTriangle },
@@ -223,6 +227,38 @@ export function SettingsPanel(props: Props) {
     } catch (e) {
       setAutostart(previous);
       setAutostartError(formatAppError(e));
+    }
+  };
+
+  // Same arrangement as autostart: null until the backend has answered.
+  const [browserExtension, setBrowserExtension] = useState<BrowserExtensionStatus | null>(null);
+  const [browserExtensionError, setBrowserExtensionError] = useState<string | null>(null);
+  const [browserExtensionBusy, setBrowserExtensionBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void readBrowserExtension()
+      .then((status) => {
+        if (!cancelled) setBrowserExtension(status);
+      })
+      .catch(() => {
+        if (!cancelled) setBrowserExtension(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const toggleBrowserExtension = async (on: boolean) => {
+    setBrowserExtensionError(null);
+    setBrowserExtensionBusy(true);
+    try {
+      setBrowserExtension(await writeBrowserExtension(on));
+    } catch (e) {
+      setBrowserExtensionError(formatAppError(e));
+      setBrowserExtension(await readBrowserExtension().catch(() => null));
+    } finally {
+      setBrowserExtensionBusy(false);
     }
   };
 
@@ -826,6 +862,40 @@ export function SettingsPanel(props: Props) {
             <p className="hint">
               {platform.autostartHint}
             </p>
+          </div>
+        )}
+
+        {section === "browser" && (
+          <div className="panel-section">
+            <h3>
+              <Globe size={16} />
+              Browser extension
+            </h3>
+            <p>Lets the browser extension fill passwords. It cannot see your files.</p>
+            <label className="s3-checkbox">
+              <input
+                type="checkbox"
+                checked={browserExtension?.enabled ?? false}
+                disabled={busy || browserExtensionBusy || !browserExtension?.supported}
+                onChange={(e) => void toggleBrowserExtension(e.target.checked)}
+              />
+              <span>
+                Allow the SilentSilo browser extension
+                <span className="hint">
+                  Every fill is confirmed in this window with {platform.builtIn} or your security
+                  key. Turned off, the extension cannot reach SilentSilo at all.
+                </span>
+              </span>
+            </label>
+            {browserExtension && !browserExtension.supported && (
+              <p className="hint">Not available on this system yet.</p>
+            )}
+            {browserExtension?.enabled && !browserExtension.running && !browserExtensionError && (
+              <p className="hint is-error">
+                On, but the channel to the browser is not open. Turn it off and on again.
+              </p>
+            )}
+            {browserExtensionError && <p className="hint is-error">{browserExtensionError}</p>}
           </div>
         )}
 

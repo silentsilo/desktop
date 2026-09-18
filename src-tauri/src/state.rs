@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
 
 use silentsilo_core::{CoreError, CoreResult};
@@ -52,6 +52,10 @@ pub struct AppState {
     /// firing while the user is holding the button — would each read the
     /// same pending queue and upload it twice.
     pub sync_in_flight: AtomicBool,
+    /// Moves whenever a silo opens, closes or takes the focus. The browser
+    /// extension's login refs are valid for one value of it, so a lock or a
+    /// switch leaves every ref it handed out useless.
+    pub session_epoch: AtomicU64,
 }
 
 pub fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -260,6 +264,14 @@ impl SessionGuard<'_> {
 }
 
 impl AppState {
+    pub fn epoch(&self) -> u64 {
+        self.session_epoch.load(Ordering::SeqCst)
+    }
+
+    pub fn bump_epoch(&self) {
+        self.session_epoch.fetch_add(1, Ordering::SeqCst);
+    }
+
     /// Locks `active_silo` before `sessions`, and never the other way
     /// round — the two are taken together often enough for the order to
     /// matter.
@@ -301,12 +313,14 @@ impl AppState {
 
         sessions.insert(id, session);
         touched.insert(id, Instant::now());
+        self.bump_epoch();
         Ok(evicted)
     }
 
     /// Closes one silo, leaving any others open.
     pub fn close_session(&self, id: Uuid) -> Result<(), String> {
         let closed = self.sessions.lock().map_err(|e| e.to_string())?.remove(&id);
+        self.bump_epoch();
         if let Ok(mut touched) = self.last_touched.lock() {
             touched.remove(&id);
         }

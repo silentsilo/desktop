@@ -5,6 +5,17 @@ Notable changes are documented here. The format follows
 onward the version follows semver, and anything that could stop an existing
 silo from opening needs a major version rather than a note.
 
+## [Unreleased]
+
+### Added
+
+- Browser extension support, off by default under Settings > Browser
+  extension. The SilentSilo extension for Chrome and Edge can ask for the
+  logins saved for the site in the open tab and fill one, after you confirm
+  in this window with Windows Hello or your security key. It sees login
+  entries only, never files, notes or codes. The installer registers a small
+  native messaging host for it; uninstalling removes the registration.
+
 ## [1.1.0] - Phones, and computers that agree
 
 Windows only, like 1.0.0. The Android app and this release share a silo;

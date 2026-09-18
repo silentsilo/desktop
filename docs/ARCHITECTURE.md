@@ -27,7 +27,8 @@ flowchart TD
         CMD["commands/*<br/>orchestration, per-silo sessions"]
         STATE["state.rs<br/>sessions map, focus, targets"]
     end
-    SHELL["silentsilo-shell<br/>OS integration: Explorer verbs,<br/>clipboard, autostart, session watch"]
+    SHELL["silentsilo-shell<br/>OS integration: Explorer verbs,<br/>clipboard, autostart, session watch,<br/>browser extension pipe"]
+    HOST["silentsilo-browser-host<br/>started by the browser,<br/>relays frames to the pipe"]
     FE["src/ (React)<br/>views, invoke, event listeners"]
     CORE["silentsilo/core (pinned tag)<br/>vfs, vault, sync, crypto, store, fido"]
 
@@ -35,6 +36,7 @@ flowchart TD
     CMD --> STATE
     CMD --> SHELL
     CMD --> CORE
+    HOST -->|"named pipe"| SHELL
 ```
 
 The application is the only layer that knows there is a window. It owns the
@@ -43,7 +45,7 @@ session map and the event names the frontend listens to. `silentsilo-shell`
 is the only crate here that talks to the operating system, and it is the one
 a port to another desktop platform rewrites.
 
-The 109 commands are the whole contract with the frontend, along with their
+The 114 commands are the whole contract with the frontend, along with their
 parameter names, their event names and payload shapes, and the error strings
 `src/lib/errors.ts` matches on. None of those may change without changing
 the frontend in the same commit.
@@ -200,6 +202,80 @@ session's cheap parts (`SessionSnapshot`) and take the sessions mutex only
 per row, never across encryption or network work; they pin the silo id they
 started on rather than re-reading focus.
 
+## Browser extension
+
+The extension (silentsilo/browser) fills a username and a password into a
+page, and nothing else. Its contract with this app is `docs/PROTOCOL.md` in
+that repository; message shapes change there first. The path:
+
+```mermaid
+flowchart LR
+    EXT["extension<br/>(service worker)"] -->|"native messaging<br/>stdio"| HOST["silentsilo-browser-host.exe<br/>one per connection"]
+    HOST -->|"\.\pipe\silentsilo-browser-&lt;SID&gt;"| PIPE["pipe server<br/>silentsilo-shell::browser_pipe"]
+    PIPE --> H["src-tauri/src/browser<br/>handlers, confirmation"]
+    H --> L["browser/logins.rs<br/>list_passwords, logins only"]
+```
+
+- **The host** (`crates/silentsilo-browser-host`) is a separate small binary
+  so the browser never starts the app, with its webview, to relay a message.
+  The browser passes the calling extension's origin as the first argument;
+  the host refuses any origin not in `allowed-origins.json` before it opens
+  the pipe. That file is the one list: it is compiled into the host, and
+  `silentsilo-browser-host --write-manifest` writes the same list into the
+  manifest the browser reads. When nothing listens on the pipe, the host
+  answers `app-not-running` to each request itself and exits when stdin
+  closes. It never starts the app. It copies frames without parsing them
+  beyond the 64 KiB limit, and wipes each one after passing it on.
+- **The pipe** is `\.\pipe\silentsilo-browser-<user SID>`, created with a
+  protected DACL granting the current user alone (`O:<SID>D:P(A;;GA;;;<SID>)`),
+  remote clients rejected, and the first instance created with
+  `FILE_FLAG_FIRST_PIPE_INSTANCE`, so a program that took the name first
+  makes the toggle fail rather than receive the extension's requests. It
+  exists only while Settings > Browser extension is on
+  (`%LOCALAPPDATA%\SilentSilo\browser-extension.json`, off by default). The
+  server runs on the async runtime, one task per connection and one per
+  request, so a fill waiting for the user does not hold up a `status` on the
+  same connection. It stops on exit and when the toggle goes off; a fill
+  still waiting then ends with its connection.
+- **The extension sees logins and nothing else.** `browser/logins.rs` is
+  the only module in `browser/` that reaches the vault, and its one call is
+  `list_passwords`. It keeps label, username, saved address and password of
+  entries whose type is `login` and which have a password; files, folders,
+  notes, one-time codes, attachments, cards and protected folders are never
+  read, so no answer can name them. A test there holds the rest of
+  `browser/` to that (it fails if `mod.rs` or `protocol.rs` mention the file
+  API), and another puts a file in a silo and checks that searching for its
+  exact name finds nothing and that no answer contains it.
+- **Matching** (`browser/protocol.rs`): only `https:` tabs, plus `http:` on
+  `localhost` and loopback addresses; any other scheme gets an empty list.
+  A login matches when the host of its saved address equals the tab's host,
+  or one is `www.` plus the other. No parent domains, no look-alikes, no
+  guessing from the label. A port the saved address names must match. The
+  saved address is free text, so one without a scheme is read as `https://`,
+  and an `android://` identity names no site.
+- **Refs** are random tokens mapped to entry ids, scoped to the focused silo
+  and to `AppState::session_epoch`, which moves on every unlock, lock and
+  focus change. A ref from before any of those is `unknown-ref`.
+- **A fill is confirmed here, every time.** The request brings the window to
+  the front, above other windows while it waits, and shows
+  `BrowserFillDialog`: the site, the login, and in words when the login was
+  saved for another site (it came from `search`). Fill runs
+  `commands::vault::verify_presence`, the same Windows Hello or security key
+  check `fido_reverify` uses for a protected entry, whatever that entry's own
+  setting; no grace period. Only once it passes is the entry read again and
+  its password written to the pipe, in a buffer sized up front and wiped
+  after the write. One fill waits at a time (`busy`), for 90 seconds
+  (`cancelled`); a lock or focus change while it waits ends it.
+- **Installed as an externalBin**, merged in by `build-release-local.ps1`
+  through `src-tauri/tauri.browser-host.json` rather than kept in
+  `tauri.conf.json`: tauri-build requires an externalBin to exist on every
+  compile of the app, CI's included. Tauri signs it with `signCommand` like
+  the app. The NSIS hooks run `--write-manifest` and point
+  `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.silentsilo.desktop`
+  and the Edge equivalent at the manifest; the uninstaller removes both keys
+  and the manifest. A plain `npm run tauri:build` has no host, and the hooks
+  skip it.
+
 ## Looks wrong, is deliberate
 
 Read this before "fixing" any of it. The gotchas that live in the domain
@@ -260,6 +336,7 @@ The checklist, in order:
    command. `--locked` is what catches a `Cargo.lock` left patched at a local
    core checkout.
 5. **Does it change a flow the tests cannot reach?** The security key, the
-   Explorer verbs, the tray and autostart have no automated coverage. Say in
+   Explorer verbs, the tray, autostart and the browser extension's pipe and
+   host registration have no automated coverage. Say in
    the commit message what you exercised by hand.
 6. **Update this page in the same commit** when behavior it describes moves.

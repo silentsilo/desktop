@@ -1,0 +1,5 @@
+{
+  "bundle": {
+    "externalBin": ["binaries/silentsilo-browser-host"]
+  }
+}

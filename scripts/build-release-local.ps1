@@ -169,7 +169,19 @@ try {
     if (git status --porcelain -- src-tauri\icons) {
         throw "npm run icons changed committed icons. Commit them, retag, then build."
     }
-    npx tauri build --config src-tauri/tauri.signing.json
+    # The browser extension's native host ships beside the app as an
+    # externalBin, so Tauri signs it with signCommand before packing it and
+    # the installer hooks register it. It is merged in here rather than kept
+    # in tauri.conf.json because tauri-build insists the file exists on
+    # every compile of the app, CI's cargo check included. Copied fresh each
+    # time: Tauri skips a sidecar that already carries a signature.
+    cargo build -p silentsilo-browser-host --release --locked
+    if (-not $?) { throw "browser host build failed" }
+    $sidecar = "src-tauri\binaries\silentsilo-browser-host-x86_64-pc-windows-msvc.exe"
+    New-Item -ItemType Directory -Force -Path (Split-Path $sidecar) | Out-Null
+    Copy-Item "target\release\silentsilo-browser-host.exe" $sidecar -Force
+
+    npx tauri build --config src-tauri/tauri.signing.json --config src-tauri/tauri.browser-host.json
     if (-not $?) { throw "tauri build failed" }
 
     # The workspace root is the repository root, so cargo writes to .\target,
@@ -322,9 +334,13 @@ try {
     # Each of those produces a complete release that warns every person who
     # downloads it, and none of them announces itself.
     Write-Host "`n== Signatures ==" -ForegroundColor Cyan
-    foreach ($name in @($setup.Name, "silentsilo-extract-windows-x86_64.exe")) {
-        $path = Join-Path $out $name
-        if (-not (Test-Path $path)) { continue }
+    # The browser host is checked where Tauri signed it, before it was packed:
+    # it ships inside the installer, not beside it.
+    foreach ($path in @((Join-Path $out $setup.Name),
+                        (Join-Path $out "silentsilo-extract-windows-x86_64.exe"),
+                        (Join-Path $repoRoot $sidecar))) {
+        $name = Split-Path $path -Leaf
+        if (-not (Test-Path $path)) { throw "$name is missing" }
         $signature = Get-AuthenticodeSignature $path
         if ($signature.Status -ne "Valid") {
             throw "$name is not validly signed: $($signature.Status). $($signature.StatusMessage)"

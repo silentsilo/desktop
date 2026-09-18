@@ -122,6 +122,34 @@ let enrolledAtRuntime = false;
 /// with the bare string the panel matches on.
 let seedCancelled = false;
 
+/// `?mock=unlocked&fill` opens the browser extension's fill question on a
+/// login saved for the site; `&fill=mismatch` on one saved for another.
+/// Answered once, it stays answered, as the real one does.
+let fillAnswered = false;
+
+function mockFillPrompt() {
+  const which = new URLSearchParams(location.search).get("fill");
+  if (which === null || fillAnswered) return null;
+  return which === "mismatch"
+    ? {
+        request_id: "fill-1",
+        site: "bank-login.example",
+        label: "Bank",
+        username: "alex@example.com",
+        mismatch: "This login was saved for bank.example, not for bank-login.example.",
+      }
+    : {
+        request_id: "fill-1",
+        site: "github.com",
+        label: "GitHub",
+        username: "alex@example.com",
+        mismatch: null,
+      };
+}
+
+/// Settings > Browser extension, off as it ships.
+let browserExtension = { supported: true, enabled: false, running: false };
+
 // ── Events ──────────────────────────────────────────────────────────
 //
 // The real backend reports a long job as it goes, and the two screens that
@@ -853,6 +881,23 @@ const handlers: Record<string, Handler> = {
   vault_upsert_password: () => null,
   vault_delete_password: () => null,
   copy_secret_to_clipboard: () => null,
+  browser_fill_pending: () => mockFillPrompt(),
+  browser_fill_confirm: (args) => {
+    fillAnswered = true;
+    emit("browser-fill-ended", args.requestId);
+    return null;
+  },
+  browser_fill_cancel: (args) => {
+    fillAnswered = true;
+    emit("browser-fill-ended", args.requestId);
+    return null;
+  },
+  browser_extension_status: () => browserExtension,
+  browser_extension_set: (args) => {
+    const on = Boolean(args.enabled);
+    browserExtension = { ...browserExtension, enabled: on, running: on };
+    return browserExtension;
+  },
   password_attach_file: (args) => ({
     blob_id: crypto.randomUUID(),
     name: String(args.path).split(/[\\/]/).pop() ?? "file",

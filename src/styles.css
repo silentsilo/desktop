@@ -3065,6 +3065,39 @@ ol.key-add-steps {
   margin-top: 0.5rem;
 }
 
+/* The browser extension's fill question: what and where, then the warning
+ * when the login was saved for another site. */
+.browser-fill-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 1rem;
+  margin: 0.25rem 0;
+}
+
+.browser-fill-facts dt {
+  color: var(--text-muted);
+}
+
+.browser-fill-facts dd {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.browser-fill-facts dd .hint {
+  font-weight: 400;
+}
+
+.browser-fill-mismatch {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger-on-dark);
+}
+
 /* A checkbox with a label and a sub-line, wherever one is offered. */
 .confirm-option,
 .key-choice {

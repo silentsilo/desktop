@@ -1469,8 +1469,15 @@ pub fn vault_delete_password(id: String, state: State<AppState>) -> Result<(), S
 /// drawer. Used by entries marked "ask again before revealing".
 #[tauri::command]
 pub async fn fido_reverify(app: AppHandle) -> Result<(), String> {
-    let root = vault_dir(&app)?;
-    let creds = crate::state::silo_credentials(&app)?;
+    verify_presence(&app, "show this entry").await
+}
+
+/// The ceremony behind `fido_reverify`, shared with the browser fill so both
+/// ask the same thing before a secret leaves the app. `purpose` completes
+/// "Confirm with Windows Hello to …".
+pub(crate) async fn verify_presence(app: &AppHandle, purpose: &str) -> Result<(), String> {
+    let root = vault_dir(app)?;
+    let creds = crate::state::silo_credentials(app)?;
 
     if !is_fido_enrolled(&root) {
         return Err("No security key is enrolled on this silo.".into());
@@ -1482,18 +1489,18 @@ pub async fn fido_reverify(app: AppHandle) -> Result<(), String> {
 
     let wanted = crate::commands::fido::preferred_authenticator(&keys);
     emit_fido_progress(
-        &app,
+        app,
         &match wanted {
             Some(silentsilo_fido::Authenticator::ThisDevice) => {
                 format!(
-                    "Confirm with {} to show this entry.",
+                    "Confirm with {} to {purpose}.",
                     crate::commands::fido::BUILT_IN
                 )
             }
-            _ => "Touch your security key to show this entry.".to_string(),
+            _ => format!("Touch your security key to {purpose}."),
         },
     );
-    let unlock = run_fido(&app, move || {
+    let unlock = run_fido(app, move || {
         silentsilo_fido::derive_unlock_material(&cred_ids, &vault_id, wanted)
     })
     .await?;
