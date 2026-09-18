@@ -7,7 +7,7 @@ wrong: a drive fails, a laptop is stolen, ransomware runs as you.
 
 The rule worth keeping is the old one. Three copies of anything you care
 about, on two different kinds of storage, one of them somewhere else. The
-Copies panel in Backup shows where each of yours stands.
+Copies page in Settings shows where each of yours stands.
 
 ## What counts as a copy
 
@@ -40,7 +40,9 @@ keeps, not a rule the storage enforces. Making the storage enforce it is the
 next section for a bucket, and is not possible on a plain folder, which the
 external drives section explains.
 
-Tick "Never delete anything here" when adding a place to make it append-only.
+Tick "Never delete anything here" when adding a place under Settings, Copies
+to make it append-only. The box is offered only for a second place: the
+connection on the Backup page is always the working one.
 
 ## Making a bucket that refuses deletes
 
@@ -183,5 +185,5 @@ lives unplugged does the same job as copy three. It is offline rather than
 immutable, which stops the same attack for a different reason, and it costs
 one habit instead of one subscription.
 
-Check the Copies panel now and again. It shows when each was last written to,
+Check Settings, Copies now and again. It shows when each was last written to,
 which is the fact that tells you a disk has been unplugged since spring.
