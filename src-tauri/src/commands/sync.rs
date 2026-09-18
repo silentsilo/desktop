@@ -946,14 +946,12 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
     // outright rather than swept and refused. Content that nothing
     // references staying there for ever is what that role means, and the
     // Copies panel says so instead of the sweep pretending to run.
-    let mut blobs_restored = 0;
-    if view_complete {
+    let blobs_restored = if view_complete {
         let sessions = &app.state::<AppState>().inner().sessions;
-        for target in targets.iter().filter(|t| t.role.allows_delete()) {
-            blobs_restored +=
-                run_blob_sweep(sessions, silo, (target.id, &*target.store), &reachable).await?;
-        }
-    }
+        run_blob_sweeps(sessions, silo, &targets, &reachable).await?
+    } else {
+        0
+    };
 
     let report = SyncReport {
         silo_id: silo.id.to_string(),
@@ -1223,12 +1221,32 @@ const BLOB_SWEEP_INTERVAL_SECS: i64 = 24 * 60 * 60;
 /// margin, past which such a device has to rebuild anyway.
 const BLOB_SWEEP_GRACE_SECS: i64 = 30 * 24 * 60 * 60;
 
+/// How old an unfinished upload has to be before the sweep aborts it. A
+/// younger one may be another device's, still sending a large file.
+const STALE_UPLOAD_AGE: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+
 type Sessions = std::sync::Mutex<std::collections::HashMap<Uuid, VaultSession>>;
+
+/// Sweeps every target whose role allows deletes. Returns how many blobs
+/// went back.
+async fn run_blob_sweeps(
+    sessions: &Sessions,
+    silo: &SiloEntry,
+    targets: &[OpenTarget],
+    reachable: &[(Uuid, &dyn ObjectStore)],
+) -> Result<usize, String> {
+    let mut restored = 0;
+    for target in targets.iter().filter(|t| t.role.allows_delete()) {
+        restored += run_blob_sweep(sessions, silo, (target.id, &*target.store), reachable).await?;
+    }
+    Ok(restored)
+}
 
 /// Deletes content nothing references, at most once a day, and only what
 /// was unreferenced on an earlier sweep and for the whole grace period. The
 /// same listing puts back content a file points at that the target lost.
 /// Runs after a successful pass, when the referenced set is trustworthy.
+/// Also aborts unfinished uploads older than [`STALE_UPLOAD_AGE`].
 /// Errors are swallowed: housekeeping. Returns how many blobs went back.
 /// The same step as core's `silentsilo-app` pass, fed the session map.
 async fn run_blob_sweep(
@@ -1273,6 +1291,16 @@ async fn run_blob_sweep(
         (referenced, first_seen)
     };
     let (referenced, first_seen) = plan;
+
+    // With the blob sweep because it deletes too, and lists: once a day, and
+    // only on a target whose role allows deletes.
+    if let Err(e) = sync::abort_stale_uploads(store, STALE_UPLOAD_AGE).await {
+        crate::diagnostics::warn(
+            "sweep",
+            format_args!("unfinished uploads were not cleared: {e}"),
+        );
+    }
+
     // Only a candidate past its grace may go on this sweep.
     let due: std::collections::HashSet<Uuid> = first_seen
         .iter()
@@ -2242,6 +2270,103 @@ mod tests {
             !in_storage(storage.path(), blob),
             "unreferenced content put back"
         );
+    }
+
+    /// A folder that counts the sweep's requests to abort unfinished uploads.
+    struct CountingStore {
+        inner: Box<dyn ObjectStore>,
+        aborts: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    #[async_trait::async_trait]
+    impl ObjectStore for CountingStore {
+        async fn put(&self, key: &str, body: Vec<u8>) -> Result<(), silentsilo_store::StoreError> {
+            self.inner.put(key, body).await
+        }
+        async fn get(&self, key: &str) -> Result<Vec<u8>, silentsilo_store::StoreError> {
+            self.inner.get(key).await
+        }
+        async fn head(&self, key: &str) -> Result<Option<i64>, silentsilo_store::StoreError> {
+            self.inner.head(key).await
+        }
+        async fn delete(&self, key: &str) -> Result<(), silentsilo_store::StoreError> {
+            self.inner.delete(key).await
+        }
+        async fn list(
+            &self,
+            prefix: &str,
+        ) -> Result<Vec<silentsilo_store::StoredObject>, silentsilo_store::StoreError> {
+            self.inner.list(prefix).await
+        }
+        fn describe(&self) -> String {
+            self.inner.describe()
+        }
+        async fn abort_stale_uploads(
+            &self,
+            prefix: &str,
+            older_than: std::time::Duration,
+        ) -> Result<usize, silentsilo_store::StoreError> {
+            self.aborts.fetch_add(1, Ordering::SeqCst);
+            self.inner.abort_stale_uploads(prefix, older_than).await
+        }
+    }
+
+    fn counted(
+        path: &Path,
+        role: silentsilo_vault::TargetRole,
+    ) -> (OpenTarget, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        let aborts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let target = OpenTarget {
+            id: Uuid::new_v4(),
+            label: String::new(),
+            store: Box::new(CountingStore {
+                inner: store(path),
+                aborts: aborts.clone(),
+            }),
+            owed: Vec::new(),
+            role,
+        };
+        (target, aborts)
+    }
+
+    #[test]
+    fn the_sweep_aborts_stale_uploads_once_a_day_and_never_on_an_archive() {
+        let silo = Silo::new();
+        let (working_dir, archive_dir) =
+            (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let (working, working_aborts) =
+            counted(working_dir.path(), silentsilo_vault::TargetRole::Working);
+        let (archive, archive_aborts) =
+            counted(archive_dir.path(), silentsilo_vault::TargetRole::Archive);
+        let targets = [working, archive];
+        let all: Vec<(Uuid, &dyn ObjectStore)> =
+            targets.iter().map(|t| (t.id, &*t.store)).collect();
+        let sweeps = || {
+            tauri::async_runtime::block_on(run_blob_sweeps(
+                &silo.sessions,
+                &silo.silo,
+                &targets,
+                &all,
+            ))
+            .unwrap()
+        };
+
+        sweeps();
+        // One request per prefix: blobs/, snapshots/, inbox/.
+        assert_eq!(working_aborts.load(Ordering::SeqCst), 3);
+        assert_eq!(archive_aborts.load(Ordering::SeqCst), 0, "archive swept");
+
+        sweeps();
+        assert_eq!(
+            working_aborts.load(Ordering::SeqCst),
+            3,
+            "swept twice a day"
+        );
+
+        silo.sql("DELETE FROM vault_meta WHERE key LIKE 'blob_sweep_at:%'");
+        sweeps();
+        assert_eq!(working_aborts.load(Ordering::SeqCst), 6);
+        assert_eq!(archive_aborts.load(Ordering::SeqCst), 0, "archive swept");
     }
 
     /// The delivery rows survive being written inside one transaction.

@@ -118,7 +118,10 @@ sequenceDiagram
   uploads content a row here points at and the target lacks, from the cache
   or another copy (`silentsilo_sync::restore_missing_blobs`), counted in
   `blobs_restored`. Content no row references is never sent, so emptying the
-  trash is not undone. The step matches core's `silentsilo-app` pass.
+  trash is not undone. The same daily sweep aborts unfinished S3 uploads
+  older than 24 hours under `blobs/`, `snapshots/` and `inbox/`
+  (`silentsilo_sync::abort_stale_uploads`); a failure there is a warning and
+  the sweep carries on. The step matches core's `silentsilo-app` pass.
 - **Ops before blobs on push, and on the same push**: a visible file whose
   content has not arrived self-corrects next pass; content with no record
   looks like an orphan and gets swept. Same reasoning gives the join order

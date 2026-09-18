@@ -26,11 +26,13 @@ update every computer before adding a phone.
   file instead of after it. What already copied stays, and running it again
   carries on. A sync shows the bytes of the file it is uploading too.
 - S3 uploads a file over 16 MiB in parts, which lifts the 5 GiB limit a
-  single upload has.
+  single upload has. Parts a closed or crashed app left behind are cleared on the
+  retry, and anything older than a day by the daily sweep, so none stay
+  billed and out of sight.
 
 ### Changed
 
-- Built on core 1.6.0. Nothing a silo holds changed in a way 1.0.0 cannot
+- Built on core 1.6.1. Nothing a silo holds changed in a way 1.0.0 cannot
   read, and 1.0.0 still opens a silo this version has used.
 - Update every computer that uses the same silo. A computer still on 1.0.0
   can stop receiving other devices' changes after meeting some of them, and
