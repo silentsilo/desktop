@@ -84,6 +84,7 @@ fn report_progress(
     step: ProgressStep,
     blob_id: Option<Uuid>,
     named: &mut NamedBlob,
+    target: Option<&str>,
 ) {
     let file = match blob_id {
         None => None,
@@ -102,17 +103,29 @@ fn report_progress(
     };
     let _ = app.emit(
         "sync-progress",
-        silentsilo_app::SyncProgress {
-            silo_id: silo_id.to_string(),
-            phase,
-            done: step.done,
-            total: step.total,
-            bytes_done: step.bytes_done,
-            bytes_total: step.bytes_total,
-            file_id: file.as_ref().map(|(id, _)| id.to_string()),
-            name: file.map(|(_, name)| name),
+        TargetedProgress {
+            progress: silentsilo_app::SyncProgress {
+                silo_id: silo_id.to_string(),
+                phase,
+                done: step.done,
+                total: step.total,
+                bytes_done: step.bytes_done,
+                bytes_total: step.bytes_total,
+                file_id: file.as_ref().map(|(id, _)| id.to_string()),
+                name: file.map(|(_, name)| name),
+            },
+            target: target.map(str::to_owned),
         },
     );
+}
+
+/// Core's progress plus the copy it is for. Uploads run once per copy, so
+/// with two copies the same "2 of 2" went by twice and read as a repeat.
+#[derive(Clone, serde::Serialize)]
+struct TargetedProgress {
+    #[serde(flatten)]
+    progress: silentsilo_app::SyncProgress,
+    target: Option<String>,
 }
 
 /// A phase counted in items, with no blob to name and so nothing to cache.
@@ -124,6 +137,7 @@ fn report_counted(app: &AppHandle, silo_id: Uuid, phase: &'static str, done: usi
         ProgressStep::counted(done, total),
         None,
         &mut None,
+        None,
     );
 }
 
@@ -658,6 +672,7 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
     let recovery = settled.envelope;
     let mut keys = load_fido_keys(&root).ok();
 
+    let several_copies = targets.len() > 1;
     for target in &targets {
         let state = sync::SiloState {
             vault_id,
@@ -697,6 +712,7 @@ pub(crate) async fn run_sync_pass(app: &AppHandle, silo: &SiloEntry) -> Result<S
                     },
                     Some(blob.blob_id),
                     &mut named,
+                    several_copies.then_some(target.label.as_str()),
                 ),
             },
         )
@@ -1100,6 +1116,7 @@ async fn fetch_missing_for_full_copy(
             ProgressStep::counted(done, batch.len()),
             Some(blob_id),
             &mut named,
+            None,
         );
         // One object that will not come down must not stop the rest. It was
         // a `break`, so a single blob missing from the bucket, or one whose

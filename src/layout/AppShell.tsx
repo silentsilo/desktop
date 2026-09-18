@@ -43,7 +43,7 @@ function describeProgress(p: SyncProgress): string {
     case "sending-changes":
       return `Sending changes${count}`;
     case "uploading":
-      return `Uploading${count}${name}${bytes}`;
+      return `Uploading${p.target ? ` to ${p.target}` : ""}${count}${name}${bytes}`;
     case "fetching-changes":
       return `Getting changes${count}`;
     case "downloading":

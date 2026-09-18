@@ -197,6 +197,9 @@ export type SyncProgress = {
   bytes_total: number;
   file_id: string | null;
   name: string | null;
+  /** The copy an upload is going to, named when there is more than one:
+   * each copy gets its own run, so the same count goes by once per copy. */
+  target?: string | null;
 };
 
 export type RecoveryStatus = {
