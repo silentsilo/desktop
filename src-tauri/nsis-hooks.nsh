@@ -23,15 +23,33 @@
 ; The browser extension's native host, silentsilo-browser-host.exe, is an
 ; externalBin: Tauri installs it beside the app, signs it with the app, and
 ; deletes it on uninstall. What Tauri does not do is tell the browsers about
-; it. The host writes its own manifest (`--write-manifest`, beside itself,
+; it. The host writes its own manifests (`--write-manifest`, beside itself,
 ; allowed extensions from crates/silentsilo-browser-host/allowed-origins.json,
-; the one list), and the two keys below point Chrome and Edge at it. HKCU,
-; like everything else here. A build without the host (a plain
-; `npm run tauri:build`) skips all of it.
+; the one list): one for Chromium browsers, one for Firefox, which lists
+; add-on ids instead of origins. The keys below point Chrome, Edge and
+; Firefox at them, each only when that browser's list has an id
+; (`--registers` exits 0); a key whose list is empty is removed, so an update
+; that drops a browser stops pointing it at the host. Brave has no key of its
+; own: on Windows it reads Chrome's (then Chromium's), and installs the
+; extension from the Chrome Web Store. HKCU, like everything else here. A
+; build without the host (a plain `npm run tauri:build`) skips all of it.
+; Nothing here installs an extension; the user adds it from the store.
 ;
 ; A host the browser still runs would hold its exe open and fail the copy,
 ; so any left are ended first. It is a relay and holds nothing; the
 ; extension reconnects.
+; Points one browser's key at a manifest when the host says that browser has
+; an allowed id, and removes the key otherwise.
+!macro SILENTSILO_REGISTER_HOST BROWSER KEY MANIFEST
+  nsExec::Exec '"$INSTDIR\silentsilo-browser-host.exe" --registers ${BROWSER}'
+  Pop $0
+  ${If} $0 == "0"
+    WriteRegStr HKCU "${KEY}" "" "$INSTDIR\${MANIFEST}"
+  ${Else}
+    DeleteRegKey HKCU "${KEY}"
+  ${EndIf}
+!macroend
+
 !macro NSIS_HOOK_PREINSTALL
   nsExec::Exec '"$SYSDIR\taskkill.exe" /F /IM silentsilo-browser-host.exe'
   Pop $0
@@ -42,8 +60,11 @@
     nsExec::Exec '"$INSTDIR\silentsilo-browser-host.exe" --write-manifest'
     Pop $0
     ${If} ${FileExists} "$INSTDIR\silentsilo-browser-host.json"
-      WriteRegStr HKCU "Software\Google\Chrome\NativeMessagingHosts\com.silentsilo.desktop" "" "$INSTDIR\silentsilo-browser-host.json"
-      WriteRegStr HKCU "Software\Microsoft\Edge\NativeMessagingHosts\com.silentsilo.desktop" "" "$INSTDIR\silentsilo-browser-host.json"
+      !insertmacro SILENTSILO_REGISTER_HOST chrome "Software\Google\Chrome\NativeMessagingHosts\com.silentsilo.desktop" "silentsilo-browser-host.json"
+      !insertmacro SILENTSILO_REGISTER_HOST edge "Software\Microsoft\Edge\NativeMessagingHosts\com.silentsilo.desktop" "silentsilo-browser-host.json"
+    ${EndIf}
+    ${If} ${FileExists} "$INSTDIR\silentsilo-browser-host.firefox.json"
+      !insertmacro SILENTSILO_REGISTER_HOST firefox "Software\Mozilla\NativeMessagingHosts\com.silentsilo.desktop" "silentsilo-browser-host.firefox.json"
     ${EndIf}
   ${EndIf}
 !macroend
@@ -90,7 +111,9 @@
   Pop $0
   DeleteRegKey HKCU "Software\Google\Chrome\NativeMessagingHosts\com.silentsilo.desktop"
   DeleteRegKey HKCU "Software\Microsoft\Edge\NativeMessagingHosts\com.silentsilo.desktop"
+  DeleteRegKey HKCU "Software\Mozilla\NativeMessagingHosts\com.silentsilo.desktop"
   Delete "$INSTDIR\silentsilo-browser-host.json"
+  Delete "$INSTDIR\silentsilo-browser-host.firefox.json"
 !macroend
 
 ; The rest of the machine-local directory, under the same box that removes

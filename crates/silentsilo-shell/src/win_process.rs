@@ -333,7 +333,8 @@ fn known_folder(id: GUID) -> Option<PathBuf> {
 }
 
 /// Where browsers install: Program Files (both), and the user's local
-/// application data for a per-user install.
+/// application data for a per-user install (Chrome, Edge, Brave, and
+/// Firefox installed without administrator rights).
 pub fn install_roots() -> Vec<PathBuf> {
     [
         FOLDERID_ProgramFiles,
@@ -391,6 +392,12 @@ mod tests {
                 "msedge.exe",
                 "Microsoft Corporation",
             ),
+            (
+                r"BraveSoftware\Brave-Browser\Application",
+                "brave.exe",
+                "Brave Software, Inc.",
+            ),
+            (r"Mozilla Firefox", "firefox.exe", "Mozilla Corporation"),
         ] {
             for root in install_roots() {
                 let path = root.join(dir).join(exe);

@@ -148,10 +148,11 @@ whatever you answer on its one question:
 - the application itself, from its install folder
 - the Explorer menu entries (*Add to SilentSilo*, *Save here from SilentSilo*)
 - the sign-in entry that starts it, so Windows stops trying to run it
-- the browser extension's registration: its host, the host's manifest, and
-  the Chrome and Edge keys named `com.silentsilo.desktop` under
-  `HKCU\Software\Google\Chrome\NativeMessagingHosts` and
-  `HKCU\Software\Microsoft\Edge\NativeMessagingHosts`
+- the browser extension's registration: its host, the host's two manifests,
+  and the keys named `com.silentsilo.desktop` under
+  `HKCU\Software\Google\Chrome\NativeMessagingHosts` (read by Chrome and
+  Brave), `HKCU\Software\Microsoft\Edge\NativeMessagingHosts` and
+  `HKCU\Software\Mozilla\NativeMessagingHosts` (Firefox)
 - `%LOCALAPPDATA%\SilentSilo\upload-queue.txt` and `download-queue.txt`,
   which hold the paths of whatever was last right-clicked
 

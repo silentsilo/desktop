@@ -10,14 +10,15 @@ silo from opening needs a major version rather than a note.
 ### Added
 
 - Browser extension support, off by default under Settings > Browser
-  extension. The SilentSilo extension for Chrome and Edge can ask for the
-  logins saved for the site in the open tab and fill one, after you confirm
-  in this window with Windows Hello or your security key. It sees login
+  extension. The SilentSilo extension for Chrome, Edge, Brave and Firefox
+  can ask for the logins saved for the site in the open tab and fill one,
+  after you confirm in this window with Windows Hello or your security key. It sees login
   entries only, never files, notes or codes. The installer registers a small
   native messaging host for it; uninstalling removes the registration. The
   app talks only to that host, signed like the app, and the host only to
-  Chrome or Edge and to this app. Filling needs a security key or Windows
-  Hello on the silo.
+  those four browsers and to this app. Brave uses Chrome's registration;
+  a browser whose extension listing does not exist yet is not registered.
+  Filling needs a security key or Windows Hello on the silo.
 - The extension's popup has an "Open SilentSilo" button when the silo is
   locked. It brings this window to the front, where you unlock as usual;
   then click the extension again. The extension cannot unlock anything.

@@ -1,56 +1,79 @@
 //! `silentsilo-browser-host`: the native messaging host the browser starts
 //! for the SilentSilo extension.
 //!
-//! Run by the browser as `silentsilo-browser-host <extension origin>`. It
-//! refuses any extension not in its allowed list and, in a release build,
-//! any start that did not come from Chrome or Edge. Then it opens the app's
-//! pipe, checks the app is what serves it, and relays whole frames between
-//! stdio and the pipe until either side closes. When the pipe is not there,
-//! or is not the app's, it answers `app-not-running` itself. It never starts
-//! the app.
+//! Chrome, Edge and Brave run it as `silentsilo-browser-host <extension
+//! origin> --parent-window=<n>`; Firefox as `silentsilo-browser-host
+//! <manifest path> <add-on id>`. It refuses any extension not on the list
+//! for its form and, in a release build, any start that did not come from a
+//! browser of that kind. Then it opens the app's pipe, checks the app is
+//! what serves it, and relays whole frames between stdio and the pipe until
+//! either side closes. When the pipe is not there, or is not the app's, it
+//! answers `app-not-running` itself. It never starts the app.
 //!
-//! `silentsilo-browser-host --write-manifest` writes the manifest the
-//! browser reads, beside the executable. The installer runs it.
-//! `--check-release` says whether this build is fit to ship.
+//! `silentsilo-browser-host --write-manifest` writes both manifests the
+//! browsers read, beside the executable. `--registers <chrome|edge|firefox>`
+//! exits 0 when that browser's registry key should point at them, 1 when its
+//! list is empty. The installer runs both. `--check-release` says whether
+//! this build is fit to ship.
 
 use std::process::ExitCode;
 
 use silentsilo_browser_host::{
-    MANIFEST_FILE, allowed_origins, caller_allowed, manifest, this_build_release_problems,
+    FIREFOX_MANIFEST_FILE, MANIFEST_FILE, allowed_caller, allowed_firefox_ids, allowed_origins,
+    firefox_manifest, manifest, registers, this_build_release_problems,
 };
 
 fn main() -> ExitCode {
     silentsilo_shell::harden_process();
-    let first = std::env::args().nth(1).unwrap_or_default();
-    if first == "--write-manifest" {
-        return write_manifest();
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match args.first().map(String::as_str) {
+        Some("--write-manifest") => return write_manifests(),
+        Some("--check-release") => return check_release(),
+        Some("--registers") => return registers_key(args.get(1).map(String::as_str)),
+        _ => {}
     }
-    if first == "--check-release" {
-        return check_release();
-    }
-    if !caller_allowed(&first, &allowed_origins()) {
+    let Some(engine) = allowed_caller(&args, &allowed_origins(), &allowed_firefox_ids()) else {
         eprintln!("silentsilo-browser-host: this extension is not allowed");
         return ExitCode::from(2);
-    }
+    };
     // Debug builds are started by tests, not by a browser.
     #[cfg(all(windows, not(debug_assertions)))]
-    if let Err(reason) = silentsilo_browser_host::started_by_browser() {
+    if let Err(reason) = silentsilo_browser_host::started_by_browser(engine) {
         eprintln!("silentsilo-browser-host: refused: {reason}");
         return ExitCode::from(3);
     }
+    #[cfg(not(all(windows, not(debug_assertions))))]
+    let _ = engine;
     relay::run()
 }
 
-fn write_manifest() -> ExitCode {
+fn write_manifests() -> ExitCode {
     let written = std::env::current_exe().and_then(|exe| {
-        let target = exe.with_file_name(MANIFEST_FILE);
-        std::fs::write(target, manifest(&exe, &allowed_origins()))
+        std::fs::write(
+            exe.with_file_name(MANIFEST_FILE),
+            manifest(&exe, &allowed_origins()),
+        )?;
+        std::fs::write(
+            exe.with_file_name(FIREFOX_MANIFEST_FILE),
+            firefox_manifest(&exe, &allowed_firefox_ids()),
+        )
     });
     match written {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("silentsilo-browser-host: could not write the manifest: {e}");
+            eprintln!("silentsilo-browser-host: could not write the manifests: {e}");
             ExitCode::FAILURE
+        }
+    }
+}
+
+fn registers_key(key: Option<&str>) -> ExitCode {
+    match key.and_then(registers) {
+        Some(true) => ExitCode::SUCCESS,
+        Some(false) => ExitCode::from(1),
+        None => {
+            eprintln!("silentsilo-browser-host: --registers takes chrome, edge or firefox");
+            ExitCode::from(2)
         }
     }
 }
@@ -61,7 +84,8 @@ fn check_release() -> ExitCode {
         eprintln!("silentsilo-browser-host: not fit to ship: {problem}");
     }
     if problems.is_empty() {
-        println!("allowed: {}", allowed_origins().join(" "));
+        println!("allowed (Chromium): {}", allowed_origins().join(" "));
+        println!("allowed (Firefox): {}", allowed_firefox_ids().join(" "));
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE

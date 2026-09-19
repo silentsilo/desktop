@@ -12,6 +12,8 @@ use silentsilo_browser_host::{NOT_OURS, NOT_RUNNING};
 use silentsilo_shell::browser_pipe::{ClientCheck, Frame, MAX_FRAME, PipeServer, pipe_name};
 
 const DEV: &str = "chrome-extension://acgmibddhpnmaegpegjcibekcnihpfic/";
+const FIREFOX_ID: &str = "browser@silentsilo.com";
+const FIREFOX_MANIFEST: &str = r"C:\SilentSilo\silentsilo-browser-host.firefox.json";
 const HOST: &str = env!("CARGO_BIN_EXE_silentsilo-browser-host");
 
 fn host(origin: &str) -> Child {
@@ -29,6 +31,19 @@ fn host_expecting(origin: &str, server: Option<&std::path::Path>) -> Child {
     command
         .arg(origin)
         .arg("--parent-window=0")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap()
+}
+
+/// The host as Firefox starts it: the manifest's path, then the add-on id.
+fn firefox_host(id: &str) -> Child {
+    Command::new(HOST)
+        .env_remove("SILENTSILO_BROWSER_HOST_TEST_SERVER")
+        .arg(FIREFOX_MANIFEST)
+        .arg(id)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -67,6 +82,11 @@ fn an_extension_not_on_the_list_is_turned_away() {
     assert_eq!(child.wait().unwrap().code(), Some(2));
     let mut none = host("");
     assert_eq!(none.wait().unwrap().code(), Some(2));
+    let mut other = firefox_host("other@silentsilo.com");
+    assert_eq!(other.wait().unwrap().code(), Some(2));
+    // A Chromium origin where Firefox puts the add-on id.
+    let mut swapped = firefox_host(DEV);
+    assert_eq!(swapped.wait().unwrap().code(), Some(2));
 }
 
 /// One test, in order: both halves use the real per-user pipe name.
@@ -92,6 +112,15 @@ fn without_the_app_it_answers_alone_and_with_it_it_relays() {
         br#"{"id":"2","type":"logins","origin":"https://a.example"}"#,
     );
     assert_eq!(receive(&mut child)["id"], "2");
+    drop(child.stdin.take());
+    assert!(child.wait().unwrap().success());
+
+    // Started the way Firefox starts it, the host gets as far.
+    let mut child = firefox_host(FIREFOX_ID);
+    send(&mut child, br#"{"id":"6","type":"status"}"#);
+    let answer = receive(&mut child);
+    assert_eq!(answer["id"], "6");
+    assert_eq!(answer["code"], "app-not-running");
     drop(child.stdin.take());
     assert!(child.wait().unwrap().success());
 

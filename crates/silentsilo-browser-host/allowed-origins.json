@@ -1,5 +1,6 @@
 {
-  "comment": "The store builds of the extension that a release host lets in. Each entry is chrome-extension://<32-letter id>/ with the trailing slash. Put the Chrome Web Store id in chrome_web_store and the Edge Add-ons id in edge_add_ons once each listing exists. While both lists are empty, build-release-local.ps1 ships the app without the host. It refuses a list holding the development id from allowed-origins.dev.json or anything but a plain extension origin, and the host's --check-release refuses a host with no store id.",
+  "comment": "The store builds of the extension that a release host lets in. chrome_web_store and edge_add_ons hold chrome-extension://<32-letter id>/ with the trailing slash; Brave installs from the Chrome Web Store and reads Chrome's registry key, so it has no list of its own. firefox_add_ons holds the Firefox Add-ons id, fixed by the extension's browser_specific_settings.gecko.id. While all three lists are empty, build-release-local.ps1 ships the app without the host; any one of them ships it, and the installer registers only the browsers whose list has an id. It refuses a list holding the development id from allowed-origins.dev.json or a malformed entry, and the host's --check-release refuses a host with no store id.",
   "chrome_web_store": [],
-  "edge_add_ons": []
+  "edge_add_ons": [],
+  "firefox_add_ons": ["browser@silentsilo.com"]
 }

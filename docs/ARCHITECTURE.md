@@ -218,34 +218,61 @@ flowchart LR
 
 - **The host** (`crates/silentsilo-browser-host`) is a separate small binary
   so the browser never starts the app, with its webview, to relay a message.
-  The browser passes the calling extension's origin as the first argument;
-  the host refuses any origin not in its list before it opens the pipe. The
-  list is compiled in. `allowed-origins.json` holds the store ids (Chrome
-  Web Store, Edge Add-ons; empty until the listings exist).
-  `allowed-origins.dev.json` holds the development id, which anyone can
-  reproduce from the public key in the extension's dev manifest, so only
-  debug builds and builds with the `dev-extension` feature let it in.
-  `--check-release` fails a host that lets the dev id in or names no store
-  id. `build-release-local.ps1` checks the JSON before it starts
-  (`browser-host-release.ps1`, the same rule as `release_verdict`): both
-  store lists empty means the release ships without the host, so a desktop
-  release never waits for a store listing; the dev id or anything but a
-  plain extension origin stops the build. When the host ships, the script
-  runs `--check-release` on the built binary. A unit test keeps the dev id
-  out of the release file. `--write-manifest` writes the same list into the
-  manifest the browser reads.
+  The browser names the calling extension in the arguments, in one of two
+  forms. Chrome, Edge and Brave pass its origin first
+  (`chrome-extension://<id>/`, then `--parent-window=<n>`); Firefox passes
+  the path of the manifest it read, then the add-on id. The host takes a
+  `chrome-extension://` first argument as the Chromium form and checks it
+  against the Chromium list only; anything else must be a `.json` path
+  followed by an id on the Firefox list (`allowed_caller`). It refuses a
+  caller on neither before it opens the pipe. The lists are compiled in.
+  `allowed-origins.json` holds the store ids: `chrome_web_store` and
+  `edge_add_ons` (empty until the listings exist; Brave installs from the
+  Chrome Web Store and has no list), and `firefox_add_ons`, which holds
+  `browser@silentsilo.com`. That id is ours, fixed in the extension's
+  `browser_specific_settings`, and the development build carries it too, so
+  Firefox has no development list. `allowed-origins.dev.json` holds the
+  Chromium development id, which anyone can reproduce from the public key in
+  the extension's dev manifest, so only debug builds and builds with the
+  `dev-extension` feature let it in. `--check-release` fails a host that
+  lets the dev id in or names no store id. `build-release-local.ps1` checks
+  the JSON before it starts (`browser-host-release.ps1`, the same rule as
+  `release_verdict`): all three lists empty means the release ships without
+  the host, so a desktop release never waits for a store listing, and any
+  one of them, the Firefox id included, ships it. The dev id, anything but a
+  plain extension origin in a Chromium list, or anything but an add-on id as
+  MDN defines it (`name@domain` of at most 80 characters, or a GUID in
+  braces) in the Firefox list stops the build. When the host ships, the
+  script runs `--check-release` on the built binary. A unit test keeps the
+  dev id out of the release file. `--write-manifest` writes both manifests
+  the browsers read: `silentsilo-browser-host.json` with `allowed_origins`
+  for Chromium, `silentsilo-browser-host.firefox.json` with
+  `allowed_extensions` for Firefox. A Firefox temporary add-on can claim any
+  id, as an unpacked Chromium extension can claim a store id through its
+  key, so an id on the list says which extension it claims to be, not which
+  one it is.
 - **No host, no pipe.** When `silentsilo-browser-host.exe` is not beside the
   app, Settings shows "The browser extension is not part of this build."
   instead of the toggle, and the pipe is never opened, whatever the saved
   setting says. In development, `cargo build -p silentsilo-browser-host`
   puts it beside the debug app.
 - **The host checks who started it** (release builds only; tests start it
-  from cargo). Its parent must be `chrome.exe` or `msedge.exe` under
-  `<Program Files, Program Files (x86) or %LOCALAPPDATA%>\Google\Chrome*\Application`
-  or `\Microsoft\Edge*\Application`, running as this user, with a valid
-  Authenticode signature from Google LLC or Microsoft Corporation. The
-  browsers start a host through `cmd.exe`, so a `cmd.exe` in a system
-  directory between the two is stepped over. A parent whose id was reused
+  from cargo). Its parent must be one of these, under `<Program Files,
+  Program Files (x86) or %LOCALAPPDATA%>`, running as this user, with a
+  valid Authenticode signature from the publisher named:
+  `Google\Chrome*\Application\chrome.exe` (Google LLC),
+  `Microsoft\Edge*\Application\msedge.exe` (Microsoft Corporation),
+  `BraveSoftware\Brave-Browser[-Beta|-Dev|-Nightly]\Application\brave.exe`
+  (Brave Software, Inc.), or `<Mozilla Firefox | Firefox Developer Edition |
+  Firefox Nightly>\firefox.exe` (Mozilla Corporation). The browser must
+  match the argument form: a Chromium origin from Chrome, Edge or Brave, a
+  Firefox id from Firefox. Chromium browsers start a host through
+  `cmd.exe` unless a policy says otherwise, so a `cmd.exe` in a system
+  directory between the two is stepped over. Firefox starts an `.exe` host
+  directly from its main process (`NativeMessaging.sys.mjs` through
+  `Subprocess`, which goes through `cmd.exe` only for `.bat` and `.cmd`), so
+  a Firefox behind `cmd.exe` fails. Firefox from the Microsoft Store (MSIX,
+  under `WindowsApps`) is not on the list. A parent whose id was reused
   (started after the host) fails. Anything else exits with code 3, before
   the pipe is opened.
 - **The host checks the pipe is the app's** before writing to it. The pipe's
@@ -349,11 +376,19 @@ flowchart LR
   `tauri.conf.json`: tauri-build requires an externalBin to exist on every
   compile of the app, CI's included. Tauri signs it with `signCommand` like
   the app, which is what the app's signer check compares. The NSIS hooks run
-  `--write-manifest` and point
+  `--write-manifest`, then `--registers chrome|edge|firefox` for each key:
   `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.silentsilo.desktop`
-  and the Edge equivalent at the manifest; the uninstaller removes both keys
-  and the manifest. A plain `npm run tauri:build`, or a release made while
-  the store lists are empty, has no host, and the hooks skip it.
+  and `HKCU\Software\Microsoft\Edge\NativeMessagingHosts\...` point at the
+  Chromium manifest, `HKCU\Software\Mozilla\NativeMessagingHosts\...` at the
+  Firefox one. A key is written only when its browser's list has an id, and
+  removed otherwise. Brave has no key of its own: on Windows it reads
+  `SOFTWARE\Chromium\NativeMessagingHosts`, then Chrome's, HKCU before HKLM
+  (upstream `launch_context_win.cc`, which brave-core does not override;
+  both strings are in Brave's `chrome.dll`), so Chrome's key serves it.
+  The uninstaller removes the three keys and both manifests. The installer
+  never installs an extension. A plain `npm run tauri:build`, or a release
+  made while the store lists are empty, has no host, and the hooks skip
+  it.
 
 ### What these checks do not stop
 
