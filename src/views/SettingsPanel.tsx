@@ -37,6 +37,8 @@ import { AUTO_LOCK_OPTIONS_MINUTES } from "../lib/types";
 import { checkForUpdate, installUpdateAndRelaunch } from "../lib/updater";
 import { readAutostart, writeAutostart, type AutostartStatus } from "../lib/autostart";
 import { readBrowserExtension, writeBrowserExtension } from "../lib/browserExtension";
+import { EXTENSION_STORES } from "../lib/extensionStores";
+import { ExtensionStoreLinks } from "./ExtensionStoreLinks";
 import type { BrowserExtensionStatus } from "../lib/types";
 import { formatAppError } from "../lib/errors";
 import { ActivityList } from "./ActivityList";
@@ -907,6 +909,7 @@ export function SettingsPanel(props: Props) {
                   </p>
                 )}
                 {browserExtensionError && <p className="hint is-error">{browserExtensionError}</p>}
+                <ExtensionStoreLinks links={EXTENSION_STORES} />
               </>
             )}
           </div>

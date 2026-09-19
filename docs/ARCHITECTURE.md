@@ -256,6 +256,12 @@ flowchart LR
   instead of the toggle, and the pipe is never opened, whatever the saved
   setting says. In development, `cargo build -p silentsilo-browser-host`
   puts it beside the debug app.
+- **Store links.** Under the toggle, "Get it for Chrome", "Edge", "Brave"
+  and "Firefox" open the extension's listing in the default browser through
+  the opener plugin. The URLs are in `src/lib/extensionStores.ts`, empty
+  until each listing exists; an empty one shows no link, and one that is
+  not https on the store's own host is never shown. Brave uses the Chrome
+  Web Store link. The installer never installs the extension.
 - **The host checks who started it** (release builds only; tests start it
   from cargo). Its parent must be one of these, under `<Program Files,
   Program Files (x86) or %LOCALAPPDATA%>`, running as this user, with a
