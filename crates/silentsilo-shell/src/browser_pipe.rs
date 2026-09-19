@@ -615,7 +615,35 @@ mod tests {
             sddl
         };
         let sid = current_user_sid().unwrap();
-        assert_eq!(sddl, format!("O:{sid}D:P(A;;FA;;;{sid})"));
+        // Written back the way Windows writes it: a well-known account (the
+        // built-in Administrator a CI runner uses) comes out as "LA", not as
+        // its full SID, so both sides go through the same conversion.
+        // SAFETY: converts a string this test built, and frees both results.
+        let expected = unsafe {
+            let wanted_sddl = ::windows::core::HSTRING::from(format!("O:{sid}D:P(A;;FA;;;{sid})"));
+            let mut sd = PSECURITY_DESCRIPTOR::default();
+            ::windows::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                &wanted_sddl,
+                SDDL_REVISION_1,
+                &mut sd,
+                None,
+            )
+            .unwrap();
+            let mut text = PWSTR::null();
+            ConvertSecurityDescriptorToStringSecurityDescriptorW(
+                sd,
+                SDDL_REVISION_1,
+                wanted,
+                &mut text,
+                None,
+            )
+            .unwrap();
+            let out = text.to_string().unwrap();
+            let _ = LocalFree(Some(HLOCAL(text.0.cast())));
+            let _ = LocalFree(Some(HLOCAL(sd.0)));
+            out
+        };
+        assert_eq!(sddl, expected);
 
         drop(client);
         drop(server);
