@@ -227,24 +227,28 @@ flowchart LR
   followed by an id on the Firefox list (`allowed_caller`). It refuses a
   caller on neither before it opens the pipe. The lists are compiled in.
   `allowed-origins.json` holds the store ids: `chrome_web_store` and
-  `edge_add_ons` (empty until the listings exist; Brave installs from the
-  Chrome Web Store and has no list), and `firefox_add_ons`, which holds
-  `browser@silentsilo.com`. That id is ours, fixed in the extension's
-  `browser_specific_settings`, and the development build carries it too, so
-  Firefox has no development list. `allowed-origins.dev.json` holds the
-  Chromium development id, which anyone can reproduce from the public key in
-  the extension's dev manifest, so only debug builds and builds with the
-  `dev-extension` feature let it in. `--check-release` fails a host that
-  lets the dev id in or names no store id. `build-release-local.ps1` checks
-  the JSON before it starts (`browser-host-release.ps1`, the same rule as
-  `release_verdict`): all three lists empty means the release ships without
-  the host, so a desktop release never waits for a store listing, and any
-  one of them, the Firefox id included, ships it. The dev id, anything but a
-  plain extension origin in a Chromium list, or anything but an add-on id as
-  MDN defines it (`name@domain` of at most 80 characters, or a GUID in
-  braces) in the Firefox list stops the build. When the host ships, the
-  script runs `--check-release` on the built binary. A unit test keeps the
-  dev id out of the release file. `--write-manifest` writes both manifests
+  `edge_add_ons` and `firefox_add_ons` (all empty until the listings exist;
+  Brave installs from the Chrome Web Store and has no list).
+  `allowed-origins.dev.json` holds the development ids, let in only by debug
+  builds and builds with the `dev-extension` feature: the Chromium one,
+  which anyone can reproduce from the public key in the extension's dev
+  manifest, and `browser@silentsilo.com`, the Firefox id fixed in the
+  extension's `browser_specific_settings`. A Firefox id is chosen by its
+  author and becomes unique only when someone first submits it to
+  addons.mozilla.org, so until our own AMO submission (listed or unlisted)
+  holds it, anyone could get a Mozilla-signed extension carrying it. It
+  moves to the release list only after that submission. `--check-release`
+  fails a host that lets a dev id in or names no store id.
+  `build-release-local.ps1` checks the JSON before it starts
+  (`browser-host-release.ps1`, the same rule as `release_verdict`): all
+  three lists empty means the release ships without the host, so a desktop
+  release never waits for a store listing, and any one of them, the Firefox
+  list included, ships it. A dev id of either kind in a release list,
+  anything but a plain extension origin in a Chromium list, or anything but
+  an add-on id as MDN defines it (`name@domain` of at most 80 characters, or
+  a GUID in braces) in the Firefox list stops the build. When the host
+  ships, the script runs `--check-release` on the built binary. Unit tests
+  keep both dev ids out of the release file. `--write-manifest` writes both manifests
   the browsers read: `silentsilo-browser-host.json` with `allowed_origins`
   for Chromium, `silentsilo-browser-host.firefox.json` with
   `allowed_extensions` for Firefox. A Firefox temporary add-on can claim any

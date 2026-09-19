@@ -24,8 +24,8 @@ pub const APP_EXE: &str = "SilentSilo.exe";
 /// be swapped. `--write-manifest` writes the same lists into the manifests.
 const RELEASE: &str = include_str!("../allowed-origins.json");
 
-/// The development build's id. Always compiled in, so a release can check
-/// it does not let it in; only [`DEV_ALLOWED`] builds let it in.
+/// The development builds' ids. Always compiled in, so a release can check
+/// it does not let them in; only [`DEV_ALLOWED`] builds let them in.
 const DEV: &str = include_str!("../allowed-origins.dev.json");
 
 /// Whether this build lets the development extension in: debug builds, and
@@ -55,9 +55,20 @@ pub fn firefox_store_ids() -> Vec<String> {
     entries_in(RELEASE, &["firefox_add_ons"])
 }
 
-/// The development build's id, as written.
+/// The Chromium development build's id, as written.
 pub fn dev_origins() -> Vec<String> {
     entries_in(DEV, &["allowed_origins"])
+}
+
+/// The Firefox id before our AMO submission claims it, as written.
+pub fn dev_firefox_ids() -> Vec<String> {
+    entries_in(DEV, &["firefox_add_ons"])
+}
+
+/// Every development id, Chromium and Firefox: what a release list must
+/// never hold.
+pub fn dev_ids() -> Vec<String> {
+    entries_in(DEV, &["allowed_origins", "firefox_add_ons"])
 }
 
 /// The Chromium extension origins allowed to start this host.
@@ -70,18 +81,22 @@ pub fn allowed_origins() -> Vec<String> {
     list
 }
 
-/// The Firefox add-on ids allowed to start this host. The development build
-/// carries the same id, so there is no development list.
+/// The Firefox add-on ids allowed to start this host.
 pub fn allowed_firefox_ids() -> Vec<String> {
     let mut list = firefox_store_ids();
+    if DEV_ALLOWED {
+        list.extend(dev_firefox_ids());
+    }
     list.retain(|id| is_firefox_id(id));
     list
 }
 
 /// What makes a host unfit to ship, empty when nothing does: it would let
-/// the development id in (anyone can build an extension with it), or it
-/// would let no extension in at all. `chromium` is the Chrome Web Store and
-/// Edge Add-ons lists together, `firefox` the Firefox Add-ons list.
+/// a development id in (anyone can build a Chromium extension with ours, and
+/// anyone can claim the Firefox one on AMO until we do), or it would let no
+/// extension in at all. `chromium` is the Chrome Web Store and Edge Add-ons
+/// lists together, `firefox` the Firefox Add-ons list, `dev` every
+/// development id of either kind.
 pub fn release_problems(
     chromium: &[String],
     firefox: &[String],
@@ -117,6 +132,10 @@ pub fn release_problems(
             problems.push(format!(
                 "allowed-origins.json has a malformed Firefox id {id:?}"
             ));
+        } else if dev.contains(id) {
+            problems.push(format!(
+                "allowed-origins.json holds the development Firefox id {id} (trust it only once our AMO submission claims it)"
+            ));
         }
     }
     problems
@@ -127,7 +146,7 @@ pub fn this_build_release_problems() -> Vec<String> {
     release_problems(
         &store_origins(),
         &firefox_store_ids(),
-        &dev_origins(),
+        &dev_ids(),
         DEV_ALLOWED,
     )
 }
@@ -265,10 +284,11 @@ pub fn registers_for(
     dev: &[String],
 ) -> Option<bool> {
     let any_origin = |list: &[String]| list.iter().any(|o| is_extension_origin(o));
+    let any_id = |list: &[String]| list.iter().any(|id| is_firefox_id(id));
     match key {
         "chrome" => Some(any_origin(chrome) || any_origin(dev)),
         "edge" => Some(any_origin(edge) || any_origin(dev)),
-        "firefox" => Some(firefox.iter().any(|id| is_firefox_id(id))),
+        "firefox" => Some(any_id(firefox) || any_id(dev)),
         _ => None,
     }
 }
@@ -277,11 +297,7 @@ pub fn registers_for(
 /// the named browser's key at the host. A browser with no allowed id gets
 /// no key.
 pub fn registers(key: &str) -> Option<bool> {
-    let dev = if DEV_ALLOWED {
-        dev_origins()
-    } else {
-        Vec::new()
-    };
+    let dev = if DEV_ALLOWED { dev_ids() } else { Vec::new() };
     registers_for(
         key,
         &entries_in(RELEASE, &["chrome_web_store"]),
@@ -543,21 +559,60 @@ mod tests {
             }
         }
         assert_eq!(dev_origins(), [DEV_ID]);
+        assert_eq!(dev_firefox_ids(), [FIREFOX_ID]);
+        assert_eq!(dev_ids(), [DEV_ID, FIREFOX_ID]);
         for id in firefox_store_ids() {
             assert!(is_firefox_id(&id), "{id:?}");
         }
-        assert_eq!(allowed_firefox_ids(), [FIREFOX_ID]);
     }
 
     /// Whatever else changes, the release list never names the id anyone
-    /// can reproduce from the public dev key.
+    /// can reproduce from the public dev key, nor the Firefox id before our
+    /// AMO submission claims it.
     #[test]
-    fn the_release_list_never_holds_the_dev_id() {
+    fn the_release_list_never_holds_a_dev_id() {
         let store = store_origins();
         for dev in dev_origins() {
             assert!(!store.contains(&dev), "allowed-origins.json holds {dev}");
         }
+        let firefox = firefox_store_ids();
+        for dev in dev_firefox_ids() {
+            assert!(!firefox.contains(&dev), "allowed-origins.json holds {dev}");
+        }
         assert!(!RELEASE.contains("acgmibddhpnmaegpegjcibekcnihpfic"));
+    }
+
+    /// Debug builds let the Firefox id in for testing; a release does not
+    /// until it is moved to the release list.
+    #[test]
+    fn the_dev_firefox_id_is_let_in_exactly_when_the_build_allows_it() {
+        assert_eq!(
+            allowed_firefox_ids().contains(&FIREFOX_ID.to_string()),
+            DEV_ALLOWED
+        );
+        assert_eq!(registers("firefox"), Some(DEV_ALLOWED));
+    }
+
+    #[test]
+    fn a_release_check_refuses_the_dev_firefox_id() {
+        let dev = s(&[DEV_ID, FIREFOX_ID]);
+        let other = s(&["other@silentsilo.com"]);
+        assert!(release_problems(&[], &other, &dev, false).is_empty());
+        let problems = release_problems(&[], &s(&[FIREFOX_ID]), &dev, false);
+        assert!(
+            problems
+                .iter()
+                .any(|p| p.contains("development Firefox id")),
+            "{problems:?}"
+        );
+        assert!(matches!(
+            release_verdict(&[STORE_ID.to_string()], &s(&[FIREFOX_ID]), &dev, false),
+            ReleaseVerdict::Refuse(_)
+        ));
+        assert!(matches!(
+            release_verdict(&[], &s(&[FIREFOX_ID]), &dev, false),
+            ReleaseVerdict::Refuse(_)
+        ));
     }
 
     #[test]
@@ -687,6 +742,10 @@ mod tests {
         let dev = s(&[DEV_ID]);
         assert_eq!(registers_for("chrome", &[], &[], &[], &dev), Some(true));
         assert_eq!(registers_for("firefox", &[], &[], &[], &dev), Some(false));
+        // The dev Firefox id registers Firefox only.
+        let dev = s(&[FIREFOX_ID]);
+        assert_eq!(registers_for("firefox", &[], &[], &[], &dev), Some(true));
+        assert_eq!(registers_for("chrome", &[], &[], &[], &dev), Some(false));
         // Malformed entries register nothing.
         let bad = s(&["chrome-extension://*/"]);
         assert_eq!(registers_for("chrome", &bad, &[], &[], &[]), Some(false));
@@ -704,7 +763,7 @@ mod tests {
         let verdict = release_verdict(
             &store_origins(),
             &firefox_store_ids(),
-            &dev_origins(),
+            &dev_ids(),
             DEV_ALLOWED,
         );
         assert!(!matches!(verdict, ReleaseVerdict::Refuse(_)), "{verdict:?}");

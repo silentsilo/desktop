@@ -1,6 +1,9 @@
 {
-  "comment": "The development build's id, pinned by the public key in silentsilo/browser's dev manifest. That key is public, so anyone can build an extension with this id. It is let in by debug builds, and by builds with the dev-extension feature, never by a release.",
+  "comment": "The development builds' ids, let in by debug builds and by builds with the dev-extension feature, never by a release. The Chromium origin is pinned by the public key in silentsilo/browser's dev manifest, so anyone can build an extension with it. The Firefox id is ours only once our AMO submission has claimed it; until then anyone could get it signed there, so it stays here and goes into allowed-origins.json only after that submission.",
   "allowed_origins": [
     "chrome-extension://acgmibddhpnmaegpegjcibekcnihpfic/"
+  ],
+  "firefox_add_ons": [
+    "browser@silentsilo.com"
   ]
 }

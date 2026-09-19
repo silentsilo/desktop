@@ -18,6 +18,8 @@ silo from opening needs a major version rather than a note.
   app talks only to that host, signed like the app, and the host only to
   those four browsers and to this app. Brave uses Chrome's registration;
   a browser whose extension listing does not exist yet is not registered.
+  Firefox is registered only once the Firefox Add-ons listing holds the
+  extension's id, so no one else can publish an add-on under it first.
   Filling needs a security key or Windows Hello on the silo.
 - The extension's popup has an "Open SilentSilo" button when the silo is
   locked. It brings this window to the front, where you unlock as usual;

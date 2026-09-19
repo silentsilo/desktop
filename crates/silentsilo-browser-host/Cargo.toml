@@ -13,7 +13,8 @@ name = "silentsilo-browser-host"
 path = "src/main.rs"
 
 [features]
-# Lets the development build of the extension in, as debug builds always do.
+# Lets the development ids in (the Chromium dev build, and the Firefox id
+# before our AMO submission claims it), as debug builds always do.
 # For a release-profile build tested against an unpacked extension; a
 # shipped host never has it (build-release-local.ps1 runs --check-release).
 dev-extension = []

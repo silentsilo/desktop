@@ -20,8 +20,10 @@ the browsers whose list has an id (the host's --registers).
 A Chromium entry that is the development id (its key is public, so anyone
 can build an extension that carries it) or not exactly
 chrome-extension://<32 letters a-p>/ (a wildcard, say) throws. So does a
-Firefox entry that is not an add-on id as MDN defines it (name@domain of at
-most 80 characters, or a GUID in braces). Otherwise "ship".
+Firefox entry that is still in the dev list (an add-on id is ours only once
+our AMO submission claims it; until then anyone could get it signed there)
+or not an add-on id as MDN defines it (name@domain of at most 80 characters,
+or a GUID in braces). Otherwise "ship".
 #>
 function Get-BrowserHostPlan {
     param(
@@ -31,7 +33,8 @@ function Get-BrowserHostPlan {
     $origins = Get-Content $OriginsPath -Raw | ConvertFrom-Json
     $chromiumIds = @(@($origins.chrome_web_store) + @($origins.edge_add_ons) | Where-Object { $null -ne $_ })
     $firefoxIds = @(@($origins.firefox_add_ons) | Where-Object { $null -ne $_ })
-    $devIds = @((Get-Content $DevPath -Raw | ConvertFrom-Json).allowed_origins)
+    $dev = Get-Content $DevPath -Raw | ConvertFrom-Json
+    $devIds = @(@($dev.allowed_origins) + @($dev.firefox_add_ons) | Where-Object { $null -ne $_ })
     if ($chromiumIds.Count -eq 0 -and $firefoxIds.Count -eq 0) {
         return "leave-out"
     }
@@ -42,6 +45,9 @@ function Get-BrowserHostPlan {
         }
     }
     foreach ($id in $firefoxIds) {
+        if ($devIds -contains $id) {
+            throw "allowed-origins.json holds the development Firefox id $id. Trust it only once our AMO submission claims it."
+        }
         $email = $id.Length -le 80 -and $id -cmatch '^[a-zA-Z0-9._-]*@[a-zA-Z0-9._-]+$'
         $guid = $id -cmatch '^\{[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\}$'
         if (-not ($email -or $guid)) {

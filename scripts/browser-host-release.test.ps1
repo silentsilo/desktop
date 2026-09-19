@@ -11,7 +11,9 @@ $realOrigins = Join-Path $repoRoot "crates\silentsilo-browser-host\allowed-origi
 $realDev = Join-Path $repoRoot "crates\silentsilo-browser-host\allowed-origins.dev.json"
 $devId = @((Get-Content $realDev -Raw | ConvertFrom-Json).allowed_origins)[0]
 $storeId = "chrome-extension://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/"
-$firefoxId = "browser@silentsilo.com"
+$devFirefoxId = @((Get-Content $realDev -Raw | ConvertFrom-Json).firefox_add_ons)[0]
+# A stand-in for an id our AMO submission holds.
+$firefoxId = "claimed@silentsilo.com"
 $dir = Join-Path $env:TEMP "silentsilo-host-plan-test"
 
 $failures = 0
@@ -36,6 +38,7 @@ Write-Host "`n== The lists in this tree =="
 $real = Get-BrowserHostPlan -OriginsPath $realOrigins -DevPath $realDev
 Write-Host "  plan: $real"
 Check "ships or leaves out, never refuses" ($real -in @("ship", "leave-out"))
+Check "the release lists do not hold the dev Firefox id" (@((Get-Content $realOrigins -Raw | ConvertFrom-Json).firefox_add_ons) -notcontains $devFirefoxId)
 
 Write-Host "`n== Fixtures =="
 Check "both empty: left out" ((Plan @() @()) -eq "leave-out")
@@ -56,6 +59,9 @@ Check "a Firefox wildcard: refused" (Throws { Plan @() @() @("*") })
 Check "a Firefox id over 80 characters: refused" (Throws { Plan @() @() @(("a" * 70) + "@silentsilo.com") })
 Check "an empty Firefox id: refused" (Throws { Plan @() @() @("") })
 Check "the dev id beside the Firefox id: refused" (Throws { Plan @($devId) @() @($firefoxId) })
+Check "the dev list has the Firefox id" ($devFirefoxId -eq "browser@silentsilo.com")
+Check "the dev Firefox id: refused" (Throws { Plan @() @() @($devFirefoxId) })
+Check "the dev Firefox id beside a store id: refused" (Throws { Plan @($storeId) @() @($firefoxId, $devFirefoxId) })
 
 if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
 Write-Host ""

@@ -67,7 +67,8 @@ if (Test-Path (Join-Path $repoRoot ".cargo\config.toml")) {
 
 # The browser host lets in the extension ids compiled into it. With no store
 # id yet (Chrome Web Store, Edge Add-ons or Firefox Add-ons) the release goes
-# out without it; an entry that is the development id (its key is public), not
+# out without it; an entry that is a development id (the Chromium key is
+# public; the Firefox id is not ours until our AMO submission claims it), not
 # a plain extension origin, or not a Firefox add-on id stops the build. Checked
 # here so a long build does not start for nothing, and again on the built
 # host below.
