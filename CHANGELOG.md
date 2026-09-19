@@ -18,6 +18,9 @@ silo from opening needs a major version rather than a note.
   app talks only to that host, signed like the app, and the host only to
   Chrome or Edge and to this app. Filling needs a security key or Windows
   Hello on the silo.
+- The extension's popup has an "Open SilentSilo" button when the silo is
+  locked. It brings this window to the front, where you unlock as usual;
+  then click the extension again. The extension cannot unlock anything.
 
 ## [1.1.0] - Phones, and computers that agree
 

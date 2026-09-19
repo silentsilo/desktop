@@ -1,7 +1,8 @@
 //! How often the extension may ask. A client that is not the extension can
-//! still reach the pipe (see ARCHITECTURE.md), so listing a silo's labels
-//! and raising the fill dialog are both rationed: per connection, and for
-//! lookups across all of them, since a new connection is cheap.
+//! still reach the pipe (see ARCHITECTURE.md), so listing a silo's labels,
+//! raising the window and raising the fill dialog are all rationed: per
+//! connection, and for lookups and `show` across all of them, since a new
+//! connection is cheap.
 
 use std::time::{Duration, Instant};
 
@@ -46,13 +47,13 @@ impl Bucket {
     }
 }
 
-/// `logins` and `search` on one connection: a popup opening and someone
+/// `logins`, `search` and `show` on one connection: a popup opening and someone
 /// typing, not a sweep through the alphabet.
 pub fn lookups_per_connection() -> Bucket {
     Bucket::new(20, Duration::from_secs(1))
 }
 
-/// `logins` and `search` across every connection.
+/// `logins`, `search` and `show` across every connection.
 pub fn lookups_overall() -> Bucket {
     Bucket::new(60, Duration::from_millis(500))
 }
@@ -79,6 +80,59 @@ impl Cooldown {
     pub fn active(&self, now: Instant) -> bool {
         self.until.is_some_and(|until| now < until)
     }
+}
+
+/// Takes one lookup from this connection's ration, then from the app-wide
+/// one. A connection past its own ration spends nothing of the other.
+pub fn take_lookup(mine: &mut Bucket, overall: &mut Bucket, now: Instant) -> bool {
+    mine.take(now) && overall.take(now)
+}
+
+/// A `show` this soon after the last one the app acted on is `busy`, so a
+/// client cannot keep raising the window.
+pub const SHOW_INTERVAL: Duration = Duration::from_secs(3);
+
+#[derive(Debug, Default)]
+pub struct ShowGate {
+    last: Option<Instant>,
+}
+
+impl ShowGate {
+    /// Whether a `show` may raise the window now. Only one that may counts
+    /// as the last.
+    pub fn take(&mut self, now: Instant) -> bool {
+        if self
+            .last
+            .is_some_and(|last| now.saturating_duration_since(last) < SHOW_INTERVAL)
+        {
+            return false;
+        }
+        self.last = Some(now);
+        true
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ShowRefused {
+    TooMany,
+    TooSoon,
+}
+
+/// A `show` spends the same rations as a lookup, then must be clear of the
+/// last one.
+pub fn admit_show(
+    mine: &mut Bucket,
+    overall: &mut Bucket,
+    gate: &mut ShowGate,
+    now: Instant,
+) -> Result<(), ShowRefused> {
+    if !take_lookup(mine, overall, now) {
+        return Err(ShowRefused::TooMany);
+    }
+    if !gate.take(now) {
+        return Err(ShowRefused::TooSoon);
+    }
+    Ok(())
 }
 
 /// What one connection has used.
@@ -134,6 +188,55 @@ mod tests {
         assert!(cooldown.active(start));
         assert!(cooldown.active(start + COOLDOWN_AFTER_CANCEL - Duration::from_millis(1)));
         assert!(!cooldown.active(start + COOLDOWN_AFTER_CANCEL));
+    }
+
+    #[test]
+    fn a_show_waits_three_seconds_after_the_last_one() {
+        let start = Instant::now();
+        let mut gate = ShowGate::default();
+        assert!(gate.take(start));
+        assert!(!gate.take(start));
+        assert!(!gate.take(start + SHOW_INTERVAL - Duration::from_millis(1)));
+        // A refused one does not push the next one further out.
+        assert!(gate.take(start + SHOW_INTERVAL));
+        assert!(!gate.take(start + SHOW_INTERVAL + Duration::from_secs(1)));
+    }
+
+    #[test]
+    fn a_show_spends_the_lookup_rations() {
+        let start = Instant::now();
+        let later = start + SHOW_INTERVAL;
+        let mut mine = lookups_per_connection();
+        let mut overall = lookups_overall();
+        let mut gate = ShowGate::default();
+        assert_eq!(
+            admit_show(&mut mine, &mut overall, &mut gate, start),
+            Ok(())
+        );
+        assert_eq!(
+            admit_show(&mut mine, &mut overall, &mut gate, start),
+            Err(ShowRefused::TooSoon)
+        );
+
+        // This connection's lookups used up: refused, three seconds or not.
+        while take_lookup(&mut mine, &mut lookups_overall(), start) {}
+        assert_eq!(
+            admit_show(&mut mine, &mut overall, &mut gate, start),
+            Err(ShowRefused::TooMany)
+        );
+
+        // The app-wide ration used up by other connections: refused too.
+        let mut fresh = lookups_per_connection();
+        let mut drained = Bucket::new(1, Duration::from_secs(3600));
+        assert!(drained.take(start));
+        assert_eq!(
+            admit_show(&mut fresh, &mut drained, &mut gate, later),
+            Err(ShowRefused::TooMany)
+        );
+        assert_eq!(
+            admit_show(&mut fresh, &mut overall, &mut gate, later),
+            Ok(())
+        );
     }
 
     #[test]

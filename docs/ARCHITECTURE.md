@@ -283,12 +283,22 @@ flowchart LR
   is the app's own. Any other client is disconnected unread and the refusal
   goes to the diagnostics log. A release built without signing therefore
   admits no host.
-- **What a client may ask is rationed** (`browser/limits.rs`). `logins` and
-  `search` share a bucket of 20 per connection, one more per second, and one
-  of 60 across all connections, one more per half second. A `search` under
-  two characters finds nothing. `fill` has 3 per connection, one more per 20
-  seconds. After a fill is declined or times out, no fill dialog opens for
-  10 seconds, whoever asks. Past any of these the answer is `busy`.
+- **What a client may ask is rationed** (`browser/limits.rs`). `logins`,
+  `search` and `show` share a bucket of 20 per connection, one more per
+  second, and one of 60 across all connections, one more per half second. A
+  `search` under two characters finds nothing. `fill` has 3 per connection,
+  one more per 20 seconds. After a fill is declined or times out, no fill
+  dialog opens for 10 seconds, whoever asks. A `show` within 3 seconds of the
+  last one acted on, from any connection, is refused. Past any of these the
+  answer is `busy`.
+- **`show` brings the window forward** and does nothing else. The popup's
+  "Open SilentSilo" button sends it when the silo is locked or there is no
+  silo. The handler runs `commands::shell::show_main_window` (show,
+  unminimise, focus) through `run_on_main_thread`, the same call the
+  single-instance handler makes, and never sets always-on-top. No frontend
+  code is involved: a locked silo already renders `UnlockView`, and the
+  unlock is the usual one. The answer is `{ id, type }` and nothing about the
+  app's state; nothing waits for the unlock, and no fill follows it.
 - **The extension sees logins and nothing else.** `browser/logins.rs` is
   the only module in `browser/` that reaches the vault, and its one call is
   `list_passwords`. It keeps label, username and saved address of entries

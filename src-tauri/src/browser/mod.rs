@@ -25,7 +25,7 @@ use uuid::Uuid;
 
 use crate::commands::fido::run_blocking;
 use crate::state::AppState;
-use limits::{Bucket, ConnectionLimits, Cooldown};
+use limits::{Bucket, ConnectionLimits, Cooldown, ShowGate, ShowRefused};
 use logins::{Login, Secret};
 use protocol::{Code, Failure, Item, Request};
 
@@ -35,6 +35,7 @@ const FILL_TIMEOUT: Duration = Duration::from_secs(90);
 const GONE: &str = "This browser request is no longer waiting.";
 const TOO_MANY: &str = "Too many requests from the browser. Wait a moment.";
 const COOLING_DOWN: &str = "A fill was just declined. Wait a few seconds before asking again.";
+const SHOWN_JUST_NOW: &str = "The window was just brought forward. Wait a few seconds.";
 
 pub struct BrowserBridge {
     server: Mutex<Option<Server>>,
@@ -45,6 +46,8 @@ pub struct BrowserBridge {
     lookups: Mutex<Bucket>,
     /// Set when a fill is declined or times out.
     cooldown: Mutex<Cooldown>,
+    /// The last `show` acted on, across every connection.
+    shown: Mutex<ShowGate>,
 }
 
 impl Default for BrowserBridge {
@@ -55,6 +58,7 @@ impl Default for BrowserBridge {
             pending: Mutex::default(),
             lookups: Mutex::new(limits::lookups_overall()),
             cooldown: Mutex::default(),
+            shown: Mutex::default(),
         }
     }
 }
@@ -326,6 +330,7 @@ async fn answer(app: &AppHandle, connection: &Connection, frame: Frame) -> Vec<u
         Request::Fill { origin, reference } => {
             fill(app, connection, &id, &origin, &reference).await
         }
+        Request::Show => show(app, connection, &id),
     };
     result.unwrap_or_else(|failure| protocol::error_answer(&id, &failure))
 }
@@ -335,12 +340,35 @@ async fn answer(app: &AppHandle, connection: &Connection, frame: Frame) -> Vec<u
 fn lookup_allowed(app: &AppHandle, connection: &Connection) -> Result<(), Failure> {
     let now = Instant::now();
     let bridge = app.state::<BrowserBridge>();
-    let mine = lock(&connection.limits).lookups.take(now);
-    if mine && lock(&bridge.lookups).take(now) {
+    let mut mine = lock(&connection.limits);
+    if limits::take_lookup(&mut mine.lookups, &mut lock(&bridge.lookups), now) {
         Ok(())
     } else {
         Err(Failure::with(Code::Busy, TOO_MANY))
     }
+}
+
+/// Brings the window forward, on its unlock screen while the silo is
+/// locked; the unlock happens there as always. The answer says nothing about
+/// the app's state, and nothing waits for the unlock. Not kept on top.
+fn show(app: &AppHandle, connection: &Connection, id: &str) -> Result<Vec<u8>, Failure> {
+    let admitted = {
+        let bridge = app.state::<BrowserBridge>();
+        let mut mine = lock(&connection.limits);
+        let mut overall = lock(&bridge.lookups);
+        let mut gate = lock(&bridge.shown);
+        limits::admit_show(&mut mine.lookups, &mut overall, &mut gate, Instant::now())
+    };
+    match admitted {
+        Ok(()) => {}
+        Err(ShowRefused::TooMany) => return Err(Failure::with(Code::Busy, TOO_MANY)),
+        Err(ShowRefused::TooSoon) => return Err(Failure::with(Code::Busy, SHOWN_JUST_NOW)),
+    }
+    // Window calls belong on the main thread, where the single-instance
+    // handler already runs.
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || crate::commands::shell::show_main_window(&handle));
+    Ok(protocol::show_answer(id))
 }
 
 enum Access {

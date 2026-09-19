@@ -91,9 +91,18 @@ impl From<Code> for Failure {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Request {
     Status,
-    Logins { origin: String },
-    Search { query: String },
-    Fill { origin: String, reference: String },
+    Logins {
+        origin: String,
+    },
+    Search {
+        query: String,
+    },
+    Fill {
+        origin: String,
+        reference: String,
+    },
+    /// Bring the window forward. Carries nothing and answers nothing.
+    Show,
 }
 
 /// Parses one request. On failure the id is whatever could be read, empty
@@ -108,6 +117,7 @@ pub fn parse_request(bytes: &[u8]) -> Result<(String, Request), (String, Failure
     let text = |name: &str| value.get(name).and_then(|v| v.as_str()).map(str::to_string);
     let request = match value.get("type").and_then(|v| v.as_str()) {
         Some("status") => Some(Request::Status),
+        Some("show") => Some(Request::Show),
         Some("logins") => text("origin").map(|origin| Request::Logins { origin }),
         Some("search") => text("query").map(|query| Request::Search { query }),
         Some("fill") => match (text("origin"), text("ref")) {
@@ -376,6 +386,18 @@ pub fn status_answer(id: &str, state: &'static str, silo: Option<&str>, version:
 }
 
 #[derive(Serialize)]
+struct ShowAnswer<'a> {
+    id: &'a str,
+    #[serde(rename = "type")]
+    kind: &'static str,
+}
+
+/// The answer to `show`: its id and type, nothing about the app's state.
+pub fn show_answer(id: &str) -> Vec<u8> {
+    serde_json::to_vec(&ShowAnswer { id, kind: "show" }).unwrap_or_default()
+}
+
+#[derive(Serialize)]
 pub struct Item<'a> {
     #[serde(rename = "ref")]
     pub reference: String,
@@ -612,6 +634,10 @@ mod tests {
             Ok(("1".into(), Request::Status))
         );
         assert_eq!(
+            parse_request(br#"{"id":"5","type":"show"}"#),
+            Ok(("5".into(), Request::Show))
+        );
+        assert_eq!(
             parse_request(br#"{"id":"2","type":"logins","origin":"https://a.example"}"#),
             Ok((
                 "2".into(),
@@ -707,6 +733,10 @@ mod tests {
             serde_json::json!({"id":"3","type":"search",
                 "logins":[{"ref":"c1f0","label":"Bank","username":"alex","site":"bank.example"}]})
         );
+
+        // Nothing but its id and type, whatever state the app is in.
+        let v: serde_json::Value = serde_json::from_slice(&show_answer("5")).unwrap();
+        assert_eq!(v, serde_json::json!({"id":"5","type":"show"}));
 
         let v: serde_json::Value =
             serde_json::from_slice(&error_answer("4", &Failure::new(Code::NoAuthenticator)))
