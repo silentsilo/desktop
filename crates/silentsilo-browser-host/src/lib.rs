@@ -543,7 +543,7 @@ mod checks {
 mod tests {
     use super::*;
 
-    const DEV_ID: &str = "chrome-extension://acgmibddhpnmaegpegjcibekcnihpfic/";
+    const DEV_ID: &str = "chrome-extension://nomggfahfnppbkognojcibjhmlpbjgbl/";
     const STORE_ID: &str = "chrome-extension://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/";
     const FIREFOX_ID: &str = "browser@silentsilo.com";
 
@@ -579,7 +579,7 @@ mod tests {
         for dev in dev_firefox_ids() {
             assert!(!firefox.contains(&dev), "allowed-origins.json holds {dev}");
         }
-        assert!(!RELEASE.contains("acgmibddhpnmaegpegjcibekcnihpfic"));
+        assert!(!RELEASE.contains("nomggfahfnppbkognojcibjhmlpbjgbl"));
     }
 
     /// Debug builds let the Firefox id in for testing; a release does not
@@ -788,12 +788,12 @@ mod tests {
     fn near_misses_are_refused() {
         let list = [DEV_ID.to_string()];
         for caller in [
-            "chrome-extension://acgmibddhpnmaegpegjcibekcnihpfic",
+            "chrome-extension://nomggfahfnppbkognojcibjhmlpbjgbl",
             "chrome-extension://ACGMIBDDHPNMAEGPEGJCIBEKCNIHPFIC/",
-            "chrome-extension://acgmibddhpnmaegpegjcibekcnihpfic/x",
-            " chrome-extension://acgmibddhpnmaegpegjcibekcnihpfic/",
-            "moz-extension://acgmibddhpnmaegpegjcibekcnihpfic/",
-            "https://acgmibddhpnmaegpegjcibekcnihpfic/",
+            "chrome-extension://nomggfahfnppbkognojcibjhmlpbjgbl/x",
+            " chrome-extension://nomggfahfnppbkognojcibjhmlpbjgbl/",
+            "moz-extension://nomggfahfnppbkognojcibjhmlpbjgbl/",
+            "https://nomggfahfnppbkognojcibjhmlpbjgbl/",
             "",
             "--write-manifest",
         ] {

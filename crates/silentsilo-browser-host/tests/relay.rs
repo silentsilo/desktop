@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use silentsilo_browser_host::{NOT_OURS, NOT_RUNNING};
 use silentsilo_shell::browser_pipe::{ClientCheck, Frame, MAX_FRAME, PipeServer, pipe_name};
 
-const DEV: &str = "chrome-extension://acgmibddhpnmaegpegjcibekcnihpfic/";
+const DEV: &str = "chrome-extension://nomggfahfnppbkognojcibjhmlpbjgbl/";
 const FIREFOX_ID: &str = "browser@silentsilo.com";
 const FIREFOX_MANIFEST: &str = r"C:\SilentSilo\silentsilo-browser-host.firefox.json";
 const HOST: &str = env!("CARGO_BIN_EXE_silentsilo-browser-host");
