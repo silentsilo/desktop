@@ -559,8 +559,11 @@ mod tests {
             }
         }
         assert_eq!(dev_origins(), [DEV_ID]);
-        assert_eq!(dev_firefox_ids(), [FIREFOX_ID]);
-        assert_eq!(dev_ids(), [DEV_ID, FIREFOX_ID]);
+        // The Firefox id moved to the release list once AMO claimed it, so
+        // nothing Firefox-specific is dev-only any more.
+        assert!(dev_firefox_ids().is_empty());
+        assert_eq!(dev_ids(), [DEV_ID]);
+        assert!(firefox_store_ids().contains(&FIREFOX_ID.to_string()));
         for id in firefox_store_ids() {
             assert!(is_firefox_id(&id), "{id:?}");
         }
@@ -582,15 +585,12 @@ mod tests {
         assert!(!RELEASE.contains("nomggfahfnppbkognojcibjhmlpbjgbl"));
     }
 
-    /// Debug builds let the Firefox id in for testing; a release does not
-    /// until it is moved to the release list.
+    /// The Firefox id is in the release list now, so every build lets it in
+    /// and the installer registers Firefox.
     #[test]
-    fn the_dev_firefox_id_is_let_in_exactly_when_the_build_allows_it() {
-        assert_eq!(
-            allowed_firefox_ids().contains(&FIREFOX_ID.to_string()),
-            DEV_ALLOWED
-        );
-        assert_eq!(registers("firefox"), Some(DEV_ALLOWED));
+    fn the_claimed_firefox_id_is_let_in_by_every_build() {
+        assert!(allowed_firefox_ids().contains(&FIREFOX_ID.to_string()));
+        assert_eq!(registers("firefox"), Some(true));
     }
 
     #[test]

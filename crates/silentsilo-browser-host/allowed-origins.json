@@ -1,6 +1,10 @@
 {
-  "comment": "The store builds of the extension that a release host lets in. chrome_web_store and edge_add_ons hold chrome-extension://<32-letter id>/ with the trailing slash; Brave installs from the Chrome Web Store and reads Chrome's registry key, so it has no list of its own. firefox_add_ons holds the Firefox Add-ons id, fixed by the extension's browser_specific_settings.gecko.id. A Firefox id is unique only once addons.mozilla.org holds it, so browser@silentsilo.com moves here from allowed-origins.dev.json only after our AMO submission has claimed it. While all three lists are empty, build-release-local.ps1 ships the app without the host; any one of them ships it, and the installer registers only the browsers whose list has an id. It refuses a list holding an id from allowed-origins.dev.json or a malformed entry, and the host's --check-release refuses a host with no store id.",
-  "chrome_web_store": [],
+  "comment": "The store builds of the extension that a release host lets in. chrome_web_store and edge_add_ons hold chrome-extension://<32-letter id>/ with the trailing slash; Brave installs from the Chrome Web Store and reads Chrome's registry key, so it has no list of its own. firefox_add_ons holds the Firefox Add-ons id, fixed by the extension's browser_specific_settings.gecko.id. A Firefox id is unique only once addons.mozilla.org holds it; the AMO submission on 20 Sep 2026 claimed browser@silentsilo.com, so it lives here. While all three lists are empty, build-release-local.ps1 ships the app without the host; any one of them ships it, and the installer registers only the browsers whose list has an id. It refuses a list holding an id from allowed-origins.dev.json or a malformed entry, and the host's --check-release refuses a host with no store id.",
+  "chrome_web_store": [
+    "chrome-extension://aclndafepjjiljjfdlddckiledfjbbbn/"
+  ],
   "edge_add_ons": [],
-  "firefox_add_ons": []
+  "firefox_add_ons": [
+    "browser@silentsilo.com"
+  ]
 }
