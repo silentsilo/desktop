@@ -25,6 +25,13 @@ silo from opening needs a major version rather than a note.
   locked. It brings this window to the front, where you unlock as usual;
   then click the extension again. The extension cannot unlock anything.
 
+### Fixed
+
+- The daily update check now sends one request. Since 1.0.0 it usually
+  sent two to four in the same second, because the check restarted every
+  time the window redrew while the first request was still out. It was
+  still once a day, and the requests carried nothing new.
+
 ## [1.1.0] - Phones, and computers that agree
 
 Windows only, like 1.0.0. The Android app and this release share a silo;

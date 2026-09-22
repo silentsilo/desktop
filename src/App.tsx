@@ -918,15 +918,25 @@ export default function App() {
    * most. The timestamp is written only after a completed request, so an
    * offline laptop does not lose its daily window to a failed attempt.
    * Failures are silent; the manual button in Settings bypasses this.
+   *
+   * The effect depends on the setting alone: `toasts` is a new object every
+   * render, and as a dependency it restarted the effect, and the check with
+   * it, while the first request was still out (2-4 requests per check in
+   * 1.0.0 and 1.1.0). The in-flight flag covers any restart that remains.
    */
+  const toastsRef = useRef(toasts);
+  toastsRef.current = toasts;
+  const updateCheckInFlight = useRef(false);
   useEffect(() => {
     if (!autoUpdateEnabled) return;
     let cancelled = false;
 
     const runIfDue = async () => {
+      if (updateCheckInFlight.current) return;
       const raw = localStorage.getItem(UPDATE_LAST_CHECK_KEY);
       const last = raw === null ? null : Number.parseInt(raw, 10);
       if (!shouldCheckForUpdate(last, Date.now())) return;
+      updateCheckInFlight.current = true;
       try {
         const result = await checkForUpdate();
         localStorage.setItem(UPDATE_LAST_CHECK_KEY, String(Date.now()));
@@ -936,10 +946,12 @@ export default function App() {
         // morning trains people to dismiss it unread.
         if (localStorage.getItem(UPDATE_NOTIFIED_KEY) !== result.version) {
           localStorage.setItem(UPDATE_NOTIFIED_KEY, result.version);
-          toasts.info(`SilentSilo ${result.version} is available. Install it from Settings.`);
+          toastsRef.current.info(`SilentSilo ${result.version} is available. Install it from Settings.`);
         }
       } catch {
         // Offline or endpoint unreachable. The next hourly pass retries.
+      } finally {
+        updateCheckInFlight.current = false;
       }
     };
 
@@ -949,7 +961,7 @@ export default function App() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [autoUpdateEnabled, toasts]);
+  }, [autoUpdateEnabled]);
 
   const createSilo = async (name: string, location: string | null) => {
     begin("silo");
