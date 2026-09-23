@@ -52,8 +52,10 @@ export function subtitleFor(entry: PasswordEntry): string {
     case "ssh_key":
       return entry.ssh_fingerprint ?? "";
     case "note":
-      // The first line is the note's own summary of itself.
-      return entry.notes.split("\n", 1)[0] ?? "";
+      // The first line is the note's own summary of itself, unless the note
+      // is protected: then it is the secret, and the list, Favourites and
+      // Health would show it without the key touch the detail pane asks for.
+      return notesAreSecret(entry) ? "Protected note" : (entry.notes.split("\n", 1)[0] ?? "");
   }
 }
 
@@ -63,7 +65,9 @@ export function searchTextFor(entry: PasswordEntry): string {
     entry.service,
     entry.username,
     entry.url,
-    entry.notes,
+    // A protected entry's notes are a secret, and matching on them would let
+    // search answer questions about text the user has not unlocked.
+    notesAreSecret(entry) ? "" : entry.notes,
     entry.card_holder,
     entry.card_brand,
     entry.id_full_name,

@@ -90,9 +90,19 @@
 ;
 ; The two queue files hold plaintext paths of whatever was last right-clicked
 ; and are never cleaned up otherwise, so they go regardless of the box.
+;
+; The marker goes only when autostart was on. Installing over an older
+; version runs this uninstaller too, without the update flag, and deleting
+; the marker of someone who had turned autostart off made the next start
+; treat the machine as new and turn it back on. Left in place, a later
+; reinstall keeps their "off".
 !macro NSIS_HOOK_PREUNINSTALL
-  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "SilentSilo"
-  Delete "$LOCALAPPDATA\SilentSilo\autostart-initialized"
+  ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "SilentSilo"
+  ${If} $0 != ""
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "SilentSilo"
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run" "SilentSilo"
+    Delete "$LOCALAPPDATA\SilentSilo\autostart-initialized"
+  ${EndIf}
 
   DeleteRegKey HKCU "Software\Classes\*\shell\SilentSiloUpload"
   DeleteRegKey HKCU "Software\Classes\Directory\shell\SilentSiloUpload"
@@ -124,7 +134,24 @@
 ; Only under the box, and never mid-update. A working copy holds everything
 ; since the last lock when a session ended in a crash, so deleting one
 ; uninvited could take records the snapshot does not have yet.
+;
+; Decrypted copies of opened files go whatever the box says. An app running
+; at uninstall is ended without a lock, and the copies it had opened sat in
+; `work\open\<silo>\open` with no app left to sweep them. The ciphered working
+; copies beside them stay under the box, as above.
 !macro NSIS_HOOK_POSTUNINSTALL
+  ${If} $UpdateMode <> 1
+    SetShellVarContext current
+    FindFirst $1 $2 "$LOCALAPPDATA\SilentSilo\work\open\*"
+    ${DoWhile} $2 != ""
+      ${If} $2 != "."
+      ${AndIf} $2 != ".."
+        RMDir /r "$LOCALAPPDATA\SilentSilo\work\open\$2\open"
+      ${EndIf}
+      FindNext $1 $2
+    ${Loop}
+    FindClose $1
+  ${EndIf}
   ${If} $DeleteAppDataCheckboxState = 1
   ${AndIf} $UpdateMode <> 1
     SetShellVarContext current

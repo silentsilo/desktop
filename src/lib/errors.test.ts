@@ -11,35 +11,43 @@ describe("formatAppError", () => {
   });
 
   it("maps a security-key cancellation", () => {
-    expect(formatAppError("user_cancelled")).toBe("Security key prompt was cancelled.");
-    expect(formatAppError("Operation was Cancelled by user")).toBe(
-      "Security key prompt was cancelled.",
+    expect(formatAppError("user_cancelled")).toBe("The key prompt was cancelled.");
+    expect(formatAppError("Security key operation cancelled")).toBe(
+      "The key prompt was cancelled.",
     );
   });
 
   it("maps a security-key timeout", () => {
-    expect(formatAppError("request timed out")).toBe(
-      "Timed out waiting for the security key. Try again.",
+    expect(formatAppError("Security key request timed out")).toBe(
+      "The key prompt timed out. Try again.",
     );
   });
 
-  it("maps connection failures to the bucket, which is the only server left", () => {
-    const expected =
-      "Can’t reach your storage bucket. Check your connection and the endpoint in Settings.";
+  it("does not blame the key for a storage timeout or a stopped job", () => {
+    expect(formatAppError("request timed out")).toBe(
+      "Your backup storage did not answer in time. Check your connection and try again.",
+    );
+    expect(formatAppError("could not open cancelled-order.pdf: access denied")).toBe(
+      "could not open cancelled-order.pdf: access denied",
+    );
+  });
+
+  it("maps connection failures to backup storage, whatever kind it is", () => {
+    const expected = "Can't reach your backup storage. Check your connection and the address.";
     expect(formatAppError("error sending request for url (...)")).toBe(expected);
     expect(formatAppError("tcp connect error: Connection refused")).toBe(expected);
   });
 
   it("maps a rejected access key to the storage settings", () => {
     const expected =
-      "Your storage provider rejected the access key. Check the credentials in Settings.";
+      "Your backup storage refused the sign-in. Check the username and password, or the access key.";
     expect(formatAppError("service error: unauthorized")).toBe(expected);
     expect(formatAppError("dispatch failure (403): SignatureDoesNotMatch")).toBe(expected);
   });
 
   it("maps a missing bucket to something the user can act on", () => {
     expect(formatAppError("service error: NoSuchBucket")).toBe(
-      "That bucket doesn’t exist. Check the name and region in Settings.",
+      "That bucket doesn't exist. Check its name and region.",
     );
   });
 
@@ -87,7 +95,7 @@ describe("rules that used to match too much", () => {
 
   it("still reads a real status", () => {
     expect(formatAppError("dispatch failure (403): SignatureDoesNotMatch")).toBe(
-      "Your storage provider rejected the access key. Check the credentials in Settings.",
+      "Your backup storage refused the sign-in. Check the username and password, or the access key.",
     );
   });
 

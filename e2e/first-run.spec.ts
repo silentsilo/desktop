@@ -58,14 +58,14 @@ test("the organisation choice reaches the backend, and is off unless asked for",
   expect(sent).toEqual([{ authenticator: "security-key", organisation: true }]);
 });
 
-test("backing out of enrolment discards the silo, after asking", async ({ page }) => {
+test("backing out of enrolment removes the silo from the list, after asking", async ({ page }) => {
   await page.goto("/?mock=empty");
   await page.getByRole("button", { name: "Create silo" }).click();
   await expect(page.getByRole("heading", { name: "Set up unlocking" })).toBeVisible();
 
-  await page.getByRole("button", { name: "discard it" }).click();
-  await expect(page.getByText("Discard this silo?")).toBeVisible();
-  await page.getByRole("button", { name: "Discard silo" }).click();
+  await page.getByRole("button", { name: "Remove it from the list" }).click();
+  await expect(page.getByText("Remove this silo from the list?")).toBeVisible();
+  await page.getByRole("button", { name: "Remove from list" }).click();
 
   // Back where first-run starts: nothing exists, so the create form is the
   // screen again.

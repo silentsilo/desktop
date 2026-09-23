@@ -7,6 +7,8 @@ import {
   normalizeUrl,
   notesAreSecret,
   oneClickCopyValue,
+  searchTextFor,
+  subtitleFor,
 } from "./util";
 
 function entry(over: Partial<PasswordEntry> = {}): PasswordEntry {
@@ -154,5 +156,23 @@ describe("the one-click copy", () => {
     const key = entry({ type: "ssh_key", ssh_public_key: "ssh-ed25519 AAAA" });
     expect(copyKindFor(key)).toBe("plain");
     expect(oneClickCopyValue(key)).toBe("ssh-ed25519 AAAA");
+  });
+});
+
+describe("a protected note in lists and search", () => {
+  const note = (over: Partial<PasswordEntry> = {}) =>
+    entry({ type: "note", notes: "seed: abandon ability able\nmore", ...over });
+
+  it("shows the first line of an ordinary note", () => {
+    expect(subtitleFor(note())).toBe("seed: abandon ability able");
+  });
+
+  it("does not show a protected note's text before the key touch", () => {
+    expect(subtitleFor(note({ require_reauth: true }))).toBe("Protected note");
+  });
+
+  it("does not match a protected entry's notes in search", () => {
+    expect(searchTextFor(note())).toContain("abandon");
+    expect(searchTextFor(note({ require_reauth: true }))).not.toContain("abandon");
   });
 });

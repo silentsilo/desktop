@@ -286,7 +286,12 @@ pub async fn backup_target_seed(app: AppHandle, from: String, to: String) -> Res
     if from == to {
         return Err("Choose two different places.".into());
     }
-    let silo = crate::state::active_silo(&app)?;
+    // Only for the silo on screen, unlocked: this rewrites a copy's records
+    // and key files, which is not something a locked silo should be doing.
+    let silo = crate::state::unlocked_silo(&app)?;
+    // No pass alongside: one pushing into the copy being filled would
+    // interleave its writes with the seed's.
+    let sync_off = crate::commands::sync::hold_sync(&app).await?;
     let targets = silentsilo_vault::load_targets(silo.id);
     let find = |id: &str| {
         targets
@@ -360,7 +365,9 @@ pub async fn backup_target_seed(app: AppHandle, from: String, to: String) -> Res
     // already there. A pass settles it the ordinary way: `push_ops` asks
     // before writing, finds everything present and marks it delivered.
     // Reconciling by hand here would be a second implementation of that,
-    // free to disagree with the first.
+    // free to disagree with the first. Released first, or the pass would
+    // find the flag taken and stand down without doing it.
+    drop(sync_off);
     let _ = crate::commands::sync::run_sync_pass(&app, &silo).await;
 
     Ok(outcome.copied)

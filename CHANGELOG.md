@@ -27,6 +27,39 @@ silo from opening needs a major version rather than a note.
 
 ### Fixed
 
+- A security key removed on one computer stays removed. Another computer
+  that still had it could publish it again, and it came back everywhere.
+- Leaving Favourites open no longer keeps the silo from locking itself.
+- The new recovery code a key change makes is shown in its own window and
+  stays until you say it is written down. It could be lost before.
+- Adding files from Explorer into another open silo no longer leaves the
+  window showing one silo while it works on the other.
+- Enter or Delete on a dialog's button no longer opens or trashes the file
+  selected behind it. Shift-click selects the files shown between the two
+  clicks when the list is sorted. Ctrl+V adds copied files.
+- A protected note's first line is no longer shown in lists or found by
+  search before the key check.
+- Key changes and the snapshot rebuild wait for a running backup pass
+  instead of racing it.
+- A file being decrypted when the silo locks is no longer opened afterwards.
+- Removing a silo from the list keeps its working copy unless its files are
+  deleted too, so changes not yet in a snapshot are not lost.
+- Adding a second folder of a silo already in the list is refused instead of
+  replacing it.
+- Unlocking with a recovery code also tries the copy in backup storage, so a
+  code replaced on another computer works here. A code made by a newer
+  version says so instead of "doesn't match".
+- A failed save of a password entry is undone on screen and keeps the
+  editor open, and removed attachments are only deleted once the save
+  succeeds.
+- Storage timeouts are no longer reported as security key problems.
+- A password with leading or trailing spaces survives a CSV export and
+  import. A one-time code secret can be typed, and a mistyped one is refused.
+- Turning autostart off in Task Manager shows as off here, and installing
+  over an older version no longer turns it back on.
+- A password copied to the clipboard is cleared even when another program
+  was holding the clipboard at the moment the timer fired.
+- Uninstalling removes decrypted copies of opened files.
 - The daily update check now sends one request. Since 1.0.0 it usually
   sent two to four in the same second, because the check restarted every
   time the window redrew while the first request was still out. It was

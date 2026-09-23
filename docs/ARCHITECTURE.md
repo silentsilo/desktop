@@ -197,10 +197,22 @@ holds the snapshot or more, everything since the last lock after a crash.
 Anything else that wrote `vault.db.enc` gets a fresh export (core's
 ARCHITECTURE.md, "The working copy outlives the lock"). Up to three
 silos stay open (`MAX_OPEN_SILOS`), least-recently-used evicted; every way
-in funnels through `open_focused_session`. Long operations snapshot the
-session's cheap parts (`SessionSnapshot`) and take the sessions mutex only
-per row, never across encryption or network work; they pin the silo id they
-started on rather than re-reading focus.
+in funnels through `open_focused_session`, which refuses a session that is
+not the focused silo's (the focus moved while it was opening). Long
+operations snapshot the session's cheap parts (`SessionSnapshot`) and take
+the sessions mutex only per row, never across encryption or network work;
+they pin the silo id they started on rather than re-reading focus. A decrypt
+that finishes after its silo locked deletes what it wrote
+(`state::discard_if_locked`) instead of opening it.
+
+Removing a silo from the list keeps its ciphered working copy unless the
+files go too: while the folder stays, that copy can hold the only record of
+changes since the last snapshot.
+
+Key operations (enrol, add, remove, rotate, resume), the snapshot rebuild and
+a seed take the sync flag for as long as they run (`sync::hold_sync`), after
+waiting up to 90 seconds for a running pass. A pass that loaded `fido.json`
+before a key change and saved it after would put the old envelopes back.
 
 ## Browser extension
 
@@ -324,8 +336,11 @@ flowchart LR
   `search` and `show` share a bucket of 20 per connection, one more per
   second, and one of 60 across all connections, one more per half second. A
   `search` under two characters finds nothing. `fill` has 3 per connection,
-  one more per 20 seconds. After a fill is declined or times out, no fill
-  dialog opens for 10 seconds, whoever asks. A `show` within 3 seconds of the
+  one more per 20 seconds, and 4 across all connections, one more per 30
+  seconds. After a fill ends without a confirmation (declined, timed out, or
+  its connection gone), no fill dialog opens for 10 seconds, whoever asks.
+  The Fill button stays inert for 700 ms after a question appears, and the
+  key prompt names the login and the site. A `show` within 3 seconds of the
   last one acted on, from any connection, is refused. Past any of these the
   answer is `busy`.
 - **`show` brings the window forward** and does nothing else. The popup's

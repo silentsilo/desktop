@@ -29,11 +29,22 @@ export function formatAppError(err: unknown): string {
   ) {
     return msg;
   }
-  if (lower.includes("cancelled") || lower.includes("canceled") || lower.includes("user_cancelled")) {
-    return "Security key prompt was cancelled.";
+  // Cancelled and timed out are only about a key when the error came from a
+  // key prompt. Mapped on the word alone, a storage timeout was reported as
+  // the security key's, and a stopped upload as a cancelled key prompt.
+  const fromKey =
+    /security key|windows hello|touch id|webauthn|passkey|fido|ceremony|user_cancelled/.test(lower);
+  const cancelled =
+    lower.includes("cancelled") || lower.includes("canceled") || lower.includes("user_cancelled");
+  const timedOut = lower.includes("timeout") || lower.includes("timed out");
+  if (fromKey && cancelled) {
+    return "The key prompt was cancelled.";
   }
-  if (lower.includes("timeout") || lower.includes("timed out")) {
-    return "Timed out waiting for the security key. Try again.";
+  if (fromKey && timedOut) {
+    return "The key prompt timed out. Try again.";
+  }
+  if (timedOut) {
+    return "Your backup storage did not answer in time. Check your connection and try again.";
   }
   if (
     lower.includes("connection refused") ||
@@ -41,16 +52,16 @@ export function formatAppError(err: unknown): string {
     lower.includes("error sending request") ||
     lower.includes("tcp connect error")
   ) {
-    return "Can’t reach your storage bucket. Check your connection and the endpoint in Settings.";
+    return "Can't reach your backup storage. Check your connection and the address.";
   }
   // The bare numbers are matched as whole words. "401" as a substring
   // appears in file names, key ids and byte counts, and any of those turned
   // an unrelated failure into advice about storage credentials.
   if (lower.includes("unauthorized") || /\b(401|403)\b/.test(lower)) {
-    return "Your storage provider rejected the access key. Check the credentials in Settings.";
+    return "Your backup storage refused the sign-in. Check the username and password, or the access key.";
   }
   if (lower.includes("nosuchbucket") || lower.includes("bucket does not exist")) {
-    return "That bucket doesn’t exist. Check the name and region in Settings.";
+    return "That bucket doesn't exist. Check its name and region.";
   }
   if (lower.includes("not enrolled") || lower.includes("no security key")) {
     return "No security key enrolled yet.";

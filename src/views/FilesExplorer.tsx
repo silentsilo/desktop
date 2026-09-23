@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { explorerKeysBlocked } from "../lib/explorerKeys";
 import type { MouseEvent } from "react";
 import type {
   BreadcrumbSeg,
@@ -76,7 +77,9 @@ type Props = {
   onRefresh: () => void;
   onAddFiles: () => void;
   onCreateFolder: () => void;
-  onSelectClick: (entry: VaultEntry, e: MouseEvent) => void;
+  /** `visible` is the list in the order on screen, which a shift-click range
+   *  is measured over. */
+  onSelectClick: (entry: VaultEntry, e: MouseEvent, visible: VaultEntry[]) => void;
   onSelectIds: (ids: Set<string>) => void;
   onOpenFolder: (folder: Extract<VaultEntry, { kind: "folder" }>) => void;
   onSaveCopy: (file: Extract<VaultEntry, { kind: "file" }>) => void;
@@ -482,16 +485,7 @@ export function FilesExplorer(props: Props) {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
       if (searchActive || renamingId !== null || sortedEntries.length === 0) return;
-      const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT" ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
+      if (explorerKeysBlocked(e)) return;
       if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) {
         return;
       }
@@ -923,7 +917,7 @@ export function FilesExplorer(props: Props) {
                   className={`grid-card${selected ? " is-selected" : ""}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onSelectClick(entry, e);
+                    onSelectClick(entry, e, sortedEntries);
                   }}
                   onDoubleClick={() => {
                     if (renaming) return;
@@ -1024,7 +1018,7 @@ export function FilesExplorer(props: Props) {
                     className={`${entry.kind === "folder" ? "row-folder" : "row-file"}${selected ? " is-selected" : ""}`}
                     onClick={(e) => {
                       e.stopPropagation();
-                      onSelectClick(entry, e);
+                      onSelectClick(entry, e, sortedEntries);
                     }}
                     onDoubleClick={() => {
                       if (renaming) return;

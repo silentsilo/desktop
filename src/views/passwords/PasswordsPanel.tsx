@@ -54,7 +54,8 @@ type Props = {
    * search hides, and show nothing. */
   focusEntryId?: string | null;
   /** Creates or replaces one entry. */
-  onSaveEntry: (entry: PasswordEntry) => void;
+  /** Resolves to whether the entry was stored. */
+  onSaveEntry: (entry: PasswordEntry) => Promise<boolean>;
   onDeleteEntry: (id: string) => void;
   onImportEntries: (entries: PasswordEntry[]) => void;
   /** Replaces the category list as a whole. */
@@ -421,9 +422,10 @@ export function PasswordsPanel({
     [ensureVerified]
   );
 
+  /// The editor stays open when the save fails, so the draft is not lost.
   const handleSave = useCallback(
-    (entry: PasswordEntry) => {
-      onSaveEntry(withEdits(entry, { updated_at: Date.now() }));
+    async (entry: PasswordEntry): Promise<boolean> => {
+      if (!(await onSaveEntry(withEdits(entry, { updated_at: Date.now() })))) return false;
       setEditing(null);
       setSelectedId(entry.id);
       // A filter that would hide what was just saved gets out of the way:
@@ -431,6 +433,7 @@ export function PasswordsPanel({
       // that appears to have vanished.
       setSelectedType((prev) => (prev && typeOf(entry) !== prev ? null : prev));
       setSelectedCategory((prev) => (prev && entry.category !== prev ? null : prev));
+      return true;
     },
     [onSaveEntry]
   );

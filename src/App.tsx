@@ -67,6 +67,8 @@ import { BackupPanel } from "./views/BackupPanel";
 import { CopiesPanel } from "./views/CopiesPanel";
 import { VerifyPanel } from "./views/VerifyPanel";
 import { ConfirmDialog } from "./views/ConfirmDialog";
+import { RecoveryCodeDialog } from "./views/RecoveryCodeDialog";
+import { explorerKeysBlocked } from "./lib/explorerKeys";
 import { ShellUploadDialog } from "./views/ShellUploadDialog";
 import { BrowserFillDialog } from "./views/BrowserFillDialog";
 import { ShellDownloadDialog } from "./views/ShellDownloadDialog";
@@ -145,7 +147,7 @@ function archiveNote(archiveTargets: number): string {
 }
 
 export default function App() {
-  const toasts = useToasts();
+  const { api: toasts, list: toastList } = useToasts();
   const [confirmDialog, setConfirmDialog] = useState<ConfirmState | null>(null);
   /// Copies the app never deletes from, so the delete-for-good dialogs can
   /// say what actually happens instead of promising "permanently".
@@ -300,6 +302,12 @@ export default function App() {
   // Held in memory only, and only until the user says they've written it
   // down: nothing anywhere else can produce it again.
   const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
+  /// A code minted by a key change. Kept apart from `recoveryCode`, which a
+  /// lock clears: a key change locks every silo before it returns, and this
+  /// code is the only way back in once the old one stopped working.
+  const [mintedCode, setMintedCode] = useState<{ code: string; siloName: string | null } | null>(
+    null,
+  );
   const [newKeyLabel, setNewKeyLabel] = useState("");
   const [keyAddSuccess, setKeyAddSuccess] = useState<string | null>(null);
   const [passwordEntries, setPasswordEntries] = useState<PasswordEntry[]>([]);
@@ -384,6 +392,9 @@ export default function App() {
   useEventSubscription(
     () =>
       listen<SyncProgress>("sync-progress", (event) => {
+        // Every open silo syncs in the background; only the one on screen
+        // drives the status bar.
+        if (event.payload.silo_id !== focusedSiloRef.current) return;
         syncTicker.push(event.payload);
       }),
     [syncTicker],
@@ -406,7 +417,7 @@ export default function App() {
   useEventSubscription(
     () =>
       listen("scratch-still-open", () => {
-        toasts.error(
+        toasts.errorText(
           "A file opened from a silo is still open in another app, so its copy could not be deleted. Close that app; SilentSilo deletes the copy at the next lock or start.",
         );
       }),
@@ -507,12 +518,18 @@ export default function App() {
     () =>
       listen<SyncReport>("sync-report", (event) => {
         const report = event.payload;
+        // Every open silo syncs in the background. A background silo's pass
+        // says nothing about the one on screen: its error is not this silo's
+        // error, and its success is not this silo's timestamp. Only the
+        // rebuild question is raised for any silo, by id.
+        const onScreen = !report.silo_id || report.silo_id === focusedSiloRef.current;
+        if (report.needs_rebuild) setNeedsRebuild(report.silo_id ?? null);
+        if (!onScreen) return;
         // Ahead of the clear, or a frame still holding the last step would
         // land after the pass ended and put the progress line back.
         syncTicker.stop();
         setSyncProgress(null);
         if (report.needs_rebuild) {
-          setNeedsRebuild(report.silo_id ?? null);
           setSync((prev) => ({ ...prev, state: "idle" }));
           return;
         }
@@ -919,13 +936,10 @@ export default function App() {
    * offline laptop does not lose its daily window to a failed attempt.
    * Failures are silent; the manual button in Settings bypasses this.
    *
-   * The effect depends on the setting alone: `toasts` is a new object every
-   * render, and as a dependency it restarted the effect, and the check with
-   * it, while the first request was still out (2-4 requests per check in
-   * 1.0.0 and 1.1.0). The in-flight flag covers any restart that remains.
+   * 1.0.0 and 1.1.0 sent 2-4 requests per check: the effect restarted on
+   * every render while the first request was still out. The in-flight flag
+   * keeps any restart from sending another.
    */
-  const toastsRef = useRef(toasts);
-  toastsRef.current = toasts;
   const updateCheckInFlight = useRef(false);
   useEffect(() => {
     if (!autoUpdateEnabled) return;
@@ -946,7 +960,7 @@ export default function App() {
         // morning trains people to dismiss it unread.
         if (localStorage.getItem(UPDATE_NOTIFIED_KEY) !== result.version) {
           localStorage.setItem(UPDATE_NOTIFIED_KEY, result.version);
-          toastsRef.current.info(`SilentSilo ${result.version} is available. Install it from Settings.`);
+          toasts.info(`SilentSilo ${result.version} is available. Install it from Settings.`);
         }
       } catch {
         // Offline or endpoint unreachable. The next hourly pass retries.
@@ -961,7 +975,7 @@ export default function App() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [autoUpdateEnabled]);
+  }, [autoUpdateEnabled, toasts]);
 
   const createSilo = async (name: string, location: string | null) => {
     begin("silo");
@@ -1119,8 +1133,9 @@ export default function App() {
     }
   };
 
-  const unlockSilo = async (recoveryCodeUsed?: string) => {
+  const unlockSilo = async (recoveryCodeUsed?: string): Promise<void> => {
     setFidoProgress(null);
+    let reopenAfterRepair = false;
     begin("silo");
     try {
       await loadRootExplorer(recoveryCodeUsed);
@@ -1169,9 +1184,11 @@ export default function App() {
               code: recoveryCodeUsed,
             });
             toasts.info("The local copy was rebuilt from the backup.");
-            await loadRootExplorer(recoveryCodeUsed);
-            unlockedRef.current = true;
-            await drainShellQueues();
+            // Opened again the ordinary way once this attempt has wound
+            // down. Opening it here skipped the bootstrap refresh, so the
+            // unlock screen stayed up over an open silo, with no trash,
+            // keys or recovery state read.
+            reopenAfterRepair = true;
             return;
           } catch (repairError) {
             toasts.error(repairError);
@@ -1184,6 +1201,7 @@ export default function App() {
       setFidoProgress(null);
       end("silo");
     }
+    if (reopenAfterRepair) await unlockSilo(recoveryCodeUsed);
   };
 
   /// Paths queued by the Explorer verbs while the app was locked. Deferred
@@ -1211,15 +1229,20 @@ export default function App() {
   const discardUnenrolledSilo = async () => {
     const silo = bootstrap?.silo;
     if (!silo) return;
+    // Taken off the list, never deleted. This screen shows whenever the key
+    // file is missing, and that is also what a silo full of files looks like
+    // after a sync client or an antivirus took that one file away. Deleting
+    // the folder here erased such a silo on the strength of a sentence
+    // saying it was empty.
     const confirmed = await askConfirm(
-      "Discard this silo?",
-      `“${silo.name}” has no security key yet and nothing in it, so this deletes the folder at ${silo.path}.`,
-      { confirmLabel: "Discard silo", danger: true },
+      "Remove this silo from the list?",
+      `“${silo.name}” has no security key set up, so it cannot be opened as it is. The folder at ${silo.path} stays on disk; delete it yourself if you no longer need it.`,
+      { confirmLabel: "Remove from list", danger: true },
     );
     if (!confirmed) return;
     begin("silo");
     try {
-      await invoke("silo_forget", { id: silo.id, deleteFiles: true });
+      await invoke("silo_forget", { id: silo.id, deleteFiles: false });
       setMeta(null);
       unlockedRef.current = false;
       await refreshSilos();
@@ -1424,13 +1447,17 @@ export default function App() {
     [begin, end, navigateTo, toasts],
   );
 
+  /// Indexes are into `visible`, the order on screen. They used to be into
+  /// the unsorted list, so with the view sorted a shift-click selected a
+  /// different set from the one between the two clicks, and Delete then
+  /// acted on files the user never picked.
   const handleSelectClick = useCallback(
-    (entry: VaultEntry, e: MouseEvent) => {
-      const idx = entries.findIndex((x) => x.id === entry.id);
-      if (e.shiftKey && anchorIndex !== null && idx >= 0) {
+    (entry: VaultEntry, e: MouseEvent, visible: VaultEntry[]) => {
+      const idx = visible.findIndex((x) => x.id === entry.id);
+      if (e.shiftKey && anchorIndex !== null && idx >= 0 && anchorIndex < visible.length) {
         const [a, b] = anchorIndex < idx ? [anchorIndex, idx] : [idx, anchorIndex];
         const next = new Set<string>();
-        for (let i = a; i <= b; i++) next.add(entries[i]!.id);
+        for (let i = a; i <= b; i++) next.add(visible[i]!.id);
         setSelectedIds(next);
         return;
       }
@@ -1447,7 +1474,7 @@ export default function App() {
       setSelectedIds(new Set([entry.id]));
       setAnchorIndex(idx >= 0 ? idx : null);
     },
-    [entries, anchorIndex],
+    [anchorIndex],
   );
 
   const handleCreateFolder = async () => {
@@ -1541,7 +1568,7 @@ export default function App() {
           counters.imported === 1 ? "Added 1 file." : `Added ${counters.imported} files.`,
         );
       } else {
-        toasts.error(
+        toasts.errorText(
           `Added ${counters.imported} of ${total}. Failed: ${failed.slice(0, 3).join("; ")}${failed.length > 3 ? "…" : ""}`,
         );
       }
@@ -1677,7 +1704,7 @@ export default function App() {
 
     if (report.verdict === "insufficient") {
       const short = report.wanted_bytes - (report.available_bytes ?? 0);
-      toasts.error(
+      toasts.errorText(
         `Not enough room: this needs about ${formatBytes(report.wanted_bytes)} and the disk has ` +
           `${formatBytes(report.available_bytes ?? 0)} left, about ${formatBytes(short)} short.`,
       );
@@ -1752,7 +1779,7 @@ export default function App() {
 
       const totalImported = result.imported_files + result.imported_folders;
       if (result.failed.length > 0) {
-        toasts.error(
+        toasts.errorText(
           `${verb} ${totalImported} ${totalImported === 1 ? "item" : "items"}. Failed: ${result.failed.slice(0, 3).join("; ")}${result.failed.length > 3 ? "…" : ""}`,
         );
       } else if (totalImported > 0) {
@@ -1772,7 +1799,12 @@ export default function App() {
     }
   };
 
-  const confirmShellUpload = async (folderId: string) => {
+  /// `returnTo` is set when the dialog imported into another open silo. That
+  /// choice moved the backend's focus, and nothing on screen followed it: the
+  /// window kept showing one silo while every command reached the other, so a
+  /// password saved from the screen landed in the wrong silo. Focus goes back
+  /// once the import is over, whatever its outcome.
+  const confirmShellUpload = async (folderId: string, returnTo: string | null) => {
     if (!pendingShellUploadPaths) return;
     if (!(await roomFor(pendingShellUploadPaths, false))) return;
     setShellUploadBusy(true);
@@ -1805,7 +1837,7 @@ export default function App() {
       // because fifty of them are one problem, not fifty.
       if (result.failed.length > 0) {
         const named = result.failed.slice(0, 3).join(", ");
-        toasts.error(
+        toasts.errorText(
           result.failed.length > 3
             ? `${result.failed.length} items were not added, including ${named}.`
             : named,
@@ -1817,6 +1849,10 @@ export default function App() {
     } catch (e) {
       toasts.error(e);
     } finally {
+      if (returnTo) {
+        await invoke("silo_open", { id: returnTo }).catch(() => {});
+        await refreshBootstrap();
+      }
       setShellUploadBusy(false);
     }
   };
@@ -1894,7 +1930,7 @@ export default function App() {
       }
       setPendingShellDownloadTarget(null);
       if (failed.length > 0) {
-        toasts.error(
+        toasts.errorText(
           `Saved ${count} ${count === 1 ? "item" : "items"}. Failed: ${failed.slice(0, 3).join("; ")}${failed.length > 3 ? "…" : ""}`,
         );
       } else {
@@ -2001,7 +2037,7 @@ export default function App() {
       await refreshTrash();
       const done = items.length - failed;
       if (failed > 0) {
-        toasts.error(`Restored ${done} of ${items.length}. The rest can be retried.`);
+        toasts.errorText(`Restored ${done} of ${items.length}. The rest can be retried.`);
       } else {
         toasts.success(done === 1 ? "Restored 1 item." : `Restored ${done} items.`);
       }
@@ -2404,7 +2440,7 @@ export default function App() {
       if (contentFetchCancelRef.current) {
         toasts.info("Stopped. What had already downloaded is on this computer.");
       } else if (failed > 0) {
-        toasts.error(`Downloaded ${ids.length - failed} of ${ids.length}. The rest can be retried.`);
+        toasts.errorText(`Downloaded ${ids.length - failed} of ${ids.length}. The rest can be retried.`);
       } else {
         toasts.success(
           ids.length === 1 ? "1 file downloaded." : `${ids.length} files downloaded.`,
@@ -2561,13 +2597,10 @@ export default function App() {
       // started here shows it, and the screen moves to where it is
       // displayed: a code shown once must not be shown on a page nobody is
       // looking at.
-      setRecoveryCode(outcome.recovery_code);
-      setSettingsSection("recovery");
+      setMintedCode({ code: outcome.recovery_code, siloName: bootstrap?.silo?.name ?? null });
 
       const parts = [
-        `Key change finished, ${outcome.resealed} objects re-sealed.`,
-        "Your recovery code was replaced; the new one is on screen now.",
-        "Unlock again with the key you just used.",
+        "Key change finished. Unlock again with the key you just used.",
       ];
       if (outcome.unchanged_targets.length > 0) {
         parts.push(
@@ -2608,11 +2641,10 @@ export default function App() {
       // code unwrapped the old key and stopped working just now. The screen
       // moves to where it is displayed, or a code shown once would be shown
       // on a page the user is not looking at.
-      setRecoveryCode(outcome.recovery_code);
-      setSettingsSection("recovery");
+      setMintedCode({ code: outcome.recovery_code, siloName: bootstrap?.silo?.name ?? null });
       setRotationPending(false);
 
-      const parts = [`Encryption key changed, ${outcome.resealed} objects re-sealed.`];
+      const parts = ["Encryption key changed. Unlock again with a key you kept."];
       if (outcome.retired.length > 0) {
         parts.push(`${outcome.retired.join(", ")} no longer opens this silo.`);
       }
@@ -2856,16 +2888,7 @@ export default function App() {
   useEffect(() => {
     if (!meta || view !== "files") return;
     const onKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT" ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
+      if (explorerKeysBlocked(e)) return;
       if (e.key === "Backspace" || (e.altKey && e.key === "ArrowUp")) {
         e.preventDefault();
         void goUp();
@@ -2903,7 +2926,7 @@ export default function App() {
         e.preventDefault();
         void refreshCurrentFolder();
       }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v" && !busy) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v" && !transferBusy) {
         e.preventDefault();
         void handlePasteFiles();
       }
@@ -3047,10 +3070,16 @@ export default function App() {
   /// the whole store meant two devices could not both add a login offline,
   /// the later writer replacing the other's work wholesale. Silent on
   /// success, or a toast per edit trains the user to ignore toasts.
+  /// Resolves to whether the entry was stored. Shown at once and taken back
+  /// on failure: a save that failed used to stay on screen as if it had
+  /// worked, and the editor then deleted the content of any attachment it
+  /// had removed.
   const savePasswordEntry = useCallback(
-    async (entry: PasswordEntry) => {
+    async (entry: PasswordEntry): Promise<boolean> => {
+      let before: PasswordEntry | undefined;
       setPasswordEntries((prev) => {
         const idx = prev.findIndex((e) => e.id === entry.id);
+        before = idx < 0 ? undefined : prev[idx];
         if (idx < 0) return [...prev, entry];
         const next = [...prev];
         next[idx] = entry;
@@ -3064,8 +3093,15 @@ export default function App() {
             json: JSON.stringify(entry),
           }),
         );
+        return true;
       } catch (e) {
+        setPasswordEntries((prev) =>
+          before
+            ? prev.map((x) => (x.id === entry.id ? before! : x))
+            : prev.filter((x) => x.id !== entry.id),
+        );
         toasts.error(e);
+        return false;
       } finally {
         end("entries");
       }
@@ -3130,7 +3166,7 @@ export default function App() {
     [begin, end, toasts, withPasswordWrite],
   );
 
-  const toastHost = <ToastHost toasts={toasts.toasts} onDismiss={toasts.dismiss} />;
+  const toastHost = <ToastHost toasts={toastList} onDismiss={toasts.dismiss} />;
   // Rendered alongside the confirmation host, so it reaches whichever screen
   // the user is on when a background pass discovers it.
   // Only above the silo it is about. A prompt raised for one silo and
@@ -3148,6 +3184,13 @@ export default function App() {
       busy={rebuilding}
       onConfirm={() => void rebuildFromSnapshot()}
       onCancel={() => setNeedsRebuild(null)}
+    />
+  );
+  const mintedCodeHost = mintedCode && (
+    <RecoveryCodeDialog
+      code={mintedCode.code}
+      siloName={mintedCode.siloName}
+      onDone={() => setMintedCode(null)}
     />
   );
   const confirmHost = confirmDialog && (
@@ -3173,6 +3216,7 @@ export default function App() {
       <AuthShell title="SilentSilo" subtitle="Loading…">
         {toastHost}
         {confirmHost}
+        {mintedCodeHost}
         {rebuildHost}
         <p className="hint">
           <span className="spinner" aria-hidden /> Starting…
@@ -3194,6 +3238,7 @@ export default function App() {
       <>
         {toastHost}
         {confirmHost}
+        {mintedCodeHost}
         {rebuildHost}
         {joining ? (
           <JoinView
@@ -3221,6 +3266,7 @@ export default function App() {
       <>
         {toastHost}
         {confirmHost}
+        {mintedCodeHost}
         {rebuildHost}
         <EnrollView
           bootstrap={bootstrap}
@@ -3242,6 +3288,7 @@ export default function App() {
       <>
         {toastHost}
         {confirmHost}
+        {mintedCodeHost}
         {rebuildHost}
         <UnlockView
           bootstrap={bootstrap}
@@ -3260,6 +3307,7 @@ export default function App() {
     <>
       {toastHost}
       {confirmHost}
+      {mintedCodeHost}
       {rebuildHost}
       {dropActive && (
         <div className="drop-overlay" aria-hidden>
@@ -3279,7 +3327,7 @@ export default function App() {
           os={osOf(bootstrap)}
           paths={pendingShellUploadPaths}
           busy={shellUploadBusy}
-          onConfirm={(folderId) => void confirmShellUpload(folderId)}
+          onConfirm={(folderId, returnTo) => void confirmShellUpload(folderId, returnTo)}
           onCancel={cancelShellUpload}
         />
       ) : (
@@ -3435,7 +3483,7 @@ export default function App() {
             storedCategories={passwordCategories}
             busy={busy("entries")}
             focusEntryId={focusEntryId}
-            onSaveEntry={(entry) => void savePasswordEntry(entry)}
+            onSaveEntry={savePasswordEntry}
             onDeleteEntry={(id) => void deletePasswordEntry(id)}
             onImportEntries={(entries) => void importPasswordEntries(entries)}
             onSaveCategories={(categories) => void savePasswordCategories(categories)}

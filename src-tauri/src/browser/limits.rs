@@ -63,6 +63,13 @@ pub fn fills_per_connection() -> Bucket {
     Bucket::new(3, Duration::from_secs(20))
 }
 
+/// `fill` across every connection. The per-connection ration alone was
+/// reset by opening a new connection, so a client could raise the dialog
+/// over and over by reconnecting.
+pub fn fills_overall() -> Bucket {
+    Bucket::new(4, Duration::from_secs(30))
+}
+
 /// After a fill was declined or timed out, the dialog stays down for this
 /// long whoever asks, so a client cannot raise it again at once.
 pub const COOLDOWN_AFTER_CANCEL: Duration = Duration::from_secs(10);

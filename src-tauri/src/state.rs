@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
@@ -189,6 +189,21 @@ pub fn session_is_open(state: &State<AppState>, id: Uuid) -> bool {
         .lock()
         .map(|sessions| sessions.contains_key(&id))
         .unwrap_or(false)
+}
+
+/// For a decrypt that ran without a lock held: if the silo locked meanwhile,
+/// the plaintext it just wrote goes, and nothing opens it.
+///
+/// A lock wipes the scratch folder, but a file still being written is open
+/// and survives the wipe, and a folder the lock had already emptied was made
+/// again by the decrypt. Without this the copy landed after the lock and was
+/// then handed to another application.
+pub fn discard_if_locked(state: &State<AppState>, id: Uuid, dest: &Path) -> Result<(), String> {
+    if session_is_open(state, id) {
+        return Ok(());
+    }
+    let _ = std::fs::remove_file(dest);
+    Err(CoreError::VaultLocked.to_string())
 }
 
 /// One target, opened, with everything a deletion needs to decide.
@@ -390,6 +405,13 @@ fn close_one(session: VaultSession) {
 pub fn open_focused_session(app: &AppHandle, session: VaultSession) -> Result<(), String> {
     let state = app.state::<AppState>();
     let id = focused_id(&state)?;
+    // An unlock waits on a key touch, a download or a disk restore, and the
+    // focus can move in that time. Filed under whatever was focused at the
+    // end, silo A's session sat under silo B's id, and a sync pass then
+    // paired A's database with B's folder and B's storage.
+    if session.vault_id != id {
+        return Err("The silo on screen changed while this one was opening. Open it again.".into());
+    }
     if let Some(evicted) = state.open_session(id, session)? {
         let name = load_registry(&app_data_dir(app)?)
             .get(evicted)

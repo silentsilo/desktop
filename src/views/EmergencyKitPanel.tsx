@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Printer } from "lucide-react";
 import { EmergencyKit } from "./EmergencyKit";
+import { fromGroups, isComplete, toGroups } from "../lib/recoveryCode";
 
 type Props = {
   busy: boolean;
@@ -59,9 +60,14 @@ export function EmergencyKitPanel({ busy, siloName, freshCode }: Props) {
 
   // Whatever the user has: the code they just generated, or one they typed
   // back in from an existing sheet. Blank prints empty boxes.
-  const code = mode === "blank" ? "" : (freshCode ?? typed).trim();
+  // A typed code is folded the way unlock reads one (case, spaces, and the
+  // letters Crockford's alphabet leaves out) and printed in the eight groups
+  // of the original. Taken as typed, lowercase and spaces went onto the
+  // paper, and a correct code typed with spaces was refused as incomplete.
+  const source = freshCode ?? typed;
+  const code = mode === "blank" ? "" : fromGroups(toGroups(source));
   const needsTyping = mode === "printed" && !freshCode;
-  const looksComplete = code.replace(/-/g, "").length === 32;
+  const looksComplete = isComplete(source);
 
   return (
     <div className="kit-block">

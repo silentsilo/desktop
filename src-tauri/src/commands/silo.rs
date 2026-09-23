@@ -497,11 +497,17 @@ fn silo_forget_impl(app: &AppHandle, id: String, delete_files: bool) -> Result<(
     registry.remove(id);
     save_registry(&app_data, &registry).map_err(|e| e.to_string())?;
 
-    // Whatever this machine decrypted for the silo goes with it. Closing the
-    // session above already does this when the silo was the open one, and
-    // forgetting one that was not open used to leave its working copy behind
-    // for whatever silo occupied that folder next.
-    silentsilo_vault::wipe_work_dir(&entry.path);
+    // The working copy goes only with the files. It is ciphered, and while
+    // the folder stays it can hold the only record of recent changes: the
+    // snapshot above fails quietly on a drive that was pulled, and a copy a
+    // crash left unmarked is newer than `vault.db.enc`. Wiping it on a plain
+    // "remove from list" lost those changes for good on a silo with no
+    // backup. A different silo later in the same folder is not at risk:
+    // core only reuses a working copy that belongs to the silo it opens.
+    // Plaintext scratch went with `close_session` above either way.
+    if delete_files {
+        silentsilo_vault::wipe_work_dir(&entry.path);
+    }
 
     // Secrets go only when the files do. Removing a silo from the list while
     // keeping its folder says "not on this list", not "not mine" — and
@@ -524,6 +530,21 @@ fn silo_forget_impl(app: &AppHandle, id: String, delete_files: bool) -> Result<(
     Ok(())
 }
 
+/// Whether two paths name the same folder, the way Windows compares them:
+/// without regard to case or a trailing separator.
+fn same_folder(a: &std::path::Path, b: &std::path::Path) -> bool {
+    let norm = |p: &std::path::Path| {
+        let s = p.to_string_lossy();
+        let s = s.trim_end_matches(['/', '\\']);
+        if cfg!(windows) {
+            s.to_lowercase()
+        } else {
+            s.to_string()
+        }
+    };
+    norm(a) == norm(b)
+}
+
 /// Adds a silo folder that this machine has forgotten, or that came from
 /// somewhere else.
 ///
@@ -542,7 +563,7 @@ pub fn silo_add_existing(
 
     let app_data = app_data_dir(&app)?;
     let mut registry = load_registry(&app_data);
-    if let Some(existing) = registry.silos.iter().find(|s| s.path == path) {
+    if let Some(existing) = registry.silos.iter().find(|s| same_folder(&s.path, &path)) {
         return Ok(SiloView::from(existing));
     }
 
@@ -557,6 +578,26 @@ pub fn silo_add_existing(
         .map_err(|e| format!("could not identify that silo: {e}"))?
         .vault_id;
 
+    // The list is keyed by silo, so a second folder of the same silo would
+    // take the first one's place: its name, its settings and the folder the
+    // next unlock opens. A backup copy added this way became the silo in
+    // use, and the two drifted apart. A folder that moved is different: the
+    // old path is gone, and the entry follows it with everything else kept.
+    if let Some(existing) = registry.get(id).cloned() {
+        if existing.path.exists() {
+            return Err(format!(
+                "That folder is the same silo as \u{201c}{}\u{201d}, which is already in the list \
+                 at {}. Open that one, or remove it from the list first.",
+                existing.name,
+                existing.path.display()
+            ));
+        }
+        let moved = SiloEntry { path, ..existing };
+        registry.upsert(moved.clone());
+        save_registry(&app_data, &registry).map_err(|e| e.to_string())?;
+        return Ok(SiloView::from(&moved));
+    }
+
     // This machine may hold no credentials for it — the folder came from
     // another computer, or this one forgot the silo and cleared them.
     let plan = AddPlan::decide(
@@ -565,8 +606,8 @@ pub fn silo_add_existing(
     );
     if plan == AddPlan::Refuse {
         return Err(
-            "That silo has no security key enrolled, and this computer no longer holds the \
-             secret it was opened with — set it up again from its backup storage instead."
+            "That silo has no security key set up, and this computer no longer has the \
+             secret it was opened with. Set it up again from its backup storage instead."
                 .into(),
         );
     }
@@ -678,6 +719,19 @@ pub(crate) fn adopt_joined_silo(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_same_folder_typed_differently_is_the_same_folder() {
+        let a = std::path::Path::new("C:\\Silos\\Personal");
+        assert!(same_folder(
+            a,
+            std::path::Path::new("C:\\Silos\\Personal\\")
+        ));
+        assert!(!same_folder(a, std::path::Path::new("C:\\Silos\\Work")));
+        if cfg!(windows) {
+            assert!(same_folder(a, std::path::Path::new("c:\\silos\\personal")));
+        }
+    }
 
     #[test]
     fn a_folder_this_machine_already_has_credentials_for_is_simply_added() {

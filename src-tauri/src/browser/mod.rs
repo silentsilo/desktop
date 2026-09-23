@@ -44,8 +44,11 @@ pub struct BrowserBridge {
     pending: Mutex<Option<Pending>>,
     /// `logins` and `search` across every connection.
     lookups: Mutex<Bucket>,
-    /// Set when a fill is declined or times out.
+    /// Set when a fill ends without being confirmed: declined, timed out, or
+    /// its connection gone.
     cooldown: Mutex<Cooldown>,
+    /// `fill` across every connection.
+    fills: Mutex<Bucket>,
     /// The last `show` acted on, across every connection.
     shown: Mutex<ShowGate>,
 }
@@ -58,6 +61,7 @@ impl Default for BrowserBridge {
             pending: Mutex::default(),
             lookups: Mutex::new(limits::lookups_overall()),
             cooldown: Mutex::default(),
+            fills: Mutex::new(limits::fills_overall()),
             shown: Mutex::default(),
         }
     }
@@ -275,8 +279,16 @@ pub async fn browser_fill_confirm(app: AppHandle, request_id: String) -> Result<
             _ => return Err(GONE.into()),
         }
     }
-    let verified =
-        crate::commands::vault::verify_presence(&app, "fill this login in your browser").await;
+    // The prompt names the site, so the key check says what it is for even
+    // if the dialog behind it changed.
+    let purpose = {
+        let bridge = app.state::<BrowserBridge>();
+        let slot = lock(&bridge.pending);
+        slot.as_ref()
+            .map(|p| format!("fill your {} login on {}", p.prompt.label, p.prompt.site))
+            .unwrap_or_else(|| "fill a login in your browser".into())
+    };
+    let verified = crate::commands::vault::verify_presence(&app, &purpose).await;
     let bridge = app.state::<BrowserBridge>();
     let mut slot = lock(&bridge.pending);
     let Some(pending) = slot.as_mut().filter(|p| p.prompt.request_id == request_id) else {
@@ -524,24 +536,35 @@ async fn search(app: &AppHandle, id: &str, query: &str) -> Result<Vec<u8>, Failu
 
 /// Takes the pending slot back and closes the dialog, however the fill
 /// ended: answered, declined, timed out, or its connection gone.
+///
+/// Any end that was not a confirmation starts the cooldown, including a
+/// connection that went away. Started only on an explicit cancel, a client
+/// could drop its connection and send the next fill at once, swapping the
+/// dialog under a click aimed at the first one.
 struct PendingGuard {
     app: AppHandle,
     request_id: String,
+    confirmed: bool,
 }
 
 impl Drop for PendingGuard {
     fn drop(&mut self) {
         let bridge = self.app.state::<BrowserBridge>();
-        {
+        let ours = {
             let mut slot = lock(&bridge.pending);
-            if slot
+            let ours = slot
                 .as_ref()
-                .is_some_and(|p| p.prompt.request_id == self.request_id)
-            {
+                .is_some_and(|p| p.prompt.request_id == self.request_id);
+            if ours {
                 *slot = None;
             }
+            ours
+        };
+        if !self.confirmed {
+            lock(&bridge.cooldown).start(Instant::now());
         }
-        if let Some(window) = self.app.get_webview_window("main") {
+        // Only for its own dialog: a newer one may already be on top.
+        if ours && let Some(window) = self.app.get_webview_window("main") {
             let _ = window.set_always_on_top(false);
         }
         let _ = self.app.emit("browser-fill-ended", &self.request_id);
@@ -575,6 +598,9 @@ fn fill_allowed(app: &AppHandle, connection: &Connection) -> Result<(), Failure>
         return Err(Failure::with(Code::Busy, COOLING_DOWN));
     }
     if !lock(&connection.limits).fills.take(now) {
+        return Err(Failure::with(Code::Busy, TOO_MANY));
+    }
+    if !lock(&app.state::<BrowserBridge>().fills).take(now) {
         return Err(Failure::with(Code::Busy, TOO_MANY));
     }
     Ok(())
@@ -637,19 +663,16 @@ async fn fill(
             verifying: false,
         });
     }
-    let _guard = PendingGuard {
+    let mut guard = PendingGuard {
         app: app.clone(),
         request_id: prompt.request_id.clone(),
+        confirmed: false,
     };
     let _ = app.emit("browser-fill-request", &prompt);
     bring_to_front(app);
 
-    if let Err(failure) = wait_for_decision(app, decided, epoch).await {
-        if failure.code == Code::Cancelled {
-            lock(&app.state::<BrowserBridge>().cooldown).start(Instant::now());
-        }
-        return Err(failure);
-    }
+    wait_for_decision(app, decided, epoch).await?;
+    guard.confirmed = true;
 
     // Confirmed. The silo must still be the one the ref was issued in, and
     // the login still there; only now is its password read.

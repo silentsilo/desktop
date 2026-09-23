@@ -240,8 +240,11 @@ function escapeCsvField(value: string, exact = false): string {
   // prefixing a quote keeps a name like "=HYPERLINK(...)" inert when the file
   // is opened in Excel. Not for a password or a TOTP secret: another
   // manager importing the file would store the quote as part of it.
-  const guarded = !exact && /^[=+\-@]/.test(value) ? `'${value}` : value;
-  return /[",\n\r]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
+  const guarded = !exact && /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  // Quoted when it starts or ends with a space too: readers, this one
+  // included, trim an unquoted field, and a password " pass " came back as
+  // "pass".
+  return /[",\n\r]|^\s|\s$/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
 }
 
 export const EXPORT_HEADERS = [

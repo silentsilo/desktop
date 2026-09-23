@@ -145,11 +145,11 @@ export function EnrollView({
           </button>
         </div>
         <p className="hint danger-hint">
-          No key to hand right now? The silo is still empty, so nothing is lost if you{" "}
+          Not setting this one up?{" "}
           <button type="button" className="link" disabled={busy} onClick={onDiscard}>
-            discard it
+            Remove it from the list
           </button>
-          .
+          . The folder stays on disk.
         </p>
       </section>
     </AuthShell>

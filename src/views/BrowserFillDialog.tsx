@@ -17,6 +17,9 @@ import { useModal } from "../hooks/useModal";
  * `browser-fill-ended` however it ends (answered, declined, timed out, the
  * silo locked). The password never passes through here.
  */
+/// Long enough to outlast a click in flight, short enough not to be noticed.
+const ARM_DELAY_MS = 700;
+
 export function BrowserFillDialog({ os }: { os: Os }) {
   const [prompt, setPrompt] = useState<BrowserFillPrompt | null>(null);
 
@@ -68,6 +71,14 @@ function FillCard({
 }) {
   const platform = platformStrings(os);
   const [busy, setBusy] = useState(false);
+  // Fill stays inert for a moment after a question appears. The card is
+  // keyed by request, so a new question mounts a new card: a click already
+  // on its way, aimed at the one before, lands on nothing.
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setArmed(true), ARM_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -155,7 +166,7 @@ function FillCard({
           <button
             type="button"
             className={prompt.mismatch ? "danger" : undefined}
-            disabled={busy}
+            disabled={busy || !armed}
             onClick={() => void confirm()}
           >
             {prompt.mismatch ? "Fill anyway" : "Fill"}

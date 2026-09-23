@@ -556,6 +556,7 @@ pub async fn vault_lock(app: AppHandle, id: Option<String>) -> Result<(), String
     run_blocking(move || {
         take_back_clipboard(&app);
         let state = app.state::<AppState>();
+        let all = id.is_none();
         let ids = match id {
             Some(id) => vec![Uuid::parse_str(&id).map_err(|e| e.to_string())?],
             None => state.open_silo_ids(),
@@ -567,6 +568,13 @@ pub async fn vault_lock(app: AppHandle, id: Option<String>) -> Result<(), String
             state.close_session(id)?;
         }
         tell_if_scratch_survived(&app, state.sweep_scratch());
+        // Every silo closing is news to the screen, which the caller may not
+        // own: the updater locks all of them before installing, and when the
+        // install then failed, the window went on showing a silo that no
+        // longer answered.
+        if all {
+            let _ = app.emit("silos-locked", ());
+        }
         Ok(())
     })
     .await
@@ -1187,6 +1195,11 @@ pub async fn vault_export_folder(
                     if skip_existing && dest.try_exists().unwrap_or(false) {
                         continue;
                     }
+                    // Stops with the silo. The files already written were
+                    // asked for; the rest were not decrypted after a lock.
+                    if !crate::state::session_is_open(&app.state::<AppState>(), snapshot.id) {
+                        return Err(CoreError::VaultLocked.to_string());
+                    }
                     let key = unwrap_export_key(wrapped_key, &snapshot.kek)?;
                     decrypt_blob(&paths.blob_path(*blob_id), dest, &key, *blob_id)
                         .map_err(|e| e.to_string())?;
@@ -1345,6 +1358,7 @@ pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), Stri
             })?;
         let blob_path = silentsilo_vault::VaultPaths::new(snapshot.root.clone()).blob_path(blob_id);
         decrypt_blob(&blob_path, &dest, &key, blob_id).map_err(|e| e.to_string())?;
+        crate::state::discard_if_locked(&app2.state::<AppState>(), snapshot.id, &dest)?;
 
         silentsilo_vault::seal_readonly(&dest);
         let _ = touch_blob_access(&snapshot.root, blob_id);
@@ -1654,6 +1668,7 @@ pub async fn password_open_attachment(
             })?;
         let blob_path = silentsilo_vault::VaultPaths::new(snapshot.root.clone()).blob_path(blob_id);
         decrypt_blob(&blob_path, &dest, &key, blob_id).map_err(|e| e.to_string())?;
+        crate::state::discard_if_locked(&app2.state::<AppState>(), snapshot.id, &dest)?;
 
         silentsilo_vault::seal_readonly(&dest);
         let _ = touch_blob_access(&snapshot.root, blob_id);
@@ -1941,6 +1956,29 @@ pub fn protected_folders_remove(app: AppHandle, path: String) -> Result<(), Stri
 /// retries the rest next time.
 #[tauri::command]
 pub async fn protected_folders_scan(app: AppHandle) -> Result<ProtectedScanReport, String> {
+    // One scan at a time. Each reads the ledger of what it already took when
+    // it starts, so a second scan started while the first was still walking
+    // (the one unlock starts, then "Check now") imported the same files again.
+    static SCANNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    struct Scanning;
+    impl Drop for Scanning {
+        fn drop(&mut self) {
+            SCANNING.store(false, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+    if SCANNING
+        .compare_exchange(
+            false,
+            true,
+            std::sync::atomic::Ordering::SeqCst,
+            std::sync::atomic::Ordering::SeqCst,
+        )
+        .is_err()
+    {
+        return Err("A check of the protected folders is already running.".into());
+    }
+    let _scanning = Scanning;
+
     run_blocking(move || {
         let (silo, kek) = crate::state::unlocked_silo_with_kek(&app)?;
         let list = silentsilo_vault::load_protected(&silo.path, &kek).map_err(|e| e.to_string())?;

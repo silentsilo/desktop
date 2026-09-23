@@ -110,8 +110,12 @@ export function parseTotpInput(input: string): TotpParams | null {
     }
   }
 
-  const secret = normalizeBase32Secret(trimmed);
-  if (!secret) return null;
+  // Spaces, dashes and padding are how sites print it. Anything else is a
+  // typo, and dropping it quietly produced a secret whose codes never
+  // matched. Under 16 characters (80 bits) is not a secret any site issues:
+  // it is someone still typing.
+  const secret = trimmed.replace(/[\s-]/g, "").replace(/=+$/, "").toUpperCase();
+  if (!/^[A-Z2-7]{16,}$/.test(secret)) return null;
   return {
     secret,
     digits: DEFAULT_TOTP_DIGITS,

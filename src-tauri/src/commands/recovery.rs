@@ -52,15 +52,6 @@ async fn require_org_key_if_controlled(app: &AppHandle, what: &str) -> Result<()
         .map(|_| ())
 }
 
-fn focused_kek(app: &AppHandle) -> Result<silentsilo_crypto::ContentKek, String> {
-    let state = app.state::<AppState>();
-    let guard = state.focused_session()?;
-    guard
-        .as_ref()
-        .map(|session| session.kek.clone())
-        .ok_or_else(|| "Unlock the silo first.".to_string())
-}
-
 #[tauri::command(async)]
 pub fn recovery_status(app: AppHandle) -> Result<RecoveryStatus, String> {
     let root = vault_dir(&app)?;
@@ -106,7 +97,7 @@ pub async fn recovery_generate(app: AppHandle) -> Result<GeneratedRecovery, Stri
     // against removal while leaving this open would protect nothing.
     require_org_key_if_controlled(&app, "recovery code").await?;
 
-    let (code, mut envelope, kek, root) = {
+    let (code, mut envelope, kek, root, silo_id) = {
         let state = app.state::<AppState>();
         let guard = state.focused_session()?;
         let session = guard
@@ -122,12 +113,16 @@ pub async fn recovery_generate(app: AppHandle) -> Result<GeneratedRecovery, Stri
             envelope,
             session.kek.clone(),
             session.paths.root.clone(),
+            session.vault_id,
         )
     };
+    // Pinned from here on: the loop below talks to storage, and a silo switch
+    // meanwhile would have sent this silo's envelope to the next one's.
+    //
     // Dated after any earlier "turned off", even on a device whose clock is
     // behind the one that turned it off: the passes drop every code made at
     // or before it.
-    for target in crate::state::silo_targets(&app) {
+    for target in crate::state::targets_for(silo_id) {
         if let Ok(Some(off)) =
             sync::revoked_at(&*target.store, &kek, sync::RECOVERY_MARKER_ID).await
         {
@@ -141,7 +136,8 @@ pub async fn recovery_generate(app: AppHandle) -> Result<GeneratedRecovery, Stri
     // that does not carry the envelope is a copy the code cannot open. Best
     // effort: the code in hand is the thing that must survive, and the next
     // sync pass republishes.
-    let unchanged_targets = crate::commands::fido::publish_recovery_envelope(&app, &envelope).await;
+    let unchanged_targets =
+        crate::commands::fido::publish_recovery_envelope(silo_id, &envelope).await;
     Ok(GeneratedRecovery {
         code,
         unchanged_targets,
@@ -157,7 +153,9 @@ pub async fn recovery_generate(app: AppHandle) -> Result<GeneratedRecovery, Stri
 /// the ordinary answer and means the code is genuinely gone.
 #[tauri::command]
 pub async fn recovery_disable(app: AppHandle) -> Result<Vec<String>, String> {
-    crate::state::unlocked_silo(&app)?;
+    // Pinned: storage is reached below, and the local envelope cleared after
+    // it has to be this silo's, not whichever is focused by then.
+    let (silo, kek) = crate::state::unlocked_silo_with_kek(&app)?;
     // Same reasoning as regenerating: turning recovery off entirely is the
     // blunter version of the same lockout.
     require_org_key_if_controlled(&app, "recovery code").await?;
@@ -177,16 +175,15 @@ pub async fn recovery_disable(app: AppHandle) -> Result<Vec<String>, String> {
     // would otherwise publish it again on its next pass. It covers every
     // envelope made up to now. Best effort on an append-only copy, which may
     // refuse to overwrite an earlier marker.
-    let kek = focused_kek(&app)?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
-    let off_at = load_recovery_envelope(&vault_dir(&app)?)
+    let off_at = load_recovery_envelope(&silo.path)
         .map(|r| r.created_at.max(now))
         .unwrap_or(now);
     let mut withheld = Vec::new();
-    for target in crate::state::silo_targets(&app) {
+    for target in crate::state::targets_for(silo.id) {
         if let Err(e) = sync::mark_recovery_disabled(&*target.store, &kek, off_at).await
             && target.role.allows_delete()
         {
@@ -200,8 +197,33 @@ pub async fn recovery_disable(app: AppHandle) -> Result<Vec<String>, String> {
             .await
             .map_err(|e| e.to_string())?;
     }
-    clear_recovery_envelope(&vault_dir(&app)?);
+    clear_recovery_envelope(&silo.path);
     Ok(withheld)
+}
+
+const WRONG_CODE: &str = "That recovery code doesn't match this silo.";
+const NEEDS_UPDATE: &str = "This recovery code was set up with a newer version of SilentSilo. Update SilentSilo, then try again.";
+
+/// Why a code did not open an envelope.
+enum CodeRefused {
+    Wrong,
+    /// A newer app made the envelope. Said as such: reported as a wrong code,
+    /// it sent people to doubt the paper they wrote down.
+    NeedsUpdate,
+}
+
+fn open_envelope(
+    envelope: &silentsilo_vault::RecoveryEnvelope,
+    code: &str,
+) -> Result<silentsilo_crypto::MasterDek, CodeRefused> {
+    unwrap_with_code(envelope, code).map_err(|e| match e {
+        silentsilo_vault::VaultError::Corrupted(message)
+            if message.contains("newer SilentSilo") =>
+        {
+            CodeRefused::NeedsUpdate
+        }
+        _ => CodeRefused::Wrong,
+    })
 }
 
 /// Opens this device's vault with the code instead of a security key.
@@ -215,21 +237,37 @@ pub async fn vault_unlock_with_recovery(
     code: String,
 ) -> Result<silentsilo_core::VaultMeta, String> {
     let root = vault_dir(&app)?;
-    let envelope = if has_recovery_code(&root) {
-        load_recovery_envelope(&root).map_err(|e| e.to_string())?
+    // This device's copy first. When it is missing (a device that joined
+    // after the code was made) or does not take the code (the code was
+    // replaced on another device and this one has not synced since), the
+    // copy in storage is tried: that one is current.
+    let local = if has_recovery_code(&root) {
+        Some(open_envelope(
+            &load_recovery_envelope(&root).map_err(|e| e.to_string())?,
+            &code,
+        ))
     } else {
-        // The local copy can be missing on a device that joined after the
-        // code was created — the bucket is then the only place it exists.
-        let store = client_for(&app)
-            .ok_or_else(|| "No recovery code is set up for this silo.".to_string())?;
-        sync::fetch_recovery_envelope(&*store)
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "No recovery code is set up for this silo.".to_string())?
+        None
     };
-
-    let dek = unwrap_with_code(&envelope, &code)
-        .map_err(|_| "That recovery code doesn't match this silo.".to_string())?;
+    let dek = match local {
+        Some(Ok(dek)) => dek,
+        Some(Err(CodeRefused::NeedsUpdate)) => return Err(NEEDS_UPDATE.into()),
+        Some(Err(CodeRefused::Wrong)) | None => {
+            let stored = match client_for(&app) {
+                Some(store) => sync::fetch_recovery_envelope(&*store).await.ok().flatten(),
+                None => None,
+            };
+            match (stored, local.is_some()) {
+                (Some(envelope), _) => match open_envelope(&envelope, &code) {
+                    Ok(dek) => dek,
+                    Err(CodeRefused::NeedsUpdate) => return Err(NEEDS_UPDATE.into()),
+                    Err(CodeRefused::Wrong) => return Err(WRONG_CODE.into()),
+                },
+                (None, true) => return Err(WRONG_CODE.into()),
+                (None, false) => return Err("No recovery code is set up for this silo.".into()),
+            }
+        }
+    };
 
     // Disk work — the working copy may be restored from its snapshot — so
     // it runs on the blocking pool rather than an async worker.

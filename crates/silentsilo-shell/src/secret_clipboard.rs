@@ -83,7 +83,9 @@ mod imp {
         CloseClipboard, EmptyClipboard, GetClipboardData, OpenClipboard, RegisterClipboardFormatW,
         SetClipboardData,
     };
-    use ::windows::Win32::System::Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalUnlock};
+    use ::windows::Win32::System::Memory::{
+        GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock,
+    };
     use ::windows::Win32::System::Ole::CF_UNICODETEXT;
     use ::windows::core::PCWSTR;
 
@@ -175,9 +177,25 @@ mod imp {
     /// The check matters: by the time the timer fires the user may well have
     /// copied something else, and wiping that would be the app reaching into
     /// something that is no longer its business.
+    ///
+    /// Keeps trying for a few seconds when another program holds the
+    /// clipboard. Giving up after the first fifth of a second, as this did,
+    /// left the password there for good whenever a clipboard manager or
+    /// Remote Desktop happened to hold it at the moment the timer fired.
     pub fn clear_if_still(expected: &str) -> bool {
+        for _ in 0..25 {
+            if let Some(cleared) = try_clear(expected) {
+                return cleared;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+        false
+    }
+
+    /// `None` when the clipboard could not be opened, so the caller retries.
+    fn try_clear(expected: &str) -> Option<bool> {
         if open_clipboard().is_err() {
-            return false;
+            return None;
         }
         unsafe {
             let cleared = (|| {
@@ -186,8 +204,12 @@ mod imp {
                 if ptr.is_null() {
                     return None;
                 }
+                // Bounded by the block's size: text another program put
+                // there without a terminator would otherwise be read past
+                // its end.
+                let capacity = GlobalSize(HGLOBAL(handle.0)) / 2;
                 let mut len = 0usize;
-                while *ptr.add(len) != 0 {
+                while len < capacity && *ptr.add(len) != 0 {
                     len += 1;
                 }
                 let current = String::from_utf16_lossy(std::slice::from_raw_parts(ptr, len));
@@ -201,7 +223,7 @@ mod imp {
             })()
             .unwrap_or(false);
             let _ = CloseClipboard();
-            cleared
+            Some(cleared)
         }
     }
 }

@@ -316,6 +316,7 @@ pub async fn fido_enroll_primary(
     authenticator: Option<Authenticator>,
     organisation: Option<bool>,
 ) -> Result<(), String> {
+    let _sync = crate::commands::sync::hold_sync(&app).await?;
     let authenticator = authenticator.unwrap_or(Authenticator::SecurityKey);
     let policy = if organisation.unwrap_or(false) {
         // The company's way back in has to work from any machine, and Hello
@@ -380,11 +381,12 @@ pub async fn fido_enroll_primary(
     // openable with the device secret rather than half-enrolled.
     let envelope_bytes = wrap_dek_bytes(&dek, &unlock.wrap_key).map_err(|e| e.to_string())?;
 
-    // Commit: from here on the vault is FIDO-only — the device secret alone
-    // no longer decrypts it.
-    // Replaced whole or not at all: a crash half way through a plain write
-    // left an envelope nothing opens, before any key was recorded.
-    silentsilo_vault::save_wrapped_dek_bytes(&root, &envelope_bytes).map_err(|e| e.to_string())?;
+    // The key is recorded first, the device-secret envelope replaced second.
+    // Once `fido.json` exists, unlock reads the key's own envelope from it
+    // and never looks at `master.dek.enc`, so a crash between the two leaves
+    // a silo that opens with the new key (and, on this computer, with the
+    // old device secret until the next enrolment). The other order left an
+    // envelope nothing opened and no key recorded: locked out.
     let (kind, derivation) = kind_and_derivation(authenticator);
     save_fido_keys(
         &root,
@@ -409,6 +411,9 @@ pub async fn fido_enroll_primary(
         silentsilo_vault::Authority::Machine,
     )
     .map_err(|e| e.to_string())?;
+    // From here the vault is key-only: the device secret alone no longer
+    // decrypts it. Replaced whole or not at all.
+    silentsilo_vault::save_wrapped_dek_bytes(&root, &envelope_bytes).map_err(|e| e.to_string())?;
 
     // Bring the encrypted snapshot up to date, but keep the session. The silo
     // had to be open to enrol at all, and the assertion above already proved
@@ -443,6 +448,7 @@ pub async fn fido_add_key(
     authenticator: Option<Authenticator>,
     organisation: Option<bool>,
 ) -> Result<StoredFidoCredential, String> {
+    let _sync = crate::commands::sync::hold_sync(&app).await?;
     let authenticator = authenticator.unwrap_or(Authenticator::SecurityKey);
     silentsilo_fido::require_fido_ready().map_err(|e| e.to_string())?;
 
@@ -630,6 +636,7 @@ pub async fn fido_remove_key(
     app: AppHandle,
     credential_id: String,
 ) -> Result<RemoveKeyOutcome, String> {
+    let _sync = crate::commands::sync::hold_sync(&app).await?;
     let root = crate::state::unlocked_silo(&app)?.path;
     let mut keys = load_fido_keys(&root).map_err(|e| e.to_string())?;
     let credential_id = credential_id.trim().to_string();
@@ -708,11 +715,13 @@ pub async fn fido_remove_key(
         }
     }
 
-    // Every target that could be asked confirmed it, so the tombstone has
-    // done its job. It is dropped even when a target withheld the delete:
-    // keeping it would make the app retry a deletion it will never issue.
-    keys.keys.retain(|k| k.credential_id != credential_id);
-    save_fido_keys(&root, &keys, authority(proof.as_ref())).map_err(|e| e.to_string())?;
+    // The tombstone stays. Deleting the envelope is half of revocation; the
+    // other half is the sealed marker in `keys/revoked/`, which tells every
+    // other device to stop trusting the key, and only the sync pass writes
+    // it. Dropping the tombstone here, as this used to, meant no marker was
+    // ever written: a device that still had the key published it again, and
+    // the next pass here added it back. The pass drops the tombstone once
+    // storage holds the marker.
     Ok(RemoveKeyOutcome {
         published: true,
         withheld,
@@ -808,6 +817,7 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
             "Choose at least one security key to keep, or nothing would open this silo.".into(),
         );
     }
+    let _sync = crate::commands::sync::hold_sync(&app).await?;
 
     let (old_dek, kek, root, vault_id, silo) = {
         let silo = crate::state::active_silo(&app)?;
@@ -975,7 +985,7 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
     let (recovery_code, envelope) =
         silentsilo_vault::create_recovery_envelope(&new_dek, &kek).map_err(|e| e.to_string())?;
     silentsilo_vault::save_recovery_envelope(&root, &envelope).map_err(|e| e.to_string())?;
-    publish_recovery_envelope(&app, &envelope).await;
+    publish_recovery_envelope(silo.id, &envelope).await;
 
     // Locked rather than kept open. The session in memory holds the old key,
     // and every read it makes from here would be against a silo that has
@@ -1030,6 +1040,7 @@ pub async fn vault_rotate_resume(
     app: AppHandle,
     credential: String,
 ) -> Result<ResumeOutcome, String> {
+    let _sync = crate::commands::sync::hold_sync(&app).await?;
     let (old_dek, kek, root, vault_id, silo) = {
         let silo = crate::state::active_silo(&app)?;
         let state = app.state::<AppState>();
@@ -1127,7 +1138,7 @@ pub async fn vault_rotate_resume(
     let (recovery_code, recovery) =
         silentsilo_vault::create_recovery_envelope(&new_dek, &kek).map_err(|e| e.to_string())?;
     silentsilo_vault::save_recovery_envelope(&root, &recovery).map_err(|e| e.to_string())?;
-    let unchanged_targets = publish_recovery_envelope(&app, &recovery).await;
+    let unchanged_targets = publish_recovery_envelope(silo.id, &recovery).await;
 
     crate::commands::vault::lock_all_silos(&app);
     Ok(ResumeOutcome {
@@ -1145,11 +1156,11 @@ pub async fn vault_rotate_resume(
 /// target keeps whatever envelope it already has, which the caller says out
 /// loud rather than leaving the user to find out.
 pub(crate) async fn publish_recovery_envelope(
-    app: &AppHandle,
+    silo_id: uuid::Uuid,
     envelope: &silentsilo_vault::RecoveryEnvelope,
 ) -> Vec<String> {
     let mut unchanged = Vec::new();
-    for target in crate::state::silo_targets(app) {
+    for target in crate::state::targets_for(silo_id) {
         if !target.role.allows_delete() {
             unchanged.push(target.label);
             continue;

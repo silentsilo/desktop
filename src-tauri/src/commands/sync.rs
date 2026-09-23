@@ -328,11 +328,31 @@ async fn wait_for_pass_to_finish(app: &AppHandle, limit: std::time::Duration) {
     }
 }
 
+/// Keeps sync passes off while a key operation rewrites what a pass reads.
+///
+/// Waits for a running pass to end, then holds the same flag a pass takes,
+/// so the background loop stands down until the guard drops. A pass that
+/// loaded `fido.json` before a key change and saved it back after put the
+/// old envelopes over the new ones, and one still pushing during a rotation
+/// sealed records under the key being retired.
+pub(crate) async fn hold_sync(app: &AppHandle) -> Result<SyncGuard, String> {
+    let deadline = std::time::Instant::now() + WAIT_FOR_PASS;
+    loop {
+        if let Some(guard) = SyncGuard::acquire(app) {
+            return Ok(guard);
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err("A backup pass is still running. Try again in a moment.".into());
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+}
+
 /// Guards a pass so only one runs at a time.
 ///
 /// Released on drop, so an error or an early return can't leave sync wedged
 /// off for the rest of the session.
-struct SyncGuard(AppHandle);
+pub(crate) struct SyncGuard(AppHandle);
 
 impl SyncGuard {
     fn acquire(app: &AppHandle) -> Option<Self> {
@@ -1359,6 +1379,9 @@ pub async fn vault_rebuild_from_snapshot(app: AppHandle, silo_id: String) -> Res
     // nobody asked about.
     let silo_id = Uuid::parse_str(&silo_id).map_err(|e| e.to_string())?;
     let silo = crate::state::silo_by_id(&app, silo_id)?;
+    // A pass running alongside would replay records it fetched against the
+    // old horizon onto the rebuilt tree.
+    let _sync = hold_sync(&app).await?;
     let targets = crate::state::targets_for(silo.id);
     if targets.is_empty() {
         return Err("This silo has no backup storage configured.".into());
@@ -1374,13 +1397,22 @@ pub async fn vault_rebuild_from_snapshot(app: AppHandle, silo_id: String) -> Res
             .clone()
     };
 
-    // Whichever copy holds a snapshot serves the rebuild; the one that
-    // triggered `needs_rebuild` is not necessarily the first configured.
-    let mut plan = None;
+    // The most current copy serves the rebuild: the highest horizon, then
+    // the most records above it. The first copy with any snapshot used to
+    // win, and a stale disk first in the list restored old state and threw
+    // away what the other copies had.
+    let mut plan: Option<(
+        silentsilo_vfs::snapshot::Snapshot,
+        Vec<silentsilo_vfs::OpRecord>,
+    )> = None;
     for target in &targets {
         if let Ok(Some(found)) = sync::fetch_rebuild(&*target.store, &dek).await {
-            plan = Some(found);
-            break;
+            let better = plan.as_ref().is_none_or(|(best, best_ops)| {
+                (found.0.horizon, found.1.len()) > (best.horizon, best_ops.len())
+            });
+            if better {
+                plan = Some(found);
+            }
         }
     }
     let (snapshot, incoming) = plan.ok_or("This silo has no snapshot to rebuild from.")?;

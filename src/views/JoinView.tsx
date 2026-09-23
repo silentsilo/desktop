@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { isComplete } from "../lib/recoveryCode";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AlertCircle, ArrowLeft, CheckCircle2, FolderOpen, LifeBuoy } from "lucide-react";
@@ -140,7 +141,13 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
         <div className="s3-form">
           <StoreConfigForm
             draft={draft}
-            onChange={setDraft}
+            onChange={(next) => {
+              // What was found belongs to the place that was looked at.
+              // Kept after an edit, it offered to set up from a place the
+              // user had since changed, and joined whatever the form said.
+              setDraft(next);
+              setPreview(null);
+            }}
             hasStoredSecret={false}
             busy={disabled}
           />
@@ -240,7 +247,7 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
           (mode === "code" || preview.key_labels.length > 0) ? (
             <button
               type="button"
-              disabled={disabled || (mode === "code" && code.trim().length === 0)}
+              disabled={disabled || (mode === "code" && !isComplete(code))}
               onClick={() => void handleJoin()}
             >
               {working && <span className="spinner" aria-hidden />}

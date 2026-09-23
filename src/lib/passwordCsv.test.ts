@@ -377,6 +377,12 @@ describe("entriesToCsv", () => {
     });
   });
 
+  it("keeps a password's leading and trailing spaces through the round trip", () => {
+    const original = entry({ password: " two spaces  " });
+    const [reimported] = csvToEntries(entriesToCsv([original])).entries;
+    expect(reimported!.password).toBe(" two spaces  ");
+  });
+
   it("quotes fields containing separators", () => {
     const csv = entriesToCsv([entry({ service: "a,b", notes: 'say "hi"' })]);
     expect(csv).toContain('"a,b"');

@@ -93,6 +93,12 @@ describe("generateTotp — RFC 6238 Appendix B vectors", () => {
 });
 
 describe("parseTotpInput", () => {
+  it("accepts a secret printed in groups, and refuses a typo or a half-typed one", () => {
+    expect(parseTotpInput("jbsw y3dp-ehpk 3pxp")?.secret).toBe("JBSWY3DPEHPK3PXP");
+    expect(parseTotpInput("JBSWY3DPEHPK3PX0")).toBeNull();
+    expect(parseTotpInput("JBSWY3")).toBeNull();
+  });
+
   it("parses a bare base32 secret with the documented defaults", () => {
     const parsed = parseTotpInput("JBSWY3DPEHPK3PXP");
     expect(parsed).toEqual({

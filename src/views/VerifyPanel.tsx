@@ -87,6 +87,9 @@ export function VerifyPanel({ busy }: Props) {
     } finally {
       setRestoring(false);
       setRestoreProgress(null);
+      // The code has done its job. Left in the field, it stayed on screen
+      // for anyone looking or sharing the screen until the page was left.
+      setCode("");
     }
   };
 

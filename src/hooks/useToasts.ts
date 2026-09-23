@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { formatAppError, isLockedError } from "../lib/errors";
 import type { Toast, ToastKind } from "../lib/types";
 
@@ -50,6 +50,15 @@ export function plan(current: Toast[], incoming: Toast): ToastPlan {
   };
 }
 
+/**
+ * The toast list and a stable handle to push onto it.
+ *
+ * `api` keeps one identity for the component's lifetime. It used to be a new
+ * object every render, and any effect or callback listing it as a dependency
+ * re-ran on every render: Favourites re-read the index in a loop that kept
+ * the silo from ever idling out, and event listeners re-subscribed with gaps
+ * that dropped events.
+ */
 export function useToasts() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const list = useRef<Toast[]>([]);
@@ -114,8 +123,17 @@ export function useToasts() {
     (err: unknown) => (isLockedError(err) ? "" : push("error", formatAppError(err))),
     [push],
   );
+  /// For a message the app composed itself. It goes out as written: run
+  /// through `formatAppError`, a file name such as "invoice 401.pdf" or
+  /// "cancelled-order.pdf" turned the whole line into advice about storage
+  /// credentials or a cancelled key prompt.
+  const errorText = useCallback((message: string) => push("error", message), [push]);
   const success = useCallback((message: string) => push("success", message), [push]);
   const info = useCallback((message: string) => push("info", message), [push]);
 
-  return { toasts, dismiss, push, error, success, info };
+  const api = useMemo(
+    () => ({ dismiss, push, error, errorText, success, info }),
+    [dismiss, push, error, errorText, success, info],
+  );
+  return { api, list: toasts };
 }

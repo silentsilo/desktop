@@ -35,7 +35,8 @@ type Props = {
   creating: boolean;
   categories: PasswordCategory[];
   now: number;
-  onSave: (entry: PasswordEntry) => void;
+  /** Resolves to whether the entry was stored. */
+  onSave: (entry: PasswordEntry) => Promise<boolean>;
   onCancel: () => void;
 };
 
@@ -58,6 +59,10 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
   const [genOpen, setGenOpen] = useState(false);
   const [totpInput, setTotpInput] = useState(initial.totp_secret ?? "");
   const [totpError, setTotpError] = useState(false);
+  /// The field stays a field while it has focus. It used to turn into the
+  /// code display on the first valid character, so a secret could be pasted
+  /// but not typed.
+  const [totpTyping, setTotpTyping] = useState(false);
   const [attachBusy, setAttachBusy] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
 
@@ -130,14 +135,17 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
     }));
   }, []);
 
-  const handleSave = useCallback(() => {
+  /// Removed attachments lose their content only once the entry that no
+  /// longer points at them is stored. Deleted first, a failed save left the
+  /// stored entry pointing at content that was gone.
+  const handleSave = useCallback(async () => {
+    if (!(await onSave(draft))) return;
     const kept = new Set((draft.attachments ?? []).map((a) => a.blob_id));
     for (const a of initial.attachments ?? []) {
       if (!kept.has(a.blob_id)) {
         void invoke("password_delete_attachment", { blobId: a.blob_id }).catch(() => {});
       }
     }
-    onSave(draft);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, onSave]);
 
@@ -428,7 +436,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
         <label className="field field-full">
           <span>Authenticator (TOTP)</span>
           <div className="pw-totp-panel">
-            {draft.totp_secret && !totpError ? (
+            {draft.totp_secret && !totpError && !totpTyping ? (
               <>
                 <TotpDisplay
                   entry={draft}
@@ -448,6 +456,8 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
                   placeholder="Secret key or otpauth:// link"
                   value={totpInput}
                   onChange={(e) => applyTotpInput(e.target.value)}
+                  onFocus={() => setTotpTyping(true)}
+                  onBlur={() => setTotpTyping(false)}
                   className={totpError ? "pw-input-error" : undefined}
                   autoComplete="off"
                   spellCheck={false}

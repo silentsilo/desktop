@@ -20,6 +20,12 @@ use std::path::PathBuf;
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 #[cfg(windows)]
 const VALUE_NAME: &str = "SilentSilo";
+/// Where Task Manager's Startup tab and Settings > Apps > Startup record
+/// their switch. They leave the Run value in place and write a flag here:
+/// the first byte is even for on, odd for off.
+#[cfg(windows)]
+const APPROVED_KEY: &str =
+    r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
 
 /// Whether this build can start with the OS at all. Callers branch on this
 /// rather than on `cfg!`, so adding macOS or Linux later stays a change to
@@ -44,10 +50,33 @@ pub fn autostart_enabled() -> bool {
     use winreg::RegKey;
     use winreg::enums::HKEY_CURRENT_USER;
 
-    RegKey::predef(HKEY_CURRENT_USER)
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let present = hkcu
         .open_subkey(RUN_KEY)
         .and_then(|run| run.get_value::<String, _>(VALUE_NAME))
-        .is_ok()
+        .is_ok();
+    // Turned off in Task Manager, the Run value is still there and Windows
+    // does not start the app. Reading only the Run value showed the switch
+    // as on while nothing started at sign-in.
+    let disabled = hkcu
+        .open_subkey(APPROVED_KEY)
+        .and_then(|key| key.get_raw_value(VALUE_NAME))
+        .is_ok_and(|value| value.bytes.first().is_some_and(|b| b % 2 == 1));
+    present && !disabled
+}
+
+/// Clears a "disabled" left by Task Manager, so turning autostart on here
+/// actually turns it on.
+#[cfg(windows)]
+fn clear_startup_disabled() {
+    use winreg::RegKey;
+    use winreg::enums::{HKEY_CURRENT_USER, KEY_SET_VALUE};
+
+    if let Ok(key) =
+        RegKey::predef(HKEY_CURRENT_USER).open_subkey_with_flags(APPROVED_KEY, KEY_SET_VALUE)
+    {
+        let _ = key.delete_value(VALUE_NAME);
+    }
 }
 
 #[cfg(windows)]
@@ -63,7 +92,9 @@ pub fn set_autostart(enabled: bool) -> std::io::Result<()> {
         };
     }
     let exe = std::env::current_exe()?;
-    run.set_value(VALUE_NAME, &autostart_command(&exe))
+    run.set_value(VALUE_NAME, &autostart_command(&exe))?;
+    clear_startup_disabled();
+    Ok(())
 }
 
 /// Called once per launch. On a machine that has never run this app it

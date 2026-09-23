@@ -11,7 +11,9 @@ type Props = {
   os: Os;
   paths: string[];
   busy: boolean;
-  onConfirm: (folderId: string) => void;
+  /** `returnTo` is the silo to focus again once the import is done, when the
+   *  user picked a different one here. */
+  onConfirm: (folderId: string, returnTo: string | null) => void;
   onCancel: () => void;
 };
 
@@ -202,7 +204,10 @@ export function ShellUploadDialog(props: Props) {
           <button
             type="button"
             disabled={busy || !folder || loading}
-            onClick={() => folder && onConfirm(folder.id)}
+            onClick={() =>
+              folder &&
+              onConfirm(folder.id, siloOnOpen && siloOnOpen !== siloId ? siloOnOpen : null)
+            }
           >
             {busy
               ? "Adding…"
