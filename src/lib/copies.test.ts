@@ -50,6 +50,16 @@ describe("copyState", () => {
     expect(state.detail).toBe("Last written 2 minutes ago.");
   });
 
+  it("does not call a copy up to date while a file has not reached it", () => {
+    const state = copyState(target({ last_success: NOW - 120, blobs_behind: 1 }), NOW);
+    expect(state.health).toBe("behind");
+    expect(state.headline).toBe("1 file not there yet");
+
+    const both = copyState(target({ last_success: NOW - 120, blobs_behind: 2, ops_behind: 3 }), NOW);
+    expect(both.headline).toBe("2 files not there yet");
+    expect(both.detail).toBe("3 changes too. Last written 2 minutes ago.");
+  });
+
   it("separates never written from long unwritten", () => {
     expect(copyState(target({ last_success: 0 }), NOW).health).toBe("never");
     expect(copyState(target({ last_success: NOW - 47 * 24 * 3600 }), NOW).health).toBe("stale");
@@ -122,12 +132,12 @@ describe("how far a fill has got", () => {
   }
 
   it("says both counts, because one large object holds the other still", () => {
-    expect(seedHeadline(seed())).toBe("Copying: 12 of 500 objects, 1 GB of 4 GB.");
+    expect(seedHeadline(seed())).toBe("Copying: 12 of 500 items, 1 GB of 4 GB.");
   });
 
   it("leaves the bytes out when the listing gave no sizes", () => {
     expect(seedHeadline(seed({ bytes_done: 0, bytes_total: 0 }))).toBe(
-      "Copying: 12 of 500 objects.",
+      "Copying: 12 of 500 items.",
     );
   });
 

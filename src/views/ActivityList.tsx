@@ -80,9 +80,8 @@ export function ActivityList({ devices }: Props) {
         Activity
       </h3>
       <p>
-        Every change recorded in this silo, in the order all your devices agree on. The time beside
-        each one comes from the clock of the machine that made it, so treat it as a label rather
-        than a measurement. Unlocking is not listed: it happens on one device and is never shared.
+        Every change made in this silo, from all your devices. Times come from each device&apos;s
+        own clock, so they can be slightly off. Unlocking is not listed.
       </p>
 
       <div className="search-input-wrapper">
@@ -91,7 +90,7 @@ export function ActivityList({ devices }: Props) {
         </span>
         <input
           type="text"
-          placeholder="Search this history…"
+          placeholder="Search activity…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -103,7 +102,7 @@ export function ActivityList({ devices }: Props) {
         </p>
       )}
 
-      {page === null && loading && <p className="hint">Reading the log…</p>}
+      {page === null && loading && <p className="hint">Loading…</p>}
 
       {page !== null && entries.length === 0 && (
         <p className="hint">
@@ -144,8 +143,8 @@ export function ActivityList({ devices }: Props) {
           screen, which otherwise reads as the day the silo began. */}
       {page !== null && page.truncated_before > 0 && !page.next && (
         <p className="hint">
-          Older changes are no longer stored. The history kept here starts after the silo was
-          compacted to save space; your files are unaffected.
+          Older changes were combined to save space, so the list starts here. Your files are not
+          affected.
         </p>
       )}
 

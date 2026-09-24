@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { platformStrings, type Os } from "../../lib/platformStrings";
 import { invoke } from "@tauri-apps/api/core";
-import { open as openFileDialog, save as saveFileDialog } from "@tauri-apps/plugin-dialog";
+import { open as openFileDialog, save as saveFileDialog } from "../../lib/dialog";
 import { Download, KeyRound, MousePointerClick, ShieldCheck, Upload } from "lucide-react";
 import { ViewHeader } from "../../components/ViewHeader";
 import type {
@@ -14,8 +14,10 @@ import { csvToEntries, entriesToCsv, formatLabel } from "../../lib/passwordCsv";
 import { bitwardenJsonToEntries, looksLikeBitwardenJson } from "../../lib/bitwardenJson";
 import {
   applyImportCategory,
+  describeExtras,
   dropDuplicates,
   type ImportCategoryChoice,
+  type ImportExtras,
 } from "../../lib/passwordImport";
 import { withEdits } from "../../lib/passwordEntry";
 import { formatAppError } from "../../lib/errors";
@@ -49,6 +51,12 @@ type Props = {
   /** Names the built-in authenticator in the verify notice. */
   os: Os;
   busy: boolean;
+  /** Whether this silo has backup storage, so texts about syncing and
+   * storage apply at all. */
+  backedUp: boolean;
+  /** Copies the app never deletes from, which keep a deleted entry's
+   * attachments. */
+  archiveTargets: number;
   /** An entry another view is sending the user to. Selecting it clears the
    * filters, or the panel would land on an entry the current category or
    * search hides, and show nothing. */
@@ -96,6 +104,8 @@ export function PasswordsPanel({
   storedCategories,
   os,
   busy,
+  backedUp,
+  archiveTargets,
   focusEntryId,
   onSaveEntry,
   onDeleteEntry,
@@ -122,6 +132,7 @@ export function PasswordsPanel({
     source: string;
     unit: [string, string];
     skippedUnit: [string, string];
+    extras: ImportExtras;
   } | null>(null);
   /// Whether the "finish editing first" notice is up. Clicking another row
   /// mid-edit does nothing on purpose, and doing nothing silently read as
@@ -303,7 +314,7 @@ export function PasswordsPanel({
   /// Gate for everything a protected entry keeps behind a fresh touch.
   /// Entries without the flag pass straight through.
   const ensureVerified = useCallback(
-    async (entry: PasswordEntry): Promise<boolean> => {
+    async (entry: PasswordEntry, purpose?: "export"): Promise<boolean> => {
       if (!entry.require_reauth) return true;
       const last = verifiedAtRef.current.get(entry.id);
       if (last !== undefined && Date.now() - last < REAUTH_GRACE_MS) return true;
@@ -311,7 +322,7 @@ export function PasswordsPanel({
       setTransferError(null);
       setVerifying(true);
       try {
-        await invoke("fido_reverify");
+        await invoke("fido_reverify", { purpose: purpose ?? null });
         verifiedAtRef.current.set(entry.id, Date.now());
         return true;
       } catch (e) {
@@ -467,9 +478,10 @@ export function PasswordsPanel({
       let source: string;
       let unit: [string, string];
       let skippedUnit: [string, string];
+      let extras: ImportExtras;
 
       if (looksLikeBitwardenJson(text)) {
-        ({ entries: imported, skipped } = bitwardenJsonToEntries(text));
+        ({ entries: imported, skipped, extras } = bitwardenJsonToEntries(text));
         source = "Bitwarden JSON";
         unit = ["item", "items"];
         skippedUnit = ["unsupported item", "unsupported items"];
@@ -477,6 +489,7 @@ export function PasswordsPanel({
         const parsed = csvToEntries(text);
         imported = parsed.entries;
         skipped = parsed.skipped;
+        extras = parsed.extras;
         source = formatLabel(parsed.format);
         unit = ["login", "logins"];
         skippedUnit = ["non-login row", "non-login rows"];
@@ -484,7 +497,7 @@ export function PasswordsPanel({
 
       // Parsed but not yet stored: the user first says where these get
       // filed. Nothing is written until they confirm.
-      setPendingImport({ imported, skipped, source, unit, skippedUnit });
+      setPendingImport({ imported, skipped, source, unit, skippedUnit, extras });
     } catch (e) {
       setTransferError(formatAppError(e));
     } finally {
@@ -495,7 +508,7 @@ export function PasswordsPanel({
   const finishImport = useCallback(
     (choice: ImportCategoryChoice) => {
       if (!pendingImport) return;
-      const { skipped, source, unit, skippedUnit } = pendingImport;
+      const { skipped, source, unit, skippedUnit, extras } = pendingImport;
       const imported = applyImportCategory(pendingImport.imported, choice);
       setPendingImport(null);
 
@@ -515,7 +528,12 @@ export function PasswordsPanel({
       setTransferNotice(
         fresh.length === 0 && duplicates > 0
           ? `Nothing new in that file: all ${duplicates} ${plural(duplicates, unit)} are already in this silo.`
-          : `Imported ${fresh.length} ${plural(fresh.length, unit)} from ${source}${suffix}.`
+          : [
+              `Imported ${fresh.length} ${plural(fresh.length, unit)} from ${source}${suffix}.`,
+              describeExtras(extras),
+            ]
+              .filter(Boolean)
+              .join(" ")
       );
     },
     [entries, onImportEntries, pendingImport]
@@ -537,7 +555,7 @@ export function PasswordsPanel({
     // to put a file that is not going to be written.
     if (exportNeedsTouch(logins)) {
       const asking = logins.find((e) => e.require_reauth)!;
-      if (!(await ensureVerified(asking))) return;
+      if (!(await ensureVerified(asking, "export"))) return;
     }
 
     const path = await saveFileDialog({
@@ -551,7 +569,7 @@ export function PasswordsPanel({
       await invoke("passwords_write_export_csv", { path, contents: entriesToCsv(logins) });
       const leftOut =
         entries.length - logins.length > 0
-          ? ` Cards, identities and SSH keys (${entries.length - logins.length}) are not part of the CSV format and stayed behind.`
+          ? ` Cards, identities, SSH keys and notes (${entries.length - logins.length}) are not part of the CSV format and stayed behind.`
           : "";
       setTransferNotice(
         `Exported ${logins.length} ${logins.length === 1 ? "login" : "logins"} as an unencrypted CSV file. Store or delete it carefully.${leftOut}`
@@ -566,7 +584,7 @@ export function PasswordsPanel({
 
   return (
     <div className="pw-view">
-      <ViewHeader icon={KeyRound} title="Credentials" subtitle={headerSummary} />
+      <ViewHeader icon={KeyRound} title="Passwords" subtitle={headerSummary} />
       {/* Toolbar spans all three panes: search and transfer act on the whole
           store, not on any one pane. */}
       <div className="view-toolbar">
@@ -628,7 +646,7 @@ export function PasswordsPanel({
             onClick={() => setAddMenuOpen((v) => !v)}
           >
             <IconPlus size={16} />
-            <span>Add item</span>
+            <span>Add entry</span>
           </button>
           {addMenuOpen && (
             <>
@@ -671,10 +689,10 @@ export function PasswordsPanel({
           <div>
             <strong>This export is not encrypted.</strong>
             <p>
-              Every password and TOTP secret is written to a readable file so other password
-              managers can import it. Anyone who opens that file can read your logins, as can any
-              backup or sync tool that picks it up. Save it somewhere you control, and delete it
-              once you are done.
+              Every login, with its password and TOTP secret, is written to a readable file for
+              another password manager to import. Cards, identities, SSH keys and notes are not
+              included. Anyone who opens the file can read your logins, so delete it once you are
+              done.
             </p>
           </div>
           <div className="pw-export-warning-actions">
@@ -770,7 +788,7 @@ export function PasswordsPanel({
                 // the user is looking for something they believe exists.
                 <div className="empty-state">
                   <IconSearch size={36} className="empty-icon" />
-                  <p className="empty-title">No matching items</p>
+                  <p className="empty-title">No matching entries</p>
                   <p className="hint">Try a different search, kind or category.</p>
                 </div>
               ) : selectedType ? (
@@ -797,7 +815,7 @@ export function PasswordsPanel({
                 <div className="empty-state">
                   <ShieldCheck size={36} className="empty-icon" />
                   <p className="empty-title">Nothing in this category yet</p>
-                  <p className="hint">Use Add item, or pick another category.</p>
+                  <p className="hint">Use Add entry, or pick another category.</p>
                 </div>
               )
             ) : (
@@ -860,7 +878,7 @@ export function PasswordsPanel({
             ) : filtered.length > 0 ? (
               <div className="pw-detail-placeholder">
                 <MousePointerClick size={32} className="empty-icon" />
-                <p className="hint">Select an item to see its details.</p>
+                <p className="hint">Select an entry to see its details.</p>
               </div>
             ) : // An empty list already says everything; a second pane
             // repeating "select something" would be advice about nothing.
@@ -871,11 +889,21 @@ export function PasswordsPanel({
 
       {pendingDelete && (
         <ConfirmDialog
-          title="Delete this item?"
-          message={`"${pendingDelete.service}" is removed from every device on the next sync. Items deleted here do not go to the trash.${
-            (pendingDelete.attachments ?? []).length > 0
-              ? " Your storage keeps the attached files for 30 days before housekeeping removes them."
+          title="Delete this entry?"
+          message={`${
+            backedUp
+              ? `“${pendingDelete.service}” is removed from every device on the next sync.`
+              : `“${pendingDelete.service}” is removed from this silo.`
+          } Entries deleted here do not go to the trash.${
+            backedUp && (pendingDelete.attachments ?? []).length > 0
+              ? " Backup storage keeps the attached files for 30 days before they are cleared."
               : ""
+          }${
+            !backedUp || archiveTargets === 0
+              ? ""
+              : (pendingDelete.attachments ?? []).length > 0
+                ? " A never-delete copy keeps the entry and its attached files until that storage's own rules remove them."
+                : " A never-delete copy keeps the entry until that storage's own rules remove it."
           }`}
           confirmLabel="Delete"
           danger

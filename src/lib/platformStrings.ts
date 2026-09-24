@@ -20,6 +20,8 @@ export type PlatformStrings = {
   builtIn: string;
   /** Where files live on this system: "Windows Explorer" or "Finder". */
   fileManager: string;
+  /** Where the app sits while its window is closed. */
+  trayArea: string;
   /** Completes "Start SilentSilo when I …". */
   signIn: string;
   /** Shown when the built-in authenticator is not set up, with the fix. */
@@ -38,16 +40,17 @@ const WINDOWS: PlatformStrings = {
   osName: "Windows",
   builtIn: "Windows Hello",
   fileManager: "Windows Explorer",
+  trayArea: "the notification area",
   signIn: "sign in to Windows",
   builtInSetupHint:
-    "Windows Hello is not set up on this machine, so a security key is the only way in " +
+    "Windows Hello is not set up on this computer, so a security key is the only way in " +
     "here. Add a PIN or a fingerprint in Windows sign-in settings and Hello shows up as " +
     "a second option.",
   autostartHint:
     "Windows lists this under Startup apps in Task Manager. Turning it off there and " +
     "turning it off here are the same thing.",
   fidoUnavailable:
-    "FIDO2 is not available on this system. Use Windows 10 (1903+) or later with a " +
+    "Security key support is not available on this system. Use Windows 10 (1903+) or later with a " +
     "compatible security key.",
   offersPhone: true,
 };
@@ -57,6 +60,7 @@ const MACOS: PlatformStrings = {
   osName: "macOS",
   builtIn: "Touch ID",
   fileManager: "Finder",
+  trayArea: "the menu bar",
   signIn: "log in to this Mac",
   builtInSetupHint:
     "Touch ID is not set up on this Mac, so a security key is the only way in here. " +
@@ -66,7 +70,7 @@ const MACOS: PlatformStrings = {
     "macOS lists this under Login Items in System Settings. Turning it off there and " +
     "turning it off here are the same thing.",
   fidoUnavailable:
-    "FIDO2 is not available on this system. Use macOS 13 or later with a compatible " +
+    "Security key support is not available on this system. Use macOS 13 or later with a compatible " +
     "security key.",
   offersPhone: false,
 };
@@ -75,12 +79,13 @@ const MACOS: PlatformStrings = {
 const LINUX: PlatformStrings = {
   os: "linux",
   osName: "Linux",
-  builtIn: "the built-in authenticator",
+  builtIn: "the built-in key",
   fileManager: "the file manager",
+  trayArea: "the system tray",
   signIn: "log in",
-  builtInSetupHint: "This build has no built-in authenticator, so a security key is the only way in.",
+  builtInSetupHint: "This build has no built-in key, so a security key is the only way in.",
   autostartHint: "Turning autostart off in the desktop's own settings and here are the same thing.",
-  fidoUnavailable: "FIDO2 is not available on this system. Use a compatible security key.",
+  fidoUnavailable: "Security key support is not available on this system. Use a compatible security key.",
   offersPhone: false,
 };
 

@@ -67,8 +67,14 @@ runtime's workers, which is where the sync pass's network work lives.
 
 ## Sync pass anatomy
 
-`commands/sync.rs::run_sync_pass`, in this exact order, each step placed
-for a reason:
+The pass is core's `silentsilo_app::run_sync_pass`; this app calls it from
+`commands/sync.rs::run_sync_pass` with `DesktopHost`, which sends its events
+to the window as `sync-report`, `sync-progress` and `vault-changed`, logs its
+warnings and reads the stored copies. The desktop had its own copy of the
+pass until 1.2; the two drifted, and only core's was under the fleet and
+lifecycle tests. `AppState` holds core's state and derefs to it, so a pass
+and a command lock the same sessions and the same `sync_in_flight`. The
+steps, in this exact order, each placed for a reason:
 
 ```mermaid
 sequenceDiagram
@@ -113,6 +119,13 @@ sequenceDiagram
   storage listed, which is what the horizon check compares against: the
   highest local record counts this device's own writes and hid a device
   that wrote a lot offline.
+- **A target that does not answer is not a target that is empty**: the
+  horizon comes from the targets that answer, and one whose records stop
+  below the highest horizon is left out as stale. When none answers, each
+  is marked failed and backs off. A pass that errors, or stops before any target records an outcome
+  (rebuild, rejoin, replaced key), holds that silo's background passes for
+  `PULL_INTERVAL_SECS` even with changes waiting (`pass_due`); pressing
+  Sync is not held.
 - **The sweep waits 30 days and puts content back**: a candidate is deleted
   only when an earlier sweep saw it unreferenced and this device first saw
   that 30 days ago (`blob_gc_seen`). A device that has not synced can still
@@ -123,7 +136,7 @@ sequenceDiagram
   trash is not undone. The same daily sweep aborts unfinished S3 uploads
   older than 24 hours under `blobs/`, `snapshots/` and `inbox/`
   (`silentsilo_sync::abort_stale_uploads`); a failure there is a warning and
-  the sweep carries on. The step matches core's `silentsilo-app` pass.
+  the sweep carries on.
 - **Ops before blobs on push, and on the same push**: a visible file whose
   content has not arrived self-corrects next pass; content with no record
   looks like an orphan and gets swept. Same reasoning gives the join order
@@ -144,7 +157,16 @@ sequenceDiagram
   back from an older copy, so the pass reports `key_material_replaced` and
   the screen says the storage is what has to be fixed. Rejoining fetches the
   same object and fails on it, which is why the two must never share a
-  message.
+  message. Every target that answers is asked, and the gravest answer wins
+  (`gravest_kek_state`: rotated, then replaced, then current): a copy that
+  missed a rotation still says current, and letting the first answer decide
+  pushed its stale envelope over the rotated one. Never-delete copies vote
+  only on a silo with no working copy: a rotation does not touch them, so to
+  a device on the new key they always look rotated, and counting them sent
+  it to rejoin in a loop, or whenever the working copy was unplugged. One
+  that reads as rotated beside working copies is retired: left out of the
+  pass with `RETIRED_COPY` as its status and not counted as a copy to reach,
+  since waiting on it held the inbox, the sweep and compaction for good.
 - **The inbox imports after the push and pull**: an item recorded in one
   pass leaves the inbox only in a later pass that reached every target, so
   it is never gone from storage while its record exists on this machine
@@ -160,7 +182,9 @@ sequenceDiagram
   so one commit covers every target: a target owed a long history used to pay
   for a commit per record with the sessions mutex held. A delivery that does
   not commit leaves the records owed, which the next pass settles by finding
-  them already in storage.
+  them already in storage. Delivery follows the push alone: a target whose
+  push went through and whose fetch failed has its records marked, and the
+  fetch failure is still its reported failure.
 - **A pass reports bytes as well as items**: `sync-progress` carries
   `bytes_done` and `bytes_total`, non-zero only while one blob is uploading,
   because the blob count stands still for the whole of a large file. The file
@@ -205,6 +229,21 @@ they pin the silo id they started on rather than re-reading focus. A decrypt
 that finishes after its silo locked deletes what it wrote
 (`state::discard_if_locked`) instead of opening it.
 
+The silo evicted to make room is taken out of the map under the mutexes and
+snapshotted after they are released, and its eviction does what a lock
+does: its copied password is taken back and `scratch-still-open` is sent
+when a file stays held. Every way in registers the silo root in
+`AppState::opening` (`state::opening`) before building a session, until it
+is in the map or abandoned, and the scratch sweep that follows any lock
+keeps those roots as if open: the sweep runs from other threads and would
+otherwise delete a working copy being opened. A silo that is not open gets
+no idle timer (`touch_if_open`, and `idle_seconds` lists open silos only),
+and a lock takes back the clipboard only when the secret on it came from a
+silo being closed. Close and lock carry on through a mutex a panic
+poisoned, rather than reporting a lock that closed nothing. On exit each
+open silo is closed once, and closing writes its snapshot; nothing flushes
+before it.
+
 Removing a silo from the list keeps its ciphered working copy unless the
 files go too: while the folder stays, that copy can hold the only record of
 changes since the last snapshot.
@@ -213,6 +252,13 @@ Key operations (enrol, add, remove, rotate, resume), the snapshot rebuild and
 a seed take the sync flag for as long as they run (`sync::hold_sync`), after
 waiting up to 90 seconds for a running pass. A pass that loaded `fido.json`
 before a key change and saved it after would put the old envelopes back.
+
+A key change (rotate or resume) opens every target before the first touch
+and stops if one will not open: skipped, it would keep the old key readable
+there. The re-wrapped keys and the new recovery envelope commit with the key
+in core (`rotation::commit_rotation_with`); past that commit an error locks
+the silo. A seed runs with the silo's key (`seed_target_checked`), so a copy
+that missed a rotation cannot put the old key back on another.
 
 ## Browser extension
 
@@ -238,19 +284,19 @@ flowchart LR
   against the Chromium list only; anything else must be a `.json` path
   followed by an id on the Firefox list (`allowed_caller`). It refuses a
   caller on neither before it opens the pipe. The lists are compiled in.
-  `allowed-origins.json` holds the store ids: `chrome_web_store` and
-  `edge_add_ons` and `firefox_add_ons` (all empty until the listings exist;
-  Brave installs from the Chrome Web Store and has no list).
-  `allowed-origins.dev.json` holds the development ids, let in only by debug
-  builds and builds with the `dev-extension` feature: the Chromium one,
-  which anyone can reproduce from the public key in the extension's dev
-  manifest, and `browser@silentsilo.com`, the Firefox id fixed in the
-  extension's `browser_specific_settings`. A Firefox id is chosen by its
-  author and becomes unique only when someone first submits it to
-  addons.mozilla.org, so until our own AMO submission (listed or unlisted)
-  holds it, anyone could get a Mozilla-signed extension carrying it. It
-  moves to the release list only after that submission. `--check-release`
-  fails a host that lets a dev id in or names no store id.
+  `allowed-origins.json` holds the store ids: `chrome_web_store` holds the
+  Chrome Web Store id, `firefox_add_ons` holds `browser@silentsilo.com`,
+  and `edge_add_ons` stays empty until the Edge listing exists (Brave
+  installs from the Chrome Web Store and has no list).
+  `allowed-origins.dev.json` holds the development Chromium id, let in only
+  by debug builds and builds with the `dev-extension` feature. It is pinned
+  by a developer's own key, which no repository holds. A Firefox id is
+  chosen by its author and becomes unique only when someone first submits
+  it to addons.mozilla.org; our submission of 20 September 2026 claimed
+  `browser@silentsilo.com`, the id fixed in the extension's
+  `browser_specific_settings`, so it moved from the dev list to the release
+  list, and the dev list has no Firefox id now. `--check-release` fails a
+  host that lets a dev id in or names no store id.
   `build-release-local.ps1` checks the JSON before it starts
   (`browser-host-release.ps1`, the same rule as `release_verdict`): all
   three lists empty means the release ships without the host, so a desktop
@@ -260,7 +306,7 @@ flowchart LR
   an add-on id as MDN defines it (`name@domain` of at most 80 characters, or
   a GUID in braces) in the Firefox list stops the build. When the host
   ships, the script runs `--check-release` on the built binary. Unit tests
-  keep both dev ids out of the release file. `--write-manifest` writes both manifests
+  keep the dev ids out of the release file. `--write-manifest` writes both manifests
   the browsers read: `silentsilo-browser-host.json` with `allowed_origins`
   for Chromium, `silentsilo-browser-host.firefox.json` with
   `allowed_extensions` for Firefox. A Firefox temporary add-on can claim any
@@ -306,7 +352,9 @@ flowchart LR
   act as it. On any mismatch the host answers `app-not-running` to each
   request with a message of its own, writes nothing to the pipe and never
   relays. When nothing listens it answers `app-not-running` itself and
-  exits when stdin closes. It never starts the app. It copies frames without
+  exits when stdin closes. It never starts the app. The extension closes
+  the port after that answer, so its next request starts a new host, which
+  finds the app once it runs with the setting on. It copies frames without
   parsing them beyond the 64 KiB limit, and wipes each one after passing it
   on.
 - **The pipe** is `\.\pipe\silentsilo-browser-<user SID>`, created with a
@@ -339,6 +387,9 @@ flowchart LR
   one more per 20 seconds, and 4 across all connections, one more per 30
   seconds. After a fill ends without a confirmation (declined, timed out, or
   its connection gone), no fill dialog opens for 10 seconds, whoever asks.
+  A fill refused for that pause, or because another fill is waiting, spends
+  neither `fill` ration (`limits::admit_fill`), so clicks during a
+  confirmation do not use up the fills after it.
   The Fill button stays inert for 700 ms after a question appears, and the
   key prompt names the login and the site. A `show` within 3 seconds of the
   last one acted on, from any connection, is refused. Past any of these the
@@ -395,7 +446,11 @@ flowchart LR
   once it passes is the password read and written to the pipe, in a buffer
   sized up front and wiped after the write. One fill waits at a time
   (`busy`), for 90 seconds (`cancelled`); a lock or focus change while it
-  waits ends it.
+  waits ends it. After a confirmed fill the window goes back to hidden or
+  minimised when that is how the request found it; a window that was on
+  screen stays where it is. A silo that is unlocked but whose logins cannot
+  be read is answered `read-failed`, never `locked`: an extension that
+  predates the code shows its generic line for it.
 - **Installed as an externalBin**, merged in by `build-release-local.ps1`
   through `src-tauri/tauri.browser-host.json` rather than kept in
   `tauri.conf.json`: tauri-build requires an externalBin to exist on every
@@ -464,6 +519,13 @@ crates are in core's map.
   sealed marker names. Three copies of that rule would be three things to
   get wrong; `join_tests` in `commands/sync.rs` plants an `org` envelope and
   holds both doors to it.
+- **A failed join leaves nothing behind.** Once the folder is registered, a
+  join that fails is undone (`silo::JoinCleanup`): the registry entry, the
+  secrets it wrote, the machine-local state and the silo's own files go, so
+  trying again is not refused over a half-made silo. Both joins refuse a
+  folder that is not empty, as creating does, so the undo never meets a
+  file it did not write. The repair refuses, before it deletes anything,
+  when the local copy still opens with the key the code produced.
 - **The protected folders list refuses while the silo is locked.** The list
   and its import ledger are sealed under the content KEK, so there is nothing
   to read without an open session: `protected_folders_list`,

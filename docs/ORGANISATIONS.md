@@ -32,9 +32,12 @@ So the in-app rule holds on the machine where the silo was created, and on
 any machine set up from the backup with an organisation key itself. A
 machine set up with the employee's own key, or with the recovery code,
 lists the company key as an ordinary key: the employee can remove it there,
-and that removal reaches every working target. It does not reach a target
-marked append-only, which is why the company's copy is the guarantee (see
-the last section) and why the remote onboarding flows below depend on it.
+and that removal reaches every working target. The app does not send it to
+a never-delete copy, which is why the company's copy matters (see the last
+section) and why the remote onboarding flows below depend on it. "Never
+deletes" is what the app does, not what the storage allows: an employee who
+can delete files on that storage by hand can still remove the company's key
+there. The storage has to refuse it, as the next section sets up.
 
 ## The layout that works
 
@@ -45,11 +48,15 @@ the last section) and why the remote onboarding flows below depend on it.
 - **Backup goes to a per-employee folder on storage the company controls**,
   for example `\\server\vaults\popescu`, with permissions restricted to that
   employee and IT. Any of the four backends works; a share is the simplest.
-- **A second place, marked append-only, on storage the company controls.**
-  "Never delete anything here" is offered only under Settings, Copies, when
-  adding a second place; the Backup page's connection is always the working
-  one. This copy is the one that survives whatever happens on the
-  employee's machine, so it is not optional in this layout.
+- **A second place, a never-delete copy, on storage the company controls
+  and the employee cannot delete from.** "Never-delete copy" is offered only
+  under Settings, Backup, when adding another copy; the main copy, at the top
+  of that page, is always the working one. The tick only stops the app from
+  deleting. The storage must refuse deletes too: a share where the employee's
+  account may create and write files but not delete them, an S3 bucket with
+  object lock, or sign-in details with no delete permission. This copy is the
+  one that survives whatever happens on the employee's machine, so it is not
+  optional in this layout.
 - **The company holds the recovery code and the organisation keys.** The code
   goes in the safe with the keys. The employee does not get a copy, and does
   not need one: their own enrolled key is their way in, and IT can always let
@@ -65,19 +72,19 @@ not to.
 
 **At the desk (preferred).** Create the silo on the employee's machine, tick
 the organisation box, enrol the organisation key, set the backup target, add
-the append-only copy under Settings, Copies, and let the first sync finish.
+the never-delete copy under Settings, Backup, and let the first sync finish.
 Then enrol the employee's own key in the same unlocked session and hand it to
 them. Same ceremony as issuing a badge. This is the only flow in which the
 in-app rule holds on the employee's own machine.
 
 **Remote, by shipping a key.** Do the same provisioning at the IT desk, enrol
 the employee's key there too, sync, then courier the key to them. On their
-machine they choose *Copy one from backup storage*, point it at their folder,
+machine they choose *Set up from backup storage*, point it at their folder,
 and touch the key. No secret ever travels over a digital channel. After the
 first unlock they can add Windows Hello themselves; Hello is sealed to their
 machine and cannot be pre-enrolled. Their key is not an organisation key, so
 on their machine the company key carries no marking (see "Where the marking
-holds"): the append-only copy is what protects the company's way in.
+holds"): the never-delete copy is what protects the company's way in.
 
 **Remote, by recovery code (last resort).** Send the code, have the employee
 join with it and enrol their key **in that same session**, then regenerate the
@@ -96,19 +103,19 @@ Take **both** organisation keys out of the safe: the rotation asks for a
 touch on every key that is to be kept, and a key from another device or not
 plugged in cannot be kept from that machine, so a rotation done with one
 company key in hand drops the other. Open the silo from the working target,
-on any machine, via *Copy one from backup storage*, and use **Change the
-silo's encryption key** under Settings, Security keys, keeping only the two
+on any machine, via *Set up from backup storage*, and use **Replace the
+encryption key** under Settings, Advanced, keeping only the two
 organisation keys. One operation does most of the job: the former employee's
-key stops opening the working target, which is re-sealed under the new key,
-and a fresh recovery code is shown once for the safe. Merely removing their
-key is not enough on storage that keeps what it is asked to delete, which is
-exactly what an append-only company target does; the app says the same thing
-on the rotation panel.
+key stops opening the working target, which moves to the new key, and a fresh
+recovery code is shown once for the safe. Merely removing their key is not
+enough on storage that keeps what it is asked to delete, which is exactly
+what a never-delete company copy does; the app says the same thing on the
+replace panel.
 
-The rotation does not touch a target the device holds as append-only, and a
-freshly joined machine has only the folder it joined from, so the company's
-append-only copy keeps the old envelope and the former employee's key goes on
-opening that one copy. Remove their access to both company folders the same
+Replacing the key does not touch a never-delete copy, and a freshly set-up
+machine has only the folder it was set up from, so the company's never-delete
+copy keeps the old key file and the former employee's key goes on opening
+what was stored there before the change. Remove their access to both company folders the same
 day; that is what closes it.
 
 What they already copied while they had access is theirs forever; no design
@@ -117,16 +124,17 @@ anywhere undoes that.
 Handing a silo over to a new owner is the same flow ending differently: retire
 the organisation keys last, and the silo becomes an ordinary personal one.
 
-## What this does and does not guarantee
+## What the app enforces, and what the storage has to
 
 The rules are enforced by the app, not by the cryptography. Someone who edits
 the silo's files by hand, or runs a modified build, can clear the organisation
-marking on their own disk; the licence guarantees them that ability. What they
-cannot do is remove the company's key envelope from a backup target the
-company owns and has marked **append-only**. That copy is the actual
-guarantee, which is why the backup target belongs on company storage and why
-the append-only role exists. Treat the in-app rules as what keeps honest
-people honest, and the company-held copy as what holds.
+marking on their own disk; the licence gives them that ability. The app never
+deletes from a **never-delete copy**, but that is the app's behaviour, not a
+property of the storage. The company's key file survives there only if the
+storage itself refuses the employee's deletes: permissions that allow writing
+but not deleting, object lock, or sign-in details without delete rights.
+Treat the in-app rules as what keeps honest people honest, and a company copy
+the employee cannot delete from as what holds.
 
 Nothing here is a way to read an employee's silo without a key. The company
 can open the silo because it enrolled a key at creation, not because a

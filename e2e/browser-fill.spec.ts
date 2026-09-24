@@ -37,7 +37,7 @@ test("the setting says the extension cannot see files, and starts off", async ({
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Browser extension" }).click();
   await expect(
-    page.getByText("Lets the browser extension fill passwords. It cannot see your files."),
+    page.getByText(/Lets the browser extension fill logins from the silo that is open/),
   ).toBeVisible();
   const toggle = page.getByRole("checkbox", { name: /Allow the SilentSilo browser extension/ });
   await expect(toggle).not.toBeChecked();

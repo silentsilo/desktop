@@ -1,6 +1,8 @@
 mod browser;
 mod commands;
 mod diagnostics;
+#[cfg(feature = "e2e")]
+mod e2e;
 mod state;
 
 /// The fixture builder's escape hatch must not be in a shipped binary.
@@ -16,12 +18,11 @@ const _: () = assert!(
      arbitrary string"
 );
 
-use std::collections::HashMap;
 use std::sync::Mutex;
 
 use commands::shell::{handle_shell_action, show_main_window};
 use silentsilo_shell::ensure_os_integration;
-use state::{AppState, flush_vault_snapshot};
+use state::AppState;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{Manager, RunEvent};
@@ -53,10 +54,8 @@ fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
         .menu(&menu)
         .on_menu_event(move |app, event| match event.id.as_ref() {
             "tray-open" => show_main_window(app),
-            "tray-quit" => {
-                flush_vault_snapshot(app.state::<AppState>());
-                app.exit(0);
-            }
+            // The exit handler below snapshots and closes every open silo.
+            "tray-quit" => app.exit(0),
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -121,6 +120,8 @@ pub fn run() {
     // undone, so applying them first is the whole point: a DLL that gets in
     // ahead of this call has already won.
     silentsilo_shell::harden_process();
+    #[cfg(feature = "e2e")]
+    e2e::isolate();
 
     let startup_args: Vec<String> = std::env::args().collect();
 
@@ -131,6 +132,8 @@ pub fn run() {
     // instead of forwarding to the running app. Once release-only over a
     // single-instance plugin panic on `tauri dev` relaunch, fixed upstream
     // well before the version in the lockfile.
+    // An e2e build runs beside the real app and must not hand over to it.
+    #[cfg(not(feature = "e2e"))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
         handle_shell_action(app, args);
     }));
@@ -154,14 +157,9 @@ pub fn run() {
                 .build(),
         )
         .manage(AppState {
-            active_silo: Mutex::new(None),
-            sessions: Mutex::new(HashMap::new()),
-            last_touched: Mutex::new(HashMap::new()),
-            import_cancelled: std::sync::atomic::AtomicBool::new(false),
-            verify_cancelled: std::sync::atomic::AtomicBool::new(false),
-            seed_cancelled: std::sync::atomic::AtomicBool::new(false),
-            sync_in_flight: std::sync::atomic::AtomicBool::new(false),
+            core: silentsilo_app::AppState::default(),
             session_epoch: std::sync::atomic::AtomicU64::new(0),
+            opening: Mutex::new(Vec::new()),
         })
         .manage(browser::BrowserBridge::default())
         .setup(move |app| {
@@ -351,11 +349,10 @@ pub fn run() {
                 let _ = silentsilo_shell::clear_secret_clipboard_now();
                 browser::stop(app_handle);
                 let state = app_handle.state::<AppState>();
-                flush_vault_snapshot(state.clone());
                 // Every silo that is open, not just the one on screen: each
                 // has keys in memory and may have opened files on disk, and
                 // leaving any of them behind is the thing this exists to
-                // prevent.
+                // prevent. Closing writes each snapshot, once.
                 for id in state.open_silo_ids() {
                     let _ = state.close_session(id);
                 }

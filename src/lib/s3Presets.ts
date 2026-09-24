@@ -56,7 +56,7 @@ export const S3_PRESETS: S3Preset[] = [
     endpoint: "http://localhost:9000",
     region: "us-east-1",
     pathStyle: true,
-    hint: "MinIO needs path-style addressing. Region can be anything, it isn't used.",
+    hint: "MinIO needs path-style addressing. Region is not used, so any value works.",
   },
   {
     id: "aws",

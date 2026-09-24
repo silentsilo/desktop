@@ -142,6 +142,36 @@ pub fn admit_show(
     Ok(())
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum FillRefused {
+    CoolingDown,
+    Busy,
+    TooMany,
+}
+
+/// Whether a `fill` may raise the dialog: not while cooling down, not while
+/// another fill waits, then within this connection's ration and the
+/// app-wide one. A fill refused before the rations spends none of them, so
+/// clicks during a confirmation do not use up the fills after it.
+pub fn admit_fill(
+    cooldown: &Cooldown,
+    busy: bool,
+    mine: &mut Bucket,
+    overall: &mut Bucket,
+    now: Instant,
+) -> Result<(), FillRefused> {
+    if cooldown.active(now) {
+        return Err(FillRefused::CoolingDown);
+    }
+    if busy {
+        return Err(FillRefused::Busy);
+    }
+    if !mine.take(now) || !overall.take(now) {
+        return Err(FillRefused::TooMany);
+    }
+    Ok(())
+}
+
 /// What one connection has used.
 pub struct ConnectionLimits {
     pub lookups: Bucket,
@@ -244,6 +274,51 @@ mod tests {
             admit_show(&mut fresh, &mut overall, &mut gate, later),
             Ok(())
         );
+    }
+
+    #[test]
+    fn a_fill_refused_as_busy_spends_no_ration() {
+        let start = Instant::now();
+        let cooldown = Cooldown::default();
+        let mut mine = fills_per_connection();
+        let mut overall = fills_overall();
+        for _ in 0..10 {
+            assert_eq!(
+                admit_fill(&cooldown, true, &mut mine, &mut overall, start),
+                Err(FillRefused::Busy)
+            );
+        }
+        // The confirmation ended: the connection still has all three.
+        for _ in 0..3 {
+            assert_eq!(
+                admit_fill(&cooldown, false, &mut mine, &mut overall, start),
+                Ok(())
+            );
+        }
+        assert_eq!(
+            admit_fill(&cooldown, false, &mut mine, &mut overall, start),
+            Err(FillRefused::TooMany)
+        );
+    }
+
+    #[test]
+    fn a_fill_during_the_cooldown_spends_no_ration() {
+        let start = Instant::now();
+        let mut cooldown = Cooldown::default();
+        cooldown.start(start);
+        let mut mine = fills_per_connection();
+        let mut overall = fills_overall();
+        assert_eq!(
+            admit_fill(&cooldown, false, &mut mine, &mut overall, start),
+            Err(FillRefused::CoolingDown)
+        );
+        let later = start + COOLDOWN_AFTER_CANCEL;
+        for _ in 0..3 {
+            assert_eq!(
+                admit_fill(&cooldown, false, &mut mine, &mut overall, later),
+                Ok(())
+            );
+        }
     }
 
     #[test]

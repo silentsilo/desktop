@@ -47,7 +47,7 @@ type Props = {
 };
 
 export function EmergencyKit({ siloName, code, variant }: Props) {
-  const printedOn = new Date().toLocaleDateString(undefined, {
+  const printedOn = new Date().toLocaleDateString("en-GB", {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -68,14 +68,13 @@ export function EmergencyKit({ siloName, code, variant }: Props) {
       <section className="kit-section">
         <h2>1. Your recovery code</h2>
         <p>
-          Thirty-two characters. Capitals and digits only, and the dashes are just for reading:
-          type it however it is easiest.
+          32 capital letters and digits. The dashes are only there for reading, so you can leave
+          them out.
         </p>
         <CodeBoxes code={code} />
         {!code && (
           <p className="kit-note">
-            Copy it from the screen into the boxes above, in ink, and check it twice. Nothing was
-            sent to the printer, which is the safest way to do this.
+            Copy it from the screen into the boxes above, in ink, and check it twice.
           </p>
         )}
       </section>
@@ -83,36 +82,33 @@ export function EmergencyKit({ siloName, code, variant }: Props) {
       <section className="kit-section">
         <h2>2. Getting your files back</h2>
         <p>
-          On any computer, including one that has never seen this silo. You need this sheet and
-          the way in to wherever the silo is kept.
+          On any computer. You need this sheet and access to wherever the silo is kept.
         </p>
-        {/* The sheet is read on the worst day, possibly in front of a
-            borrowed machine, so the step that says "download the app" has
-            to say which machines that works on. The app is Windows only;
-            the extraction tool is what covers the other two, and it is
-            precisely the case this sheet exists for. */}
+        {/* The sheet is kept for years and read on the worst day, possibly in
+            front of a borrowed machine. Which platforms the app runs on will
+            change in that time, so the sheet names none and points at the
+            extraction tool for any computer the app does not run on. */}
         <ol className="kit-steps">
           <li>
-            On a <strong>Windows</strong> computer, go to <strong>silentsilo.com</strong> and
-            download SilentSilo, then follow the steps below. The app is Windows only. On a
-            Mac or on Linux, download <strong>silentsilo-extract</strong> from the same
-            place: it is a small command-line program that writes your files back out with
-            nothing but this code. Copy the backup to a folder first, then run{" "}
+            Go to <strong>silentsilo.com</strong> and download SilentSilo for the computer in
+            front of you. If there is no version for it, download{" "}
+            <strong>silentsilo-extract</strong> from the same place: a small command-line program
+            that writes your files back out using this code. Copy the contents of your backup
+            storage to a folder, then run{" "}
             <code>silentsilo-extract extract --from &lt;folder&gt; --code &lt;code&gt; --to
-            &lt;folder&gt;</code>. Run it with no arguments and it explains itself.
+            &lt;folder&gt;</code>. Run it with no arguments for help.
           </li>
           <li>Install it and open it.</li>
           <li>
             On the first screen, look under <strong>Already have one?</strong>.
           </li>
           <li>
-            Say where the silo is. Either of these works, whichever you have:
+            Say where the silo is, with either of these:
             <ul className="kit-substeps">
               <li>
-                <strong>Copy one from backup storage</strong>, then sign in to wherever this
-                silo backs up: an S3-compatible bucket, a folder or network share, WebDAV, or
-                SFTP. Not written on this sheet, because you know it and a stranger holding
-                this should not.
+                <strong>Set up from backup storage</strong>, then sign in to this silo&apos;s
+                backup storage (S3-compatible bucket, folder or network share, WebDAV or SFTP).
+                Its details are left off this sheet on purpose.
               </li>
               <li>
                 <strong>Add a folder from this computer</strong>, if you still have the silo
@@ -134,13 +130,12 @@ export function EmergencyKit({ siloName, code, variant }: Props) {
       <section className="kit-section kit-warning">
         <h2>Keep this like a key</h2>
         <p>
-          Anyone holding this sheet and able to reach your storage can read everything in the
-          silo. It is the way in rather than the contents, so losing it costs you nothing on its
-          own. A safe, a deposit box, or a sealed envelope away from your house. Not a drawer.
+          Anyone with this sheet and access to your backup storage can read everything in the
+          silo. Keep it in a safe or a deposit box, not in a drawer.
         </p>
         <p>
-          If you think someone has seen it: open SilentSilo, generate a new recovery code, and
-          print this again. The old sheet stops working the moment you do.
+          If you think someone has seen it, make a new recovery code in SilentSilo and print this
+          again. The old code stops working, except on a never-delete copy, which keeps it.
         </p>
       </section>
 

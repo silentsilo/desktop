@@ -25,7 +25,7 @@ use uuid::Uuid;
 
 use crate::commands::fido::run_blocking;
 use crate::state::AppState;
-use limits::{Bucket, ConnectionLimits, Cooldown, ShowGate, ShowRefused};
+use limits::{Bucket, ConnectionLimits, Cooldown, FillRefused, ShowGate, ShowRefused};
 use logins::{Login, Secret};
 use protocol::{Code, Failure, Item, Request};
 
@@ -172,9 +172,9 @@ async fn start(app: &AppHandle) -> Result<(), String> {
     let (stop, stop_rx) = watch::channel(false);
     // Only the host beside this executable, signed like it in a release.
     let check = ClientCheck::host_beside_this_exe().map_err(|e| e.to_string())?;
-    let server = PipeServer::bind(stop_rx, check)
-        .await
-        .map_err(|e| format!("The browser extension's channel could not be opened: {e}"))?;
+    let server = PipeServer::bind(stop_rx, check).await.map_err(|e| {
+        format!("SilentSilo could not open the connection to the browser extension: {e}")
+    })?;
     let alive = Arc::new(AtomicBool::new(true));
     {
         let mut slot = lock(&bridge.server);
@@ -466,10 +466,9 @@ async fn with_session<T: Send + 'static>(
     match result {
         Ok(Some(value)) => Ok(value),
         Ok(None) => Err(Code::Locked.into()),
-        Err(_) => Err(Failure::with(
-            Code::Locked,
-            "SilentSilo could not read this silo's logins.",
-        )),
+        // Unlocked but unreadable: saying `locked` would send the person to
+        // unlock a silo that already is.
+        Err(_) => Err(Code::ReadFailed.into()),
     }
 }
 
@@ -541,10 +540,36 @@ async fn search(app: &AppHandle, id: &str, query: &str) -> Result<Vec<u8>, Failu
 /// connection that went away. Started only on an explicit cancel, a client
 /// could drop its connection and send the next fill at once, swapping the
 /// dialog under a click aimed at the first one.
+///
+/// After a confirmation the window goes back to hidden or minimised if that
+/// is how the dialog found it, so the person is left in the browser.
 struct PendingGuard {
     app: AppHandle,
     request_id: String,
     confirmed: bool,
+    before: WindowBefore,
+}
+
+/// The main window as a fill's dialog found it.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WindowBefore {
+    Hidden,
+    Minimised,
+    /// On screen, in front or not. Left where the person puts it next.
+    Shown,
+}
+
+fn window_before(app: &AppHandle) -> WindowBefore {
+    let Some(window) = app.get_webview_window("main") else {
+        return WindowBefore::Shown;
+    };
+    if !window.is_visible().unwrap_or(true) {
+        WindowBefore::Hidden
+    } else if window.is_minimized().unwrap_or(false) {
+        WindowBefore::Minimised
+    } else {
+        WindowBefore::Shown
+    }
 }
 
 impl Drop for PendingGuard {
@@ -566,6 +591,17 @@ impl Drop for PendingGuard {
         // Only for its own dialog: a newer one may already be on top.
         if ours && let Some(window) = self.app.get_webview_window("main") {
             let _ = window.set_always_on_top(false);
+            if self.confirmed {
+                match self.before {
+                    WindowBefore::Hidden => {
+                        let _ = window.hide();
+                    }
+                    WindowBefore::Minimised => {
+                        let _ = window.minimize();
+                    }
+                    WindowBefore::Shown => {}
+                }
+            }
         }
         let _ = self.app.emit("browser-fill-ended", &self.request_id);
     }
@@ -591,19 +627,26 @@ async fn authenticator_enrolled(app: &AppHandle) -> bool {
 }
 
 /// Whether a fill may raise the dialog now: not while it is cooling down
-/// after a cancel, and not past this connection's ration.
+/// after a cancel, not while another fill waits, and not past the rations
+/// (`limits::admit_fill`).
 fn fill_allowed(app: &AppHandle, connection: &Connection) -> Result<(), Failure> {
-    let now = Instant::now();
-    if lock(&app.state::<BrowserBridge>().cooldown).active(now) {
-        return Err(Failure::with(Code::Busy, COOLING_DOWN));
+    let bridge = app.state::<BrowserBridge>();
+    let busy = lock(&bridge.pending).is_some();
+    let cooldown = lock(&bridge.cooldown);
+    let mut mine = lock(&connection.limits);
+    let mut overall = lock(&bridge.fills);
+    match limits::admit_fill(
+        &cooldown,
+        busy,
+        &mut mine.fills,
+        &mut overall,
+        Instant::now(),
+    ) {
+        Ok(()) => Ok(()),
+        Err(FillRefused::CoolingDown) => Err(Failure::with(Code::Busy, COOLING_DOWN)),
+        Err(FillRefused::Busy) => Err(Code::Busy.into()),
+        Err(FillRefused::TooMany) => Err(Failure::with(Code::Busy, TOO_MANY)),
     }
-    if !lock(&connection.limits).fills.take(now) {
-        return Err(Failure::with(Code::Busy, TOO_MANY));
-    }
-    if !lock(&app.state::<BrowserBridge>().fills).take(now) {
-        return Err(Failure::with(Code::Busy, TOO_MANY));
-    }
-    Ok(())
 }
 
 async fn fill(
@@ -667,6 +710,7 @@ async fn fill(
         app: app.clone(),
         request_id: prompt.request_id.clone(),
         confirmed: false,
+        before: window_before(app),
     };
     let _ = app.emit("browser-fill-request", &prompt);
     bring_to_front(app);

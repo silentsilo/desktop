@@ -14,6 +14,10 @@ type Props = {
   onUnlock: () => void;
   onUnlockWithRecovery: (code: string) => void;
   onSwitchSilo: () => void;
+  /** The key found this computer's copy damaged and the user agreed to
+   * rebuild it, which needs the recovery code. */
+  rebuilding?: boolean;
+  onCancelRebuild?: () => void;
 };
 
 export function UnlockView({
@@ -24,14 +28,22 @@ export function UnlockView({
   onUnlock,
   onUnlockWithRecovery,
   onSwitchSilo,
+  rebuilding = false,
+  onCancelRebuild,
 }: Props) {
   const platform = platformStrings(osOf(bootstrap));
   const [usingCode, setUsingCode] = useState(false);
   const [code, setCode] = useState("");
 
-  if (usingCode) {
+  if (usingCode || rebuilding) {
     return (
-      <AuthShell subtitle="Unlock with the code you wrote down.">
+      <AuthShell
+        subtitle={
+          rebuilding
+            ? "Enter the code you wrote down to rebuild this silo from backup storage."
+            : "Unlock with the code you wrote down."
+        }
+      >
         {/* A real form, so Enter in the field submits rather than doing
             nothing and sending the user back to the mouse. */}
         <form
@@ -43,8 +55,8 @@ export function UnlockView({
         >
           <h2>Recovery code</h2>
           <p className="hint">
-            The long code you saved when you set this up, one group per box. Paste the whole
-            code into any of them and the rest fill themselves.
+            The code you saved when you set this up. Paste the whole code into any box and the
+            rest fill in.
           </p>
           <div className="field">
             <span>Code</span>
@@ -53,7 +65,7 @@ export function UnlockView({
           <div className="actions">
             <button type="submit" disabled={busy || !isComplete(code)}>
               <LifeBuoy size={15} />
-              {busy ? "Checking…" : "Unlock"}
+              {busy ? "Checking…" : rebuilding ? "Rebuild and unlock" : "Unlock"}
             </button>
             <button
               type="button"
@@ -62,6 +74,7 @@ export function UnlockView({
               onClick={() => {
                 setUsingCode(false);
                 setCode("");
+                onCancelRebuild?.();
               }}
             >
               <ArrowLeft size={15} />
@@ -83,9 +96,8 @@ export function UnlockView({
     : both
       ? `Touch an enrolled security key, or confirm with ${platform.builtIn}, to unlock.`
       : "Insert an enrolled security key and touch it to unlock.";
-  const readyHint = helloOnly
-    ? `${platform.builtIn} is ready. ${platform.osName} will show its own prompt.`
-    : `Security key ready. ${platform.osName} will show a native prompt.`;
+  // Only that the prompt is available: no key has been looked at yet.
+  const readyHint = `${platform.osName} will show its own prompt.`;
 
   return (
     <AuthShell subtitle={subtitle}>
@@ -118,12 +130,12 @@ export function UnlockView({
           <button type="button" className="link" disabled={busy} onClick={() => setUsingCode(true)}>
             <LifeBuoy size={14} />
             {helloOnly
-              ? "Hello not working? Use your recovery code"
+              ? `${platform.builtIn} not working? Use your recovery code`
               : "Lost your key? Use your recovery code"}
           </button>
           <button type="button" className="link" disabled={busy} onClick={onSwitchSilo}>
             <HardDrive size={14} />
-            Open a different silo
+            Switch silo
           </button>
         </div>
       </section>

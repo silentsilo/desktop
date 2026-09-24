@@ -16,6 +16,8 @@ export type BackupTargetView = {
   last_success: number;
   /** Changes this target has not received. */
   ops_behind: number;
+  /** Files this target does not have yet. Absent from older backends. */
+  blobs_behind?: number;
   /** Seconds until sync tries again, 0 when it is due now. */
   retry_in: number;
   /** The app never sends this one a delete, so it grows for ever. */
@@ -40,9 +42,9 @@ export function protectionWarning(p: Protection | null, archive: boolean): strin
   if (!archive || !p) return "";
   if (p.object_lock) return "";
   if (p.versioning) {
-    return "This bucket has versioning but not object lock. SilentSilo will never delete from it, but anything holding the credentials still can, and old versions stay readable. That last part matters for revoking a key: use a bucket with object lock, or credentials without permission to delete.";
+    return "This bucket has versioning but no object lock. SilentSilo does not delete from it, but anyone with the access key can, and old versions stay readable after revoking a key. Use a bucket with object lock, or an access key that cannot delete.";
   }
-  return "This place reports no object lock and no versioning. SilentSilo will never delete from it, but nothing stops anything else with the same credentials. Credentials without permission to delete get you most of the way there.";
+  return "This backup storage reports no object lock and no versioning. SilentSilo does not delete from it, but anyone with the same sign-in details can. Use sign-in details that cannot delete.";
 }
 
 /**
@@ -94,6 +96,7 @@ export type CopyState = {
  */
 export function copyState(target: BackupTargetView, nowSeconds: number): CopyState {
   const behind = target.ops_behind;
+  const files = target.blobs_behind ?? 0;
   const retry =
     target.retry_in > 0 ? `Next attempt in ${describeDuration(target.retry_in)}.` : "";
 
@@ -101,14 +104,18 @@ export function copyState(target: BackupTargetView, nowSeconds: number): CopySta
     return {
       health: "never",
       headline: "Not written to yet",
-      detail: retry || "The next sync pass will write to it.",
+      detail: retry || "The next sync will write to it.",
     };
   }
 
   const age = Math.max(0, nowSeconds - target.last_success);
   const ago = `Last written ${describeDuration(age)} ago.`;
-  const backlog =
-    behind > 0 ? `${behind} change${behind === 1 ? "" : "s"} not there yet.` : "";
+  const backlog = [
+    files > 0 ? `${files} file${files === 1 ? "" : "s"} not there yet.` : "",
+    behind > 0 ? `${behind} change${behind === 1 ? "" : "s"} not there yet.` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   // Once a copy has gone stale the age is the headline, whatever the backlog
   // says. A disk unplugged since spring being "3 changes behind" invites
@@ -122,11 +129,17 @@ export function copyState(target: BackupTargetView, nowSeconds: number): CopySta
     };
   }
 
-  if (behind > 0) {
+  // Files lead: a change that has not gone out is a name and a size, a
+  // file that has not gone out is the thing itself.
+  if (files > 0 || behind > 0) {
     return {
       health: "behind",
-      headline: `${behind} change${behind === 1 ? "" : "s"} not there yet`,
-      detail: retry ? `${ago} ${retry}` : ago,
+      headline: files > 0
+        ? `${files} file${files === 1 ? "" : "s"} not there yet`
+        : `${behind} change${behind === 1 ? "" : "s"} not there yet`,
+      detail: [files > 0 && behind > 0 ? `${behind} change${behind === 1 ? "" : "s"} too.` : "", ago, retry]
+        .filter(Boolean)
+        .join(" "),
     };
   }
 
@@ -152,7 +165,7 @@ export function currentCopies(targets: BackupTargetView[], nowSeconds: number): 
  * a thousand small records are what is left.
  */
 export function seedHeadline(p: SeedProgress): string {
-  const objects = `${p.objects_done} of ${p.objects_total} object${
+  const objects = `${p.objects_done} of ${p.objects_total} item${
     p.objects_total === 1 ? "" : "s"
   }`;
   if (p.bytes_total <= 0) return `Copying: ${objects}.`;

@@ -23,10 +23,15 @@ const RUNS_ON_OPEN = [
   "msc",
   "msi",
   "msix",
+  "msixbundle",
   "appx",
+  "appxbundle",
+  "appinstaller",
   "msp",
   "mst",
+  "msu",
   "pif",
+  "ppkg",
   "scr",
   // Scripts. The `msh` family is the shell PowerShell grew out of, and
   // still opens.
@@ -40,6 +45,8 @@ const RUNS_ON_OPEN = [
   "mshxml",
   "ps1",
   "psc1",
+  "psm1",
+  "sct",
   "vb",
   "vbe",
   "vbs",
@@ -47,6 +54,14 @@ const RUNS_ON_OPEN = [
   "wsc",
   "wsf",
   "wsh",
+  // An Excel add-in runs its code as soon as Excel loads it.
+  "xll",
+  // Disk images mount on a double click, and what is inside them loses the
+  // downloaded-from-elsewhere mark that makes Windows warn before running it.
+  "img",
+  "iso",
+  "vhd",
+  "vhdx",
   // Files whose whole purpose is to point at something else, which is what
   // makes them worth a question: what opens is not what the name describes.
   "appref-ms",
@@ -54,11 +69,13 @@ const RUNS_ON_OPEN = [
   "inf",
   "library-ms",
   "lnk",
+  "rdp",
   "reg",
   "scf",
   "searchconnector-ms",
   "settingcontent-ms",
   "url",
+  "wsb",
   // Help and diagnostics, both of which execute and both of which have been
   // used to do so on purpose.
   "chm",

@@ -4,7 +4,9 @@ import { test, expect } from "@playwright/test";
 // unlocks it, land in the files. Nothing else in the app matters if this
 // path breaks, and no unit test can see it.
 
-test("creating a silo leads into enrolment and out to the files", async ({ page }) => {
+test("creating a silo leads into enrolment, the recovery code, backup, and the files", async ({
+  page,
+}) => {
   await page.goto("/?mock=empty");
   await expect(page.getByRole("heading", { name: "New silo" })).toBeVisible();
 
@@ -19,6 +21,14 @@ test("creating a silo leads into enrolment and out to the files", async ({ page 
   await expect(
     page.getByText("Security key enrolled. It opens this silo from now on."),
   ).toBeVisible();
+
+  // The two steps a new silo needs, each of which can wait.
+  await expect(page.getByRole("heading", { name: "Recovery code" })).toBeVisible();
+  await page.getByRole("button", { name: "Create a recovery code" }).click();
+  await page.getByRole("button", { name: "I've written it down" }).click();
+  await expect(page.getByRole("heading", { name: "Backup storage" })).toBeVisible();
+  await page.getByRole("button", { name: "Set up later" }).click();
+
   await expect(page.getByText("Invoices")).toBeVisible();
 });
 

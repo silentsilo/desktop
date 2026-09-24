@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test("unlocking opens the files", async ({ page }) => {
   await page.goto("/?mock=unlock");
   await expect(
-    page.getByText("Security key ready. Windows will show a native prompt."),
+    page.getByText("Windows will show its own prompt."),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Unlock" }).click();
@@ -21,7 +21,7 @@ test("the recovery path is reachable and refuses an empty code", async ({ page }
 
   await page.getByRole("button", { name: "Back" }).click();
   await expect(
-    page.getByText("Security key ready. Windows will show a native prompt."),
+    page.getByText("Windows will show its own prompt."),
   ).toBeVisible();
 });
 
@@ -38,7 +38,7 @@ test("shell uploads queued while locked surface right after unlock", async ({ pa
 test("on a Mac the same screens use the Mac's own words", async ({ page }) => {
   await page.goto("/?mock=unlock&dialogs&os=macos");
   await expect(
-    page.getByText("Security key ready. macOS will show a native prompt."),
+    page.getByText("macOS will show its own prompt."),
   ).toBeVisible();
   await expect(page.getByText(/Windows will show/)).toHaveCount(0);
 

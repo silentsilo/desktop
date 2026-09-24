@@ -55,7 +55,7 @@ function fileLine(f: FileFact): string {
 function describeKeys(k: KeyCounts | null): string {
   if (k === null) return "cannot be read";
   if (k.total === 0) return "none enrolled";
-  const parts = [`${k.platform} sealed to a machine`, `${k.portable} portable`];
+  const parts = [`${k.platform} sealed to a computer`, `${k.portable} portable`];
   if (k.revoked > 0) parts.push(`${k.revoked} retired`);
   return `${k.total} enrolled (${parts.join(", ")})`;
 }

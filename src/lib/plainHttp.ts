@@ -15,4 +15,4 @@ export function isPlainHttp(address: string): boolean {
 }
 
 export const PLAIN_HTTP_WARNING =
-  "Plain HTTP. The files stay encrypted, but the key used to reach this storage travels readable, and so does the size and timing of everything you store. Use https:// unless this is a machine on your own network.";
+  "Plain HTTP. Files stay encrypted, but the sign-in details for this storage are sent readable, as are the size and timing of what you store. Use https:// unless this server is on your own network.";

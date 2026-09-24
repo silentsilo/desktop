@@ -74,15 +74,17 @@ export function backupHeadline(
     const one = unsyncedCount === 1;
     const files = `${unsyncedCount} file${one ? "" : "s"}`;
     const size = unsyncedBytes > 0 ? ` (${formatBytes(unsyncedBytes)})` : "";
-    const ops = pendingOps > 0 ? ` ${changes(pendingOps)} still to send too.` : "";
-    return `${files}${size} not backed up yet. The next pass retries ${one ? "it" : "them"}.${ops}`;
+    // One phrase for pending work everywhere it is shown: the sidebar, the
+    // status bar and this card used to say it three different ways.
+    const ops = pendingOps > 0 ? ` and ${changes(pendingOps)}` : "";
+    return `${files}${size}${ops} waiting to sync. The next sync retries ${one && !ops ? "it" : "them"}.`;
   }
   if (pendingOps > 0) {
-    return `${changes(pendingOps)} waiting to be sent.`;
+    return `${changes(pendingOps)} waiting to sync.`;
   }
   return lastSyncAt
-    ? "Everything is backed up."
-    : "Connected. The first pass runs in the background.";
+    ? "Everything is synced."
+    : "Connected. The first sync runs in the background.";
 }
 
 export type Status =
@@ -94,15 +96,15 @@ export type Status =
 /// One line summarising what a pass actually did, rather than a bare "done".
 export function describeSync(r: SyncReport): string {
   if (r.needs_rejoin) {
-    return "This silo's key was changed from another device, and this device was not kept. Remove the silo here and rejoin it with a current security key or the recovery code.";
+    return "The encryption key of this silo was replaced on another device, and this computer's key was not kept. Remove the silo here, then choose Set up from backup storage and use a current key or the recovery code.";
   }
   // Never the rejoin wording: rejoining reads the same content key, so it
   // would fail on the same object and leave the user going round a loop.
   if (r.key_material_replaced) {
-    return "The content key in your backup storage does not match this silo, while the changes stored beside it do. A key change cannot leave it that way, so that one file was replaced or put back from an older copy. Nothing was sent. Restore that file from a copy of the storage, or point this silo at storage that still has the right one.";
+    return "The key file in your backup storage does not match this silo, although the changes beside it do. That file was replaced or put back from an older copy. Nothing was sent. Restore it from another copy of the backup storage, or connect backup storage that has the right one.";
   }
   if (r.needs_rebuild) {
-    return "This device is too far behind to catch up. It has to be set up again from the current state.";
+    return "This computer is too far behind to catch up. It has to be set up again from the current state.";
   }
   const parts: string[] = [];
   if (r.ops_pushed > 0) parts.push(`${r.ops_pushed} change${r.ops_pushed === 1 ? "" : "s"} sent`);
@@ -112,21 +114,22 @@ export function describeSync(r: SyncReport): string {
   if (r.blobs_failed > 0) parts.push(`${r.blobs_failed} failed, will retry`);
   const restored = r.blobs_restored ?? 0;
   if (restored > 0)
-    parts.push(`${restored} missing file${restored === 1 ? "" : "s"} put back in the backup`);
+    parts.push(`${restored} missing file${restored === 1 ? "" : "s"} put back in backup storage`);
   const unreadable = r.unreadable?.length ?? 0;
   if (unreadable > 0)
     parts.push(
-      `${unreadable} object${unreadable === 1 ? "" : "s"} in the backup could not be read`,
+      `${unreadable} file${unreadable === 1 ? "" : "s"} in backup storage could not be read`,
     );
   // Housekeeping, mentioned rather than announced: the user did not ask for
   // it and nothing of theirs changed.
-  if (r.compacted > 0) parts.push(`history tidied (${r.compacted} old records dropped)`);
+  if (r.compacted > 0)
+    parts.push(`${r.compacted} old change${r.compacted === 1 ? "" : "s"} combined`);
   if (parts.length > 0) return parts.join(", ");
 
   // A pass that stood down reached nothing, so its zeroes say nothing about
   // whether the copies are current. Reporting them as "up to date" is how a
   // backup still uploading gets announced as finished.
-  if (r.skipped) return "A backup was already running.";
+  if (r.skipped) return "A sync was already running.";
 
   // Nothing moved. That is only good news when every target was reachable:
   // a pass where each one failed produces exactly these zeroes, and saying

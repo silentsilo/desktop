@@ -29,6 +29,9 @@ pub enum Code {
     BadRequest,
     Busy,
     NoAuthenticator,
+    /// Unlocked, but its logins could not be read. Newer than the first
+    /// extension, which shows its generic line for it.
+    ReadFailed,
 }
 
 impl Code {
@@ -41,6 +44,7 @@ impl Code {
             Code::BadRequest => "bad-request",
             Code::Busy => "busy",
             Code::NoAuthenticator => "no-authenticator",
+            Code::ReadFailed => "read-failed",
         }
     }
 
@@ -55,11 +59,13 @@ impl Code {
             Code::NoAuthenticator => {
                 "This silo has no security key or Windows Hello set up, so no fill can be confirmed."
             }
+            Code::ReadFailed => "SilentSilo could not read this silo's logins.",
         }
     }
 }
 
-/// An error answer: a code and the sentence the popup shows as it is.
+/// An error answer: a code, and a sentence for logs. The extension shows
+/// its own text for each code, never this one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Failure {
     pub code: Code,
@@ -742,6 +748,10 @@ mod tests {
             serde_json::from_slice(&error_answer("4", &Failure::new(Code::NoAuthenticator)))
                 .unwrap();
         assert_eq!(v["code"], "no-authenticator");
+
+        let v: serde_json::Value =
+            serde_json::from_slice(&error_answer("4", &Failure::new(Code::ReadFailed))).unwrap();
+        assert_eq!(v["code"], "read-failed");
 
         let v: serde_json::Value =
             serde_json::from_slice(&fill_answer("4", "alex", "p\"w\u{1}")).unwrap();

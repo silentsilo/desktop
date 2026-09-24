@@ -24,6 +24,13 @@ name: Release everything that is not Windows
 # lockfile records, so the binary on the release page comes from exactly the
 # revision the installer was compiled against. Same logic as the local script
 # uses for the Windows one.
+#
+# The build jobs never see the updater key or a token that can write. They run
+# vite, every npm install script, every cargo build script and the bundler,
+# and any of those can plant something for a later step of the same job (a
+# changed node_modules, a line in $GITHUB_ENV). So they only build and upload
+# workflow artifacts. The `publish` job signs and attaches, from a fresh
+# checkout, with `npm ci --ignore-scripts` and no build cache.
 on:
   push:
     tags:
@@ -37,7 +44,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # The extraction tool is the answer to "what if the project disappears", so
@@ -46,17 +53,14 @@ jobs:
   # Windows application first. It is a plain binary with no interface and no
   # security key, so one source builds everywhere.
   build-extract:
-    # A tag, never a manual run: on a branch `github.ref_name` is the branch
-    # name, and attaching to it would open a release called "main".
+    # A tag, never a manual run: the extractor answers a tag, and a manual run
+    # asks whether the app builds.
     if: startsWith(github.ref, 'refs/tags/')
     strategy:
       # One platform failing must not withhold the binary that did build: the
       # release is a draft either way, and a missing macOS binary is something
       # to notice rather than a reason to have no Linux one.
       fail-fast: false
-      # Whichever job runs first creates the draft this uploads into. In
-      # parallel they would race to create the same release, so they queue.
-      max-parallel: 1
       matrix:
         include:
           - os: ubuntu-latest
@@ -69,6 +73,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
       # The pin is the single source of truth for which core revision the app
       # was compiled against. Read from the manifest and the lockfile rather
       # than typed here, and the two must agree with each other and with what
@@ -103,14 +109,11 @@ jobs:
             exit 1
           fi
 
+      # No build cache in any release job: a cache is written by other runs,
+      # and what it restores ends up in a binary people download.
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           toolchain: 1.97.1
-
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          key: extract-${{ matrix.os }}
-          workspaces: core-src
 
       # The keychain crate reaches for D-Bus on Linux, because the vault
       # stores credentials in the OS keychain and the persistent Linux
@@ -148,42 +151,15 @@ jobs:
           mkdir -p dist
           cp "core-src/target/release/${{ matrix.built }}" "dist/${{ matrix.asset }}"
 
-      # Signed with the same updater key as the installer. This is the tool
-      # someone downloads when they have lost confidence in everything else,
-      # so "is this the binary the project published" has to be answerable
-      # without trusting GitHub. Verify with minisign against the public key
-      # in tauri.conf.json, also published as SIGNING-PUBKEY.txt in core.
-      # The signer comes from the lockfile, not from whatever npm serves
-      # today: it runs with the updater key in its environment.
-      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci --ignore-scripts
-      - name: Sign it
-        shell: bash
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npx --no-install tauri signer sign "dist/${{ matrix.asset }}"
-
-      - name: Attach it to the draft
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref_name }}
-          draft: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          body: "Built against silentsilo/core ${{ steps.pin.outputs.tag }} (${{ steps.pin.outputs.commit }})."
-          files: |
-            dist/${{ matrix.asset }}
-            dist/${{ matrix.asset }}.sig
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          retention-days: 7
 
   # The macOS application: a universal binary (Apple silicon and Intel) in a
-  # .app inside a .dmg, plus the .app.tar.gz and its signature the updater
-  # downloads. Built against the core commit the lockfile pins, like
+  # .app inside a .dmg, plus the .app.tar.gz the updater downloads, signed
+  # by `publish`. Built against the core commit the lockfile pins, like
   # everything else, through `--locked`.
   #
   # Signing and notarisation happen inside `tauri build` when the APPLE_*
@@ -193,32 +169,25 @@ jobs:
   # not build it, and an updater manifest pointing at one would offer an
   # update nobody can install. So a build without a Developer ID is kept as
   # a workflow artifact, for looking at, and only a build this job has
-  # verified as signed and notarised is attached to the draft.
+  # verified as signed and notarised is attached to the draft by `publish`.
   #
   # The macOS entries of latest.json are not written yet. When they are, the
   # trap to know: the updater asks for `darwin-aarch64` and `darwin-x86_64`
   # and never for `darwin-universal`, so a universal build needs both keys
   # pointing at the same archive.
   build-macos-app:
-    # After the extractors, so the draft exists before this attaches to it:
-    # two jobs creating the same release at once would race. `!cancelled()`
-    # rather than plain `needs`, because the matrix above sets
-    # `fail-fast: false` on purpose. One platform's extractor failing must
-    # not also withhold the application.
-    #
     # Manual runs reach here too, so that "does it build" can be answered
-    # without a tag. The two steps that touch a release carry the tag
-    # condition themselves, which is where it belongs: without it, a manual
-    # run on a machine that did have the Apple secrets would attach to a
-    # release named after the branch.
-    needs: build-extract
-    if: ${{ !cancelled() }}
+    # without a tag.
     runs-on: macos-latest
+    outputs:
+      signed: ${{ steps.apple.outputs.signed }}
     # Two cold cargo release builds, one per architecture, plus notarisation,
     # which is a queue on Apple's side and not a local step.
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: "22"
@@ -228,27 +197,7 @@ jobs:
         with:
           toolchain: 1.97.1
           targets: aarch64-apple-darwin,x86_64-apple-darwin
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          key: macos-app
       - run: npm ci
-
-      # Same two lines as the extractor job reads. Repeated rather than
-      # taken from `needs`, because a matrix job publishes no outputs, and
-      # the release body has to name the core revision either way.
-      - name: Which core revision this build is pinned to
-        id: pin
-        shell: bash
-        run: |
-          tag=$(grep -m1 -oE 'silentsilo-core = \{ git = "[^"]+", tag = "([^"]+)"' Cargo.toml                 | grep -oE 'tag = "[^"]+"' | cut -d'"' -f2)
-          commit=$(awk '/^name = "silentsilo-core"$/{f=1} f && /^source = /{print; exit}' Cargo.lock                    | grep -oE '#[0-9a-f]{40}' | tr -d '#')
-          if [ -z "$tag" ] || [ -z "$commit" ]; then
-            echo "::error::Cargo.toml pins no core tag, or Cargo.lock records no commit for it"
-            exit 1
-          fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "commit=$commit" >> "$GITHUB_OUTPUT"
-          echo "core $tag at $commit"
 
       # Secrets are not readable in `if:`, so the decision is made once here
       # and read as a step output below. All six or none: a half-configured
@@ -298,7 +247,7 @@ jobs:
       # in that tree could read the key that signs updates for every install.
       # `createUpdaterArtifacts: false` is what lets it out, since the
       # bundler refuses to make an updater artifact it cannot sign, so the
-      # .app.tar.gz is made and signed in the two steps below instead. The
+      # .app.tar.gz is made below and signed by `publish`. The
       # Apple secrets stay here: codesigning and notarisation happen inside
       # `tauri build` and there is no separate step to move them to.
       - name: Build, unsigned
@@ -335,20 +284,6 @@ jobs:
           tar -C "$out" -czf "$out/$app.tar.gz" "$app"
           ls -l "$out"
 
-      # The one step that sees the updater key. `--no-install` so the signer
-      # is the one the lockfile pins rather than whatever npm serves today:
-      # it runs with the key in its environment.
-      - name: Sign the updater archive
-        shell: bash
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          out=target/universal-apple-darwin/release/bundle/macos
-          archive=$(ls "$out"/*.app.tar.gz)
-          npx --no-install tauri signer sign "$archive"
-          [ -f "$archive.sig" ] || { echo "::error::no signature for $archive"; exit 1; }
-
       # The workspace root is the repository root, so cargo and the bundler
       # write to target\, not to src-tauri\target\. The staging directory is
       # not `dist`: that is the frontend's build output, which `tauri build`
@@ -360,7 +295,7 @@ jobs:
           out=target/universal-apple-darwin/release/bundle
           mkdir -p dist-macos
           cp "$out"/dmg/*.dmg dist-macos/
-          cp "$out"/macos/*.app.tar.gz "$out"/macos/*.app.tar.gz.sig dist-macos/
+          cp "$out"/macos/*.app.tar.gz dist-macos/
           ls -l dist-macos
 
       # What the gate above promised, checked against the artifact rather
@@ -377,47 +312,13 @@ jobs:
           spctl --assess --type exec --verbose=4 "$app"
           xcrun stapler validate "$app"
 
-      - name: Keep the unsigned build as an artifact
-        if: steps.apple.outputs.signed == 'false'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      # Signed or not, it goes to `publish` as an artifact; only a build the
+      # step above proved signed and notarised is attached there.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: macos-app-unsigned
+          name: macos-app
           path: dist-macos/
           retention-days: 7
-
-      # `draft: true` is applied to an existing release too, so attaching to
-      # a tag that has already been published would flip it back to draft and
-      # 404 every asset URL, latest.json's installer included. A re-run is
-      # exactly when that happens, so it is checked rather than assumed.
-      - name: Refuse to attach to a published release
-        if: ${{ steps.apple.outputs.signed == 'true' && startsWith(github.ref, 'refs/tags/') }}
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          state=$(gh release view "${{ github.ref_name }}" --json isDraft -q .isDraft 2>/dev/null || echo absent)
-          if [ "$state" = "false" ]; then
-            echo "::error::${{ github.ref_name }} is already published. Attaching here would put it back in draft and break every download. Upload dist-macos/ by hand instead."
-            exit 1
-          fi
-          echo "release is $state, safe to attach"
-
-      - name: Attach the signed build to the draft
-        if: ${{ steps.apple.outputs.signed == 'true' && startsWith(github.ref, 'refs/tags/') }}
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref_name }}
-          draft: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          # Named rather than globbed, so nothing that happens to be in the
-          # directory rides along onto the release page.
-          body: "Built against silentsilo/core ${{ steps.pin.outputs.tag }} (${{ steps.pin.outputs.commit }})."
-          files: |
-            dist-macos/*.dmg
-            dist-macos/*.app.tar.gz
-            dist-macos/*.app.tar.gz.sig
 
   # The Linux application: a .deb for the Debian and Ubuntu family, and an
   # AppImage for everything else. No certificate and no secrets beyond the
@@ -437,8 +338,6 @@ jobs:
   # hand one of the two formats a file it cannot install. Write both, never
   # the bare one.
   build-linux-app:
-    needs: build-extract
-    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     container: ubuntu:22.04
     timeout-minutes: 60
@@ -465,6 +364,8 @@ jobs:
             xdg-utils patchelf squashfs-tools libgdk-pixbuf-2.0-dev
 
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: "22"
@@ -473,9 +374,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           toolchain: 1.97.1
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          key: linux-app
       - run: npm ci
 
       # `APPIMAGE_EXTRACT_AND_RUN` because the AppImage tooling mounts itself
@@ -487,8 +385,7 @@ jobs:
       # environment of all of them: one compromised dependency anywhere in
       # that tree could read the key that signs updates for every install.
       # `createUpdaterArtifacts: false` is what lets it out, since the
-      # bundler refuses to make an updater artifact it cannot sign. The
-      # signing step below is the only place the key appears.
+      # bundler refuses to make an updater artifact it cannot sign.
       - name: Build
         env:
           APPIMAGE_EXTRACT_AND_RUN: 1
@@ -499,8 +396,7 @@ jobs:
       #
       # Linux has no updater archive: unlike macOS, where the updater
       # downloads a .app.tar.gz, here it downloads the .deb or the .AppImage
-      # itself. The build above makes neither signature, so both are made in
-      # the step after this one.
+      # itself. The build above makes neither signature; `publish` does.
       - name: Collect the bundle
         shell: bash
         run: |
@@ -512,61 +408,117 @@ jobs:
           cp "$out"/appimage/*.AppImage dist-linux/
           ls -l dist-linux
 
-      # The one step that sees the updater key. The updater can install a
-      # .deb through pkexec, so the .deb needs a signature like everything
-      # else it might download. `--no-install` so the signer is the one the
-      # lockfile pins rather than whatever npm serves today: it runs with the
-      # key in its environment. A file that ends up without a signature fails
-      # the job rather than reaching the draft, since an asset the manifest
-      # points at and cannot prove is an update nobody can install.
-      - name: Sign the bundles
-        shell: bash
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          for file in dist-linux/*.deb dist-linux/*.AppImage; do
-            [ -e "$file" ] || continue
-            if [ -f "$file.sig" ]; then
-              echo "already signed: $file"
-            else
-              echo "signing: $file"
-              npx --no-install tauri signer sign "$file"
-            fi
-            [ -f "$file.sig" ] || { echo "::error::no signature for $file"; exit 1; }
-          done
-          ls -l dist-linux
-
-      # Kept whatever the trigger was. On a manual run this is the whole
-      # point; on a tag it is the copy to look at while the draft is checked.
+      # Kept whatever the trigger was, and what `publish` signs. On a manual
+      # run this is the whole point.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: linux-app
           path: dist-linux/
           retention-days: 7
 
-      # Same guard as the macOS job: `draft: true` is applied to an existing
-      # release too, so attaching to a tag that has already been published
-      # would put it back in draft and 404 every asset URL.
+  # The one job that sees the updater key and a token that can write. It
+  # builds nothing: a fresh checkout for the lockfile and the pin, the signer
+  # from `npm ci --ignore-scripts`, and the artifacts the jobs above left.
+  #
+  # `!cancelled()` because one platform failing must not withhold what did
+  # build: the release is a draft either way. A manual run signs too, so the
+  # path is exercised before a tag, and attaches nothing.
+  publish:
+    needs: [build-extract, build-macos-app, build-linux-app]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Which core revision this build is pinned to
+        id: pin
+        shell: bash
+        run: |
+          tag=$(grep -m1 -oE 'silentsilo-core = \{ git = "[^"]+", tag = "([^"]+)"' Cargo.toml \
+                | grep -oE 'tag = "[^"]+"' | cut -d'"' -f2)
+          commit=$(awk '/^name = "silentsilo-core"$/{f=1} f && /^source = /{print; exit}' Cargo.lock \
+                   | grep -oE '#[0-9a-f]{40}' | tr -d '#')
+          if [ -z "$tag" ] || [ -z "$commit" ]; then
+            echo "::error::Cargo.toml pins no core tag, or Cargo.lock records no commit for it"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "core $tag at $commit"
+
+      # The signer as the lockfile pins it, and nothing run while installing.
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "22"
+      - run: npm ci --ignore-scripts
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: artifacts
+
+      # What goes on the draft, and nothing else. Extractors always; macOS
+      # only when its job proved the build signed and notarised; Linux only
+      # once SHIP_LINUX is "true", since the platforms debut together.
+      - name: Choose what ships
+        shell: bash
+        env:
+          MAC_SIGNED: ${{ needs.build-macos-app.outputs.signed }}
+          SHIP_LINUX: ${{ vars.SHIP_LINUX }}
+        run: |
+          mkdir -p ship
+          for f in artifacts/silentsilo-extract-*/silentsilo-extract-*; do
+            if [ -f "$f" ]; then cp "$f" ship/; fi
+          done
+          if [ "$MAC_SIGNED" = "true" ]; then
+            cp artifacts/macos-app/*.dmg artifacts/macos-app/*.app.tar.gz ship/
+          fi
+          if [ "$SHIP_LINUX" = "true" ]; then
+            cp artifacts/linux-app/*.deb artifacts/linux-app/*.AppImage ship/
+          fi
+          ls -l ship
+
+      # Everything the updater might download gets a signature, and the
+      # extractors too: "is this the binary the project published" has to be
+      # answerable without trusting GitHub. Verify with minisign against the
+      # public key in tauri.conf.json, also SIGNING-PUBKEY.txt in core. The
+      # .dmg is installed by hand and is not signed here.
+      - name: Sign
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          for file in ship/*; do
+            case "$file" in *.dmg|*.sig) continue ;; esac
+            npx --no-install tauri signer sign "$file"
+            [ -f "$file.sig" ] || { echo "::error::no signature for $file"; exit 1; }
+          done
+          ls -l ship
+
+      # `draft: true` is applied to an existing release too, so attaching to
+      # a tag that has already been published would flip it back to draft and
+      # 404 every asset URL, latest.json's installer included. A re-run is
+      # exactly when that happens, so it is checked rather than assumed.
       - name: Refuse to attach to a published release
-        if: startsWith(github.ref, 'refs/tags/') && vars.SHIP_LINUX == 'true'
+        if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          state=$(gh release view "${{ github.ref_name }}" --json isDraft -q .isDraft 2>/dev/null || echo absent)
+          state=$(gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" --json isDraft -q .isDraft 2>/dev/null || echo absent)
           if [ "$state" = "false" ]; then
-            echo "::error::${{ github.ref_name }} is already published. Attaching here would put it back in draft and break every download. Upload dist-linux/ by hand instead."
+            echo "::error::${{ github.ref_name }} is already published. Attaching here would put it back in draft and break every download. Upload the files by hand instead."
             exit 1
           fi
           echo "release is $state, safe to attach"
 
-      # Linux is built on every tag and kept as the artifact above, but it
-      # reaches the release only once the repository variable SHIP_LINUX is
-      # "true": Windows, Linux and macOS debut together at one version, so a
-      # Linux bundle on a Windows-only release would be a launch nobody chose.
       - name: Attach to the draft
-        if: startsWith(github.ref, 'refs/tags/') && vars.SHIP_LINUX == 'true'
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -574,8 +526,13 @@ jobs:
           tag_name: ${{ github.ref_name }}
           draft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-          files: |
-            dist-linux/*.deb
-            dist-linux/*.deb.sig
-            dist-linux/*.AppImage
-            dist-linux/*.AppImage.sig
+          body: "Built against silentsilo/core ${{ steps.pin.outputs.tag }} (${{ steps.pin.outputs.commit }})."
+          files: ship/*
+
+      - name: Keep the signed files of a manual run
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: signed
+          path: ship/
+          retention-days: 7

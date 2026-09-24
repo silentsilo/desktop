@@ -47,7 +47,7 @@ export function FavoritesPanel({
     }
     if (credentials.length > 0) {
       parts.push(
-        `${credentials.length} ${credentials.length === 1 ? "credential" : "credentials"}`
+        `${credentials.length} ${credentials.length === 1 ? "entry" : "entries"} from Passwords`
       );
     }
     return parts.join(" · ");
@@ -62,8 +62,8 @@ export function FavoritesPanel({
           <div className="favorites-empty-state">
             <Star size={28} />
             <p className="hint">
-              Right-click a file or folder and choose Add to favourites, or star a credential from
-              its page. Favourites travel with the silo, so they are the same on every device.
+              Right-click a file or folder and choose Add to favourites, or star an entry in
+              Passwords. Favourites travel with the silo, so they are the same on every device.
             </p>
           </div>
         ) : (
@@ -115,7 +115,7 @@ export function FavoritesPanel({
 
             {credentials.length > 0 && (
               <section className="favorites-section">
-                <h3>Credentials</h3>
+                <h3>Passwords</h3>
                 <ul className="favorites-grid">
                   {credentials.map((entry) => {
                     const Icon = TYPE_ICONS[typeOf(entry)];
@@ -126,7 +126,7 @@ export function FavoritesPanel({
                           type="button"
                           className="favorites-card-open"
                           onClick={() => onOpenCredential(entry.id)}
-                          title={`Open ${entry.service} in Credentials`}
+                          title={`Open ${entry.service} in Passwords`}
                         >
                           <span className="favorites-card-icon">
                             <Icon size={26} />

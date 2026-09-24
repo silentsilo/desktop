@@ -39,6 +39,11 @@ if (-not $RustOnly) {
     Invoke-Step 'lint' { npm run lint }
     Invoke-Step 'frontend tests' { npm test }
     Invoke-Step 'frontend build' { npm run build }
+    Invoke-Step 'release scripts' {
+        powershell -NoProfile -ExecutionPolicy Bypass -File scripts\release-manifest.test.ps1
+        if ($LASTEXITCODE -ne 0) { return }
+        powershell -NoProfile -ExecutionPolicy Bypass -File scripts\browser-host-release.test.ps1
+    }
 }
 
 Invoke-Step 'fmt' { cargo fmt --all -- --check }

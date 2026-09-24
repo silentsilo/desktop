@@ -28,7 +28,7 @@ use hex::encode as hex_encode;
 pub(crate) const BUILT_IN: &str = if cfg!(target_os = "macos") {
     "Touch ID"
 } else if cfg!(target_os = "linux") {
-    "the built-in authenticator"
+    "the built-in key"
 } else {
     "Windows Hello"
 };
@@ -58,14 +58,12 @@ fn step_one_message(authenticator: Authenticator) -> &'static str {
                 "Confirm with Touch ID to secure the silo."
             } else if cfg!(target_os = "linux") {
                 // Unreachable: nothing offers this authenticator on Linux.
-                "Confirm with the built-in authenticator to secure the silo."
+                "Confirm with the built-in key to secure the silo."
             } else {
                 "Confirm with Windows Hello to secure the silo."
             }
         }
-        Authenticator::SecurityKey => {
-            "Touch your security key to create the enrollment credential."
-        }
+        Authenticator::SecurityKey => "Touch your security key to enrol it.",
     }
 }
 
@@ -162,8 +160,8 @@ async fn settle_between_ceremonies() {
 
 /// Like `run_fido`, but retries a ceremony that failed for a reason the
 /// user did not choose, backing off further each time. Never after a
-/// cancellation: re-opening the dialog of someone who just pressed Cancel
-/// is worse than the error was.
+/// cancellation or a timeout: re-opening the dialog of someone who just
+/// pressed Cancel, or let it run out, is worse than the error was.
 async fn run_fido_settling<T, F>(app: &AppHandle, f: F) -> Result<T, String>
 where
     T: Send + 'static,
@@ -175,7 +173,7 @@ where
     };
 
     for delay in [800, 1800] {
-        if last.to_lowercase().contains("cancel") {
+        if ended_by_user(&last) {
             break;
         }
         sleep_ms(delay).await;
@@ -187,6 +185,18 @@ where
 
     Err(last)
 }
+
+/// Whether a ceremony ended because the person cancelled it or let it time
+/// out, the two failures a retry must not answer with another prompt.
+fn ended_by_user(error: &str) -> bool {
+    let lower = error.to_lowercase();
+    ["cancel", "timeout", "timed out", "time out"]
+        .iter()
+        .any(|word| lower.contains(word))
+}
+
+/// The longest key name the app accepts, when adding a key or renaming one.
+const MAX_KEY_LABEL: usize = 64;
 
 /// Runs blocking work (filesystem walks, encryption over large files) on a
 /// dedicated thread rather than the async task the Tauri command runs in,
@@ -287,18 +297,27 @@ fn authority(proof: Option<&silentsilo_vault::OrgProof>) -> silentsilo_vault::Au
     }
 }
 
-fn ensure_session_for_enrollment(app: &AppHandle, state: &State<AppState>) -> Result<(), String> {
+async fn ensure_session_for_enrollment(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+) -> Result<(), String> {
     if state.focused_session()?.is_some() {
         return Ok(());
     }
     let creds = crate::state::silo_credentials(app)?;
     let root = vault_dir(app)?;
     if is_fido_enrolled(&root) {
-        return Err("A security key is already enrolled on this silo".into());
+        return Err("A key is already enrolled on this silo.".into());
     }
-    let session = VaultSession::open_with_device_secret(root, &creds.device_secret)
-        .map_err(|e| e.to_string())?;
-    crate::state::open_focused_session(app, session)
+    // The device secret goes through Argon2id: blocking pool.
+    let app = app.clone();
+    run_blocking(move || {
+        let _opening = crate::state::opening(&app, &root);
+        let session = VaultSession::open_with_device_secret(root.clone(), &creds.device_secret)
+            .map_err(|e| e.to_string())?;
+        crate::state::open_focused_session(&app, session)
+    })
+    .await
 }
 
 /// Enrols the silo's first key.
@@ -324,7 +343,7 @@ pub async fn fido_enroll_primary(
         // one motherboard was never holding escrow at all.
         if authenticator == Authenticator::ThisDevice {
             return Err(format!(
-                "{BUILT_IN} is sealed to this computer, and an organisation key has to \
+                "{BUILT_IN} works only on this computer, and an organisation key has to \
                      open the silo from anywhere. Use a removable security key."
             ));
         }
@@ -336,16 +355,16 @@ pub async fn fido_enroll_primary(
 
     let root = vault_dir(&app)?;
     if is_fido_enrolled(&root) {
-        return Err("A security key is already enrolled on this silo".into());
+        return Err("A key is already enrolled on this silo.".into());
     }
 
-    ensure_session_for_enrollment(&app, &state)?;
+    ensure_session_for_enrollment(&app, &state).await?;
 
     let (vault_id, dek) = {
         let session_guard = state.focused_session()?;
         let session = session_guard
             .as_ref()
-            .ok_or_else(|| "Open a silo first, then enroll a security key".to_string())?;
+            .ok_or_else(|| "Open a silo first, then enrol a key.".to_string())?;
         (session.vault_id.to_string(), session.dek.clone())
     };
 
@@ -421,16 +440,19 @@ pub async fn fido_enroll_primary(
     // buys a third PIN prompt in a row. A failed snapshot is worth saying out
     // loud and no reason to fail the command: the vault is already committed
     // to FIDO by this point, and reporting the enrolment as failed would be
-    // the one answer that is certainly wrong.
-    {
+    // the one answer that is certainly wrong. Sealing the snapshot is disk
+    // and cipher work, so it runs on the blocking pool.
+    run_blocking(move || {
+        let state = app.state::<AppState>();
         let session_guard = state.focused_session()?;
         if let Some(session) = session_guard.as_ref()
             && let Err(e) = session.backup_locally()
         {
             crate::diagnostics::warn("enroll", format_args!("local snapshot failed: {e}"));
         }
-    }
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 /// Add another FIDO2 security key (any vendor). Vault must be unlocked.
@@ -448,13 +470,23 @@ pub async fn fido_add_key(
     authenticator: Option<Authenticator>,
     organisation: Option<bool>,
 ) -> Result<StoredFidoCredential, String> {
+    // Before any prompt: renaming refuses a longer name, and so does this.
+    let label = label
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    if label
+        .as_ref()
+        .is_some_and(|l| l.chars().count() > MAX_KEY_LABEL)
+    {
+        return Err("That name is too long.".into());
+    }
     let _sync = crate::commands::sync::hold_sync(&app).await?;
     let authenticator = authenticator.unwrap_or(Authenticator::SecurityKey);
     silentsilo_fido::require_fido_ready().map_err(|e| e.to_string())?;
 
     let root = vault_dir(&app)?;
     if !is_fido_enrolled(&root) {
-        return Err("Enroll the first security key before adding more".into());
+        return Err("Enrol the first key before adding more.".into());
     }
 
     let mut keys = load_fido_keys(&root).map_err(|e| e.to_string())?;
@@ -465,7 +497,7 @@ pub async fn fido_add_key(
     let policy = if organisation.unwrap_or(false) {
         if authenticator == Authenticator::ThisDevice {
             return Err(format!(
-                "{BUILT_IN} is sealed to this computer, and an organisation key has to \
+                "{BUILT_IN} works only on this computer, and an organisation key has to \
                      open the silo from anywhere. Use a removable security key."
             ));
         }
@@ -486,7 +518,7 @@ pub async fn fido_add_key(
         let session_guard = state.focused_session()?;
         let session = session_guard
             .as_ref()
-            .ok_or_else(|| "Unlock the silo first to add a security key".to_string())?;
+            .ok_or_else(|| "Unlock the silo first to add a key.".to_string())?;
         (session.vault_id.to_string(), session.dek.clone())
     };
 
@@ -502,7 +534,7 @@ pub async fn fido_add_key(
 
     let new_id_hex = hex_encode(&cred.credential_id);
     if keys.active().any(|k| k.credential_id == new_id_hex) {
-        return Err("This credential is already enrolled".into());
+        return Err("This key is already enrolled.".into());
     }
     // Re-enrolling a key that was removed while offline: drop the tombstone,
     // or the pass that publishes the new envelope would delete it again in
@@ -526,10 +558,7 @@ pub async fn fido_add_key(
     };
 
     let envelope_bytes = wrap_dek_bytes(&dek, &unlock.wrap_key).map_err(|e| e.to_string())?;
-    let label = label
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| format!("Key {}", keys.active().count() + 1));
+    let label = label.unwrap_or_else(|| format!("Key {}", keys.active().count() + 1));
 
     let (kind, derivation) = kind_and_derivation(authenticator);
     let stored = StoredFidoCredential {
@@ -600,7 +629,7 @@ pub fn fido_rename_key(app: AppHandle, credential_id: String, label: String) -> 
     if label.is_empty() {
         return Err("Give the key a name.".into());
     }
-    if label.chars().count() > 64 {
+    if label.chars().count() > MAX_KEY_LABEL {
         return Err("That name is too long.".into());
     }
 
@@ -608,7 +637,7 @@ pub fn fido_rename_key(app: AppHandle, credential_id: String, label: String) -> 
         .keys
         .iter_mut()
         .find(|k| k.credential_id == credential_id.trim())
-        .ok_or_else(|| "Security key not found".to_string())?;
+        .ok_or_else(|| "That key was not found.".to_string())?;
     key.label = label.to_string();
     // A label, so the set of keys that open the silo is unchanged.
     save_fido_keys(&root, &keys, silentsilo_vault::Authority::Machine)
@@ -647,7 +676,7 @@ pub async fn fido_remove_key(
     // unusable one would stand in for the key this machine needs.
     let removing_usable = keys.usable().any(|k| k.credential_id == credential_id);
     if removing_usable && keys.usable().count() <= 1 {
-        return Err("Keep at least one security key enrolled".into());
+        return Err("Keep at least one key enrolled.".into());
     }
 
     // An organisation's key is the company's way back into a silo it
@@ -670,7 +699,7 @@ pub async fn fido_remove_key(
         .iter_mut()
         .find(|k| !k.revoked && k.credential_id == credential_id)
     else {
-        return Err("Security key not found".into());
+        return Err("That key was not found.".into());
     };
 
     // Marked rather than dropped, so a delete that never reaches storage is
@@ -733,6 +762,9 @@ pub async fn fido_remove_key(
 pub struct RotateOutcome {
     /// Objects re-sealed across every target that accepts writes.
     pub resealed: usize,
+    /// Damaged objects that opened under no key before the change either,
+    /// left as they were.
+    pub unreadable: usize,
     /// Security keys that still open the silo. Everything else enrolled
     /// before now does not.
     pub kept: Vec<String>,
@@ -758,32 +790,126 @@ pub struct RotateOutcome {
 /// is renamed into place. Dying between the last two leaves the new key in
 /// force beside a snapshot under the old one, which is what
 /// `VaultPaths::db_enc_staged_path` exists for and what unlock now finishes.
+///
+/// The re-wrapped keys and the new recovery envelope commit with the key,
+/// in core, so no crash can leave the new key in force and nothing that
+/// opens it. Past the commit the session holds a key the silo no longer
+/// uses, so an error there locks.
 fn commit_keys_and_snapshot(
     app: &AppHandle,
     silo: &silentsilo_vault::SiloEntry,
     root: &std::path::Path,
     new_dek: &silentsilo_crypto::MasterDek,
+    keys: &silentsilo_vault::StoredFidoKeys,
+    authority: silentsilo_vault::Authority<'_>,
+    recovery: &silentsilo_vault::RecoveryEnvelope,
 ) -> Result<(), String> {
     let paths = silentsilo_vault::VaultPaths::new(root.to_path_buf());
     let staged_db = paths.db_enc_staged_path();
     {
         let state = app.state::<AppState>();
         let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
-        let session = sessions
-            .get(&silo.id)
-            .ok_or_else(|| "The silo closed part way through the change".to_string())?;
+        let session = sessions.get(&silo.id).ok_or_else(|| {
+            "The silo closed part way through replacing the encryption key.".to_string()
+        })?;
         session
             .stage_local_backup(new_dek, &staged_db)
             .map_err(|e| e.to_string())?;
     }
 
-    silentsilo_vault::rotation::commit_rotation(root).map_err(|e| e.to_string())?;
-    silentsilo_core::rename_with_retry(&staged_db, &paths.db_enc_path())
+    silentsilo_vault::rotation::commit_rotation_with(root, keys, authority, Some(recovery))
         .map_err(|e| e.to_string())?;
+    if let Err(e) = silentsilo_core::rename_with_retry(&staged_db, &paths.db_enc_path()) {
+        // Unlock adopts the staged snapshot, so this is finished there.
+        crate::commands::vault::lock_all_silos(app);
+        return Err(format!(
+            "The new key is in use, but this computer's copy of the silo was not updated ({e}). \
+             Unlock the silo again to finish."
+        ));
+    }
     // The spare copy as well, or the fallback path opens the old one and
-    // reports the database as corrupt.
-    std::fs::copy(paths.db_enc_path(), paths.db_enc_backup_path()).map_err(|e| e.to_string())?;
+    // reports the database as corrupt. The next lock writes it again.
+    let _ = std::fs::copy(paths.db_enc_path(), paths.db_enc_backup_path());
     Ok(())
+}
+
+/// [`commit_keys_and_snapshot`] on the blocking pool: it exports and seals
+/// the whole index, which held an async worker for as long as that took.
+async fn commit_blocking(
+    app: &AppHandle,
+    silo: &silentsilo_vault::SiloEntry,
+    root: &std::path::Path,
+    new_dek: &silentsilo_crypto::MasterDek,
+    keys: &silentsilo_vault::StoredFidoKeys,
+    org_proof: Option<silentsilo_vault::OrgProof>,
+    recovery: &silentsilo_vault::RecoveryEnvelope,
+) -> Result<(), String> {
+    let (app, silo, root, new_dek, keys, recovery) = (
+        app.clone(),
+        silo.clone(),
+        root.to_path_buf(),
+        new_dek.clone(),
+        keys.clone(),
+        recovery.clone(),
+    );
+    run_blocking(move || {
+        commit_keys_and_snapshot(
+            &app,
+            &silo,
+            &root,
+            &new_dek,
+            &keys,
+            authority(org_proof.as_ref()),
+            &recovery,
+        )
+    })
+    .await
+}
+
+/// A new recovery code and its envelope. Argon2id, so on the blocking pool.
+async fn recovery_envelope_blocking(
+    dek: &silentsilo_crypto::MasterDek,
+    kek: &silentsilo_crypto::ContentKek,
+) -> Result<(String, silentsilo_vault::RecoveryEnvelope), String> {
+    let (dek, kek) = (dek.clone(), kek.clone());
+    run_blocking(move || {
+        silentsilo_vault::create_recovery_envelope(&dek, &kek).map_err(|e| e.to_string())
+    })
+    .await
+}
+
+/// Locks every silo from async code: each close seals a snapshot.
+async fn lock_all_blocking(app: &AppHandle) {
+    let app = app.clone();
+    let _ = run_blocking(move || {
+        crate::commands::vault::lock_all_silos(&app);
+        Ok(())
+    })
+    .await;
+}
+
+/// Whether the key a ceremony produced opens the envelope this silo keeps
+/// for that credential, to the key the silo uses now. Asked before a key
+/// change touches anything: a wrap key that does not would leave the new key
+/// wrapped under something that never opened the silo.
+fn opens_current_key(
+    keys: &StoredFidoKeys,
+    credential_id: &str,
+    label: &str,
+    wrap_key: &[u8; 32],
+    current: &silentsilo_crypto::MasterDek,
+) -> Result<(), String> {
+    let opened = keys
+        .active()
+        .find(|k| k.credential_id == credential_id)
+        .and_then(|k| silentsilo_vault::unwrap_dek_hex(&k.wrapped_dek, wrap_key).ok());
+    match opened {
+        Some(dek) if dek.as_bytes() == current.as_bytes() => Ok(()),
+        _ => Err(format!(
+            "\u{201c}{label}\u{201d} does not open this silo's current encryption key, so nothing \
+             was changed. Try again with that key."
+        )),
+    }
 }
 
 /// What to say when a rotation stops after storage has been touched.
@@ -794,9 +920,9 @@ fn commit_keys_and_snapshot(
 /// of it, rather than describing a failure that left nothing behind.
 fn unfinished(target: &str, why: &str) -> String {
     format!(
-        "The key change stopped part way through {target} ({why}). Nothing is lost: the new key \
-         is saved and the objects already converted are readable with it. Finish the change from \
-         Settings, with any enrolled key. Do not start another one."
+        "Replacing the encryption key stopped part way through {target} ({why}). Nothing is lost: \
+         the new key is saved and what was already converted opens with it. Finish replacing \
+         the encryption key under Settings, Advanced, with any enrolled key. Do not start again."
     )
 }
 
@@ -813,9 +939,7 @@ fn unfinished(target: &str, why: &str) -> String {
 #[tauri::command]
 pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<RotateOutcome, String> {
     if keep.is_empty() {
-        return Err(
-            "Choose at least one security key to keep, or nothing would open this silo.".into(),
-        );
+        return Err("Choose at least one key to keep, or nothing would open this silo.".into());
     }
     let _sync = crate::commands::sync::hold_sync(&app).await?;
 
@@ -825,7 +949,7 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
         let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
         let session = sessions
             .get(&silo.id)
-            .ok_or_else(|| "Unlock the silo before rotating its key".to_string())?;
+            .ok_or_else(|| "Unlock the silo before replacing the encryption key.".to_string())?;
         (
             session.dek.clone(),
             session.kek.clone(),
@@ -843,8 +967,9 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
     // `vault_rotate_resume`.
     if silentsilo_vault::rotation::rotation_pending(&root) {
         return Err(
-            "A key change on this silo was started and never finished. Finish that one first: \
-             starting another would strand everything the first attempt already re-sealed."
+            "Replacing the encryption key of this silo was started and never finished. Finish \
+             that first under Settings, Advanced: starting again would make what was already \
+             converted unreadable."
                 .into(),
         );
     }
@@ -879,6 +1004,10 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
     // keep list of someone who cannot touch them.
     let org_proof = organisation_proof_if_needed(&app, &keys, "encryption key").await?;
 
+    // Every target has to be reached, so one that will not open stops this
+    // before any touch: skipped, it would keep the old key readable.
+    let every_target = crate::state::every_target_for(silo.id)?;
+
     // Every touch first, before anything on disk or in storage changes. A key
     // the user cannot produce is a rotation that should not have started, and
     // finding that out half way through is how a silo ends up with a new key
@@ -886,7 +1015,7 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
     let mut wrap_keys: Vec<(String, [u8; 32])> = Vec::new();
     for (nth, id) in keep.iter().enumerate() {
         let label = labelled.get(id).cloned().unwrap_or_default();
-        emit_fido_progress(&app, &format!("Touch “{label}” to keep it working"));
+        emit_fido_progress(&app, &format!("Use “{label}” to keep it working"));
         // Same platform constraint as enrolment: one ceremony at a time, and
         // the next one has to wait for the last to be torn down. Rotating two
         // keys is two ceremonies back to back, so every touch after the first
@@ -894,13 +1023,14 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
         if nth > 0 {
             settle_between_ceremonies().await;
         }
-        let raw = hex::decode(id).map_err(|_| "That credential id is not readable.".to_string())?;
+        let raw = hex::decode(id).map_err(|_| "That key id is not readable.".to_string())?;
         let vault = vault_id.clone();
         let wanted = authenticator_of(&keys, id);
         let unlock = run_fido_settling(&app, move || {
             silentsilo_fido::derive_unlock_material(std::slice::from_ref(&raw), &vault, wanted)
         })
         .await?;
+        opens_current_key(&keys, id, &label, &unlock.wrap_key, &old_dek)?;
         wrap_keys.push((id.clone(), unlock.wrap_key));
     }
 
@@ -915,8 +1045,9 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
     // object re-sealed under a key that exists only in memory is one no
     // surviving key opens.
     let mut resealed = 0;
+    let mut unreadable = 0;
     let mut unchanged_targets = Vec::new();
-    for target in crate::state::silo_targets(&app) {
+    for target in every_target {
         if !target.role.allows_delete() {
             // Append-only, so its objects cannot be overwritten. Named rather
             // than skipped quietly: what is there stays readable with the old
@@ -937,7 +1068,7 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
             return Err(unfinished(
                 &target.label,
                 &format!(
-                    "{} objects would not re-seal, the first being {}: {}",
+                    "{} files would not move to the new key. The first was {}: {}",
                     outcome.failed.len(),
                     outcome.failed[0].0,
                     outcome.failed[0].1
@@ -945,11 +1076,8 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
             ));
         }
         resealed += outcome.resealed;
+        unreadable += outcome.unreadable.len();
     }
-
-    // The switch. Everything above can be repeated and none of it is
-    // visible to the next unlock until this runs.
-    commit_keys_and_snapshot(&app, &silo, &root, &new_dek)?;
 
     let mut retired: Vec<String> = Vec::new();
     for credential in keys.keys.iter_mut() {
@@ -974,7 +1102,6 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
             }
         }
     }
-    save_fido_keys(&root, &keys, authority(org_proof.as_ref())).map_err(|e| e.to_string())?;
 
     // A new recovery code, because the old one unwraps the old key and would
     // fail at the worst moment. Generated rather than offered: the silo has
@@ -982,19 +1109,21 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
     // direction to fail in.
     // The content KEK is the one key a rotation leaves alone, so the tag on
     // the new envelope is the same one every other device verifies.
-    let (recovery_code, envelope) =
-        silentsilo_vault::create_recovery_envelope(&new_dek, &kek).map_err(|e| e.to_string())?;
-    silentsilo_vault::save_recovery_envelope(&root, &envelope).map_err(|e| e.to_string())?;
+    let (recovery_code, envelope) = recovery_envelope_blocking(&new_dek, &kek).await?;
+
+    // The switch. Everything above can be repeated and none of it is
+    // visible to the next unlock until this runs.
+    commit_blocking(&app, &silo, &root, &new_dek, &keys, org_proof, &envelope).await?;
     publish_recovery_envelope(silo.id, &envelope).await;
 
     // Locked rather than kept open. The session in memory holds the old key,
     // and every read it makes from here would be against a silo that has
     // moved on.
-    crate::commands::vault::lock_all_silos(&app);
-    let _ = silo;
+    lock_all_blocking(&app).await;
 
     Ok(RotateOutcome {
         resealed,
+        unreadable,
         kept: keep,
         retired,
         recovery_code,
@@ -1023,6 +1152,8 @@ pub fn vault_rotation_pending(app: AppHandle) -> Result<bool, String> {
 #[derive(Debug, serde::Serialize)]
 pub struct ResumeOutcome {
     pub resealed: usize,
+    /// As in [`RotateOutcome`].
+    pub unreadable: usize,
     /// Shown once, exactly as a rotation started here shows it.
     pub recovery_code: String,
     /// Targets the app never deletes from, so their copy of the old
@@ -1045,9 +1176,9 @@ pub async fn vault_rotate_resume(
         let silo = crate::state::active_silo(&app)?;
         let state = app.state::<AppState>();
         let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
-        let session = sessions
-            .get(&silo.id)
-            .ok_or_else(|| "Unlock the silo before finishing the key change".to_string())?;
+        let session = sessions.get(&silo.id).ok_or_else(|| {
+            "Unlock the silo first, then finish replacing the encryption key.".to_string()
+        })?;
         (
             session.dek.clone(),
             session.kek.clone(),
@@ -1056,13 +1187,13 @@ pub async fn vault_rotate_resume(
             silo,
         )
     };
-    let _ = silo;
 
     if !silentsilo_vault::rotation::rotation_pending(&root) {
-        return Err("There is no key change waiting to be finished.".into());
+        return Err("There is nothing to finish: the encryption key is not being replaced.".into());
     }
-    let new_dek = silentsilo_vault::rotation::load_staged_dek(&root, &old_dek)
-        .map_err(|_| "The staged key cannot be read with this silo's current key.".to_string())?;
+    let new_dek = silentsilo_vault::rotation::load_staged_dek(&root, &old_dek).map_err(|_| {
+        "The new encryption key cannot be read with this silo's current key.".to_string()
+    })?;
 
     let mut keys = load_fido_keys(&root).map_err(|e| e.to_string())?;
     let label = keys
@@ -1076,22 +1207,29 @@ pub async fn vault_rotate_resume(
     // rule. An interrupted company rotation must not become an employee's
     // way to finish it with only their own key.
     let org_proof = organisation_proof_if_needed(&app, &keys, "encryption key").await?;
+    let every_target = crate::state::every_target_for(silo.id)?;
 
     // The touch first, as when starting: a key nobody can produce leaves this
     // exactly where it was rather than half further along.
-    emit_fido_progress(&app, &format!("Touch “{label}” to finish the key change"));
-    let raw =
-        hex::decode(&credential).map_err(|_| "That credential id is not readable.".to_string())?;
+    emit_fido_progress(
+        &app,
+        &format!("Use “{label}” to finish replacing the encryption key"),
+    );
+    let raw = hex::decode(&credential).map_err(|_| "That key id is not readable.".to_string())?;
     let wanted = authenticator_of(&keys, &credential);
     let unlock = run_fido(&app, move || {
         silentsilo_fido::derive_unlock_material(std::slice::from_ref(&raw), &vault_id, wanted)
     })
     .await?;
+    // Before storage is touched: a key that does not open the current one
+    // would be the only key left after this, opening nothing.
+    opens_current_key(&keys, &credential, &label, &unlock.wrap_key, &old_dek)?;
 
     // Idempotent, so whatever the interrupted pass managed is kept and only
     // the rest is done.
     let mut resealed = 0;
-    for target in crate::state::silo_targets(&app) {
+    let mut unreadable = 0;
+    for target in every_target {
         if !target.role.allows_delete() {
             continue;
         }
@@ -1101,7 +1239,8 @@ pub async fn vault_rotate_resume(
                 .map_err(|e| e.to_string())?;
         if !outcome.failed.is_empty() {
             return Err(format!(
-                "{} objects on {} still cannot be re-sealed, so the key change is unfinished.                  The first was {}: {}",
+                "{} files on {} still cannot move to the new key, so replacing the encryption \
+                 key is unfinished. The first was {}: {}",
                 outcome.failed.len(),
                 target.label,
                 outcome.failed[0].0,
@@ -1109,17 +1248,14 @@ pub async fn vault_rotate_resume(
             ));
         }
         resealed += outcome.resealed;
+        unreadable += outcome.unreadable.len();
     }
-
-    // Wrapped for this credential's row in `fido.json` below; rotation
-    // itself no longer writes an envelope to disk.
-    let envelope =
-        silentsilo_vault::wrap_dek_bytes(&new_dek, &unlock.wrap_key).map_err(|e| e.to_string())?;
-    commit_keys_and_snapshot(&app, &silo, &root, &new_dek)?;
 
     // Only this key is known to work now. The others were never re-wrapped,
     // and there is no way to tell from here whether the interrupted pass
     // meant to keep them, so they are marked rather than guessed about.
+    let envelope =
+        silentsilo_vault::wrap_dek_bytes(&new_dek, &unlock.wrap_key).map_err(|e| e.to_string())?;
     for key in keys.keys.iter_mut() {
         if key.credential_id != credential {
             key.revoked = true;
@@ -1127,7 +1263,6 @@ pub async fn vault_rotate_resume(
             key.wrapped_dek = hex::encode(&envelope);
         }
     }
-    save_fido_keys(&root, &keys, authority(org_proof.as_ref())).map_err(|e| e.to_string())?;
 
     // A new code, and one somebody actually gets to write down. The old code
     // unwraps the key that just stopped being current, so a resume that kept
@@ -1135,14 +1270,14 @@ pub async fn vault_rotate_resume(
     // back through. Published as well as saved, for the same reason
     // `recovery_generate` publishes: the case this exists for is a machine
     // that has never seen the silo.
-    let (recovery_code, recovery) =
-        silentsilo_vault::create_recovery_envelope(&new_dek, &kek).map_err(|e| e.to_string())?;
-    silentsilo_vault::save_recovery_envelope(&root, &recovery).map_err(|e| e.to_string())?;
+    let (recovery_code, recovery) = recovery_envelope_blocking(&new_dek, &kek).await?;
+    commit_blocking(&app, &silo, &root, &new_dek, &keys, org_proof, &recovery).await?;
     let unchanged_targets = publish_recovery_envelope(silo.id, &recovery).await;
 
-    crate::commands::vault::lock_all_silos(&app);
+    lock_all_blocking(&app).await;
     Ok(ResumeOutcome {
         resealed,
+        unreadable,
         recovery_code,
         unchanged_targets,
     })
@@ -1271,6 +1406,34 @@ mod authenticator_choice_tests {
         assert_eq!(json["credential_id"], "aa11");
         assert_eq!(json["kind"], "fido2");
         assert_eq!(json["usable"], false);
+    }
+
+    #[test]
+    fn a_prompt_the_person_ended_is_not_opened_again() {
+        assert!(super::ended_by_user(
+            "unlock failed: Security key operation cancelled"
+        ));
+        assert!(super::ended_by_user(
+            "enrollment failed: the request timed out"
+        ));
+        assert!(super::ended_by_user("unlock failed: TimeoutError"));
+        assert!(!super::ended_by_user("unlock failed: InvalidStateError"));
+    }
+
+    #[test]
+    fn a_key_change_needs_a_key_that_opens_the_current_key() {
+        let current = silentsilo_crypto::generate_dek();
+        let wrap = [7u8; 32];
+        let mut held = key(false);
+        held.wrapped_dek = hex::encode(silentsilo_vault::wrap_dek_bytes(&current, &wrap).unwrap());
+        let keys = StoredFidoKeys { keys: vec![held] };
+
+        assert!(super::opens_current_key(&keys, "aa11", "Blue", &wrap, &current).is_ok());
+        let wrong = super::opens_current_key(&keys, "aa11", "Blue", &[8u8; 32], &current);
+        assert!(wrong.unwrap_err().contains("nothing was changed"));
+        // Opens, but to a key the silo no longer uses.
+        let older = silentsilo_crypto::generate_dek();
+        assert!(super::opens_current_key(&keys, "aa11", "Blue", &wrap, &older).is_err());
     }
 
     #[test]

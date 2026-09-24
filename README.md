@@ -134,8 +134,9 @@ no locking, and nothing that depends on a provider feature beyond plain
 PUT/GET/LIST/DELETE. Devices that have been offline converge on the same
 tree regardless of the order records arrive in.
 
-To join a second device, pick *I already have a vault* on first run, point it
-at the same bucket, and touch a security key already enrolled on the first.
+To add a second computer, pick *Set up from backup storage* on first run,
+point it at the same backup storage, and touch a key already enrolled on the
+first.
 Its tree is rebuilt by replaying the log. There is no snapshot to download,
 and no step where anything is readable in transit.
 

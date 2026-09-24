@@ -43,6 +43,13 @@ type SortField = "name" | "size" | "modified";
 
 const SORT_FIELDS: readonly SortField[] = ["name", "size", "modified"] as const;
 
+/** What ascending and descending mean for each field, in words. */
+function orderLabel(field: SortField, order: "asc" | "desc"): string {
+  if (field === "size") return order === "asc" ? "smallest first" : "largest first";
+  if (field === "modified") return order === "asc" ? "oldest first" : "newest first";
+  return order === "asc" ? "A-Z" : "Z-A";
+}
+
 const SORT_LABELS: Record<SortField, string> = {
   name: "Name",
   size: "Size",
@@ -311,7 +318,7 @@ export function FilesExplorer(props: Props) {
         kind: "action",
         label:
           sortBy === field
-            ? `Sort by ${SORT_LABELS[field].toLowerCase()} (${sortOrder === "asc" ? "A-Z" : "Z-A"})`
+            ? `Sort by ${SORT_LABELS[field].toLowerCase()} (${orderLabel(field, sortOrder)})`
             : `Sort by ${SORT_LABELS[field].toLowerCase()}`,
         icon: sortBy === field ? <Check size={14} /> : <ArrowUpDown size={14} />,
         onClick: () => handleSort(field),
@@ -382,7 +389,7 @@ export function FilesExplorer(props: Props) {
       }
       items.push({
         kind: "action",
-        label: `Trash ${selectedIds.size} items`,
+        label: `Move ${selectedIds.size} items to trash`,
         icon: <IconTrash size={14} />,
         danger: true,
         onClick: onTrash,
@@ -409,7 +416,7 @@ export function FilesExplorer(props: Props) {
         { kind: "divider" },
         {
           kind: "action",
-          label: "Trash",
+          label: "Move to trash",
           icon: <IconTrash size={14} />,
           danger: true,
           onClick: () => onTrashEntry(entry),
@@ -427,7 +434,7 @@ export function FilesExplorer(props: Props) {
         { kind: "divider" },
         {
           kind: "action",
-          label: "Trash",
+          label: "Move to trash",
           icon: <IconTrash size={14} />,
           danger: true,
           onClick: () => onTrashEntry(entry),
@@ -739,14 +746,16 @@ export function FilesExplorer(props: Props) {
           <div className="sort-menu-wrap">
             <button
               type="button"
-              className={`view-toggle-btn${sortBy ? " active" : ""}`}
+              className={`view-toggle-btn view-toggle-labelled${sortBy ? " active" : ""}`}
               onClick={() => setShowSortMenu((v) => !v)}
               title={sortBy ? `Sorted by ${SORT_LABELS[sortBy]}` : "Sort"}
-              aria-label="Sort"
               aria-haspopup="menu"
               aria-expanded={showSortMenu}
             >
               <ArrowUpDown size={17} />
+              {/* Named, not just drawn: an arrow pair alone was not read as
+                  sorting. */}
+              <span>{sortBy ? SORT_LABELS[sortBy] : "Sort"}</span>
             </button>
             {showSortMenu && (
               <>
@@ -767,7 +776,7 @@ export function FilesExplorer(props: Props) {
                       {sortBy === field ? <Check size={15} /> : <span className="dropdown-tick" />}
                       <span>{SORT_LABELS[field]}</span>
                       {sortBy === field && (
-                        <span className="dropdown-hint">{sortOrder === "asc" ? "A-Z" : "Z-A"}</span>
+                        <span className="dropdown-hint">{orderLabel(field, sortOrder)}</span>
                       )}
                     </button>
                   ))}
@@ -803,7 +812,7 @@ export function FilesExplorer(props: Props) {
                 disabled={progressCancelling}
                 onClick={onCancelProgress}
               >
-                {progressCancelling ? "Cancelling…" : "Cancel"}
+                {progressCancelling ? "Stopping…" : "Stop"}
               </button>
             )}
           </div>
@@ -830,8 +839,7 @@ export function FilesExplorer(props: Props) {
               <div className="empty-state">
                 <p className="empty-title">Nothing matches “{searchQuery}”</p>
                 <p className="hint">
-                  Search looks at names only. File contents stay encrypted and are never
-                  indexed.
+                  Search looks at names only, not file contents.
                 </p>
               </div>
             ) : (
@@ -878,7 +886,7 @@ export function FilesExplorer(props: Props) {
             <p className="empty-title">This folder is empty</p>
             <p className="hint">
               Add files from this computer, or drag them onto the window. They are encrypted as
-              they land.
+              they are added.
             </p>
             <div className="actions">
               <button type="button" disabled={busy} onClick={onAddFiles}>
@@ -1065,7 +1073,7 @@ export function FilesExplorer(props: Props) {
                     </td>
                     <td>
                       <span className="cell-size">
-                        {entry.kind === "file" ? formatBytes(entry.size_bytes) : "—"}
+                        {entry.kind === "file" ? formatBytes(entry.size_bytes) : "-"}
                         {syncState && <SyncBadge state={syncState} compact />}
                       </span>
                     </td>
@@ -1167,7 +1175,7 @@ export function FilesExplorer(props: Props) {
               disabled={busy}
               onClick={onTrash}
             >
-              <IconTrash size={14} /> Trash
+              <IconTrash size={14} /> Move to trash
             </button>
 
             {onClearSelection && (

@@ -149,8 +149,8 @@ function FillCard({
             </p>
           )}
           <p className="hint">
-            {platform.builtIn} or your security key is asked next. The browser gets nothing
-            before that.
+            You confirm with {platform.builtIn} or your security key next. The browser receives
+            the login only after that.
           </p>
           {busy && progress && (
             <p className="hint" role="status">

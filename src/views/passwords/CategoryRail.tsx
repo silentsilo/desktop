@@ -76,7 +76,7 @@ export function CategoryRail({
   };
 
   return (
-    <nav className="view-rail" aria-label="Credential types and categories">
+    <nav className="view-rail" aria-label="Entry types and categories">
       {/* Kinds first: "show me my cards" is the question asked walking up
           to a checkout, and it should not require remembering a category. */}
       <button
@@ -84,7 +84,7 @@ export function CategoryRail({
         className={`view-rail-item${selectedType === null ? " active" : ""}`}
         onClick={() => onSelectType(null)}
       >
-        <span className="view-rail-label">All items</span>
+        <span className="view-rail-label">All entries</span>
         <span className="view-rail-count">{total}</span>
       </button>
       {CREDENTIAL_TYPES.map((type) => {

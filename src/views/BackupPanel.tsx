@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   CheckCircle2,
@@ -8,12 +8,13 @@ import {
   LockKeyhole,
   Pencil,
   RefreshCw,
+  SearchCheck,
   Server,
   Unplug,
 } from "lucide-react";
 import type { StoreConfigView } from "../lib/types";
 import { formatAppError } from "../lib/errors";
-import { formatBytes } from "../lib/format";
+import { formatBytes, formatDay } from "../lib/format";
 import { detectPreset } from "../lib/s3Presets";
 import { backupHeadline, syncOutcome, type Status, type SyncReport } from "../lib/syncOutcome";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -79,7 +80,6 @@ function StoredSummary({ stored }: { stored: StoreConfigView }) {
 
 type Props = {
   busy: boolean;
-  siloName: string;
   /** Unix ms of the last pass that reached the storage, from the app shell. */
   lastSyncAt: number | null;
   /** Lets the shell's status bar refresh right away instead of on its timer. */
@@ -106,6 +106,14 @@ type Props = {
   onFullCopy: (on: boolean) => void;
   onFetchAllContent: () => void;
   onCancelFetchContent: () => void;
+  /** The list of copies, shown under the status once storage is connected. */
+  copies?: ReactNode;
+  /** Why the last background pass failed, or null when it did not. */
+  syncError?: string | null;
+  /** Opens the backup test, which has a page of its own. */
+  onTestBackup?: () => void;
+  /** Unix ms of the last test on this computer, null for never. */
+  lastTestedAt?: number | null;
 };
 
 /**
@@ -119,7 +127,6 @@ type Props = {
  */
 export function BackupPanel({
   busy,
-  siloName,
   lastSyncAt,
   onActivity,
   missingCount,
@@ -133,6 +140,10 @@ export function BackupPanel({
   onFullCopy,
   onFetchAllContent,
   onCancelFetchContent,
+  copies,
+  syncError = null,
+  onTestBackup,
+  lastTestedAt = null,
 }: Props) {
   const [connected, setConnected] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
@@ -240,10 +251,10 @@ export function BackupPanel({
 
   const handleTest = async () => {
     if (!guard()) return;
-    setStatus({ kind: "busy", message: "Writing a test object…" });
+    setStatus({ kind: "busy", message: "Writing a test file…" });
     try {
       await invoke("s3_test_config", { config: payload() });
-      setStatus({ kind: "ok", message: "Connected. The storage is writable." });
+      setStatus({ kind: "ok", message: "Connected. The backup storage is writable." });
     } catch (e) {
       setStatus({ kind: "error", message: formatAppError(e) });
     }
@@ -261,7 +272,7 @@ export function BackupPanel({
         s3: { ...prev.s3, secretAccessKey: "" },
         dav: { ...prev.dav, password: "" },
       }));
-      setStatus({ kind: "ok", message: "Storage connected." });
+      setStatus({ kind: "ok", message: "Backup storage connected." });
       void load();
       onActivity();
     } catch (e) {
@@ -295,7 +306,7 @@ export function BackupPanel({
       setStored(null);
       setDraft(EMPTY_STORE_DRAFT);
       setWhere("");
-      setStatus({ kind: "ok", message: "Disconnected. Your files in the storage were left alone." });
+      setStatus({ kind: "ok", message: "Disconnected. Nothing in backup storage was deleted." });
       onActivity();
     } catch (e) {
       setStatus({ kind: "error", message: formatAppError(e) });
@@ -323,13 +334,18 @@ export function BackupPanel({
                     still leave a file behind. "Everything is backed up" is
                     only true when both queues are empty. */}
                 <p>{backupHeadline(pending, unsyncedCount, unsyncedBytes, lastSyncAt)}</p>
+                {syncError && status.kind === "idle" && (
+                  <p className="hint is-error" role="status">
+                    The last sync failed: {formatAppError(syncError)}
+                  </p>
+                )}
               </>
             ) : (
               <>
-                <h3>{siloName} is on this computer only</h3>
+                <h3>Not backed up. This silo is only on this computer.</h3>
                 <p>
-                  If this machine fails, the silo goes with it. Connect storage you control and an
-                  encrypted copy lives there too.
+                  If this computer fails, the silo is lost with it. Connect backup storage you
+                  control to keep an encrypted copy there.
                 </p>
               </>
             )}
@@ -364,6 +380,12 @@ export function BackupPanel({
               <Pencil size={15} />
               Edit
             </button>
+            {onTestBackup && (
+              <button type="button" className="secondary" disabled={working} onClick={onTestBackup}>
+                <SearchCheck size={15} />
+                Test backup
+              </button>
+            )}
             <button
               type="button"
               className="danger"
@@ -375,12 +397,20 @@ export function BackupPanel({
             </button>
           </div>
         )}
+
+        {!expanded && connected && onTestBackup && (
+          <p className="hint">
+            {lastTestedAt
+              ? `Last tested ${formatDay(Math.floor(lastTestedAt / 1000))} on this computer.`
+              : "Never tested from this computer."}
+          </p>
+        )}
       </div>
 
       {confirmingDisconnect && (
         <ConfirmDialog
           title="Disconnect this backup?"
-          message={`This silo stops backing up to ${where}. Nothing there is deleted, but from now on this silo lives on this computer alone until storage is connected again.`}
+          message={`This silo stops backing up to ${where} and to every other copy. Nothing there is deleted, but the silo is only on this computer until you connect backup storage again.`}
           confirmLabel="Disconnect"
           danger
           busy={working}
@@ -392,9 +422,9 @@ export function BackupPanel({
         />
       )}
 
-      {/* Copies and verification live on their own Settings pages now: each
-          one is a question of its own, and stacking all three here made one
-          very long scroll with the answers buried in it. */}
+      {/* Every copy, the main one included, right under the status: one
+          subject, one page. The backup test keeps a page of its own. */}
+      {!expanded && connected && copies}
 
       {/* The other direction. Everything above is about content leaving this
           machine; this is about getting it back, which is the question
@@ -408,8 +438,8 @@ export function BackupPanel({
           {absentCount > 0 && (
             <p className="hint">
               {absentCount === 1
-                ? "1 file is missing: its content is on no backup and not on this computer."
-                : `${absentCount} files are missing: their content is on no backup and not on this computer.`}{" "}
+                ? "1 file is missing: its content is in no backup storage and not on this computer."
+                : `${absentCount} files are missing: their content is in no backup storage and not on this computer.`}{" "}
               They show as Missing in Files. A device that still has them uploads them when it syncs.
             </p>
           )}
@@ -417,11 +447,10 @@ export function BackupPanel({
             <>
               <p>
                 {missingCount === 1
-                  ? "1 file is in the backup but not here"
-                  : `${missingCount} files are in the backup but not here`}{" "}
-                ({formatBytes(missingBytes)}). Syncing moves the file list, not the contents, so a
-                device that just joined or recovered starts with the names and fetches each file
-                when you open it.
+                  ? "1 file is in backup storage but not here"
+                  : `${missingCount} files are in backup storage but not here`}{" "}
+                ({formatBytes(missingBytes)}). A computer that was just set up from backup storage
+                starts with the file list and downloads each file when you open it.
               </p>
               <div className="actions">
                 {contentFetch ? (
@@ -447,7 +476,7 @@ export function BackupPanel({
           ) : (
             <p>
               Every file in this silo is on this computer ({formatBytes(localBytes)}), as well as in
-              the backup.
+              backup storage.
             </p>
           )}
 
@@ -464,10 +493,9 @@ export function BackupPanel({
             <span>
               Keep a full copy on this computer
               <span className="hint">
-                Without this, a device holds the file list and fetches contents when you open
-                them, so it is an index rather than a copy: counting it as one of your three
-                copies would be wrong. With it, missing files are fetched in the background and
-                nothing is evicted to save space.
+                Without this, this computer keeps the file list and downloads each file when you
+                open it, so it does not count as a copy. With it, every file is downloaded in the
+                background and kept here.
               </span>
             </span>
           </label>
@@ -478,11 +506,11 @@ export function BackupPanel({
         <div className="panel-section">
           <h3>
             <Server size={16} />
-            {connected ? "Change where the backup lives" : "Where should the backup live?"}
+            {connected ? "Change backup storage" : "Choose backup storage"}
           </h3>
           <p>
             Any S3-compatible bucket, a folder or network share, WebDAV, or SFTP.
-            {connected && " A silo has one backup connection: saving replaces the current one."}
+            {connected && " Saving replaces the current backup storage."}
           </p>
 
           <div className="s3-form">
@@ -506,7 +534,7 @@ export function BackupPanel({
             <div className="actions">
               <button type="button" disabled={working} onClick={() => void handleSave()}>
                 {status.kind === "busy" && <span className="spinner" aria-hidden />}
-                {status.kind === "busy" ? "Working…" : "Save & connect"}
+                {status.kind === "busy" ? "Working…" : "Save and connect"}
               </button>
               <button
                 type="button"
@@ -549,8 +577,8 @@ export function BackupPanel({
             <div>
               <strong>Encrypted before it leaves.</strong>
               <p>
-                Files, names and passwords are sealed on this computer first. The storage only
-                ever sees ciphertext.
+                Files, names and passwords are encrypted on this computer before they are sent to
+                backup storage.
               </p>
             </div>
           </li>
@@ -570,7 +598,7 @@ export function BackupPanel({
             <div>
               <strong>It is also sync.</strong>
               <p>
-                Point a second computer at the same storage and the silo appears there, kept up
+                Point a second computer at the same backup storage and the silo appears there, kept up
                 to date in both directions.
               </p>
             </div>
@@ -582,13 +610,13 @@ export function BackupPanel({
             <div>
               <strong>It is your way back.</strong>
               <p>
-                On a new computer, choose <em>From backup storage</em> and unlock with your
-                security key or recovery code. The storage holds the data; the key opens it.
+                On a new computer, choose <em>Set up from backup storage</em> and unlock with your
+                key or recovery code.
               </p>
             </div>
           </li>
         </ul>
-        <p className="hint">Each silo connects to its own storage, so they can live in different places.</p>
+        <p className="hint">Each silo has its own backup storage, so different silos can back up to different places.</p>
       </div>
       )}
     </div>

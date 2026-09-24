@@ -113,13 +113,13 @@ fn encrypt_import(
     source: &Path,
 ) -> Result<EncryptedImport, String> {
     if !source.is_file() {
-        return Err(format!("not a file: {}", source.display()));
+        return Err(format!("Not a file: {}", source.display()));
     }
 
     let file_name = source
         .file_name()
         .and_then(|n| n.to_str())
-        .ok_or_else(|| "invalid file name".to_string())?
+        .ok_or_else(|| "That file name cannot be read.".to_string())?
         .to_string();
 
     let file_id = Uuid::now_v7();
@@ -187,6 +187,18 @@ struct ImportProgress {
     current: u32,
     total: u32,
     name: String,
+    /// Files and folders that could not be read or imported so far. Final
+    /// on the "done" report.
+    skipped: u32,
+}
+
+/// Where a folder import has got to: files attempted, files found by the
+/// scan, and what could not be read or imported.
+#[derive(Default)]
+struct ImportCounters {
+    done: u32,
+    total: u32,
+    skipped: u32,
 }
 
 fn emit_import_progress(app: &AppHandle, progress: ImportProgress) {
@@ -254,7 +266,7 @@ const IMPORT_CANCELLED: &str = "cancelled";
 /// then reported as "Folder imported." Locking the workstation mid-import is
 /// an ordinary thing to do, so this was an ordinary way to lose half a
 /// folder without being told.
-const SILO_CLOSED: &str = "the silo was locked before the import finished";
+const SILO_CLOSED: &str = "The silo was locked before the import finished.";
 
 fn import_folder_recursive(
     app: &AppHandle,
@@ -262,7 +274,7 @@ fn import_folder_recursive(
     parent_folder_id: Uuid,
     source_dir: &std::path::Path,
     visited: &mut HashSet<std::path::PathBuf>,
-    counters: &mut (u32, u32),
+    counters: &mut ImportCounters,
     cancelled: &std::sync::atomic::AtomicBool,
 ) -> Result<(), String> {
     let canonical = std::fs::canonicalize(source_dir).unwrap_or_else(|_| source_dir.to_path_buf());
@@ -270,7 +282,16 @@ fn import_folder_recursive(
         return Ok(());
     }
 
-    let entries = std::fs::read_dir(source_dir).map_err(|e| e.to_string())?;
+    // A subfolder that will not open is skipped and counted, like a file
+    // that will not: it used to stop the whole import half way.
+    let entries = match std::fs::read_dir(source_dir) {
+        Ok(entries) => entries,
+        Err(e) => {
+            counters.skipped = counters.skipped.saturating_add(1);
+            crate::diagnostics::warn("import", format_args!("skipped a folder: {e}"));
+            return Ok(());
+        }
+    };
 
     for entry in entries {
         if cancelled.load(Ordering::Relaxed) {
@@ -279,12 +300,18 @@ fn import_folder_recursive(
         if !crate::state::session_is_open(&app.state::<AppState>(), snapshot.id) {
             return Err(SILO_CLOSED.to_string());
         }
-        let entry = entry.map_err(|e| e.to_string())?;
+        let Ok(entry) = entry else {
+            counters.skipped = counters.skipped.saturating_add(1);
+            continue;
+        };
         let path = entry.path();
 
         let meta = match std::fs::symlink_metadata(&path) {
             Ok(m) => m,
-            Err(_) => continue,
+            Err(_) => {
+                counters.skipped = counters.skipped.saturating_add(1);
+                continue;
+            }
         };
         // Skip symlinks / junctions — following them can recurse forever on Windows.
         if meta.file_type().is_symlink() {
@@ -298,34 +325,35 @@ fn import_folder_recursive(
             .to_string();
 
         if meta.is_file() {
-            counters.0 = counters.0.saturating_add(1);
+            counters.done = counters.done.saturating_add(1);
             emit_import_progress(
                 app,
                 ImportProgress {
                     phase: "encrypting".into(),
-                    current: counters.0,
-                    total: counters.1,
+                    current: counters.done,
+                    total: counters.total,
                     name: display_name,
+                    skipped: counters.skipped,
                 },
             );
             // Keep going if a single file fails (locked/system files, etc.).
             if let Err(e) = import_one(app, snapshot, parent_folder_id, &path) {
-                crate::diagnostics::warn(
-                    "import",
-                    format_args!("skipped a file ({}): {e}", path.display()),
-                );
+                counters.skipped = counters.skipped.saturating_add(1);
+                crate::diagnostics::warn("import", format_args!("skipped a file: {e}"));
             }
         } else if meta.is_dir() {
             let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) else {
+                counters.skipped = counters.skipped.saturating_add(1);
                 continue;
             };
             emit_import_progress(
                 app,
                 ImportProgress {
                     phase: "folders".into(),
-                    current: counters.0,
-                    total: counters.1,
+                    current: counters.done,
+                    total: counters.total,
                     name: display_name,
+                    skipped: counters.skipped,
                 },
             );
             // A short lock for the row; the descent itself holds nothing.
@@ -346,10 +374,8 @@ fn import_folder_recursive(
                     )?;
                 }
                 Err(e) => {
-                    crate::diagnostics::warn(
-                        "import",
-                        format_args!("skipped a folder ({}): {e}", path.display()),
-                    );
+                    counters.skipped = counters.skipped.saturating_add(1);
+                    crate::diagnostics::warn("import", format_args!("skipped a folder: {e}"));
                 }
             }
         }
@@ -363,9 +389,11 @@ fn import_folder_recursive(
 /// per-file encryption are the longest work in the app. The sessions lock
 /// is taken per row, not for the duration, so the rest of the app keeps
 /// answering while a large folder comes in.
-fn import_folder_impl(app: &AppHandle, folder_id: Uuid, source: &Path) -> Result<(), String> {
+///
+/// Returns how many files and folders could not be read or imported.
+fn import_folder_impl(app: &AppHandle, folder_id: Uuid, source: &Path) -> Result<u32, String> {
     if !source.is_dir() {
-        return Err(format!("not a directory: {}", source.display()));
+        return Err(format!("Not a folder: {}", source.display()));
     }
 
     let total_files = count_importable_files(source);
@@ -380,6 +408,7 @@ fn import_folder_impl(app: &AppHandle, folder_id: Uuid, source: &Path) -> Result
                 .and_then(|n| n.to_str())
                 .unwrap_or("folder")
                 .to_string(),
+            skipped: 0,
         },
     );
 
@@ -389,7 +418,7 @@ fn import_folder_impl(app: &AppHandle, folder_id: Uuid, source: &Path) -> Result
     let dir_name = source
         .file_name()
         .and_then(|n| n.to_str())
-        .ok_or_else(|| "invalid dir name".to_string())?;
+        .ok_or_else(|| "That folder name cannot be read.".to_string())?;
 
     // Merged into a folder already carrying the name, as a drop onto an
     // existing tree means; uploading the same folder twice used to fail
@@ -399,7 +428,10 @@ fn import_folder_impl(app: &AppHandle, folder_id: Uuid, source: &Path) -> Result
     })?;
 
     let mut visited = HashSet::new();
-    let mut counters = (0u32, total_files);
+    let mut counters = ImportCounters {
+        total: total_files,
+        ..ImportCounters::default()
+    };
     import_folder_recursive(
         app,
         &snapshot,
@@ -414,25 +446,34 @@ fn import_folder_impl(app: &AppHandle, folder_id: Uuid, source: &Path) -> Result
         app,
         ImportProgress {
             phase: "done".into(),
-            current: counters.0,
+            current: counters.done,
             total: total_files,
             name: dir_name.to_string(),
+            skipped: counters.skipped,
         },
     );
-    Ok(())
+    Ok(counters.skipped)
 }
 
+/// Returns how many files and folders were skipped because they could not be
+/// read or imported; the "done" progress report carries the same number.
 #[tauri::command]
 pub async fn vault_import_folder(
     app: AppHandle,
     folder_id: String,
     source_path: String,
-) -> Result<(), String> {
+) -> Result<u32, String> {
     let folder_id = Uuid::parse_str(&folder_id).map_err(|e| e.to_string())?;
     let source = PathBuf::from(&source_path);
     run_blocking(move || import_folder_impl(&app, folder_id, &source)).await
 }
 
+/// Imports what the Explorer verbs queued into Inbox.
+///
+/// Nothing is dropped. What would not import goes back in the queue, so the
+/// next unlock offers it again, and the window hears about it through
+/// `shell-upload-failed` (a list of "name: why"). A queue that cannot be
+/// read into the silo at all goes back whole.
 pub(crate) fn process_shell_upload_queue(app: &AppHandle) -> Result<u32, String> {
     let paths = silentsilo_shell::drain_upload_queue().map_err(|e| e.to_string())?;
     if paths.is_empty() {
@@ -440,19 +481,51 @@ pub(crate) fn process_shell_upload_queue(app: &AppHandle) -> Result<u32, String>
     }
 
     let state = app.state::<AppState>();
-    let snapshot = crate::state::snapshot_focused_session(&state)?;
-    let inbox_id = crate::state::with_session_id(&state, snapshot.id, |_s, vfs| {
-        vfs.inbox_folder().map(|f| f.id)
-    })?;
+    let target = crate::state::snapshot_focused_session(&state).and_then(|snapshot| {
+        crate::state::with_session_id(&state, snapshot.id, |_s, vfs| {
+            vfs.inbox_folder().map(|f| f.id)
+        })
+        .map(|inbox| (snapshot, inbox))
+    });
+    let (snapshot, inbox_id) = match target {
+        Ok(target) => target,
+        Err(e) => {
+            requeue_uploads(&paths);
+            return Err(e);
+        }
+    };
 
     let mut imported = 0u32;
+    let mut failed = Vec::new();
+    let mut requeue = Vec::new();
     for path in paths {
         let source = PathBuf::from(&path);
-        if import_one(app, &snapshot, inbox_id, &source).is_ok() {
-            imported += 1;
+        match import_one(app, &snapshot, inbox_id, &source) {
+            Ok(_) => imported += 1,
+            Err(e) => {
+                let name = source
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or(&path)
+                    .to_string();
+                failed.push(format!("{name}: {e}"));
+                requeue.push(path);
+            }
         }
     }
+    if !failed.is_empty() {
+        requeue_uploads(&requeue);
+        let _ = app.emit("shell-upload-failed", &failed);
+    }
     Ok(imported)
+}
+
+fn requeue_uploads(paths: &[String]) {
+    for path in paths {
+        if let Err(e) = silentsilo_shell::queue_upload(path) {
+            crate::diagnostics::warn("import", format_args!("a queued file was lost: {e}"));
+        }
+    }
 }
 
 /// The DEK envelope to open the silo with, given the credential that
@@ -471,7 +544,7 @@ fn wrapped_dek_for(
         .or_else(|| keys.primary())
         .map(|key| key.wrapped_dek.clone())
         .filter(|wrapped| !wrapped.is_empty())
-        .ok_or_else(|| "No matching enrolled security key".to_string())
+        .ok_or_else(|| "That key is not enrolled on this silo.".to_string())
 }
 
 /// What to tell the user to do, matching what was actually asked of the
@@ -499,7 +572,7 @@ pub async fn vault_unlock(
     let root = vault_dir(&app)?;
 
     if !is_fido_enrolled(&root) {
-        return Err("Enroll a security key before unlocking".into());
+        return Err("Enrol a key before unlocking.".into());
     }
 
     let keys = silentsilo_vault::load_fido_keys(&root).map_err(|e| e.to_string())?;
@@ -521,12 +594,14 @@ pub async fn vault_unlock(
     // restores one from the encrypted snapshot: real disk work on a large
     // silo, so blocking-pool territory rather than an async worker.
     run_blocking(move || {
+        // Kept by the scratch sweep another silo's lock runs meanwhile.
+        let _opening = crate::state::opening(&app, &root);
         let session =
             VaultSession::open_with_fido_wrapped(root.clone(), &unlock.wrap_key, &wrapped_dek)
                 .map_err(|e| e.to_string())?;
 
         if session.vault_id != creds.vault_id {
-            return Err("these credentials belong to a different silo".into());
+            return Err("This key opens a different silo.".into());
         }
 
         let vfs = Vfs::new(&session);
@@ -554,13 +629,21 @@ pub async fn vault_unlock(
 #[tauri::command]
 pub async fn vault_lock(app: AppHandle, id: Option<String>) -> Result<(), String> {
     run_blocking(move || {
-        take_back_clipboard(&app);
         let state = app.state::<AppState>();
         let all = id.is_none();
         let ids = match id {
-            Some(id) => vec![Uuid::parse_str(&id).map_err(|e| e.to_string())?],
+            Some(id) => {
+                let id = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
+                // Only a silo that is open has anything to give back.
+                state
+                    .open_silo_ids()
+                    .into_iter()
+                    .filter(|open| *open == id)
+                    .collect()
+            }
             None => state.open_silo_ids(),
         };
+        take_back_clipboard(&app, if all { None } else { Some(&ids) });
         // Only ciphertext should remain on disk for each of these once this
         // returns; `close_session` snapshots, drops the connection and then
         // clears the working copy, in that order.
@@ -594,7 +677,7 @@ fn tell_if_scratch_survived(app: &AppHandle, left: usize) {
 /// a silo that cannot close right now is closed by its idle timer soon
 /// after.
 pub fn lock_all_silos(app: &AppHandle) {
-    take_back_clipboard(app);
+    take_back_clipboard(app, None);
     let state = app.state::<AppState>();
     for id in state.open_silo_ids() {
         let _ = state.close_session(id);
@@ -786,7 +869,15 @@ pub async fn vault_paste_paths(
             }
             if source.is_dir() {
                 match import_folder_impl(&app, folder_uuid, &source) {
-                    Ok(()) => result.imported_folders += 1,
+                    Ok(0) => result.imported_folders += 1,
+                    // Imported, minus what could not be read; said rather
+                    // than counted as a clean folder.
+                    Ok(skipped) => {
+                        result.imported_folders += 1;
+                        result
+                            .failed
+                            .push(format!("{name}: {skipped} items could not be read"));
+                    }
                     // A cancelled sub-folder import means cancellation was
                     // requested — stop the whole paste rather than recording the
                     // folder as a failure.
@@ -876,8 +967,8 @@ pub fn vault_restore_folder(
     with_vfs(&state, |_session, vfs| vfs.restore_folder(folder_id))
 }
 
-/// Permanently removes trashed items from the local index and their blobs
-/// from the local cache. The bucket copies are left to the orphan sweep: it
+/// Permanently removes trashed items from the local index, and their blobs
+/// from the local cache once a copy holds them. The bucket copies are left to the orphan sweep: it
 /// deletes only what stayed unreferenced across two passes, so a restore or
 /// an edit made concurrently on another device cannot lose content it still
 /// points at. The blob ids come back already filtered against what the
@@ -886,26 +977,20 @@ pub fn vault_restore_folder(
 #[tauri::command]
 pub async fn vault_empty_trash(app: AppHandle) -> Result<u64, String> {
     let app2 = app.clone();
-    let (removed, blob_ids, root) = run_blocking(move || {
+    let (removed, blob_ids, root, silo_id) = run_blocking(move || {
         let state = app2.state::<AppState>();
+        let silo_id = crate::state::focused_id(&state)?;
         let session_guard = state.focused_session()?;
         let session = session_guard
             .as_ref()
             .ok_or_else(|| CoreError::VaultLocked.to_string())?;
         let (removed, blob_ids) = Vfs::new(session).empty_trash().map_err(|e| e.to_string())?;
-        Ok((removed, blob_ids, session.paths.root.clone()))
+        Ok((removed, blob_ids, session.paths.root.clone(), silo_id))
     })
     .await?;
 
     let _ = run_blocking(move || {
-        for blob_id in &blob_ids {
-            if let Err(e) = silentsilo_vault::remove_blob_from_cache(&root, *blob_id) {
-                crate::diagnostics::warn(
-                    "purge",
-                    format_args!("blob {blob_id} left in the local cache: {e}"),
-                );
-            }
-        }
+        crate::commands::sync::release_purged_blobs(&app, silo_id, &root, &blob_ids);
         Ok(())
     })
     .await;
@@ -928,8 +1013,9 @@ pub async fn vault_purge_items(app: AppHandle, ids: Vec<String>) -> Result<u64, 
         .collect::<Result<_, _>>()?;
 
     let app2 = app.clone();
-    let (removed, blob_ids, root) = run_blocking(move || {
+    let (removed, blob_ids, root, silo_id) = run_blocking(move || {
         let state = app2.state::<AppState>();
+        let silo_id = crate::state::focused_id(&state)?;
         let session_guard = state.focused_session()?;
         let session = session_guard
             .as_ref()
@@ -937,19 +1023,12 @@ pub async fn vault_purge_items(app: AppHandle, ids: Vec<String>) -> Result<u64, 
         let (removed, blob_ids) = Vfs::new(session)
             .purge_items(&ids)
             .map_err(|e| e.to_string())?;
-        Ok((removed, blob_ids, session.paths.root.clone()))
+        Ok((removed, blob_ids, session.paths.root.clone(), silo_id))
     })
     .await?;
 
     let _ = run_blocking(move || {
-        for blob_id in &blob_ids {
-            if let Err(e) = silentsilo_vault::remove_blob_from_cache(&root, *blob_id) {
-                crate::diagnostics::warn(
-                    "purge",
-                    format_args!("blob {blob_id} left in the local cache: {e}"),
-                );
-            }
-        }
+        crate::commands::sync::release_purged_blobs(&app, silo_id, &root, &blob_ids);
         Ok(())
     })
     .await;
@@ -994,7 +1073,8 @@ async fn ensure_blobs_local(app: &AppHandle, blob_ids: &[Uuid]) -> Result<(), St
     let targets = crate::state::silo_targets(app);
     if targets.is_empty() {
         return Err(
-            "Some of this content isn't on this device, and no backup storage is connected.".into(),
+            "Some of these files are not on this computer, and no backup storage is connected."
+                .into(),
         );
     }
     let stores: Vec<(Uuid, &dyn silentsilo_store::ObjectStore)> =
@@ -1004,7 +1084,7 @@ async fn ensure_blobs_local(app: &AppHandle, blob_ids: &[Uuid]) -> Result<(), St
     for id in missing {
         silentsilo_sync::fetch_blob_from_targets(&stores, &root, id, every_copy)
             .await
-            .map_err(|e| format!("could not download the file content: {e}"))?;
+            .map_err(|e| format!("Could not download the file: {e}"))?;
     }
     // On the copy it came from, so no longer waiting to back up there.
     if let Ok(silo) = crate::state::active_silo(app) {
@@ -1065,10 +1145,10 @@ fn unwrap_export_key(
     kek: &silentsilo_crypto::ContentKek,
 ) -> Result<silentsilo_crypto::ContentKey, String> {
     if wrapped.is_empty() {
-        return Err("This file has no content key recorded, so it cannot be opened.".into());
+        return Err("This file has no key recorded, so it cannot be opened.".into());
     }
     silentsilo_crypto::unwrap_content_key(wrapped, kek)
-        .map_err(|_| "This content's key could not be read, so it cannot be opened.".to_string())
+        .map_err(|_| "This file's key could not be read, so it cannot be opened.".to_string())
 }
 
 /// Which of `names` are already in `dest_dir`.
@@ -1269,7 +1349,7 @@ fn safe_join(dest: &Path, name: &str) -> Result<PathBuf, String> {
         || name.contains(['/', '\\', ':'])
         || name.chars().any(char::is_control)
     {
-        return Err(format!("refusing to export unsafe entry name: {name:?}"));
+        return Err(format!("This name cannot be used as a file name: {name:?}"));
     }
     Ok(dest.join(name))
 }
@@ -1354,7 +1434,7 @@ pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), Stri
 
         let key =
             silentsilo_crypto::unwrap_content_key(&wrapped_key, &snapshot.kek).map_err(|_| {
-                "This content's key could not be read, so it cannot be opened.".to_string()
+                "This file's key could not be read, so it cannot be opened.".to_string()
             })?;
         let blob_path = silentsilo_vault::VaultPaths::new(snapshot.root.clone()).blob_path(blob_id);
         decrypt_blob(&blob_path, &dest, &key, blob_id).map_err(|e| e.to_string())?;
@@ -1398,18 +1478,18 @@ pub fn vault_upsert_password(
     json: String,
     state: State<AppState>,
 ) -> Result<(), String> {
-    let id = Uuid::parse_str(&id).map_err(|e| format!("invalid entry id: {e}"))?;
+    let id = Uuid::parse_str(&id).map_err(|e| format!("That entry id is not valid: {e}"))?;
 
     // Parsed to reject anything that would not survive a round trip, and to
     // make sure the id in the record matches the one being written. A row
     // whose body disagrees with its key is the kind of thing that only
     // surfaces on another device, months later.
     let parsed: serde_json::Value =
-        serde_json::from_str(&json).map_err(|e| format!("invalid JSON: {e}"))?;
+        serde_json::from_str(&json).map_err(|e| format!("The entry could not be read: {e}"))?;
     match parsed.get("id").and_then(|v| v.as_str()) {
         Some(inner) if inner == id.to_string() => {}
-        Some(_) => return Err("entry id does not match the record".into()),
-        None => return Err("entry has no id".into()),
+        Some(_) => return Err("The entry id does not match the entry.".into()),
+        None => return Err("The entry has no id.".into()),
     }
 
     let session_guard = state.focused_session()?;
@@ -1433,7 +1513,11 @@ pub fn vault_upsert_password(
 #[tauri::command]
 pub async fn copy_secret_to_clipboard(app: AppHandle, text: String) -> Result<(), String> {
     let copied = text.clone();
+    let owner = crate::state::focused_id(&app.state::<AppState>()).ok();
     run_blocking(move || silentsilo_shell::set_secret_clipboard(&copied)).await?;
+    if let Ok(mut held) = CLIPBOARD_OWNER.lock() {
+        *held = owner;
+    }
 
     // Cleared only if it is still ours: by the time this fires the user has
     // often copied something else, and wiping that would be the app reaching
@@ -1455,19 +1539,39 @@ pub async fn copy_secret_to_clipboard(app: AppHandle, text: String) -> Result<()
     Ok(())
 }
 
+/// The silo the secret on the clipboard came from, if one was focused.
+static CLIPBOARD_OWNER: std::sync::Mutex<Option<Uuid>> = std::sync::Mutex::new(None);
+
 /// Takes back a copied secret when a silo closes: a password copied a
 /// moment before the lock would otherwise stay readable for the rest of
 /// its forty-five seconds.
-fn take_back_clipboard(app: &AppHandle) {
+///
+/// `closing` names the silos going away, `None` meaning all of them. A
+/// secret another silo copied stays; one whose silo is not known goes.
+pub(crate) fn take_back_clipboard(app: &AppHandle, closing: Option<&[Uuid]>) {
+    let owner = CLIPBOARD_OWNER.lock().map(|o| *o).unwrap_or(None);
+    if !clipboard_goes(owner, closing) {
+        return;
+    }
     if silentsilo_shell::clear_secret_clipboard_now() {
         let _ = app.emit("clipboard-cleared", ());
+    }
+}
+
+fn clipboard_goes(owner: Option<Uuid>, closing: Option<&[Uuid]>) -> bool {
+    match (owner, closing) {
+        (_, None) => true,
+        // Nothing is closing, so nothing is taken back.
+        (_, Some([])) => false,
+        (None, Some(_)) => true,
+        (Some(owner), Some(closing)) => closing.contains(&owner),
     }
 }
 
 /// Removes one entry outright. There is no trash for logins.
 #[tauri::command(async)]
 pub fn vault_delete_password(id: String, state: State<AppState>) -> Result<(), String> {
-    let id = Uuid::parse_str(&id).map_err(|e| format!("invalid entry id: {e}"))?;
+    let id = Uuid::parse_str(&id).map_err(|e| format!("That entry id is not valid: {e}"))?;
     let session_guard = state.focused_session()?;
     let session = session_guard
         .as_ref()
@@ -1480,10 +1584,15 @@ pub fn vault_delete_password(id: String, state: State<AppState>) -> Result<(), S
 /// Proves the user is still at the keyboard, without touching the open
 /// session. The touch only counts if the key it produces actually unwraps
 /// this silo's DEK; a bare presence check would accept any FIDO key in the
-/// drawer. Used by entries marked "ask again before revealing".
+/// drawer. Used by entries marked "ask again before revealing". `purpose`
+/// picks the prompt's wording from a fixed list, never free text.
 #[tauri::command]
-pub async fn fido_reverify(app: AppHandle) -> Result<(), String> {
-    verify_presence(&app, "show this entry").await
+pub async fn fido_reverify(app: AppHandle, purpose: Option<String>) -> Result<(), String> {
+    let why = match purpose.as_deref() {
+        Some("export") => "export your logins",
+        _ => "show this entry",
+    };
+    verify_presence(&app, why).await
 }
 
 /// Whether the focused silo has a security key or Windows Hello enrolled,
@@ -1500,7 +1609,7 @@ pub(crate) async fn verify_presence(app: &AppHandle, purpose: &str) -> Result<()
     let creds = crate::state::silo_credentials(app)?;
 
     if !is_fido_enrolled(&root) {
-        return Err("No security key is enrolled on this silo.".into());
+        return Err("No key is enrolled on this silo.".into());
     }
 
     let keys = silentsilo_vault::load_fido_keys(&root).map_err(|e| e.to_string())?;
@@ -1528,11 +1637,11 @@ pub(crate) async fn verify_presence(app: &AppHandle, purpose: &str) -> Result<()
     let stored = keys
         .find_by_credential_id(&unlock.credential_id)
         .or_else(|| keys.primary())
-        .ok_or_else(|| "That security key isn't enrolled on this silo.".to_string())?;
+        .ok_or_else(|| "That key is not enrolled on this silo.".to_string())?;
 
     silentsilo_vault::unwrap_dek_hex(&stored.wrapped_dek, &unlock.wrap_key)
         .map(|_| ())
-        .map_err(|_| "That security key could not verify this silo.".to_string())
+        .map_err(|_| "That key could not verify this silo.".to_string())
 }
 
 #[derive(serde::Serialize)]
@@ -1606,7 +1715,7 @@ pub async fn password_attach_file(
         let name = source
             .file_name()
             .and_then(|n| n.to_str())
-            .ok_or_else(|| "invalid file name".to_string())?
+            .ok_or_else(|| "That file name cannot be read.".to_string())?
             .to_string();
 
         let blob_id = Uuid::new_v4();
@@ -1664,7 +1773,7 @@ pub async fn password_open_attachment(
 
         let key =
             silentsilo_crypto::unwrap_content_key(&blob_key, &snapshot.kek).map_err(|_| {
-                "This content's key could not be read, so it cannot be opened.".to_string()
+                "This file's key could not be read, so it cannot be opened.".to_string()
             })?;
         let blob_path = silentsilo_vault::VaultPaths::new(snapshot.root.clone()).blob_path(blob_id);
         decrypt_blob(&blob_path, &dest, &key, blob_id).map_err(|e| e.to_string())?;
@@ -1723,8 +1832,9 @@ pub async fn passwords_read_import_csv(app: AppHandle, path: String) -> Result<S
             return Err("That file is too large to be a password export.".into());
         }
 
-        std::fs::read_to_string(&path)
-            .map_err(|_| "Couldn't read that file as text. Is it really a CSV?".to_string())
+        std::fs::read_to_string(&path).map_err(|_| {
+            "Could not read that file as text. Choose a CSV or a Bitwarden JSON export.".to_string()
+        })
     })
     .await
 }
@@ -1810,7 +1920,7 @@ pub async fn vault_blob_status(app: AppHandle) -> Result<BlobStatus, String> {
                 Vfs::new(session)
                     .list_blob_sizes()
                     .map_err(|e| e.to_string())?,
-                Vfs::new(session).attachment_blobs().unwrap_or_default(),
+                attachment_sizes(session),
             )
         };
 
@@ -1837,16 +1947,16 @@ pub async fn vault_blob_status(app: AppHandle) -> Result<BlobStatus, String> {
 
         // Password attachments hold blobs the file tree never references, so
         // a recovery that only counted the tree would leave them behind.
-        for attachment in attachments {
-            let id = attachment.blob_id.to_string();
-            if here.contains(&attachment.blob_id) || missing.contains(&id) || absent.contains(&id) {
+        for (blob_id, size_bytes) in attachments {
+            let id = blob_id.to_string();
+            if here.contains(&blob_id) || missing.contains(&id) || absent.contains(&id) {
                 continue;
             }
-            if absent_ids.contains(&attachment.blob_id) {
+            if absent_ids.contains(&blob_id) {
                 absent.push(id);
             } else {
                 missing.push(id);
-                missing_bytes += attachment.size_bytes;
+                missing_bytes += size_bytes;
             }
         }
 
@@ -1863,6 +1973,53 @@ pub async fn vault_blob_status(app: AppHandle) -> Result<BlobStatus, String> {
         })
     })
     .await
+}
+
+/// Password attachments by silo, with a fingerprint of the sealed rows they
+/// were read from.
+type AttachmentCache = Option<(Uuid, u64, Vec<(Uuid, i64)>)>;
+static ATTACHMENTS: std::sync::Mutex<AttachmentCache> = std::sync::Mutex::new(None);
+
+/// Every attachment's blob and size. Finding them means opening every
+/// password entry, secrets included, and the explorer asks every twenty
+/// seconds, so the answer is kept until a sealed row changes. Sealing uses
+/// a fresh nonce, so any edit changes the ciphertext the fingerprint reads.
+fn attachment_sizes(session: &VaultSession) -> Vec<(Uuid, i64)> {
+    let fingerprint = sealed_passwords_fingerprint(session);
+    if let (Some(fingerprint), Ok(cache)) = (fingerprint, ATTACHMENTS.lock())
+        && let Some((silo, seen, sizes)) = cache.as_ref()
+        && *silo == session.vault_id
+        && *seen == fingerprint
+    {
+        return sizes.clone();
+    }
+    let sizes: Vec<(Uuid, i64)> = Vfs::new(session)
+        .attachment_blobs()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|a| (a.blob_id, a.size_bytes))
+        .collect();
+    if let (Some(fingerprint), Ok(mut cache)) = (fingerprint, ATTACHMENTS.lock()) {
+        *cache = Some((session.vault_id, fingerprint, sizes.clone()));
+    }
+    sizes
+}
+
+/// A hash of the sealed password rows as stored, without opening any.
+/// `None` when the table cannot be read, which means no caching.
+fn sealed_passwords_fingerprint(session: &VaultSession) -> Option<u64> {
+    use std::hash::{Hash, Hasher};
+    let mut stmt = session
+        .conn
+        .prepare("SELECT id, data FROM passwords ORDER BY id")
+        .ok()?;
+    let mut rows = stmt.query([]).ok()?;
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    while let Some(row) = rows.next().ok()? {
+        row.get::<_, String>(0).ok()?.hash(&mut hasher);
+        row.get::<_, String>(1).ok()?.hash(&mut hasher);
+    }
+    Some(hasher.finish())
 }
 
 // ── Protected folders ───────────────────────────────────────────────
@@ -1975,7 +2132,7 @@ pub async fn protected_folders_scan(app: AppHandle) -> Result<ProtectedScanRepor
         )
         .is_err()
     {
-        return Err("A check of the protected folders is already running.".into());
+        return Err("A check of the auto-import folders is already running.".into());
     }
     let _scanning = Scanning;
 
@@ -2251,7 +2408,62 @@ mod export_path_tests {
     fn a_row_with_no_content_key_is_refused_rather_than_guessed() {
         let kek = silentsilo_crypto::generate_content_kek();
         let err = unwrap_export_key("", &kek).map(|_| ()).unwrap_err();
-        assert!(err.contains("no content key"), "{err}");
+        assert!(err.contains("no key recorded"), "{err}");
+    }
+}
+
+#[cfg(test)]
+mod clipboard_and_status_tests {
+    use super::{attachment_sizes, clipboard_goes, sealed_passwords_fingerprint};
+    use silentsilo_vault::VaultSession;
+    use silentsilo_vfs::Vfs;
+    use uuid::Uuid;
+
+    #[test]
+    fn a_lock_takes_back_only_its_own_silos_secret() {
+        let (a, b) = (Uuid::from_bytes([1; 16]), Uuid::from_bytes([2; 16]));
+        assert!(clipboard_goes(Some(a), Some(&[a])));
+        assert!(
+            !clipboard_goes(Some(a), Some(&[b])),
+            "another silo's copy stays"
+        );
+        assert!(
+            !clipboard_goes(None, Some(&[])),
+            "closing nothing clears nothing"
+        );
+        assert!(
+            clipboard_goes(Some(a), None),
+            "locking everything clears it"
+        );
+        assert!(clipboard_goes(None, Some(&[a])), "an unknown owner goes");
+    }
+
+    #[test]
+    fn attachments_are_read_again_only_when_an_entry_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let session =
+            VaultSession::provision(dir.path().join("silo"), Uuid::new_v4(), "s").unwrap();
+        let vfs = Vfs::new(&session);
+        vfs.ensure_initialized().unwrap();
+        let before = sealed_passwords_fingerprint(&session).expect("the table reads");
+
+        let id = Uuid::new_v4();
+        let blob = Uuid::new_v4();
+        let entry = serde_json::json!({
+            "id": id.to_string(), "service": "Bank", "username": "a", "password": "p",
+            "attachments": [{ "blob_id": blob.to_string(), "name": "x.pdf",
+                "size_bytes": 7, "blob_key": "k" }],
+        });
+        vfs.upsert_password(id, &entry.to_string()).unwrap();
+        let after = sealed_passwords_fingerprint(&session).unwrap();
+        assert_ne!(before, after, "a new entry changes the fingerprint");
+        assert_eq!(attachment_sizes(&session), vec![(blob, 7)]);
+
+        vfs.delete_password(id).unwrap();
+        assert!(
+            attachment_sizes(&session).is_empty(),
+            "a removed entry is not served from the cache"
+        );
     }
 }
 

@@ -40,8 +40,8 @@ export function SiloReportDialog({ report, onClose }: Props) {
       >
         <h3 className="modal-title">About {report.name}</h3>
         <p className="hint">
-          What this silo looks like on disk, without opening it. Copy it into a message if
-          something here needs explaining.
+          What this silo looks like on disk, read without opening it. Copy it into a message
+          when you ask for help.
         </p>
 
         <div className="modal-body info-body">
@@ -86,7 +86,7 @@ export function SiloReportDialog({ report, onClose }: Props) {
                 ? "cannot be read"
                 : keys.total === 0
                   ? "none enrolled"
-                  : `${keys.total} enrolled · ${keys.platform} sealed to a machine · ${keys.portable} portable${
+                  : `${keys.total} enrolled · ${keys.platform} sealed to a computer · ${keys.portable} portable${
                       keys.revoked > 0 ? ` · ${keys.revoked} retired` : ""
                     }`}
             </span>

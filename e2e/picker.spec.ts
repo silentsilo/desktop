@@ -5,7 +5,7 @@ test("the picker lists silos and says which cannot open", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "Your silos" })).toBeVisible();
   // The badge reads OPEN on screen; the uppercasing is CSS, the text is not.
-  await expect(page.locator(".silo-open-badge")).toHaveText("open");
+  await expect(page.locator(".silo-open-badge")).toHaveText("unlocked");
   await expect(page.getByText("not reachable", { exact: false }).first()).toBeVisible();
   // The explanation for the unreachable state, so the row does not read as
   // a silo that fails for invisible reasons.

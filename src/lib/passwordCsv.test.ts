@@ -169,6 +169,26 @@ describe("csvToEntries", () => {
     });
   });
 
+  it("keeps Bitwarden's extra addresses, custom fields and unusable 2FA in notes", () => {
+    const csv = [
+      "folder,favorite,type,name,notes,fields,reprompt,login_uri,login_username,login_password,login_totp",
+      'Games,0,login,Steam,my note,"PIN: 4321\nRegion: EU",0,"https://a.com,https://b.com",alice,pw,steam://ABCDE',
+    ].join("\n");
+
+    const result = csvToEntries(csv, clock);
+    expect(result.entries[0]!.url).toBe("https://a.com");
+    expect(result.entries[0]!.totp_secret).toBeUndefined();
+    expect(result.entries[0]!.notes).toBe(
+      "my note\nWeb address: https://b.com\nPIN: 4321\nRegion: EU\nTwo-factor secret: steam://ABCDE",
+    );
+    expect(result.extras).toEqual({
+      customFields: 2,
+      extraUris: 1,
+      unsupportedOtp: 1,
+      passkeys: 0,
+    });
+  });
+
   it("imports a LastPass export", () => {
     const csv = [
       "url,username,password,totp,extra,name,grouping,fav",
@@ -396,6 +416,60 @@ describe("entriesToCsv", () => {
     const csv = entriesToCsv([entry({ service: "=1+1", password: "=2+2" })]);
     expect(csv).toContain("'=1+1");
     expect(csv).toContain(",=2+2,");
+  });
+
+  it("guards formulas behind +, - and @ but leaves phone numbers and handles alone", () => {
+    const csv = entriesToCsv([
+      entry({ service: "+HYPERLINK(\"x\")", username: "+40 721 000 000" }),
+      entry({ service: "-cmd|' /C calc'!A0", username: "@alex" }),
+      entry({ service: "@SUM(1+1)", username: "-5" }),
+    ]);
+    expect(csv).toContain("'+HYPERLINK");
+    expect(csv).toContain("'-cmd|");
+    expect(csv).toContain("'@SUM(1+1)");
+    expect(csv).toContain(",+40 721 000 000,");
+    expect(csv).toContain(",@alex,");
+    expect(csv).toContain(",-5,");
+  });
+
+  it("takes the guard back off when its own export is imported", () => {
+    const values = [
+      "=1+1",
+      "+SUM(A1)",
+      "@SUM(1+1)",
+      "-cmd|x!A0",
+      "+40 721 000 000",
+      "@alex",
+      "'=already quoted",
+      "''+SUM(1)",
+      "'plain",
+    ];
+    const original = values.map((v) => entry({ service: v, username: v, notes: v, category: v }));
+    const result = csvToEntries(entriesToCsv(original));
+    expect(result.format).toBe("silentsilo");
+    result.entries.forEach((reimported, i) => {
+      expect(reimported).toMatchObject({
+        service: values[i],
+        username: values[i],
+        notes: values[i],
+        category: values[i],
+      });
+    });
+  });
+
+  it("strips the wider guard earlier versions wrote", () => {
+    const csv = [
+      "name,url,username,password,totp,category,note",
+      "Phone,,'+40 721 000 000,pw,,General,'@mention",
+    ].join("\n");
+    const [reimported] = csvToEntries(csv).entries;
+    expect(reimported!.username).toBe("+40 721 000 000");
+    expect(reimported!.notes).toBe("@mention");
+  });
+
+  it("leaves a quote alone in another tool's export", () => {
+    const csv = ["name,url,username,password", "'=x,,,pw"].join("\n");
+    expect(csvToEntries(csv).entries[0]!.service).toBe("'=x");
   });
 
   it("ends with a newline", () => {

@@ -3,7 +3,7 @@ import { isComplete } from "../lib/recoveryCode";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AlertCircle, ArrowLeft, CheckCircle2, FolderOpen, LifeBuoy } from "lucide-react";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog } from "../lib/dialog";
 import { AuthShell } from "../layout/AuthShell";
 import { RecoveryCodeInput } from "../components/RecoveryCodeInput";
 import { formatAppError } from "../lib/errors";
@@ -133,9 +133,8 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
       <section className="card auth-card is-form">
         <h2>Set up from backup storage</h2>
         <p className="hint">
-          Point this computer at wherever your silo backs up. Its contents are copied here and
-          decrypted with a security key you already have. After that you work locally, exactly
-          like any other silo.
+          Enter your silo&apos;s backup storage details. The silo is copied here and unlocked with
+          a key you already have.
         </p>
 
         <div className="s3-form">
@@ -164,7 +163,7 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
             screen after it finishes is a number nobody is waiting for. */}
         {working && fetched !== null && fetched.total > 0 && (
           <p className="hint" role="status">
-            Fetching this silo's history: {fetched.done} of {fetched.total} changes.
+            Downloading this silo&apos;s changes: {fetched.done} of {fetched.total}.
           </p>
         )}
 
@@ -214,16 +213,14 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
               <CheckCircle2 size={14} />
               {preview.key_labels.length > 0
                 ? `Found a silo. Keys that can open it: ${preview.key_labels.join(", ")}.`
-                : "Found a silo, but no security keys have been published to it yet."}
+                : "Found a silo, but no keys have been added to it yet."}
             </p>
             {mode === "code" ? (
               <div className="field">
                 <span>Recovery code</span>
                 <RecoveryCodeInput value={code} onChange={setCode} disabled={disabled} />
                 <p className="hint">
-                  One group per box; paste the whole code into any of them and the rest fill
-                  themselves. This rebuilds the silo here from storage alone, with no security
-                  key needed.
+                  Paste the whole code into any box and the rest fill in. No key is needed.
                 </p>
               </div>
             ) : (
@@ -253,7 +250,7 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
               {working && <span className="spinner" aria-hidden />}
               {working
                 ? mode === "code"
-                  ? "Restoring…"
+                  ? "Setting up…"
                   : "Waiting for your key…"
                 : "Set up on this computer"}
             </button>

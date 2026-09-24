@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  forgetTheme,
   preferredTheme,
   rememberTheme,
   ThemeContext,
   themeIsExplicit,
   type Theme,
+  type ThemeChoice,
 } from "../lib/theme";
 
 /**
@@ -18,6 +20,7 @@ import {
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(preferredTheme);
+  const [explicit, setExplicit] = useState(themeIsExplicit);
 
   useEffect(() => {
     document.documentElement.className = theme === "light" ? "light-theme" : "";
@@ -48,8 +51,24 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       rememberTheme(next);
       return next;
     });
+    setExplicit(true);
   }, []);
 
-  const value = useMemo(() => ({ theme, toggle }), [theme, toggle]);
+  const choose = useCallback((choice: ThemeChoice) => {
+    if (choice === "system") {
+      forgetTheme();
+      setExplicit(false);
+      setTheme(preferredTheme());
+    } else {
+      rememberTheme(choice);
+      setExplicit(true);
+      setTheme(choice);
+    }
+  }, []);
+
+  const value = useMemo(
+    () => ({ theme, toggle, choice: explicit ? theme : ("system" as const), choose }),
+    [theme, toggle, explicit, choose],
+  );
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

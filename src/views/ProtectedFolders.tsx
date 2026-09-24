@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog } from "../lib/dialog";
 import { FolderHeart, RefreshCw, Trash2 } from "lucide-react";
 import { formatAppError } from "../lib/errors";
 
@@ -9,10 +9,10 @@ type ProtectedFolder = { path: string; target: string };
 /**
  * Folders on this computer the silo keeps a copy of.
  *
- * The wording here is the feature. "Protected folder" reads like a mirror to
- * most people, and this is an archive: content goes in, nothing comes back
- * out on its own, and deleting a file on the computer does not delete the
- * copy. Someone who expects a mirror and gets an archive is only surprised
+ * The wording here is the feature. It was called "Protected folders", which
+ * said nothing about how it works and read like a mirror to most people. It
+ * is one way: content goes in, nothing comes back out on its own, and
+ * deleting a file on the computer does not delete the copy. Someone who expects a mirror and gets an archive is only surprised
  * on the day they were counting on the deletion, which is the worst possible
  * day to find out.
  */
@@ -95,16 +95,15 @@ export function ProtectedFoldersPanel() {
     <div className="panel-section">
       <h3>
         <FolderHeart size={16} />
-        Protected folders
+        Auto-import folders
       </h3>
       <p>
-        Folders on this computer that the silo keeps a copy of. They are checked when you unlock
-        the silo and whenever you ask. Nothing is ever written back to them.
+        Files from these folders are copied into the silo each time you unlock it, and when you
+        press Check now. Nothing is written back to the folders.
       </p>
       <p className="hint">
-        This is an archive, not a mirror. A file you delete on this computer stays in the silo,
-        which is the point of putting a folder here. To remove one from the silo, delete it in
-        Files.
+        Deleting a file here on the computer does not delete it from the silo. To remove it from
+        the silo, delete it in Files.
       </p>
 
       {folders !== null && folders.length > 0 && (
@@ -122,10 +121,10 @@ export function ProtectedFoldersPanel() {
                 className="secondary"
                 disabled={busy}
                 onClick={() => void remove(folder.path)}
-                title="Stop copying this folder"
+                title="Stop importing this folder. What is already in the silo stays."
               >
                 <Trash2 size={14} />
-                Stop
+                Stop importing
               </button>
             </li>
           ))}
@@ -133,13 +132,13 @@ export function ProtectedFoldersPanel() {
       )}
 
       {folders !== null && folders.length === 0 && (
-        <p className="hint">No folders are being copied yet.</p>
+        <p className="hint">No folders are imported yet.</p>
       )}
 
       <div className="actions">
         <button type="button" disabled={busy} onClick={() => void add()}>
           <FolderHeart size={15} />
-          Add a folder
+          Add a folder to import
         </button>
         <button
           type="button"

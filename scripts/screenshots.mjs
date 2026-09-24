@@ -40,7 +40,7 @@ const shots = [
   {
     name: "unlock",
     async take(page) {
-      await settle(page, "/?mock=unlock", "Security key ready");
+      await settle(page, "/?mock=unlock", "will show its own prompt");
     },
   },
   {
@@ -56,7 +56,7 @@ const shots = [
     name: "credentials",
     async take(page) {
       await settle(page, "/?mock=unlocked", "Passport scan.pdf");
-      await page.getByRole("button", { name: "Credentials" }).click();
+      await page.getByRole("button", { name: "Passwords", exact: true }).click();
       await page.getByText("Bank", { exact: true }).first().click();
       await page.getByText("Branch phone: 021 000 000").waitFor({ state: "visible" });
     },
@@ -66,7 +66,7 @@ const shots = [
     async take(page) {
       await settle(page, "/?mock=unlocked", "Passport scan.pdf");
       await page.getByRole("button", { name: "Settings" }).click();
-      await page.getByRole("button", { name: "Backup" }).click();
+      await page.getByRole("button", { name: "Backup", exact: true }).click();
     },
   },
   {
@@ -74,7 +74,7 @@ const shots = [
     async take(page) {
       await settle(page, "/?mock=unlocked", "Passport scan.pdf");
       await page.getByRole("button", { name: "Settings" }).click();
-      await page.getByRole("button", { name: "Recovery code" }).click();
+      await page.getByRole("button", { name: "Recovery code", exact: true }).click();
       // The sheet is the point of this screen, and it sits below the fold.
       // Filled in rather than blank: empty boxes photograph as a form, and
       // what is worth showing is the paper someone files away.
@@ -98,12 +98,9 @@ const shots = [
     name: "restore",
     async take(page) {
       await settle(page, "/?mock=picker", "Your silos");
-      await page.getByRole("button", { name: "Copy one from backup storage" }).click();
-      // The folder backend rather than the default bucket one: its form is
-      // six fields shorter, so the whole card fits the shot instead of being
-      // cut off mid-field, and a filled path reads as a real setup rather
-      // than an empty form.
-      await page.getByRole("button", { name: "Folder" }).click();
+      await page.getByRole("button", { name: "Set up from backup storage" }).click();
+      // The form starts on a folder, the shortest of the four: the whole
+      // card fits the shot, and a filled path reads as a real setup.
       await page.getByPlaceholder("\\\\nas\\backups\\silentsilo").fill("E:\\Backups\\SilentSilo");
     },
   },

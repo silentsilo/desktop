@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { applyImportCategory, dropDuplicates, entryFingerprint } from "./passwordImport";
+import {
+  applyImportCategory,
+  describeExtras,
+  dropDuplicates,
+  entryFingerprint,
+  noExtras,
+} from "./passwordImport";
 import type { PasswordEntry } from "./types";
 
 function entry(overrides: Partial<PasswordEntry> = {}): PasswordEntry {
@@ -120,5 +126,20 @@ describe("applyImportCategory", () => {
       category: "Imported",
     });
     expect(dropDuplicates([stored], refiled).duplicates).toBe(1);
+  });
+});
+
+describe("describeExtras", () => {
+  it("says nothing when everything had a field of its own", () => {
+    expect(describeExtras(noExtras())).toBe("");
+  });
+
+  it("names what went into notes and what was left out", () => {
+    expect(
+      describeExtras({ customFields: 3, extraUris: 1, unsupportedOtp: 2, passkeys: 1 }),
+    ).toBe(
+      "Moved into notes: 3 custom fields, 1 extra web address and 2 two-factor secrets" +
+        " SilentSilo cannot show codes for. Left out: 1 passkey, which SilentSilo does not store.",
+    );
   });
 });

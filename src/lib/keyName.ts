@@ -35,5 +35,5 @@ export function usableHere(key: SecurityKeyInfo): boolean {
 export function securityKeyDisplayName(key: SecurityKeyInfo, os: Os = "windows"): string {
   if (key.label) return key.label;
   if (!usableHere(key)) return "Key from another device";
-  return key.platform ? platformStrings(os).builtIn : `Key in slot ${key.key_slot}`;
+  return key.platform ? platformStrings(os).builtIn : `Security key ${key.key_slot}`;
 }

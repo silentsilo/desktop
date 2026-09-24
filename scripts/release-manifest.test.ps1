@@ -87,6 +87,20 @@ Reset-Fixture @("$setupName", "$setupName.sig", "SilentSilo.app.tar.gz", "Silent
 $p = Build
 Check "windows plus the two mac keys, nothing invented for Linux" ($p.Keys.Count -eq 3)
 
+Write-Host "`n== Version order, as the updater ranks it =="
+Check "a minor above the last release" (Test-VersionAbove "1.2.0" "1.1.0")
+Check "an rc above the last release" (Test-VersionAbove "1.2.0-rc.1" "1.1.0")
+Check "the release above its own rc" (Test-VersionAbove "1.2.0" "1.2.0-rc.5")
+Check "no rc above its release" (-not (Test-VersionAbove "1.2.0-rc.5" "1.2.0"))
+Check "rc.10 above rc.9" (Test-VersionAbove "1.2.0-rc.10" "1.2.0-rc.9")
+Check "the same version is not above itself" (-not (Test-VersionAbove "1.1.0" "1.1.0"))
+Check "a lower patch is not above" (-not (Test-VersionAbove "1.1.0" "1.1.1"))
+Check "rc.1 above rc (more fields)" (Test-VersionAbove "1.2.0-rc.1" "1.2.0-rc")
+Check "an alphanumeric id above a numeric one" (Test-VersionAbove "1.2.0-rc" "1.2.0-1")
+$threw = $false
+try { Test-VersionAbove "latest" "1.1.0" | Out-Null } catch { $threw = $true }
+Check "refuses what is not a version" $threw
+
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
 Write-Host ""
 if ($failures -gt 0) { Write-Host "$failures failed" -ForegroundColor Red; exit 1 }

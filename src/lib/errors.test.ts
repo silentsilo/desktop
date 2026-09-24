@@ -3,10 +3,10 @@ import { formatAppError } from "./errors";
 
 describe("formatAppError", () => {
   it("recognizes an unconfigured bucket as a benign local-only notice", () => {
-    const expected = "No backup storage is connected. This silo is on this computer only.";
+    const expected = "Not backed up. This silo is only on this computer.";
     expect(formatAppError("CloudNotConfigured")).toBe(expected);
     expect(
-      formatAppError("That file isn't on this device, and no backup storage is connected."),
+      formatAppError("That file is not on this computer, and no backup storage is connected."),
     ).toBe(expected);
   });
 
@@ -33,7 +33,7 @@ describe("formatAppError", () => {
   });
 
   it("maps connection failures to backup storage, whatever kind it is", () => {
-    const expected = "Can't reach your backup storage. Check your connection and the address.";
+    const expected = "Cannot reach your backup storage. Check your connection and the address.";
     expect(formatAppError("error sending request for url (...)")).toBe(expected);
     expect(formatAppError("tcp connect error: Connection refused")).toBe(expected);
   });
@@ -47,23 +47,26 @@ describe("formatAppError", () => {
 
   it("maps a missing bucket to something the user can act on", () => {
     expect(formatAppError("service error: NoSuchBucket")).toBe(
-      "That bucket doesn't exist. Check its name and region.",
+      "That bucket does not exist. Check its name and region.",
     );
   });
 
   it("maps FIDO enrollment-state messages", () => {
-    expect(formatAppError("no security key enrolled")).toBe("No security key enrolled yet.");
-    expect(formatAppError("credential already enrolled")).toBe(
-      "That credential is already enrolled.",
+    expect(formatAppError("no security key enrolled")).toBe("No key enrolled yet.");
+    expect(formatAppError("This key is already enrolled")).toBe("That key is already enrolled.");
+    expect(formatAppError("credential already enrolled")).toBe("That key is already enrolled.");
+    expect(formatAppError("Keep at least one key enrolled")).toBe(
+      "Keep at least one key on the silo.",
     );
     expect(formatAppError("keep at least one security key")).toBe(
-      "Keep at least one security key on the silo.",
+      "Keep at least one key on the silo.",
     );
   });
 
   it("passes through a first-unlock/enrollment-related vault-locked message verbatim", () => {
     const msg = "VaultLocked: unlock and enroll a security key first";
     expect(formatAppError(msg)).toBe(msg);
+    expect(formatAppError("Enrol a key before unlocking")).toBe("Enrol a key before unlocking");
   });
 
   it("strips common Rust/Tauri error-wrapper prefixes for an unrecognized message", () => {
@@ -103,8 +106,8 @@ describe("rules that used to match too much", () => {
     expect(formatAppError("pick at least one folder to export")).toBe(
       "pick at least one folder to export",
     );
-    expect(formatAppError("Keep at least one security key enrolled")).toBe(
-      "Keep at least one security key on the silo.",
+    expect(formatAppError("Keep at least one key enrolled")).toBe(
+      "Keep at least one key on the silo.",
     );
   });
 

@@ -37,17 +37,15 @@ export function EnrollView({
       <section className="card auth-card">
         <h2>Set up unlocking</h2>
         <p className="hint">
-          A FIDO2 key (YubiKey, Nitrokey, SoloKeys and others) travels with you and survives this
-          computer. {platform.builtIn} is quicker, but it is sealed to this machine: if the machine
-          dies, so does that way in. Both protect the silo equally well, and you can add the
-          other later in Settings.
+          A security key (YubiKey, Nitrokey, SoloKeys) works on any computer. {platform.builtIn}{" "}
+          is quicker but works only on this one. You can add the other later in Settings.
         </p>
         {bootstrap.fido_available ? (
           <>
             <p className="hint">
-              Security key ready. {platform.osName} will show its own prompt.
+              {platform.osName} will show its own prompt.
               {platform.offersPhone &&
-                " It may also offer a phone via a QR code: that works on recent Android phones, and a phone whose passkey cannot derive the silo key is refused with an explanation."}
+                " It may also offer a phone through a QR code. Recent Android phones work; others are refused with a reason."}
             </p>
             {!bootstrap.platform_authenticator && (
               <p className="hint">{platform.builtInSetupHint}</p>
@@ -66,17 +64,13 @@ export function EnrollView({
             What happens if you lose it
           </h3>
           <p>
-            Whatever you choose here is the way in. If you lose it, a
-            recovery code is the only thing that gets you back, and if you
-            never made one, or you lose that too, the files are gone
-            permanently. There is no backdoor, no support override and no
-            copy of your key on our side.
+            If you lose what you choose here, only a recovery code gets you
+            back in. Without one, the files are lost for good. We keep no copy
+            of your key and cannot open the silo for you.
           </p>
           <p>
-            That is the direct consequence of the thing that makes this worth
-            using: nobody else can open your silo, including us. So make a
-            recovery code as soon as you are in, from Settings, and keep it
-            where you would keep a passport.
+            Make a recovery code in Settings as soon as you are in, and keep it
+            where you keep your passport.
           </p>
         </div>
         {/* The one moment this can be chosen, so it is asked here rather than
@@ -98,11 +92,10 @@ export function EnrollView({
                 consequences appear before the enrolment they apply to. */}
             {organisation && (
               <span className="hint">
-                For a company setting a silo up for someone. The key you enrol next stays the
-                organisation&apos;s way in: whoever uses this computer cannot remove it, and cannot
-                change the recovery code without it. Enrol a second organisation key afterwards,
-                from Settings, because losing the only one leaves nobody able to administer the
-                silo. This cannot be turned on later, and it is visible on every device.
+                The key you enrol next belongs to the organisation. The person using this computer
+                cannot remove it, or change the recovery code without it. Enrol a second
+                organisation key later in Settings: if the only one is lost, nobody can administer
+                the silo. This cannot be turned on later.
               </span>
             )}
           </span>
@@ -141,7 +134,7 @@ export function EnrollView({
         <div className="auth-alternatives">
           <button type="button" className="secondary" disabled={busy} onClick={onBack}>
             <ArrowLeft size={15} />
-            Back to silos
+            Switch silo
           </button>
         </div>
         <p className="hint danger-hint">

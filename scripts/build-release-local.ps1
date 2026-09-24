@@ -22,9 +22,9 @@
 # before installing anything. They are unrelated and both are required.
 #
 # Authenticode needs the hardware token plugged in and unlocked. The updater
-# key needs a password, asked for once below; that password never reaches a
-# file or the shell history, it is read into the process environment and
-# cleared when the script ends.
+# key needs a password, asked for once after every build has finished; it
+# never reaches a file or the shell history, and sits in the environment only
+# while the two signer commands run.
 #
 # Everything lands in dist-release\, ready to upload to the GitHub release.
 
@@ -154,24 +154,16 @@ try {
     cargo clippy --all-targets --locked -- -D warnings; if (-not $?) { throw "clippy failed" }
     cargo test --all --locked;  if (-not $?) { throw "cargo test failed" }
 
-    # Asked only now: the checks above run every dev dependency and every
-    # crate's build script, none of which needs the updater key's password.
-    $secure = Read-Host "Updater signing key password" -AsSecureString
-    $env:TAURI_SIGNING_PRIVATE_KEY = $keyFile
-    $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD =
-        [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
-            [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
-
     Write-Host "`n== Installer ==" -ForegroundColor Cyan
     # The Authenticode certificate lives on a hardware token, so a GitHub
     # runner cannot reach it and signCommand stays out of tauri.conf.json.
     # Merging it in only here is what lets a tagged build stay green in CI
     # while the release people actually download is signed.
     #
-    # Tauri signs during bundling and computes the updater signature after, so
-    # the .sig covers the signed bytes. Getting that order wrong produces an
-    # update the app refuses to install, which is why signing does not happen
-    # further down with the extractors.
+    # tauri.signing.json also turns the updater artifacts off, so the build
+    # never sees the updater key or its password: every crate's build script
+    # runs in it. The installer gets its updater signature further down, after
+    # Authenticode has changed its bytes, so the .sig covers what ships.
     # Direct, not `npm run tauri:build`: npm drops forwarded arguments for a
     # script chained with `&&`, taking the signing config with them.
     npm run icons; if (-not $?) { throw "icon generation failed" }
@@ -204,7 +196,7 @@ try {
         $tauriConfigs += @("--config", "src-tauri/tauri.browser-host.json")
     }
 
-    npx tauri build @tauriConfigs
+    npx --no-install tauri build @tauriConfigs
     if (-not $?) { throw "tauri build failed" }
 
     # The workspace root is the repository root, so cargo writes to .\target,
@@ -218,11 +210,9 @@ try {
     $setup = Get-ChildItem $nsisDir -Filter "*_${version}_*-setup.exe" |
         Select-Object -First 1
     if (-not $setup) { throw "no installer for $version in $nsisDir" }
-    $sig = "$($setup.FullName).sig"
-    if (-not (Test-Path $sig)) { throw "installer was not signed: $sig missing" }
-
+    # Copied, then signed where it ships. A .sig left in the bundle folder by
+    # an earlier build is never picked up.
     Copy-Item $setup.FullName (Join-Path $out $setup.Name) -Force
-    Copy-Item $sig (Join-Path $out "$($setup.Name).sig") -Force
 
     # The extractor lives in silentsilo/core now, so it is built from a clean
     # clone of the tag this app is pinned to, at the exact commit Cargo.lock
@@ -273,17 +263,34 @@ try {
     & "$PSScriptRoot\sign-windows.ps1" -Path (Join-Path $out "silentsilo-extract-windows-x86_64.exe")
     if (-not $?) { throw "signing the windows extractor failed" }
 
-    # The extractor is the tool someone reaches for when they no longer trust
-    # anything else, so it gets the same signature the installer does. Verify
-    # with minisign against the public key in tauri.conf.json.
-    Write-Host "`n== Signing the extractor ==" -ForegroundColor Cyan
-    # TAURI_SIGNING_PRIVATE_KEY holds a path here, which `tauri build` accepts
-    # but `signer sign` would read as the key itself. Clear it so the explicit
-    # -f flag is the only source.
+    # The updater signature, on the installer and on the extractor: the
+    # extractor is the tool someone reaches for when they no longer trust
+    # anything else, so it gets the same one. Verify with minisign against the
+    # public key in tauri.conf.json.
+    #
+    # Asked only now, after every build: the password lives in the
+    # environment for these two commands and nothing else.
+    Write-Host "`n== Updater signatures ==" -ForegroundColor Cyan
     Remove-Item Env:\TAURI_SIGNING_PRIVATE_KEY -ErrorAction SilentlyContinue
-    npx --no-install tauri signer sign --private-key-path $keyFile `
-        (Join-Path $out "silentsilo-extract-windows-x86_64.exe")
-    if (-not $?) { throw "the updater signature for the windows extractor failed" }
+    $secure = Read-Host "Updater signing key password" -AsSecureString
+    $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try {
+        $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD =
+            [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+    }
+    finally {
+        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    }
+    try {
+        foreach ($name in @($setup.Name, "silentsilo-extract-windows-x86_64.exe")) {
+            npx --no-install tauri signer sign --private-key-path $keyFile (Join-Path $out $name)
+            if (-not $?) { throw "the updater signature for $name failed" }
+            if (-not (Test-Path (Join-Path $out "$name.sig"))) { throw "$name.sig was not written" }
+        }
+    }
+    finally {
+        Remove-Item Env:\TAURI_SIGNING_PRIVATE_KEY_PASSWORD -ErrorAction SilentlyContinue
+    }
 
     # latest.json is what the updater actually reads. tauri-action writes it
     # in CI; built by hand it has to match byte for byte in structure, and the
@@ -343,8 +350,7 @@ try {
         $live = (Invoke-RestMethod "https://releases.silentsilo.com/windows/x86_64/0.0.0" -TimeoutSec 10).version
     } catch {}
     if ($live) {
-        npx --no-install semver $version -r "> $live" | Out-Null
-        if (-not $?) {
+        if (-not (Test-VersionAbove -Version $version -Than $live)) {
             throw "the endpoint already serves $live, and $version does not rank above it"
         }
     }

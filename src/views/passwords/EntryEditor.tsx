@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { platformStrings, type Os } from "../../lib/platformStrings";
 import { invoke } from "@tauri-apps/api/core";
-import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
+import { open as openFileDialog } from "../../lib/dialog";
 import { ChevronDown, ChevronRight, Paperclip } from "lucide-react";
 import type { PasswordAttachment, PasswordCategory, PasswordEntry } from "../../lib/types";
 import { parseTotpInput, DEFAULT_TOTP_ALGORITHM, DEFAULT_TOTP_DIGITS, DEFAULT_TOTP_PERIOD } from "../../lib/totp";
@@ -328,7 +328,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
         {type === "login" && (
           <>
         <label className="field">
-          <span>Username / Email</span>
+          <span>Username or email</span>
           <input
             type="text"
             autoComplete="off"
@@ -434,7 +434,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
         </label>
 
         <label className="field field-full">
-          <span>Authenticator (TOTP)</span>
+          <span>One-time code (TOTP)</span>
           <div className="pw-totp-panel">
             {draft.totp_secret && !totpError && !totpTyping ? (
               <>
@@ -473,7 +473,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
         </label>
 
         <label className="field">
-          <span>URL</span>
+          <span>Website</span>
           <input
             type="url"
             autoComplete="off"
@@ -534,8 +534,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
           </div>
           {attachError && <p className="hint is-error">{attachError}</p>}
           <p className="hint">
-            Encrypted and kept only with this entry. Attached files never appear in the file
-            explorer.
+            Encrypted and kept with this entry. They do not appear in Files.
           </p>
         </div>
 
@@ -553,7 +552,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
           </label>
           <p className="hint">
             Applies to revealing or copying the password, the one-time code, and opening attached
-            files. One touch covers the next few minutes.
+            files. One confirmation covers the next few minutes.
           </p>
         </div>
 
@@ -583,7 +582,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
           title={!canSave ? `Still needed: ${missingForSave.join(" and ")}.` : undefined}
           onClick={handleSave}
         >
-          {creating ? "Add" : "Update"}
+          {creating ? "Add" : "Save"}
         </button>
       </div>
     </div>

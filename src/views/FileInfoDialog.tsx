@@ -14,13 +14,13 @@ type Props = {
 /// The same three states the row badges show, in words rather than a glyph:
 /// this dialog is where someone comes for the sentence.
 function describeSyncState(state: FileSyncState): string {
-  if (state === "backed-up") return "On this computer and in the backup.";
+  if (state === "backed-up") return "On this computer and in backup storage.";
   if (state === "pending") return "On this computer, waiting to be backed up.";
-  if (state === "uploading") return "On this computer, uploading to the backup now.";
-  if (state === "downloading") return "In the backup, downloading to this computer now.";
+  if (state === "uploading") return "On this computer, uploading to backup storage now.";
+  if (state === "downloading") return "In backup storage, downloading to this computer now.";
   if (state === "absent")
-    return "Missing. The backup does not hold this file's content and neither does this computer. If another device still has the file, open SilentSilo there and sync; otherwise it can be deleted.";
-  return "In the backup only. It downloads when opened.";
+    return "Missing. Neither backup storage nor this computer has this file's content. If another device still has the file, open SilentSilo there and sync. Otherwise you can delete it.";
+  return "In backup storage only. It downloads when opened.";
 }
 
 export function FileInfoDialog({ entry, location, syncState, onClose }: Props) {

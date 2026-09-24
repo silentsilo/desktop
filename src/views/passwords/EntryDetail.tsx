@@ -97,8 +97,8 @@ export function EntryDetail({
     <button
       type="button"
       className="pw-inline-btn"
-      title={revealed ? "Hide" : "Reveal"}
-      aria-label={revealed ? "Hide" : "Reveal"}
+      title={revealed ? "Hide" : "Show"}
+      aria-label={revealed ? "Hide" : "Show"}
       onClick={toggleReveal}
     >
       {revealed ? <IconEyeOff size={14} /> : <IconEye size={14} />}
@@ -224,8 +224,8 @@ export function EntryDetail({
         {type === "login" && (
           <>
             <div className="pw-field-row">
-              <span className="pw-field-label">Username</span>
-              <span className="pw-field-value">{entry.username || "—"}</span>
+              <span className="pw-field-label">Username or email</span>
+              <span className="pw-field-value">{entry.username || "-"}</span>
               <button
                 type="button"
                 className="pw-inline-btn"
@@ -261,14 +261,14 @@ export function EntryDetail({
             )}
             {(entry.card_exp_month || entry.card_exp_year) && (
               <div className="pw-field-row">
-                <span className="pw-field-label">Expires</span>
+                <span className="pw-field-label">Expiry</span>
                 <span className="pw-field-value">
                   {entry.card_exp_month || "??"}/{entry.card_exp_year || "??"}
                 </span>
               </div>
             )}
             {entry.card_code &&
-              secretRow("Code", entry.card_code, entry.card_code, `c-${entry.id}`)}
+              secretRow("Security code", entry.card_code, entry.card_code, `c-${entry.id}`)}
           </>
         )}
 
@@ -362,14 +362,14 @@ export function EntryDetail({
 
         {(entry.attachments ?? []).length > 0 && (
           <div className="pw-field-row pw-field-notes">
-            <span className="pw-field-label">Files</span>
+            <span className="pw-field-label">Attached files</span>
             <div className="pw-attachments">
               {entry.attachments!.map((a) => (
                 <button
                   key={a.blob_id}
                   type="button"
                   className="pw-attachment-row is-clickable"
-                  title="Open (fetched from backup if not on this computer)"
+                  title="Open (downloaded from backup storage if not on this computer)"
                   onClick={() => onOpenAttachment(a)}
                 >
                   <Paperclip size={14} aria-hidden />

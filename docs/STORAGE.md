@@ -7,7 +7,7 @@ wrong: a drive fails, a laptop is stolen, ransomware runs as you.
 
 The rule worth keeping is the old one. Three copies of anything you care
 about, on two different kinds of storage, one of them somewhere else. The
-Copies page in Settings shows where each of yours stands.
+list of copies under Settings, Backup shows where each of yours stands.
 
 ## What counts as a copy
 
@@ -40,9 +40,9 @@ keeps, not a rule the storage enforces. Making the storage enforce it is the
 next section for a bucket, and is not possible on a plain folder, which the
 external drives section explains.
 
-Tick "Never delete anything here" when adding a place under Settings, Copies
-to make it append-only. The box is offered only for a second place: the
-connection on the Backup page is always the working one.
+Tick "Never-delete copy" when adding another copy under Settings, Backup to
+make it append-only. The box is offered only for another copy: the main copy,
+at the top of the Backup page, is always the working one.
 
 ## Making a bucket that refuses deletes
 
@@ -64,7 +64,7 @@ includes you when you genuinely want something gone. Choose knowing that.
 gets you most of the protection with none of the setup. SilentSilo treats a
 refused delete as an expected answer rather than an error.
 
-When you tick "Never delete anything here", SilentSilo asks the bucket what
+When you tick "Never-delete copy", SilentSilo asks the bucket what
 it has and tells you if the answer is weaker than you might assume.
 
 ## Versioning alone is not protection, and it breaks revocation
@@ -87,7 +87,7 @@ affected, and they are the two that matter:
 
 So on a versioned or object-locked target, deleting an envelope is not
 revocation. The only real revocation there is changing the silo's encryption
-key, under Settings, Security keys. SilentSilo tells you which target withheld
+key, under Settings, Advanced. SilentSilo tells you which target withheld
 a deletion rather than reporting success.
 
 Changing the key re-seals every object on the targets that accept writes and
@@ -135,7 +135,7 @@ sees a half-written object and uploads the fragment. Renaming needs the
 right to delete the source, so a permission that forbids deletion forbids
 writing too, and the backup stops rather than becoming immutable.
 
-Ticking "Never delete anything here" still works and is still worth doing.
+Ticking "Never-delete copy" still works and is still worth doing.
 It stops SilentSilo from sending a delete, which covers the emptied trash
 and the bug in our code. It does not stop anything else on the machine, and
 on a folder there is nothing underneath to enforce it.
@@ -185,5 +185,6 @@ lives unplugged does the same job as copy three. It is offline rather than
 immutable, which stops the same attack for a different reason, and it costs
 one habit instead of one subscription.
 
-Check Settings, Copies now and again. It shows when each was last written to,
+Check the list of copies under Settings, Backup now and again. It shows when
+each was last written to,
 which is the fact that tells you a disk has been unplugged since spring.

@@ -13,6 +13,9 @@ const YEAR = 365 * 24 * 60 * 60 * 1000;
  * findings its entries produce. */
 const HEALTHY_SILO: SiloHealth = {
   backupConfigured: true,
+  backupFailing: false,
+  backupError: null,
+  lastTestedAt: NOW,
   securityKeyCount: 2,
   recoveryCodeSet: true,
   freeBytes: 500 * 1024 * 1024 * 1024,
@@ -126,7 +129,26 @@ describe("analyseHealth", () => {
       { ...HEALTHY_SILO, backupConfigured: false, securityKeyCount: 1, freeBytes: null },
       NOW,
     );
-    expect(ids(findings)).toEqual(["single-key", "no-backup"]);
+    expect(ids(findings)).toEqual(["no-backup", "single-key"]);
+  });
+
+  it("reports a failing backup, and one never tested", () => {
+    const failing = analyseHealth(
+      [],
+      { ...HEALTHY_SILO, backupFailing: true, backupError: "timed out", freeBytes: null },
+      NOW,
+    );
+    expect(ids(failing)).toEqual(["backup-failing"]);
+    expect(failing[0]!.detail).toContain("timed out");
+
+    const untested = analyseHealth([], { ...HEALTHY_SILO, lastTestedAt: null, freeBytes: null }, NOW);
+    expect(ids(untested)).toEqual(["backup-untested"]);
+    const old = analyseHealth(
+      [],
+      { ...HEALTHY_SILO, lastTestedAt: NOW - YEAR, freeBytes: null },
+      NOW,
+    );
+    expect(ids(old)).toEqual(["backup-untested"]);
   });
 
   it("puts the serious findings first", () => {
@@ -135,7 +157,7 @@ describe("analyseHealth", () => {
       { ...HEALTHY_SILO, backupConfigured: false, freeBytes: null },
       NOW,
     );
-    expect(findings.map((f) => f.severity)).toEqual(["high", "medium", "info"]);
+    expect(findings.map((f) => f.severity)).toEqual(["high", "high", "info"]);
   });
 });
 
@@ -146,6 +168,6 @@ describe("summarise", () => {
       { ...HEALTHY_SILO, backupConfigured: false, freeBytes: null },
       NOW,
     );
-    expect(summarise(findings)).toEqual({ high: 1, medium: 1, info: 1 });
+    expect(summarise(findings)).toEqual({ high: 2, medium: 0, info: 1 });
   });
 });

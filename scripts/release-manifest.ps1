@@ -3,7 +3,7 @@
 # exercised without the signing token: a test that mirrors this logic instead
 # of calling it drifts, and then reassures about code nobody runs.
 #
-# Dot-source it. It defines a function and does nothing else.
+# Dot-source it. It defines functions and does nothing else.
 
 <#
 .SYNOPSIS
@@ -91,4 +91,55 @@ function New-ManifestPlatforms {
     }
 
     return $platforms
+}
+
+<#
+.SYNOPSIS
+Whether one version ranks above another, the way the updater ranks them.
+
+.DESCRIPTION
+Semver precedence, prereleases included: 1.2.0-rc.1 ranks above 1.1.0 and
+below 1.2.0, and rc.10 above rc.9. Build metadata is ignored. Written here
+rather than taken from the `semver` package, which is not a dependency of
+this repository and without `-p` refused every prerelease.
+#>
+function Test-VersionAbove {
+    param(
+        [Parameter(Mandatory)][string]$Version,
+        [Parameter(Mandatory)][string]$Than
+    )
+
+    function Split-Version([string]$v) {
+        $m = [regex]::Match($v, '^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$')
+        if (-not $m.Success) { throw "not a version: $v" }
+        $pre = if ($m.Groups[4].Success) { $m.Groups[4].Value -split '\.' } else { @() }
+        return @{
+            Core = @([long]$m.Groups[1].Value, [long]$m.Groups[2].Value, [long]$m.Groups[3].Value)
+            Pre  = $pre
+        }
+    }
+
+    $a = Split-Version $Version
+    $b = Split-Version $Than
+    for ($i = 0; $i -lt 3; $i++) {
+        if ($a.Core[$i] -ne $b.Core[$i]) { return $a.Core[$i] -gt $b.Core[$i] }
+    }
+    # A release ranks above any prerelease of it.
+    if ($a.Pre.Count -eq 0) { return $b.Pre.Count -gt 0 }
+    if ($b.Pre.Count -eq 0) { return $false }
+    for ($i = 0; $i -lt [Math]::Min($a.Pre.Count, $b.Pre.Count); $i++) {
+        $x = $a.Pre[$i]; $y = $b.Pre[$i]
+        $xNum = $x -match '^\d+$'; $yNum = $y -match '^\d+$'
+        if ($xNum -and $yNum) {
+            if ([long]$x -ne [long]$y) { return [long]$x -gt [long]$y }
+        }
+        elseif ($xNum -ne $yNum) {
+            # Numeric identifiers rank below alphanumeric ones.
+            return $yNum
+        }
+        elseif ($x -cne $y) {
+            return [string]::CompareOrdinal($x, $y) -gt 0
+        }
+    }
+    return $a.Pre.Count -gt $b.Pre.Count
 }

@@ -110,9 +110,13 @@ button:active:where(:not(:disabled)) {
   transform: translateY(0.5px);
 }
 
+/* Faded alone, a violet gradient still read as a button to press. The
+   colour goes too, and the glow that marks the main action. */
 button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+  filter: grayscale(0.85);
+  box-shadow: none;
 }
 
 /* The primary look is a violet gradient *and* the glow beneath it. Controls
@@ -125,6 +129,7 @@ button.explorer-icon-btn,
 button.sidebar-silo,
 button.silo-item,
 button.silo-remove,
+button.silo-info,
 button.search-result,
 button.search-clear,
 button.folder-picker-row,
@@ -621,6 +626,16 @@ textarea:focus {
   background: var(--accent);
 }
 
+.tab-badge-neutral {
+  background: color-mix(in srgb, var(--text-muted) 30%, transparent);
+  color: var(--text);
+}
+
+.tab-badge-warn {
+  background: var(--warning);
+  color: #1f1300;
+}
+
 .rail-update-badge {
   margin-left: auto;
 }
@@ -686,6 +701,37 @@ textarea:focus {
   top: 1rem;
   right: 1rem;
   z-index: 2;
+}
+
+.auth-settings-toggle {
+  position: fixed;
+  top: 1rem;
+  right: 3.5rem;
+  z-index: 2;
+}
+
+.card.auth-card.app-settings-card {
+  width: min(680px, 100%);
+}
+
+/* The card is the surface already; the section inside it should not draw a
+   second one. */
+.app-settings-card .panel-section {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.auth-card h2 svg {
+  vertical-align: -3px;
+}
+
+.app-settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
 }
 
 .btn-lock {
@@ -1974,19 +2020,18 @@ textarea:focus {
   box-shadow: none;
 }
 
-/* Reads bottom-to-top, the way a spine label does, so the digits keep their
-   normal shape instead of being rotated one by one. */
+/* Horizontal and small. Written sideways, like a spine label, it had to be
+   read with the head tilted, and "2.3 MB" fits the narrow sidebar as it is. */
 .sidebar-storage-vertical {
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  padding: 0.7rem 0.3rem;
+  gap: 0.3rem;
+  padding: 0.55rem 0.2rem;
   margin-inline: auto;
+  font-size: 0.72rem;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
+  white-space: nowrap;
   color: var(--text-muted);
 }
 
@@ -2685,6 +2730,14 @@ ol.key-add-steps {
   background: var(--bg-hover);
   border-color: rgba(139, 92, 246, 0.3);
   color: var(--ink);
+}
+
+.view-toggle-btn.view-toggle-labelled {
+  width: auto;
+  padding: 0 0.7rem;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 .view-toggle-btn.active {
@@ -5425,6 +5478,30 @@ button.pw-gen-toggle {
   box-shadow: none;
 }
 
+/* Info reads a report and changes nothing, so it does not turn red with
+   Remove beside it, and a gap keeps a slipped click off the X. */
+.silo-info {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  min-height: 0;
+  padding: 0;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  margin-right: 6px;
+}
+
+.silo-info:hover:not(:disabled),
+.silo-info:focus-visible {
+  color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: none;
+}
+
 /* ── Auth screen actions ── */
 /* Shared by unlock and the picker: one prominent way forward, then the ways
    out ruled off beneath it. */
@@ -6146,10 +6223,15 @@ button.storage-option:hover:where(:not(:disabled)) {
    the text is pushed against the right edge and reads as right-aligned.
    Letting it take the free space puts it back where every other line on the
    page starts. */
-.copies-list .protected-row-text {
+.copies-list .protected-row-text,
+.overview-list .protected-row-text {
   flex: 1 1 auto;
   align-items: flex-start;
   text-align: left;
+}
+
+.overview-list .key-list-item {
+  align-items: center;
 }
 
 .copy-icon {
@@ -6488,6 +6570,14 @@ button.storage-option:hover:where(:not(:disabled)) {
   margin-top: 0.85rem;
 }
 
+/* The kit sits under the section's own description and must not outrank
+   it: same colour and measure as a card's opening paragraph. */
+.kit-block > p:not(.hint) {
+  color: var(--text-muted);
+  line-height: 1.55;
+  max-width: 62ch;
+}
+
 /* Introduces a list of steps. Bolder than body text and tighter to what
    follows, so two sequences on the same page do not read as one. */
 .kit-lead {
@@ -6535,4 +6625,21 @@ button.storage-option:hover:where(:not(:disabled)) {
 
 .health-breach .health-entry-group {
   margin-top: 0.6rem;
+}
+
+
+/* Narrow windows, placed last so it wins over the base rules: the rails in Passwords and Settings give up width first,
+   so the list and the detail beside them keep room to read. */
+@media (max-width: 980px) {
+  .view-rail {
+    width: 150px;
+  }
+
+  .view-rail-item {
+    font-size: 0.85rem;
+  }
+
+  .pw-layout {
+    gap: 0.6rem;
+  }
 }

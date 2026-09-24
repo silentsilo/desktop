@@ -2,12 +2,12 @@ import { test, expect } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/?mock=unlocked");
-  await page.getByRole("button", { name: "Credentials" }).click();
-  await expect(page.getByText("All items")).toBeVisible();
+  await page.getByRole("button", { name: "Passwords", exact: true }).click();
+  await expect(page.getByText("All entries")).toBeVisible();
 });
 
 test("selecting an entry shows its details", async ({ page }) => {
-  await expect(page.getByText("Select an item to see its details.")).toBeVisible();
+  await expect(page.getByText("Select an entry to see its details.")).toBeVisible();
 
   await page.getByText("Bank", { exact: true }).first().click();
   // The notes line only exists in the detail pane, so it is the one proof

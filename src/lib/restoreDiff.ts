@@ -48,13 +48,13 @@ function describeDigestLine(rest: string, side: string): string | null {
 
   const password = rest.match(/^password (\S+)$/);
   if (password) {
-    return `${side}: a credential entry (id ${password[1]!.slice(0, 8)}…).`;
+    return `${side}: a password entry (id ${password[1]!.slice(0, 8)}…).`;
   }
 
   const ops = rest.match(/^ops count=(\d+)$/);
   if (ops) {
     const count = Number(ops[1]);
-    return `${side}: a history of ${count} record${count === 1 ? "" : "s"}. The two histories are different lengths.`;
+    return `${side}: ${count} change${count === 1 ? "" : "s"}. The two lists of changes are different lengths.`;
   }
 
   return null;

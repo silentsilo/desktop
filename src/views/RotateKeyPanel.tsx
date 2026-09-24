@@ -14,6 +14,8 @@ type Props = {
   /** A key change that was started here and never finished. */
   pending: boolean;
   onResume: (credential: string) => void;
+  /** Never-delete copies, which the change cannot reach. */
+  archiveTargets: number;
 };
 
 /**
@@ -37,6 +39,7 @@ export function RotateKeyPanel({
   onRotate,
   pending,
   onResume,
+  archiveTargets,
 }: Props) {
   // `fido_list_keys` returns the ones that still work, so there is nothing
   // to filter here.
@@ -73,17 +76,16 @@ export function RotateKeyPanel({
       <div className="panel-section">
         <h3>
           <RefreshCw size={16} />
-          Finish changing the encryption key
+          Finish replacing the encryption key
         </h3>
         <p className="hint is-error" role="status">
           <AlertTriangle size={14} />
-          A key change was started here and stopped before it finished. Your storage is part-way
-          converted, so syncing will keep failing until this is done. Finishing it is the only way
-          out: once objects have been re-sealed, going back is not possible.
+          Replacing the encryption key stopped before it finished. Syncing fails until you finish
+          it, and it cannot be undone.
         </p>
         <p>
-          Choose a key to finish with. Any enrolled key works, including one that was not used to
-          start this. Every other key stops opening the silo, so add them again afterwards.
+          Choose any enrolled key to finish with. Every other key stops opening the silo, so add
+          them again afterwards.
         </p>
         <div className="actions">
           {active.filter(usableHere).map((k) => (
@@ -111,20 +113,26 @@ export function RotateKeyPanel({
     <div className="panel-section">
       <h3>
         <RefreshCw size={16} />
-        Change the silo's encryption key
+        Replace the encryption key
       </h3>
       <p>
-        Removing a security key is usually enough. It is not enough on storage that refuses to
-        delete: a versioned bucket, or one under object lock, keeps the removed key's envelope
-        readable and that key goes on opening the silo. Changing the encryption key is the only
-        thing that really stops it.
+        Removing a key is usually enough. On backup storage with versioning or object lock, a
+        removed key can still open the silo. After you replace the encryption key, it cannot
+        open anything added from then on.
       </p>
       <p className="hint">
-        Your files are not re-encrypted and nothing is re-uploaded, however large the silo. Only
-        the keys change, which takes seconds.
+        Your files are not re-encrypted or uploaded again, however large the silo. Only the file
+        list and the keys are rewritten in each backup storage.
       </p>
+      {archiveTargets > 0 && (
+        <p className="hint is-error">
+          A never-delete copy keeps the old key and stops receiving backups after the change.
+          When it is done, remove that copy under Backup (what is stored there stays) and add a
+          new never-delete copy.
+        </p>
+      )}
 
-      <p>Tick the keys that should still open this silo. You will be asked to touch each one.</p>
+      <p>Tick the keys that should still open this silo. You will be asked to confirm with each one.</p>
 
       <ul className="key-list">
         {active.map((k) => (
@@ -140,7 +148,7 @@ export function RotateKeyPanel({
                 {named(k)}
                 <span className="hint">
                   {!usableHere(k)
-                    ? "From another device. This computer cannot keep it; add it again from that device afterwards."
+                    ? "From another device, so it cannot be kept from here. Add it again from that device afterwards."
                     : k.platform
                       ? "Built into this computer"
                       : "Removable key, needs to be plugged in"}
@@ -159,8 +167,7 @@ export function RotateKeyPanel({
             : `${dropping.length} keys will stop opening this silo: ${dropping
                 .map(named)
                 .join(", ")}.`}{" "}
-          That is what this is for, and it cannot be undone from here. They would have to be
-          enrolled again.
+          To use a key again, you would have to enrol it again.
         </p>
       )}
 
@@ -172,8 +179,8 @@ export function RotateKeyPanel({
       )}
 
       <p className="hint">
-        Your recovery code changes too, because the old one unwraps the old key. A new one is
-        shown once when this finishes. Write it down before closing the message.
+        Your recovery code changes too. The new one is shown once when this finishes, so write it
+        down before closing the message.
       </p>
 
       {progress && (
@@ -190,7 +197,7 @@ export function RotateKeyPanel({
           onClick={() => onRotate(keep)}
         >
           <KeyRound size={15} />
-          {busy ? "Working…" : "Change the encryption key"}
+          {busy ? "Working…" : "Replace the encryption key"}
         </button>
       </div>
     </div>

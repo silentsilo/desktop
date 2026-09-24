@@ -36,9 +36,7 @@ describe("platformStrings", () => {
 
   it("composes the sentences the unlock screen used to hardcode, byte for byte", () => {
     const s = platformStrings("windows");
-    expect(`Security key ready. ${s.osName} will show a native prompt.`).toBe(
-      "Security key ready. Windows will show a native prompt.",
-    );
+    expect(`${s.osName} will show its own prompt.`).toBe("Windows will show its own prompt.");
     expect(`Confirm with ${s.builtIn} to unlock.`).toBe("Confirm with Windows Hello to unlock.");
     expect(`2 items from ${s.fileManager}. Choose where they should go.`).toBe(
       "2 items from Windows Explorer. Choose where they should go.",

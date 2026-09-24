@@ -3,9 +3,13 @@ import { createPortal } from "react-dom";
 import { AlertTriangle, Printer } from "lucide-react";
 import { EmergencyKit } from "./EmergencyKit";
 import { fromGroups, isComplete, toGroups } from "../lib/recoveryCode";
+import { markDone } from "../lib/siloMemory";
+import { RecoveryCodeInput } from "../components/RecoveryCodeInput";
 
 type Props = {
   busy: boolean;
+  /** For remembering when the kit was last printed, for the overview. */
+  siloId: string;
   siloName: string;
   /**
    * A code generated in this session, if there was one. The app never stores
@@ -27,7 +31,7 @@ type Props = {
  * printer, which on an office machine means a spooler, a queue and possibly a
  * log. Writing it in by hand puts it nowhere but the paper.
  */
-export function EmergencyKitPanel({ busy, siloName, freshCode }: Props) {
+export function EmergencyKitPanel({ busy, siloId, siloName, freshCode }: Props) {
   /// The preview is the sheet at its real size, shrunk to fit the pane.
   ///
   /// It has to be the real size first: everything on the page is measured in
@@ -76,15 +80,12 @@ export function EmergencyKitPanel({ busy, siloName, freshCode }: Props) {
         Print an emergency kit
       </h4>
       <p>
-        One sheet of paper holding everything needed to get this silo back on a computer that has
-        never seen it: the recovery code, where your files are, and what to do, in order. Print
-        it and keep it where you keep documents you cannot replace.
+        One sheet with the recovery code and the steps to get this silo back on any computer. Keep
+        it with documents you cannot replace.
       </p>
       <p className="hint">
-        No file is written. The page goes straight to your printer through the usual dialog, so
-        the code does not land on this disk on the way. If you choose "Save as PDF" in that
-        dialog, that is your decision rather than ours, and the file it makes is worth exactly as
-        much as the sheet would be.
+        The page goes to your printer through the usual print dialog, and SilentSilo writes no
+        file. If you choose “Save as PDF” there, keep that file as safe as the sheet.
       </p>
 
       <div className="field">
@@ -97,8 +98,8 @@ export function EmergencyKitPanel({ busy, siloName, freshCode }: Props) {
           >
             <strong>Leave the boxes empty</strong>
             <span>
-              You copy the code in by hand. Nothing goes through the printer, which on a shared
-              or office machine means no spooler, no queue and no log. The safer one.
+              You copy the code in by hand, so it does not go through the printer. Safer on a
+              shared or office printer.
             </span>
           </button>
           <button
@@ -108,35 +109,28 @@ export function EmergencyKitPanel({ busy, siloName, freshCode }: Props) {
           >
             <strong>Print the code too</strong>
             <span>
-              Faster and impossible to transcribe wrongly. Reasonable on a printer in your own
-              home, and worth avoiding on one you do not control.
+              Faster and less likely to be copied wrongly. Use it only on a printer you control.
             </span>
           </button>
         </div>
       </div>
 
       {needsTyping && (
-        <label className="field">
-          <span>Your recovery code</span>
-          <input
-            value={typed}
-            disabled={busy}
-            spellCheck={false}
-            placeholder="Type it from your existing sheet"
-            onChange={(e) => setTyped(e.target.value)}
-          />
+        <div className="field">
+          <span>Your recovery code, from your existing sheet</span>
+          <RecoveryCodeInput value={typed} disabled={busy} onChange={setTyped} />
           <span className="hint">
-            The app never keeps your code, only a sealed copy of the key it opens, so it cannot
-            fill this in for you. If you no longer have it, generate a new one under Recovery
-            code first: the old one stops working when you do.
+            SilentSilo does not keep your code, so it cannot fill this in. If you no longer have
+            it, make a new one under Recovery code first. The old one then stops working, except
+            on a never-delete copy.
           </span>
-        </label>
+        </div>
       )}
 
       {mode === "printed" && code.length > 0 && !looksComplete && (
         <p className="hint is-error" role="status">
           <AlertTriangle size={14} />
-          That is not a whole code. It should come to 32 letters and digits.
+          That is not a whole code. It has 32 letters and digits.
         </p>
       )}
 
@@ -144,7 +138,12 @@ export function EmergencyKitPanel({ busy, siloName, freshCode }: Props) {
         <button
           type="button"
           disabled={busy || (mode === "printed" && !looksComplete)}
-          onClick={() => window.print()}
+          onClick={() => {
+            // Whether the dialog ended in paper is not something the app
+            // can know, so opening it counts.
+            markDone(siloId, "kit-printed");
+            window.print();
+          }}
         >
           <Printer size={15} />
           Print the kit
@@ -152,12 +151,11 @@ export function EmergencyKitPanel({ busy, siloName, freshCode }: Props) {
       </div>
 
       <p className="hint">
-        In the print dialog, turn <strong>Headers and footers</strong> off. Left on, the printer
-        adds today's date and an internal address along the top and bottom, which belongs on a
-        web page and not on this.
+        In the print dialog, turn <strong>Headers and footers</strong> off, or the date and an
+        internal address are printed along the edges.
       </p>
 
-      <p className="hint">Below is exactly what will come out of the printer.</p>
+      <p className="hint">This is what will be printed.</p>
 
       <div className="kit-preview" ref={previewRef}>
         <div className="kit-preview-scale" style={{ zoom: scale }}>

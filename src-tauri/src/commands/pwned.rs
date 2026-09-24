@@ -33,7 +33,7 @@ fn client() -> Result<&'static reqwest::Client, String> {
 #[tauri::command]
 pub async fn pwned_range(prefix: String) -> Result<String, String> {
     if !is_prefix(&prefix) {
-        return Err("not a hash prefix".into());
+        return Err("That is not a password hash prefix.".into());
     }
     let response = client()?
         .get(format!("https://api.pwnedpasswords.com/range/{prefix}"))
@@ -44,7 +44,10 @@ pub async fn pwned_range(prefix: String) -> Result<String, String> {
         .await
         .map_err(|e| e.to_string())?;
     if !response.status().is_success() {
-        return Err(format!("breach service answered {}", response.status()));
+        return Err(format!(
+            "The breach service answered {}.",
+            response.status()
+        ));
     }
     response.text().await.map_err(|e| e.to_string())
 }

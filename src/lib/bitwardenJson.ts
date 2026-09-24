@@ -1,5 +1,6 @@
 import type { PasswordEntry } from "./types";
 import { parseTotpInput } from "./totp";
+import { appendNotes, noExtras, type ImportExtras } from "./passwordImport";
 
 /**
  * Bitwarden's unencrypted JSON export, the one format their apps write that
@@ -14,6 +15,7 @@ export type JsonImportResult = {
   entries: PasswordEntry[];
   /** Item types newer than this importer knows. */
   skipped: number;
+  extras: ImportExtras;
 };
 
 export class JsonImportError extends Error {}
@@ -23,11 +25,14 @@ type BwItem = {
   name?: string;
   notes?: string | null;
   folderId?: string | null;
+  /** Custom fields. Type 3 is a link to another field and carries no value. */
+  fields?: { name?: string | null; value?: string | null; type?: number }[] | null;
   login?: {
     username?: string | null;
     password?: string | null;
     totp?: string | null;
     uris?: { uri?: string | null }[] | null;
+    fido2Credentials?: unknown[] | null;
   };
   card?: {
     cardholderName?: string | null;
@@ -77,15 +82,22 @@ export function bitwardenJsonToEntries(
 
   const entries: PasswordEntry[] = [];
   let skipped = 0;
+  const extras = noExtras();
 
   for (const item of parsed.items) {
+    // Any kind of item can carry custom fields, and a hidden one is often a
+    // secret, so they go into notes rather than being dropped.
+    const fieldLines = (item.fields ?? [])
+      .filter((f) => f.type !== 3 && (f.name || f.value))
+      .map((f) => `${f.name ?? ""}: ${f.value ?? ""}`);
+    const before = entries.length;
     const base: PasswordEntry = {
       id: crypto.randomUUID(),
       service: item.name ?? "",
       username: "",
       password: "",
       url: "",
-      notes: item.notes ?? "",
+      notes: appendNotes(item.notes ?? "", fieldLines),
       category: (item.folderId && folderNames.get(item.folderId)) || "General",
       created_at: now(),
       updated_at: now(),
@@ -93,12 +105,26 @@ export function bitwardenJsonToEntries(
 
     switch (item.type) {
       case 1: {
-        const totp = item.login?.totp ? parseTotpInput(item.login.totp) : null;
+        const rawTotp = item.login?.totp ?? "";
+        const totp = rawTotp ? parseTotpInput(rawTotp) : null;
+        const [firstUri = "", ...moreUris] = (item.login?.uris ?? [])
+          .map((u) => u.uri ?? "")
+          .filter(Boolean);
+        const lines = moreUris.map((uri) => `Web address: ${uri}`);
+        extras.extraUris += moreUris.length;
+        // Steam and HOTP secrets have no codes here, but they are still the
+        // user's second factor.
+        if (rawTotp && !totp) {
+          lines.push(`Two-factor secret: ${rawTotp}`);
+          extras.unsupportedOtp += 1;
+        }
+        extras.passkeys += item.login?.fido2Credentials?.length ?? 0;
         entries.push({
           ...base,
           username: item.login?.username ?? "",
           password: item.login?.password ?? "",
-          url: item.login?.uris?.[0]?.uri ?? "",
+          url: firstUri,
+          notes: appendNotes(base.notes, lines),
           ...(totp
             ? {
                 totp_secret: totp.secret,
@@ -129,7 +155,7 @@ export function bitwardenJsonToEntries(
           .join(" ");
         // Fields our identity shape has no slot for still matter to the
         // person who filled them in; they land in notes instead of vanishing.
-        const extras = (
+        const unslotted = (
           [
             ["SSN", id.ssn],
             ["Passport", id.passportNumber],
@@ -151,7 +177,7 @@ export function bitwardenJsonToEntries(
           id_state: id.state ?? "",
           id_zip: id.postalCode ?? "",
           id_country: id.country ?? "",
-          notes: [base.notes, ...extras].filter(Boolean).join("\n"),
+          notes: appendNotes(base.notes, unslotted),
         });
         break;
       }
@@ -172,7 +198,8 @@ export function bitwardenJsonToEntries(
         // Anything newer than this importer knows.
         skipped += 1;
     }
+    if (entries.length > before) extras.customFields += fieldLines.length;
   }
 
-  return { entries, skipped };
+  return { entries, skipped, extras };
 }

@@ -73,12 +73,12 @@ describe("siloReportText", () => {
 
   it("counts keys without naming any of them", () => {
     const text = siloReportText(report());
-    expect(text).toContain("3 enrolled (1 sealed to a machine, 2 portable, 1 retired)");
+    expect(text).toContain("3 enrolled (1 sealed to a computer, 2 portable, 1 retired)");
   });
 
   it("leaves retired keys out when there are none", () => {
     const text = siloReportText(report({ keys: { total: 2, platform: 0, portable: 2, revoked: 0 } }));
-    expect(text).toContain("2 enrolled (0 sealed to a machine, 2 portable)");
+    expect(text).toContain("2 enrolled (0 sealed to a computer, 2 portable)");
     expect(text).not.toContain("retired");
   });
 });

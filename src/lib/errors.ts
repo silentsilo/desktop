@@ -18,14 +18,15 @@ export function formatAppError(err: unknown): string {
   const lower = msg.toLowerCase();
 
   if (msg.includes("CloudNotConfigured") || lower.includes("no backup storage is connected")) {
-    return "No backup storage is connected. This silo is on this computer only.";
+    return "Not backed up. This silo is only on this computer.";
   }
-  // "Unlock the silo first", "enroll a key before unlocking" and friends
+  // "Unlock the silo first", "enrol a key before unlocking" and friends
   // already say the right thing, so they go back unchanged. Checked before
-  // the rules below, several of which would otherwise claim them.
+  // the rules below, several of which would otherwise claim them. "enrol"
+  // also matches the US spelling core may still send.
   if (
     (lower.includes("vaultlocked") || lower.includes("vault locked") || lower.includes("unlock")) &&
-    (lower.includes("first") || lower.includes("enroll"))
+    (lower.includes("first") || lower.includes("enrol"))
   ) {
     return msg;
   }
@@ -52,7 +53,7 @@ export function formatAppError(err: unknown): string {
     lower.includes("error sending request") ||
     lower.includes("tcp connect error")
   ) {
-    return "Can't reach your backup storage. Check your connection and the address.";
+    return "Cannot reach your backup storage. Check your connection and the address.";
   }
   // The bare numbers are matched as whole words. "401" as a substring
   // appears in file names, key ids and byte counts, and any of those turned
@@ -61,18 +62,22 @@ export function formatAppError(err: unknown): string {
     return "Your backup storage refused the sign-in. Check the username and password, or the access key.";
   }
   if (lower.includes("nosuchbucket") || lower.includes("bucket does not exist")) {
-    return "That bucket doesn't exist. Check its name and region.";
+    return "That bucket does not exist. Check its name and region.";
   }
   if (lower.includes("not enrolled") || lower.includes("no security key")) {
-    return "No security key enrolled yet.";
+    return "No key enrolled yet.";
   }
   if (lower.includes("already enrolled")) {
-    return "That credential is already enrolled.";
+    return "That key is already enrolled.";
   }
-  // Narrowed to the phrase this app actually writes. "at least one" alone
-  // matched sentences about anything.
-  if (lower.includes("keep at least one security key")) {
-    return "Keep at least one security key on the silo.";
+  // Narrowed to the phrases this app writes, the current one and the older
+  // "security key" wording. "at least one" alone matched sentences about
+  // anything.
+  if (
+    lower.includes("keep at least one key") ||
+    lower.includes("keep at least one security key")
+  ) {
+    return "Keep at least one key on the silo.";
   }
 
   // Strip common Rust/Tauri wrappers

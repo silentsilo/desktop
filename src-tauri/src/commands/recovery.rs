@@ -97,25 +97,27 @@ pub async fn recovery_generate(app: AppHandle) -> Result<GeneratedRecovery, Stri
     // against removal while leaving this open would protect nothing.
     require_org_key_if_controlled(&app, "recovery code").await?;
 
-    let (code, mut envelope, kek, root, silo_id) = {
+    let (dek, kek, root, silo_id) = {
         let state = app.state::<AppState>();
         let guard = state.focused_session()?;
         let session = guard
             .as_ref()
-            .ok_or_else(|| "Unlock the silo before creating a recovery code".to_string())?;
-        // Tagged under the content KEK, which storage never sees: that tag
-        // is what lets the other devices tell this envelope from one a
-        // bucket writer put there.
-        let (code, envelope) =
-            create_recovery_envelope(&session.dek, &session.kek).map_err(|e| e.to_string())?;
+            .ok_or_else(|| "Unlock the silo before creating a recovery code.".to_string())?;
         (
-            code,
-            envelope,
+            session.dek.clone(),
             session.kek.clone(),
             session.paths.root.clone(),
             session.vault_id,
         )
     };
+    // Tagged under the content KEK, which storage never sees: that tag is
+    // what lets the other devices tell this envelope from one a bucket
+    // writer put there. Argon2id, so on the blocking pool and with no lock.
+    let envelope_kek = kek.clone();
+    let (code, mut envelope) = crate::commands::fido::run_blocking(move || {
+        create_recovery_envelope(&dek, &envelope_kek).map_err(|e| e.to_string())
+    })
+    .await?;
     // Pinned from here on: the loop below talks to storage, and a silo switch
     // meanwhile would have sent this silo's envelope to the next one's.
     //
@@ -201,7 +203,7 @@ pub async fn recovery_disable(app: AppHandle) -> Result<Vec<String>, String> {
     Ok(withheld)
 }
 
-const WRONG_CODE: &str = "That recovery code doesn't match this silo.";
+const WRONG_CODE: &str = "That recovery code does not match this silo.";
 const NEEDS_UPDATE: &str = "This recovery code was set up with a newer version of SilentSilo. Update SilentSilo, then try again.";
 
 /// Why a code did not open an envelope.
@@ -226,6 +228,15 @@ fn open_envelope(
     })
 }
 
+/// [`open_envelope`] on the blocking pool: the code goes through Argon2id,
+/// which would otherwise hold an async worker for the length of it.
+async fn open_envelope_blocking(
+    envelope: silentsilo_vault::RecoveryEnvelope,
+    code: String,
+) -> Result<Result<silentsilo_crypto::MasterDek, CodeRefused>, String> {
+    crate::commands::fido::run_blocking(move || Ok(open_envelope(&envelope, &code))).await
+}
+
 /// Opens this device's vault with the code instead of a security key.
 ///
 /// For the case where the vault is still on this machine but the key that
@@ -242,10 +253,8 @@ pub async fn vault_unlock_with_recovery(
     // replaced on another device and this one has not synced since), the
     // copy in storage is tried: that one is current.
     let local = if has_recovery_code(&root) {
-        Some(open_envelope(
-            &load_recovery_envelope(&root).map_err(|e| e.to_string())?,
-            &code,
-        ))
+        let envelope = load_recovery_envelope(&root).map_err(|e| e.to_string())?;
+        Some(open_envelope_blocking(envelope, code.clone()).await?)
     } else {
         None
     };
@@ -258,7 +267,7 @@ pub async fn vault_unlock_with_recovery(
                 None => None,
             };
             match (stored, local.is_some()) {
-                (Some(envelope), _) => match open_envelope(&envelope, &code) {
+                (Some(envelope), _) => match open_envelope_blocking(envelope, code).await? {
                     Ok(dek) => dek,
                     Err(CodeRefused::NeedsUpdate) => return Err(NEEDS_UPDATE.into()),
                     Err(CodeRefused::Wrong) => return Err(WRONG_CODE.into()),
@@ -273,9 +282,10 @@ pub async fn vault_unlock_with_recovery(
     // it runs on the blocking pool rather than an async worker.
     crate::commands::fido::run_blocking(move || {
         let creds = crate::state::silo_credentials(&app)?;
+        let _opening = crate::state::opening(&app, &root);
         let session = VaultSession::open_with_dek(root, dek).map_err(|e| e.to_string())?;
         if session.vault_id != creds.vault_id {
-            return Err("vault id mismatch".into());
+            return Err("That recovery code opens a different silo.".into());
         }
 
         let vfs = Vfs::new(&session);
@@ -318,7 +328,7 @@ pub async fn vault_repair_from_storage(
     for target in &targets {
         if let Ok(Some(manifest)) = sync::read_manifest(&*target.store).await {
             if manifest.vault_id != silo.id {
-                return Err("That storage holds a different silo.".into());
+                return Err("That backup storage holds a different silo.".into());
             }
             store = Some(&*target.store);
             break;
@@ -330,6 +340,35 @@ pub async fn vault_repair_from_storage(
 
     // The code has to open the silo before anything local is touched.
     let join = silentsilo_app::flows::recovery_join_begin(store, &code).await?;
+    let _opening = crate::state::opening(&app, &root);
+
+    // And the local copy has to be really unreadable. Asked with the key the
+    // code just produced: a copy that opens is one to unlock, not to throw
+    // away with whatever it holds that storage does not.
+    {
+        let root = root.clone();
+        let dek = join.dek().clone();
+        let opens = crate::commands::fido::run_blocking(move || {
+            let Ok(session) = VaultSession::open_with_dek(root, dek) else {
+                return Ok(false);
+            };
+            if let Err(e) = session.seal_for_lock() {
+                crate::diagnostics::warn("repair", format_args!("local snapshot failed: {e}"));
+            }
+            let paths = session.paths.clone();
+            drop(session);
+            silentsilo_vault::wipe_plaintext_working_copy(&paths);
+            Ok(true)
+        })
+        .await?;
+        if opens {
+            return Err(
+                "This silo's copy on this computer still opens, so nothing was replaced. \
+                 Unlock it with the recovery code instead."
+                    .into(),
+            );
+        }
+    }
 
     // From here local state is replaced. Blobs and the silo folder stay.
     let device_secret = {
@@ -410,9 +449,13 @@ pub async fn vault_join_with_recovery(
     let join = silentsilo_app::flows::recovery_join_begin(&*store, &code).await?;
 
     // Local state starts here. Everything above could fail without leaving
-    // anything behind.
-    let entry = crate::commands::silo::register_joined_silo(&app, join.vault_id, &name, location)?;
+    // anything behind, and everything below is undone if it fails, so the
+    // retry is not refused over a half-made silo.
+    let joined = crate::commands::silo::register_joined_silo(&app, join.vault_id, &name, location)?;
+    let mut cleanup = crate::commands::silo::JoinCleanup::new(&app, &joined);
+    let entry = joined.entry;
     let root = entry.path.clone();
+    let _opening = crate::state::opening(&app, &root);
 
     let device_secret = {
         use rand::RngCore;
@@ -425,7 +468,9 @@ pub async fn vault_join_with_recovery(
         device_secret: device_secret.clone(),
     })
     .map_err(|e| e.to_string())?;
+    cleanup.wrote_credentials();
     silentsilo_vault::save_s3_config(join.vault_id, &s3_config).map_err(|e| e.to_string())?;
+    cleanup.wrote_storage();
 
     // The published key envelopes come down with it, so the security keys
     // still in the user's possession keep working on this machine. No key
@@ -454,10 +499,16 @@ pub async fn vault_join_with_recovery(
     // replay, which held the sessions mutex for the whole restore and let
     // the background sync see a half-replayed silo. On the blocking pool,
     // because replaying a long history is sustained database work.
-    crate::commands::fido::run_blocking(move || {
+    let session = crate::commands::fido::run_blocking(move || {
         let mut session = session;
         plan.apply(&mut session.conn).map_err(|e| e.to_string())?;
         session.backup_locally().map_err(|e| e.to_string())?;
+        Ok(session)
+    })
+    .await?;
+    // Whole and saved: from here a failure leaves a silo that opens.
+    cleanup.done();
+    crate::commands::fido::run_blocking(move || {
         let meta = Vfs::new(&session).meta().map_err(|e| e.to_string())?;
         crate::state::open_focused_session(&app, session)?;
         Ok(meta)

@@ -81,6 +81,43 @@ describe("bitwardenJsonToEntries", () => {
     expect(ssh.ssh_fingerprint).toBe("SHA256:abc");
   });
 
+  it("keeps custom fields, extra addresses and unusable 2FA in notes, and counts passkeys", () => {
+    const text = JSON.stringify({
+      items: [
+        {
+          type: 1,
+          name: "Steam",
+          notes: "main account",
+          fields: [
+            { name: "PIN", value: "4321", type: 1 },
+            { name: "Linked", value: null, type: 3 },
+          ],
+          login: {
+            username: "alex",
+            password: "pw",
+            totp: "steam://ABCDEFGHIJ",
+            uris: [{ uri: "https://store.steampowered.com" }, { uri: "https://steamcommunity.com" }],
+            fido2Credentials: [{ credentialId: "x" }],
+          },
+        },
+        { type: 99, name: "Unknown", fields: [{ name: "Ignored", value: "x", type: 0 }] },
+      ],
+    });
+    const { entries, extras } = bitwardenJsonToEntries(text, () => 1);
+    const login = entries[0]!;
+    expect(login.url).toBe("https://store.steampowered.com");
+    expect(login.totp_secret).toBeUndefined();
+    expect(login.notes).toBe(
+      [
+        "main account",
+        "PIN: 4321",
+        "Web address: https://steamcommunity.com",
+        "Two-factor secret: steam://ABCDEFGHIJ",
+      ].join("\n"),
+    );
+    expect(extras).toEqual({ customFields: 1, extraUris: 1, unsupportedOtp: 1, passkeys: 1 });
+  });
+
   it("refuses a password-protected export with advice, not a parse error", () => {
     expect(() => bitwardenJsonToEntries(JSON.stringify({ encrypted: true, items: [] }))).toThrow(
       JsonImportError

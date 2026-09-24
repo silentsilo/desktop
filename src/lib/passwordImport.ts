@@ -77,6 +77,61 @@ export function dropDuplicates(
   return { fresh, duplicates };
 }
 
+/**
+ * What an import could not put in a field of its own. The first three go
+ * into the entry's notes, because a custom field is often a secret and an
+ * extra address is still where the login is used. Passkeys have no place
+ * here at all and are only counted.
+ */
+export type ImportExtras = {
+  customFields: number;
+  extraUris: number;
+  /** Two-factor secrets with no codes shown: Steam, HOTP, or unreadable. */
+  unsupportedOtp: number;
+  passkeys: number;
+};
+
+export function noExtras(): ImportExtras {
+  return { customFields: 0, extraUris: 0, unsupportedOtp: 0, passkeys: 0 };
+}
+
+/** Notes with lines added after what was already there. */
+export function appendNotes(notes: string, lines: string[]): string {
+  return [notes, ...lines].filter(Boolean).join("\n");
+}
+
+/** The import summary's account of the above, or "" when there was none. */
+export function describeExtras(extras: ImportExtras): string {
+  const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const moved: string[] = [];
+  if (extras.customFields > 0) {
+    moved.push(count(extras.customFields, "custom field", "custom fields"));
+  }
+  if (extras.extraUris > 0) {
+    moved.push(count(extras.extraUris, "extra web address", "extra web addresses"));
+  }
+  if (extras.unsupportedOtp > 0) {
+    moved.push(
+      count(extras.unsupportedOtp, "two-factor secret", "two-factor secrets") +
+        " SilentSilo cannot show codes for",
+    );
+  }
+  const sentences: string[] = [];
+  if (moved.length > 0) {
+    const list =
+      moved.length === 1
+        ? moved[0]
+        : `${moved.slice(0, -1).join(", ")} and ${moved[moved.length - 1]}`;
+    sentences.push(`Moved into notes: ${list}.`);
+  }
+  if (extras.passkeys > 0) {
+    sentences.push(
+      `Left out: ${count(extras.passkeys, "passkey", "passkeys")}, which SilentSilo does not store.`,
+    );
+  }
+  return sentences.join(" ");
+}
+
 /** Where imported entries get filed: as the file says, or all into one. */
 export type ImportCategoryChoice = { kind: "file" } | { kind: "into"; category: string };
 

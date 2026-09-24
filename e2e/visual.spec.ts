@@ -39,7 +39,7 @@ async function freezeVersion(page: Page) {
 
 const screens: Array<{ name: string; url: string; anchor: string }> = [
   { name: "picker", url: "/?mock=picker", anchor: "Your silos" },
-  { name: "unlock", url: "/?mock=unlock", anchor: "Security key ready" },
+  { name: "unlock", url: "/?mock=unlock", anchor: "will show its own prompt" },
   { name: "files-grid", url: "/?mock=unlocked", anchor: "Passport scan.pdf" },
 ];
 
@@ -72,7 +72,7 @@ test("enrolment, dark", async ({ page }) => {
 
 test("credentials with a selected entry, dark", async ({ page }) => {
   await settled(page, "/?mock=unlocked", "Passport scan.pdf");
-  await page.getByRole("button", { name: "Credentials" }).click();
+  await page.getByRole("button", { name: "Passwords", exact: true }).click();
   await page.getByText("Bank", { exact: true }).first().click();
   await expect(page.getByText("Branch phone: 021 000 000")).toBeVisible();
   await freezeVersion(page);
@@ -84,7 +84,7 @@ test("credentials with a selected entry, dark", async ({ page }) => {
 test("security keys settings, dark", async ({ page }) => {
   await settled(page, "/?mock=unlocked", "Passport scan.pdf");
   await page.getByRole("button", { name: "Settings" }).click();
-  await page.getByRole("button", { name: "Security keys" }).click();
+  await page.getByRole("button", { name: "Unlocking", exact: true }).click();
   await expect(page.getByText("YubiKey 5C", { exact: true })).toBeVisible();
   await freezeVersion(page);
   await expect(page).toHaveScreenshot("settings-keys-dark.png", {

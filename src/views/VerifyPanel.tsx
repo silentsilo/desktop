@@ -5,7 +5,10 @@ import { AlertTriangle, CheckCircle2, LifeBuoy, SearchCheck, X } from "lucide-re
 import { useEventSubscription } from "../hooks/useEventSubscription";
 import { formatAppError } from "../lib/errors";
 import { formatBytes } from "../lib/format";
+import { markDone } from "../lib/siloMemory";
 import { describeRestoreDifference } from "../lib/restoreDiff";
+import { isComplete } from "../lib/recoveryCode";
+import { RecoveryCodeInput } from "../components/RecoveryCodeInput";
 
 type Result = {
   id: string;
@@ -34,7 +37,11 @@ type RestoreTest = {
   content_error: string | null;
 };
 
-type Props = { busy: boolean };
+type Props = {
+  busy: boolean;
+  /** For remembering when the backup was last tested, for the overview. */
+  siloId: string;
+};
 
 /**
  * Checking a silo against what its storage actually holds.
@@ -44,7 +51,7 @@ type Props = { busy: boolean };
  * them looks exactly like a healthy backup until the day something is
  * restored, and this is the only thing that asks before that day.
  */
-export function VerifyPanel({ busy }: Props) {
+export function VerifyPanel({ busy, siloId }: Props) {
   const [results, setResults] = useState<Result[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   /// Set when the user pressed stop. Its own state rather than an error:
@@ -81,7 +88,9 @@ export function VerifyPanel({ busy }: Props) {
     setRestoring(true);
     setRestoreProgress(null);
     try {
-      setRestore(await invoke<RestoreTest>("vault_test_restore", { code: code.trim() }));
+      const result = await invoke<RestoreTest>("vault_test_restore", { code });
+      setRestore(result);
+      if (result.matches && !result.content_error) markDone(siloId, "restore-tested");
     } catch (e) {
       setRestoreError(formatAppError(e));
     } finally {
@@ -101,6 +110,7 @@ export function VerifyPanel({ busy }: Props) {
     setRunning(deep ? "deep" : "quick");
     try {
       setResults(await invoke<Result[]>("vault_verify", { deep }));
+      markDone(siloId, "verified");
     } catch (e) {
       // Compared raw rather than after formatAppError, which rewrites
       // anything containing "cancelled" into a FIDO-prompt message.
@@ -125,12 +135,11 @@ export function VerifyPanel({ busy }: Props) {
     <div className="panel-section">
       <h3>
         <SearchCheck size={16} />
-        Check this silo against its storage
+        Check this silo against its backup storage
       </h3>
       <p>
-        Reads what each copy actually holds and compares it with what this silo believes is there.
-        A provider that lost an object, an upload that stopped half way, a file that rotted on a
-        disk: all three look like a healthy backup until the day you need them.
+        Reads what each copy holds and compares it with what this silo expects. Lost or damaged
+        files do not show up any other way until you try to restore them.
       </p>
 
       <div className="actions">
@@ -156,16 +165,14 @@ export function VerifyPanel({ busy }: Props) {
       </div>
 
       <p className="hint">
-        The quick check reads the history and looks for missing or empty objects, which costs
-        about what a listing costs whatever the size of the silo. Reading every file back is the
-        only way to find a rotted one, and downloads the whole silo to do it. Stopping is safe
-        either way: nothing is changed, only unanswered.
+        The quick check looks for missing or empty files and is fast at any size. Reading every
+        file back also finds damaged ones, but downloads the whole silo. Stopping changes nothing.
       </p>
 
       {running !== null && progress && progress[2] > 0 && (
         <div className="progress-row" role="status">
           <p className="hint">
-            {progress[0]}: {progress[1]} of {progress[2]} objects
+            {progress[0]}: {progress[1]} of {progress[2]}
           </p>
           <div className="progress-track">
             <div
@@ -178,7 +185,7 @@ export function VerifyPanel({ busy }: Props) {
 
       {stopped && (
         <p className="hint" role="status">
-          Stopped. Nothing was changed; run it again whenever you like.
+          Stopped. Nothing was changed.
         </p>
       )}
 
@@ -200,7 +207,8 @@ export function VerifyPanel({ busy }: Props) {
                   {state === "sound" && (
                     <span className="hint success-msg">
                       <CheckCircle2 size={14} />
-                      Sound. {r.records_read} records and {r.blobs_checked} files checked
+                      No problems found. {r.records_read} changes and {r.blobs_checked} files
+                      checked
                       {r.bytes_read > 0 ? `, ${formatBytes(r.bytes_read)} read back` : ""}.
                     </span>
                   )}
@@ -219,7 +227,7 @@ export function VerifyPanel({ busy }: Props) {
                             : `${r.missing} files this silo believes it has are not there.`
                           : ""}{" "}
                         {r.damaged.length > 0
-                          ? `${r.damaged.length} object${r.damaged.length === 1 ? " is" : "s are"} damaged.`
+                          ? `${r.damaged.length} file${r.damaged.length === 1 ? " is" : "s are"} damaged.`
                           : ""}
                       </span>
                       {/* Named, not counted. A report that says "3 problems"
@@ -236,9 +244,8 @@ export function VerifyPanel({ busy }: Props) {
                   )}
                   {r.unreferenced > 0 && (
                     <span className="hint">
-                      {r.unreferenced} object{r.unreferenced === 1 ? "" : "s"} nothing refers to.
-                      Normal: housekeeping clears them, and one that arrived ahead of its record
-                      is expected.
+                      {r.unreferenced} leftover file{r.unreferenced === 1 ? "" : "s"} this silo
+                      does not use. This is normal: they are cleared up later.
                     </span>
                   )}
                 </div>
@@ -250,8 +257,7 @@ export function VerifyPanel({ busy }: Props) {
 
       {results && results.every((r) => verdict(r) === "sound") && (
         <p className="hint">
-          Worth doing now and again rather than once. Storage decays quietly, and a check is only
-          true of the moment it ran.
+          A check covers only the moment it ran. Run it again every few months.
         </p>
       )}
 
@@ -260,39 +266,32 @@ export function VerifyPanel({ busy }: Props) {
         Test a recovery
       </h3>
       <p>
-        Rebuilds this silo from its storage and your recovery code, in a temporary folder, and
-        compares the result with what you have. This is the route that still exists when the
-        computer does not, so it is the one worth proving.
+        Rebuilds this silo in a temporary folder from backup storage and your recovery code, then
+        compares it with what you have. This is how you would get the silo back if this computer
+        were lost.
       </p>
       <p className="hint">
-        Quick: the history is replayed and compared, and one file is pulled out and opened for
-        real. Rebuilding the list proves the history survived; opening a file is what proves the
-        code still reaches your content, which is the part that would fail silently.
-      </p>
-      <p className="hint">
-        Nothing here is changed and no silo is added. The rebuild is thrown away as soon as it
-        has been compared, and only that one file is downloaded.
+        It rebuilds the file list and opens one file, to show the code still opens your content.
+        Nothing here is changed, and the rebuild is deleted afterwards.
       </p>
 
-      <label className="field">
+      <div className="field">
         <span>Your recovery code</span>
-        <input
+        <RecoveryCodeInput
           value={code}
           disabled={busy || restoring}
-          spellCheck={false}
-          placeholder="The code you wrote down"
-          onChange={(e) => {
-            setCode(e.target.value);
+          onChange={(next) => {
+            setCode(next);
             setRestore(null);
             setRestoreError(null);
           }}
         />
-      </label>
+      </div>
 
       <div className="actions">
         <button
           type="button"
-          disabled={busy || restoring || code.trim().length === 0}
+          disabled={busy || restoring || !isComplete(code)}
           onClick={() => void runRestore()}
         >
           {restoring ? <span className="spinner" aria-hidden /> : <LifeBuoy size={15} />}
@@ -304,8 +303,8 @@ export function VerifyPanel({ busy }: Props) {
         <div className="progress-row" role="status">
           <p className="hint">
             {restoreProgress && restoreProgress[1] > 0
-              ? `Fetching this silo's history: ${restoreProgress[0]} of ${restoreProgress[1]} records.`
-              : "Reading the storage…"}
+              ? `Downloading this silo's changes: ${restoreProgress[0]} of ${restoreProgress[1]}.`
+              : "Reading the backup storage…"}
           </p>
           {restoreProgress && restoreProgress[1] > 0 && (
             <div className="progress-track">
@@ -330,10 +329,8 @@ export function VerifyPanel({ busy }: Props) {
       {restore?.matches && (
         <p className="hint success-msg" role="status">
           <CheckCircle2 size={14} />
-          Your code and your storage rebuilt this silo exactly: {restore.entries} folders and
-          files from {restore.records} records
-          {restore.checked_file ? `, and “${restore.checked_file}” opened and matched` : ""}. The
-          paper copy works.
+          Recovery works. Your code and backup storage rebuilt {restore.entries} folders and files
+          {restore.checked_file ? `, and “${restore.checked_file}” opened and matched` : ""}.
         </p>
       )}
 
@@ -341,13 +338,13 @@ export function VerifyPanel({ busy }: Props) {
         <>
           <p className="hint is-error" role="status">
             <AlertTriangle size={14} />
-            The rebuild does not match what you have. Your files are fine here; what this says is
-            that recovering from storage alone would not give you the same silo.
+            The rebuild does not match what you have. Your files here are fine, but recovering from
+            backup storage now would not give you the same silo.
           </p>
           {restore.content_error && (
             <p className="hint is-error">
               {restore.checked_file
-                ? `“${restore.checked_file}” could not be opened from the backup: ${restore.content_error}`
+                ? `“${restore.checked_file}” could not be opened from backup storage: ${restore.content_error}`
                 : restore.content_error}
             </p>
           )}
@@ -360,7 +357,7 @@ export function VerifyPanel({ busy }: Props) {
             <p className="hint">and {restore.differences.length - 8} more differences.</p>
           )}
           <p className="hint">
-            The usual cause is changes that have not reached storage yet. Sync, then try again.
+            The usual cause is changes that have not reached backup storage yet. Sync, then try again.
           </p>
         </>
       )}

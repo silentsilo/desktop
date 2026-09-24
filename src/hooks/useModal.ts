@@ -1,6 +1,30 @@
 import { useEffect, useRef } from "react";
 
 /**
+ * The dialogs open right now, oldest first. Only the last one handles
+ * Escape and Tab: every dialog listens on the document, so with two open
+ * one Escape closed both, and the one underneath pulled focus back from the
+ * one on top whenever Tab was pressed.
+ */
+export class ModalStack {
+  private open: object[] = [];
+
+  push(token: object): void {
+    this.open.push(token);
+  }
+
+  remove(token: object): void {
+    this.open = this.open.filter((t) => t !== token);
+  }
+
+  isTop(token: object): boolean {
+    return this.open[this.open.length - 1] === token;
+  }
+}
+
+const modals = new ModalStack();
+
+/**
  * The parts of a dialog that every dialog was implementing differently.
  *
  * Before this, Escape closed the new-folder modal but not the password
@@ -34,6 +58,8 @@ export function useModal(onClose: (() => void) | undefined, open = true) {
     // otherwise focus falls to the top of the document and a keyboard user
     // has to tab back to where they were.
     const previous = document.activeElement as HTMLElement | null;
+    const token = {};
+    modals.push(token);
 
     const focusable = () =>
       [
@@ -49,6 +75,7 @@ export function useModal(onClose: (() => void) | undefined, open = true) {
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
+      if (!modals.isTop(token)) return;
       if (e.key === "Escape") {
         e.stopPropagation();
         closeRef.current?.();
@@ -73,7 +100,10 @@ export function useModal(onClose: (() => void) | undefined, open = true) {
     document.addEventListener("keydown", onKeyDown, true);
     return () => {
       document.removeEventListener("keydown", onKeyDown, true);
-      previous?.focus?.();
+      const wasTop = modals.isTop(token);
+      modals.remove(token);
+      // A dialog closing underneath another must not pull focus out of it.
+      if (wasTop) previous?.focus?.();
     };
   }, [open]);
 

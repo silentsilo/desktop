@@ -10,7 +10,7 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog } from "../lib/dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { AuthShell } from "../layout/AuthShell";
 import { SiloReportDialog } from "./SiloReportDialog";
@@ -143,9 +143,8 @@ export function SiloPickerView({
         >
           <h2>New silo</h2>
           <p className="hint">
-            A silo is a folder holding everything inside it, encrypted. Keep separate ones for
-            separate lives (personal, family, work). Each gets its own security keys and its own
-            backup storage.
+            A silo is an encrypted folder. Each one has its own keys and backup storage, so you
+            can keep work and personal files apart.
           </p>
 
           <label className="field">
@@ -175,16 +174,15 @@ export function SiloPickerView({
               </button>
             </div>
             <p className="hint">
-              An external drive or a folder you already back up both work. Everything written here
-              is ciphertext, and nothing decrypted is ever stored in this folder.
+              Any folder works, including one on an external drive. What SilentSilo writes here is
+              encrypted.
             </p>
             {syncProvider && (
               <p className="hint is-warning">
                 <AlertTriangle size={14} />
-                This is inside {syncProvider}, which works as a backup for one computer but cannot
-                be shared with a second: {syncProvider} would make conflict copies instead of
-                merging. To use two computers, keep the silo elsewhere and connect backup storage
-                in Settings.
+                This is inside {syncProvider}. That works as a backup for one computer, but{" "}
+                {syncProvider} cannot merge changes from two. To use two computers, keep the silo
+                elsewhere and connect backup storage in Settings.
               </p>
             )}
           </label>
@@ -235,7 +233,7 @@ export function SiloPickerView({
                 </button>
                 <button type="button" className="secondary" disabled={busy} onClick={onJoin}>
                   <Cloud size={15} />
-                  Copy one from backup storage
+                  Set up from backup storage
                 </button>
               </div>
             </div>
@@ -267,7 +265,7 @@ export function SiloPickerView({
                         an unlocked silo opens on click, a locked one asks
                         for a key first, and that is the difference worth
                         knowing before clicking. */}
-                    {silo.unlocked && <span className="silo-open-badge">open</span>}
+                    {silo.unlocked && <span className="silo-open-badge">unlocked</span>}
                   </strong>
                   <span className="hint">
                     {silo.present ? describeLastOpened(silo.last_opened) : "not reachable"} ·{" "}
@@ -277,7 +275,7 @@ export function SiloPickerView({
               </button>
               <button
                 type="button"
-                className="silo-remove"
+                className="silo-info"
                 disabled={busy}
                 onClick={() => void showReport(silo.id)}
                 title={`What ${silo.name} looks like on disk`}
@@ -339,7 +337,7 @@ export function SiloPickerView({
           </button>
           <button type="button" className="secondary" disabled={busy} onClick={onJoin}>
             <Cloud size={16} />
-            <span>Copy one from backup storage</span>
+            <span>Set up from backup storage</span>
           </button>
         </div>
       </section>

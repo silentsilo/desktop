@@ -200,14 +200,14 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
       setNote(
         copied === 0
           ? "Already had everything."
-          : `Copied ${copied} object${copied === 1 ? "" : "s"} across.`,
+          : `Copied ${copied} item${copied === 1 ? "" : "s"}.`,
       );
       await refresh();
     } catch (e) {
       // Compared raw rather than after formatAppError, which rewrites
       // anything containing "cancelled" into a FIDO-prompt message.
       if (String(e) === "cancelled") {
-        setNote("Stopped. What already copied stays there, and running it again carries on.");
+        setNote("Stopped. What was copied stays there. Run it again to carry on.");
         await refresh();
       } else {
         setError(formatAppError(e));
@@ -257,11 +257,15 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
         Copies
       </h3>
       <p>
-        The rule worth keeping is three copies, on two kinds of storage, one of them somewhere
-        else. Right now this silo has {current} of {places}{" "}
-        {places === 1 ? "place" : "places"} up to date, across {media}{" "}
+        Aim for three copies on two kinds of storage, with one somewhere else. This silo has{" "}
+        {current} of {places}{" "}
+        {places === 1 ? "copy" : "copies"} up to date, across {media}{" "}
         {media === 1 ? "kind" : "kinds"} of storage.
-        {list.length > 0 ? " At least one of them is off this computer." : ""}
+        {/* Only storage reached over the network is known to be elsewhere. A
+            folder may be an external drive or a spot on the same disk. */}
+        {list.some((t) => t.config.kind !== "folder")
+          ? " At least one of them is off this computer."
+          : ""}
       </p>
 
       <ul className="key-list copies-list">
@@ -274,7 +278,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
             <span className="hint">
               {fullCopy
                 ? "Holds every file, so it counts as a copy."
-                : "Holds the file list and fetches contents when you open them, so it is an index rather than a copy."}
+                : "Holds the file list and downloads each file when you open it, so it does not count as a copy."}
             </span>
           </div>
         </li>
@@ -289,21 +293,22 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
               <div className="protected-row-text">
                 <strong>
                   {target.label || whereIs(target.config)}
-                  {target.archive && <span className="copy-tag">append-only</span>}
+                  {target.primary && <span className="copy-tag">main</span>}
+                  {target.archive && <span className="copy-tag">never deletes</span>}
                 </strong>
                 <span className={`hint copy-state is-${state.health}`}>{state.headline}</span>
                 <span className="hint">{state.detail}</span>
                 {target.archive && (
                   <span className="hint">
-                    Nothing is ever deleted here, so emptying the trash and tidying old history
-                    leave it untouched and it keeps growing.
+                    SilentSilo does not delete anything here, so it keeps growing. Old keys and
+                    recovery codes stay in it too.
                   </span>
                 )}
               </div>
-              {/* The first target is the connection the Backup screen edits.
-                  Removing it there is called Disconnect and clears
-                  everything, so offering a second way to do it from here
-                  would mean two buttons with different consequences. */}
+              {/* The main copy is the one the card above edits. Removing it
+                  there is called Disconnect and clears everything, so a
+                  second way to do it here would mean two buttons with
+                  different consequences. */}
               {!target.primary && (
                 <div className="key-list-actions">
                   <button
@@ -311,7 +316,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                     className="secondary"
                     disabled={busy || working || seeding !== null}
                     onClick={() => void seed(target.id)}
-                    title="Copy everything from the first place into this one"
+                    title="Copy everything from the main copy into this one"
                   >
                     {seeding === target.id ? (
                       <span className="spinner" aria-hidden />
@@ -322,7 +327,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                       ? seedProgress
                         ? seedLabel(seedProgress)
                         : "Copying…"
-                      : "Fill from the first copy"}
+                      : "Fill from the main copy"}
                   </button>
                   {seeding === target.id && (
                     <button
@@ -341,7 +346,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                     className="secondary"
                     disabled={busy || working || seeding !== null}
                     onClick={() => setConfirmRemove(target)}
-                    title="Stop backing up to this place"
+                    title="Stop backing up to this copy"
                   >
                     <Trash2 size={14} />
                     Remove
@@ -376,10 +381,8 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
 
       {list.length > 1 && (
         <p className="hint">
-          Filling one place from another copies the files directly, so a large silo can go onto
-          an external disk over a cable instead of over your connection. It moves encrypted files
-          and never needs your key, it can be stopped at any point, and running it again carries
-          on from where it stopped.
+          Filling from the main copy goes straight from one storage to the other, for example onto
+          an external disk over a cable. You can stop it at any time and run it again to carry on.
         </p>
       )}
 
@@ -390,7 +393,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
             <input
               value={label}
               disabled={working}
-              placeholder="Disc extern, birou"
+              placeholder="External disk, office"
               onChange={(e) => setLabel(e.target.value)}
             />
           </label>
@@ -408,12 +411,11 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
               onChange={(e) => setArchive(e.target.checked)}
             />
             <span>
-              Never delete anything here
+              Never-delete copy
               <span className="hint">
-                For a copy meant to survive this computer being taken over. SilentSilo only ever
-                adds to it: emptying the trash, tidying old history and clearing unused content
-                all skip it, so it grows for ever and you pay for that. Pair it with a bucket
-                that has object lock, or with credentials that have no permission to delete.
+                For a copy that should survive this computer being taken over. SilentSilo does
+                not delete anything here, so it keeps growing and keeps old keys and recovery
+                codes. Use storage with object lock, or sign-in details that cannot delete.
               </span>
             </span>
           </label>
@@ -425,14 +427,13 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
           )}
 
           <p className="hint">
-            It is written to before it is saved. A place that cannot be written to is not a copy,
-            and finding that out on the next pass means believing you have one for however long
-            that takes.
+            SilentSilo writes a test file first, so storage it cannot write to is caught before
+            it is added.
           </p>
           <div className="actions">
             <button type="button" disabled={working} onClick={() => void add()}>
               {working ? <span className="spinner" aria-hidden /> : <Plus size={15} />}
-              {working ? "Checking…" : "Add this place"}
+              {working ? "Checking…" : "Add this copy"}
             </button>
             <button
               type="button"
@@ -452,15 +453,15 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
         <div className="actions">
           <button type="button" disabled={busy || working} onClick={() => setAdding(true)}>
             <Plus size={15} />
-            Add another place
+            Add another copy
           </button>
         </div>
       )}
 
       {confirmRemove && (
         <ConfirmDialog
-          title="Stop backing up to this place?"
-          message={`“${confirmRemove.label || whereIs(confirmRemove.config)}” stops receiving copies of this silo. What is already there is left alone, and adding the place back later picks up from where it stopped.`}
+          title="Remove this copy?"
+          message={`“${confirmRemove.label || whereIs(confirmRemove.config)}” stops receiving this silo. Nothing there is deleted, and adding it back later carries on from where it stopped.`}
           confirmLabel="Remove"
           danger
           busy={working}

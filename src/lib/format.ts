@@ -29,18 +29,24 @@ export function breadcrumbSegments(folderPath: string, rootLabel: string): Bread
 }
 
 /**
+ * One date shape everywhere, day first: "15 Nov 2023, 14:00". British, like
+ * the spelling; the system locale answered "Nov 15, 2023" next to it.
+ */
+const DATE_LOCALE = "en-GB";
+
+/**
  * A timestamp, with the year shown only when it isn't this one.
  *
- * Omitting it entirely made a file last touched in 2023 read as "Nov 15,
- * 00:13" — indistinguishable from one touched last week, which is the single
+ * Omitting it entirely made a file last touched in 2023 read as "15 Nov,
+ * 00:13", no different from one touched last week, which is the single
  * thing a modified column exists to tell you apart.
  */
 export function formatDate(ts: number): string {
-  if (!ts) return "—";
+  if (!ts) return "-";
   const ms = ts > 1e12 ? ts : ts * 1000;
   const date = new Date(ms);
   const sameYear = date.getFullYear() === new Date().getFullYear();
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString(DATE_LOCALE, {
     year: sameYear ? undefined : "numeric",
     month: "short",
     day: "numeric",
@@ -59,13 +65,27 @@ export function formatDate(ts: number): string {
  * to a column of "Jan 21" timestamps, which read as two different products.
  */
 export function formatDay(ts: number): string {
-  if (!ts) return "—";
+  if (!ts) return "-";
   const ms = ts > 1e12 ? ts : ts * 1000;
   const date = new Date(ms);
   const sameYear = date.getFullYear() === new Date().getFullYear();
-  return date.toLocaleDateString(undefined, {
+  return date.toLocaleDateString(DATE_LOCALE, {
     year: sameYear ? undefined : "numeric",
     month: "short",
     day: "numeric",
   });
+}
+
+/** How long ago a Unix ms instant was, in the words a status line uses. */
+export function formatAge(at: number): string {
+  const seconds = Math.round((Date.now() - at) / 1000);
+  if (seconds < 45) return "just now";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return hours === 1 ? "an hour ago" : `${hours} hours ago`;
+  // "49 hours ago" made the reader do arithmetic to learn it was the day
+  // before yesterday.
+  const days = Math.round(hours / 24);
+  return days === 1 ? "yesterday" : `${days} days ago`;
 }

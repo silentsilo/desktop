@@ -14,6 +14,17 @@ export async function checkForUpdate(): Promise<UpdateCheckResult> {
   return { available: true, version: update.version, body: update.body ?? null, update };
 }
 
+/** A failed install, and whether it failed after the silos were locked, in
+ * which case the screen that started it is no longer there to say so. */
+export class UpdateInstallError extends Error {
+  constructor(
+    readonly reason: unknown,
+    readonly silosLocked: boolean,
+  ) {
+    super(String(reason));
+  }
+}
+
 /**
  * Downloads, locks every open silo, installs, then relaunches into the new
  * version. On Windows the installer ends this process outright, with no exit
@@ -26,21 +37,30 @@ export async function installUpdateAndRelaunch(
   let downloaded = 0;
   let contentLength: number | null = null;
 
-  await update.download((event) => {
-    switch (event.event) {
-      case "Started":
-        contentLength = event.data.contentLength ?? null;
-        break;
-      case "Progress":
-        downloaded += event.data.chunkLength;
-        onProgress?.(downloaded, contentLength);
-        break;
-      case "Finished":
-        break;
-    }
-  });
+  try {
+    await update.download((event) => {
+      switch (event.event) {
+        case "Started":
+          contentLength = event.data.contentLength ?? null;
+          break;
+        case "Progress":
+          downloaded += event.data.chunkLength;
+          onProgress?.(downloaded, contentLength);
+          break;
+        case "Finished":
+          break;
+      }
+    });
+  } catch (e) {
+    throw new UpdateInstallError(e, false);
+  }
 
-  await invoke("vault_lock", { id: null });
-  await update.install();
-  await relaunch();
+  // A lock that failed part way may still have closed some of them.
+  try {
+    await invoke("vault_lock", { id: null });
+    await update.install();
+    await relaunch();
+  } catch (e) {
+    throw new UpdateInstallError(e, true);
+  }
 }

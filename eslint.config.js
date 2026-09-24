@@ -20,6 +20,19 @@ export default tseslint.config(
     languageOptions: { globals: { console: "readonly", process: "readonly" } },
   },
   {
+    // The end-to-end runner and its tests drive the app from Node.
+    files: ["e2e-app/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        console: "readonly",
+        process: "readonly",
+        Buffer: "readonly",
+        setTimeout: "readonly",
+        window: "readonly",
+      },
+    },
+  },
+  {
     files: ["**/*.{ts,tsx}"],
     plugins: { "react-hooks": reactHooks },
     languageOptions: {

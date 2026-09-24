@@ -9,7 +9,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog } from "../lib/dialog";
 import { formatAppError } from "../lib/errors";
 import {
   applyPreset,
@@ -53,8 +53,10 @@ export type StoreDraft = {
   sftp: SftpForm;
 };
 
+/// Starts on a folder: the choice most people can make without an account
+/// anywhere, and the one with a single field.
 export const EMPTY_STORE_DRAFT: StoreDraft = {
-  kind: "s3",
+  kind: "folder",
   preset: S3_PRESETS[S3_PRESETS.length - 1]!,
   s3: DEFAULT_S3_FORM,
   folder: "",
@@ -202,8 +204,8 @@ function HostKeyStep({
           <code>{sftp.fingerprint}</code>
         </div>
         <p className="hint">
-          This silo will only ever talk to a server presenting this key. If it changes, the
-          connection stops rather than continuing to something else.
+          SilentSilo connects only to a server with this key. If the key changes, the connection
+          stops.
         </p>
         <button type="button" className="secondary" disabled={busy || checking} onClick={check}>
           Check again
@@ -261,8 +263,8 @@ function HostKeyStep({
         </p>
       ) : null}
       <p className="hint">
-        Nothing is sent yet: no username, no password. The server offers its key first, and it is
-        that key this silo will be tied to.
+        Your username and password are not sent at this step. The server shows its key first, and
+        this silo is tied to that key.
       </p>
     </div>
   );
@@ -292,23 +294,21 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy }: Prop
   return (
     <>
       <div className="field">
-        <span>Where the backup lives</span>
+        <span>Where should the encrypted copy live?</span>
         <div className="store-kind-picker">
-          <button
-            type="button"
-            className={draft.kind === "s3" ? "" : "secondary"}
-            onClick={() => setKind("s3")}
-          >
-            <Cloud size={15} />
-            Bucket
-          </button>
           <button
             type="button"
             className={draft.kind === "folder" ? "" : "secondary"}
             onClick={() => setKind("folder")}
           >
-            <HardDrive size={15} />
-            Folder
+            <HardDrive size={15} />A drive or NAS folder
+          </button>
+          <button
+            type="button"
+            className={draft.kind === "s3" ? "" : "secondary"}
+            onClick={() => setKind("s3")}
+          >
+            <Cloud size={15} />A cloud bucket (S3)
           </button>
           <button
             type="button"
@@ -316,15 +316,14 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy }: Prop
             onClick={() => setKind("web-dav")}
           >
             <Server size={15} />
-            WebDAV
+            Nextcloud or WebDAV
           </button>
           <button
             type="button"
             className={draft.kind === "sftp" ? "" : "secondary"}
             onClick={() => setKind("sftp")}
           >
-            <Terminal size={15} />
-            SFTP
+            <Terminal size={15} />A server over SFTP
           </button>
         </div>
       </div>
@@ -354,9 +353,8 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy }: Prop
             </button>
           </div>
           <p className="hint">
-            A network share, an external drive, or a folder your cloud client already syncs.
-            Dropbox, OneDrive and Google Drive all work this way, and none of them see anything but
-            ciphertext.
+            A network share, an external drive, or a folder that Dropbox, OneDrive or Google Drive
+            already syncs. What SilentSilo writes there is encrypted.
           </p>
         </label>
       )}
@@ -372,8 +370,8 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy }: Prop
               spellCheck={false}
             />
             <p className="hint">
-              The folder inside your Nextcloud, ownCloud, Synology or other WebDAV server. It will
-              be created if it isn&apos;t there.
+              The folder inside your Nextcloud, ownCloud, Synology or other WebDAV server. It is
+              created if it does not exist.
             </p>
             {isPlainHttp(draft.dav.url) && <p className="hint">{PLAIN_HTTP_WARNING}</p>}
           </label>
@@ -401,8 +399,8 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy }: Prop
               autoComplete="off"
             />
               <p className="hint">
-                On Nextcloud, generate an app password rather than using your account password.
-                It can be revoked on its own.
+                On Nextcloud, use an app password, not your account password. You can revoke it
+                on its own.
               </p>
             </label>
           </div>
@@ -494,8 +492,8 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy }: Prop
                   rows={4}
                 />
                 <p className="hint">
-                  Paste the key itself, not a path to it. It is kept with the silo&apos;s other
-                  secrets, so this keeps working if the file moves or the machine is rebuilt.
+                  Paste the key itself, not a path to it. SilentSilo keeps it with the
+                  silo&apos;s other sign-in details.
                 </p>
               </label>
               <label className="field">
@@ -520,8 +518,8 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy }: Prop
               spellCheck={false}
             />
             <p className="hint">
-              Relative to where you land when you log in, or an absolute path. It will be created
-              if it isn&apos;t there.
+              Relative to where you land when you log in, or an absolute path. It is created if it
+              does not exist.
             </p>
           </label>
         </>

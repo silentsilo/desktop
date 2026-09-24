@@ -37,7 +37,7 @@ describe("describeRestoreDifference", () => {
       describeRestoreDifference(
         "only here: password aaaaaaaa-0000-0000-0000-000000000001",
       ),
-    ).toBe("Only in this silo: a credential entry (id aaaaaaaa…).");
+    ).toBe("Only in this silo: a password entry (id aaaaaaaa…).");
   });
 
   it("explains a history length mismatch", () => {

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use silentsilo_core::{CoreError, CoreResult};
@@ -20,45 +20,71 @@ use uuid::Uuid;
 pub const MAX_OPEN_SILOS: usize = 3;
 
 pub struct AppState {
-    /// Which silo the app is currently pointed at.
-    ///
-    /// Everything path-shaped reads through this, so switching silos is a
-    /// matter of changing it rather than of threading an id through every
-    /// command. `None` only before the first one is opened.
-    pub active_silo: Mutex<Option<SiloEntry>>,
-    /// Every silo currently unlocked, keyed by id. More than one may be
-    /// open so switching costs nothing; the alternative is a key tap every
-    /// time somebody moves between work and personal. Bounded by
-    /// [`MAX_OPEN_SILOS`]; see `sessions_mut` for the limit behaviour.
-    pub sessions: Mutex<HashMap<Uuid, VaultSession>>,
-    /// When each open silo was last used, for the idle timer and for
-    /// deciding which one to close when the limit is reached.
-    pub last_touched: Mutex<HashMap<Uuid, Instant>>,
-    /// Set by `cancel_import`, checked between items by the long-running
-    /// folder/paste import commands (which run as one blocking call, so a
-    /// JS-side abort signal can't reach them directly). Callers reset it via
-    /// `reset_import_cancel` before starting a new cancellable batch.
-    pub import_cancelled: AtomicBool,
-    /// Set by `cancel_verify`, checked between objects by `vault_verify`.
-    /// Same pattern as `import_cancelled`: the check runs as one blocking
-    /// invoke, so a JS-side abort signal cannot reach it directly. Reset at
-    /// the start of every run rather than by a separate command.
-    pub verify_cancelled: AtomicBool,
-    /// Set by `cancel_seed`, checked between objects by `backup_target_seed`.
-    /// Stopping a seed is safe: what already landed stays, and the next run
-    /// skips it and carries on.
-    pub seed_cancelled: AtomicBool,
-    /// Held for the duration of a sync pass. Two passes at once — the timer
-    /// firing while the user is holding the button — would each read the
-    /// same pending queue and upload it twice.
-    pub sync_in_flight: AtomicBool,
+    /// What this app shares with core's sync pass and flows: the focused
+    /// silo, the open sessions, the idle clock and the flags a pass or a
+    /// long command holds. Reached through `Deref`, so `state.sessions`
+    /// reads as before; one set, so a pass core runs and a command here
+    /// lock the same things.
+    pub core: silentsilo_app::AppState,
     /// Moves whenever a silo opens, closes or takes the focus. The browser
     /// extension's login refs are valid for one value of it, so a lock or a
     /// switch leaves every ref it handed out useless.
     pub session_epoch: AtomicU64,
+    /// Silo roots with a session being built and not yet in `sessions`. The
+    /// scratch sweep after a lock keeps their working copies: it runs from
+    /// other threads and would otherwise delete a copy being opened.
+    pub opening: Mutex<Vec<PathBuf>>,
+}
+
+impl std::ops::Deref for AppState {
+    type Target = silentsilo_app::AppState;
+
+    fn deref(&self) -> &Self::Target {
+        &self.core
+    }
+}
+
+/// Registers a silo root as being opened until dropped. Taken before a
+/// session is built and held until it is in the map or abandoned.
+pub struct Opening {
+    app: AppHandle,
+    root: PathBuf,
+}
+
+pub fn opening(app: &AppHandle, root: &Path) -> Opening {
+    lock_recovering(&app.state::<AppState>().opening).push(root.to_path_buf());
+    Opening {
+        app: app.clone(),
+        root: root.to_path_buf(),
+    }
+}
+
+impl Drop for Opening {
+    fn drop(&mut self) {
+        let state = self.app.state::<AppState>();
+        let mut opening = lock_recovering(&state.opening);
+        if let Some(at) = opening.iter().position(|r| *r == self.root) {
+            opening.remove(at);
+        }
+    }
+}
+
+/// A guard even when a panic poisoned the mutex. Only for the paths that
+/// close silos or clear their scratch: a lock that fails over poisoning
+/// would leave them open, which is the worse of the two.
+fn lock_recovering<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 pub fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    #[cfg(feature = "e2e")]
+    return {
+        let _ = app;
+        Ok(crate::e2e::dir().join("app"))
+    };
+    #[cfg(not(feature = "e2e"))]
     app.path().app_data_dir().map_err(|e| e.to_string())
 }
 
@@ -113,13 +139,19 @@ pub fn active_silo(app: &AppHandle) -> Result<SiloEntry, String> {
         .lock()
         .map_err(|e| e.to_string())?
         .clone()
-        .ok_or_else(|| "No silo is open".to_string())
+        .ok_or_else(|| "No silo is open.".to_string())
 }
 
 /// The path a silo would get by default, before the user picks somewhere
 /// else. Documents rather than app data, because a silo is the user's
 /// property and belongs somewhere they can find, back up, and copy.
 pub fn default_silo_parent(app: &AppHandle) -> PathBuf {
+    #[cfg(feature = "e2e")]
+    return {
+        let _ = app;
+        crate::e2e::dir().join("Documents").join("SilentSilo")
+    };
+    #[cfg(not(feature = "e2e"))]
     app.path()
         .document_dir()
         .unwrap_or_else(|_| app.path().home_dir().unwrap_or_else(|_| PathBuf::from(".")))
@@ -253,6 +285,35 @@ pub fn targets_for(silo_id: Uuid) -> Vec<TargetHandle> {
         .collect()
 }
 
+/// [`targets_for`] for a key change, which must reach every target: one
+/// skipped because it would not open keeps the old key readable there.
+pub fn every_target_for(silo_id: Uuid) -> Result<Vec<TargetHandle>, String> {
+    silentsilo_vault::load_targets(silo_id)
+        .into_iter()
+        .map(|target| {
+            let store = target.config.open().map_err(|e| {
+                let name = if target.label.is_empty() {
+                    "A backup storage"
+                } else {
+                    target.label.as_str()
+                };
+                format!("{name} cannot be opened ({e}). Fix it or remove it first.")
+            })?;
+            let label = if target.label.is_empty() {
+                store.describe()
+            } else {
+                target.label.clone()
+            };
+            Ok(TargetHandle {
+                id: target.config.target_id(),
+                store,
+                role: target.role,
+                label,
+            })
+        })
+        .collect()
+}
+
 /// The focused silo's session, held for as long as the caller needs it.
 ///
 /// Deliberately shaped like the `Option<VaultSession>` this replaced, so
@@ -307,38 +368,51 @@ impl AppState {
     /// that would take the count past [`MAX_OPEN_SILOS`].
     ///
     /// Returns the silo that was closed to make room, so the caller can say
-    /// so rather than leaving the user to discover it.
-    pub fn open_session(&self, id: Uuid, session: VaultSession) -> Result<Option<Uuid>, String> {
-        let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
-        let mut touched = self.last_touched.lock().map_err(|e| e.to_string())?;
+    /// so rather than leaving the user to discover it, and how many scratch
+    /// folders still hold plaintext afterwards, as a lock reports it.
+    ///
+    /// The evicted session is snapshotted after both mutexes are released:
+    /// sealing a large index under them froze every other command.
+    pub fn open_session(
+        &self,
+        id: Uuid,
+        session: VaultSession,
+    ) -> Result<Option<(Uuid, usize)>, String> {
+        let evicted = {
+            let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
+            let mut touched = self.last_touched.lock().map_err(|e| e.to_string())?;
 
-        let evicted = if sessions.contains_key(&id) || sessions.len() < MAX_OPEN_SILOS {
-            None
-        } else {
-            // Oldest by last use. A silo with no recorded touch is one that
-            // was opened and never used, which makes it the best candidate,
-            // so a missing entry sorts as maximally stale.
-            stalest(sessions.keys().copied(), &touched).inspect(|stale| {
-                if let Some(old) = sessions.remove(stale) {
-                    close_one(old);
-                }
-                touched.remove(stale);
-            })
+            let evicted = if sessions.contains_key(&id) || sessions.len() < MAX_OPEN_SILOS {
+                None
+            } else {
+                // Oldest by last use. A silo with no recorded touch is one
+                // that was opened and never used, which makes it the best
+                // candidate, so a missing entry sorts as maximally stale.
+                stalest(sessions.keys().copied(), &touched).and_then(|stale| {
+                    touched.remove(&stale);
+                    sessions.remove(&stale).map(|old| (stale, old))
+                })
+            };
+
+            sessions.insert(id, session);
+            touched.insert(id, Instant::now());
+            evicted
         };
-
-        sessions.insert(id, session);
-        touched.insert(id, Instant::now());
         self.bump_epoch();
-        Ok(evicted)
+        Ok(evicted.map(|(stale, old)| {
+            close_one(old);
+            (stale, self.sweep_scratch())
+        }))
     }
 
     /// Closes one silo, leaving any others open.
+    ///
+    /// Carries on through a poisoned mutex: a panic elsewhere must not turn
+    /// Lock into a success that closed nothing.
     pub fn close_session(&self, id: Uuid) -> Result<(), String> {
-        let closed = self.sessions.lock().map_err(|e| e.to_string())?.remove(&id);
+        let closed = lock_recovering(&self.sessions).remove(&id);
         self.bump_epoch();
-        if let Ok(mut touched) = self.last_touched.lock() {
-            touched.remove(&id);
-        }
+        lock_recovering(&self.last_touched).remove(&id);
         if let Some(session) = closed {
             close_one(session);
         }
@@ -350,25 +424,20 @@ impl AppState {
     /// just closed and any a crash or kill left behind, keeping their
     /// ciphered working copies. Returns how many still hold plaintext because
     /// another application holds a file in them.
+    ///
+    /// A silo being unlocked right now is kept as if it were open.
     pub fn sweep_scratch(&self) -> usize {
-        let roots: Vec<std::path::PathBuf> = self
-            .sessions
-            .lock()
-            .map(|s| {
-                s.values()
-                    .map(|session| session.paths.root.clone())
-                    .collect()
-            })
-            .unwrap_or_default();
-        let open: Vec<&std::path::Path> = roots.iter().map(|r| r.as_path()).collect();
+        let mut roots: Vec<PathBuf> = lock_recovering(&self.sessions)
+            .values()
+            .map(|session| session.paths.root.clone())
+            .collect();
+        roots.extend(lock_recovering(&self.opening).iter().cloned());
+        let open: Vec<&Path> = roots.iter().map(|r| r.as_path()).collect();
         silentsilo_vault::wipe_work_dirs_except(&open)
     }
 
     pub fn open_silo_ids(&self) -> Vec<Uuid> {
-        self.sessions
-            .lock()
-            .map(|s| s.keys().copied().collect())
-            .unwrap_or_default()
+        lock_recovering(&self.sessions).keys().copied().collect()
     }
 }
 
@@ -412,7 +481,13 @@ pub fn open_focused_session(app: &AppHandle, session: VaultSession) -> Result<()
     if session.vault_id != id {
         return Err("The silo on screen changed while this one was opening. Open it again.".into());
     }
-    if let Some(evicted) = state.open_session(id, session)? {
+    if let Some((evicted, scratch_left)) = state.open_session(id, session)? {
+        // What a lock of that silo would have done: a password it copied
+        // goes, and a file still held open is reported.
+        crate::commands::vault::take_back_clipboard(app, Some(&[evicted]));
+        if scratch_left > 0 {
+            let _ = app.emit("scratch-still-open", scratch_left);
+        }
         let name = load_registry(&app_data_dir(app)?)
             .get(evicted)
             .map(|e| e.name.clone())
@@ -450,7 +525,7 @@ pub fn focused_id(state: &State<AppState>) -> Result<Uuid, String> {
         .map_err(|e| e.to_string())?
         .as_ref()
         .map(|s| s.id)
-        .ok_or_else(|| "No silo is open".to_string())
+        .ok_or_else(|| "No silo is open.".to_string())
 }
 
 /// Records that a silo was used just now.
@@ -465,13 +540,28 @@ pub fn touch(state: &State<AppState>, id: Uuid) {
     }
 }
 
-/// How long each open silo has gone unused, in seconds.
+/// [`touch`] for callers that do not hold the sessions lock and may name a
+/// locked silo. A locked silo gets no idle timer: it would later "lock"
+/// nothing and take back another silo's clipboard on the way.
+pub fn touch_if_open(state: &State<AppState>, id: Uuid) {
+    if session_is_open(state, id) {
+        touch(state, id);
+    }
+}
+
+/// How long each open silo has gone unused, in seconds. Only open ones: a
+/// timer left for a silo that is not open would ask to lock it.
 pub fn idle_seconds(state: &State<AppState>) -> Vec<(Uuid, u64)> {
+    let open = state.open_silo_ids();
     let Ok(seen) = state.last_touched.lock() else {
         return Vec::new();
     };
-    let now = Instant::now();
+    idle_of_open(&seen, &open, Instant::now())
+}
+
+fn idle_of_open(seen: &HashMap<Uuid, Instant>, open: &[Uuid], now: Instant) -> Vec<(Uuid, u64)> {
     seen.iter()
+        .filter(|(id, _)| open.contains(id))
         .map(|(id, at)| (*id, now.saturating_duration_since(*at).as_secs()))
         .collect()
 }
@@ -545,25 +635,37 @@ pub fn snapshot_focused_session(state: &State<AppState>) -> Result<SessionSnapsh
     })
 }
 
-/// Push vault.db and pending blobs before lock or app exit.
-///
-/// Every open silo, not only the focused one: they all have unsaved work by
-/// the same argument, and the reason to flush — the app is going away — does
-/// not distinguish between them.
-pub fn flush_vault_snapshot(state: State<'_, AppState>) {
-    let Ok(sessions) = state.sessions.lock() else {
-        return;
-    };
-    for session in sessions.values() {
-        if let Err(e) = session.backup_locally() {
-            crate::diagnostics::warn("flush", format_args!("local snapshot failed: {e}"));
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_an_open_silo_has_an_idle_timer() {
+        // A silo focused while locked used to get a timer, and its expiry
+        // then locked nothing and cleared another silo's clipboard.
+        let now = Instant::now();
+        let seen = HashMap::from([
+            (id(1), now - std::time::Duration::from_secs(30)),
+            (id(2), now - std::time::Duration::from_secs(900)),
+        ]);
+        let idle = idle_of_open(&seen, &[id(1)], now);
+        assert_eq!(idle, vec![(id(1), 30)]);
+    }
+
+    #[test]
+    fn a_poisoned_mutex_still_hands_over_what_it_holds() {
+        // Lock has to close silos after a panic elsewhere, not report
+        // success over an empty list.
+        let map = std::sync::Arc::new(Mutex::new(vec![id(1)]));
+        let poisoner = map.clone();
+        let _ = std::thread::spawn(move || {
+            let _guard = poisoner.lock().unwrap();
+            panic!("poison it");
+        })
+        .join();
+        assert!(map.lock().is_err(), "the mutex is poisoned");
+        assert_eq!(*lock_recovering(&map), vec![id(1)]);
+    }
 
     fn id(n: u8) -> Uuid {
         Uuid::from_bytes([n; 16])

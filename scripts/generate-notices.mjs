@@ -13,7 +13,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const TARGET = "x86_64-pc-windows-msvc";
+/** Every platform a bundle ships for. One file goes into all of them, so it
+ *  lists the union: a crate only Linux or macOS links is in it too. */
+const TARGETS = [
+  "x86_64-pc-windows-msvc",
+  "x86_64-unknown-linux-gnu",
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+];
 
 /** Our own crates and the app itself: the AGPL covers these. */
 const OURS = /^silentsilo(-|$)/;
@@ -84,13 +91,17 @@ function licenceTexts(dir) {
 }
 
 function rustComponents() {
-  const raw = execFileSync(
-    "cargo",
-    ["metadata", "--format-version", "1", "--filter-platform", TARGET],
-    { cwd: root, encoding: "utf8", maxBuffer: 128 * 1024 * 1024 }
-  );
-  return JSON.parse(raw)
-    .packages.filter((p) => !OURS.test(p.name))
+  const packages = new Map();
+  for (const target of TARGETS) {
+    const raw = execFileSync(
+      "cargo",
+      ["metadata", "--format-version", "1", "--filter-platform", target],
+      { cwd: root, encoding: "utf8", maxBuffer: 128 * 1024 * 1024 }
+    );
+    for (const p of JSON.parse(raw).packages) packages.set(`${p.name}@${p.version}`, p);
+  }
+  return [...packages.values()]
+    .filter((p) => !OURS.test(p.name))
     .map((p) => ({
       kind: "crate",
       name: p.name,
@@ -264,7 +275,7 @@ out.push(
   `licence follows, once per distinct text. Where a component ships its own`,
   `copyright or NOTICE file, that file is what is reproduced here.`,
   ``,
-  `Generated from the resolved dependency graph on ${stamp}, for ${TARGET}.`,
+  `Generated from the resolved dependency graph on ${stamp}, for ${TARGETS.join(", ")}.`,
   `Regenerate with: npm run notices`,
   ``,
   `Components: ${components.length}`,

@@ -24,6 +24,26 @@ describe("runsOnOpen", () => {
     expect(runsOnOpen("legacy.msh")).toBe(true);
   });
 
+  it("recognises installer packages, modules, add-ins and disk images", () => {
+    for (const name of [
+      "patch.msu",
+      "module.psm1",
+      "scriptlet.sct",
+      "sandbox.wsb",
+      "addin.xll",
+      "office.rdp",
+      "setup.ppkg",
+      "app.msixbundle",
+      "app.appinstaller",
+      "disk.iso",
+      "disk.img",
+      "disk.vhd",
+      "disk.vhdx",
+    ]) {
+      expect(runsOnOpen(name), name).toBe(true);
+    }
+  });
+
   it("leaves ordinary documents alone", () => {
     expect(runsOnOpen("contract.pdf")).toBe(false);
     expect(runsOnOpen("photo.jpg")).toBe(false);

@@ -1,5 +1,6 @@
 {
   "bundle": {
+    "createUpdaterArtifacts": false,
     "windows": {
       "nsis": {
         "installerHooks": "nsis-hooks.nsh"

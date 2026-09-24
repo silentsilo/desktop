@@ -124,20 +124,33 @@ fn explain_denied_write(err: &str, path: &std::path::Path) -> String {
     let lower = err.to_lowercase();
     let denied = lower.contains("os error 5")
         || lower.contains("access is denied")
-        || lower.contains("permission denied");
+        || lower.contains("permission denied")
+        || lower.contains("operation not permitted");
     if !denied {
         return err.to_string();
     }
-    format!(
+    // Worded per platform: ransomware protection is a Windows thing, and
+    // naming Windows on a Mac tells the user the app does not know where it is.
+    const DENIED: &str = if cfg!(windows) {
         concat!(
-            "Windows refused SilentSilo permission to write in {}. Something is ",
-            "denying this application in particular: most often security software ",
-            "blocking it, which it may do without showing a notification, or folder ",
-            "protection such as ransomware protection. Allow SilentSilo in your ",
-            "security software, or choose a different folder."
-        ),
-        path.display()
-    )
+            "Windows refused SilentSilo permission to write in {path}. This is usually ",
+            "security software or ransomware protection blocking the app, sometimes ",
+            "without a notification. Allow SilentSilo in your security software, or ",
+            "choose a different folder."
+        )
+    } else if cfg!(target_os = "macos") {
+        concat!(
+            "macOS refused SilentSilo permission to write in {path}. Allow SilentSilo ",
+            "under System Settings, Privacy & Security, Files and Folders, or choose a ",
+            "different folder."
+        )
+    } else {
+        concat!(
+            "SilentSilo is not allowed to write in {path}. Check who owns that folder ",
+            "and its permissions, or choose a different folder."
+        )
+    };
+    DENIED.replace("{path}", &path.display().to_string())
 }
 
 /// Everything creating a silo decides before it writes anything: whether
@@ -163,10 +176,16 @@ fn plan_new_silo(
         Some(chosen) => PathBuf::from(chosen),
         None => available_path(default_parent, name),
     };
+    refuse_unusable_folder(&path, location.is_some())?;
+    Ok(path)
+}
+
+/// The rule every new silo folder answers to, made here or joined.
+fn refuse_unusable_folder(path: &std::path::Path, chosen: bool) -> Result<(), String> {
     // A folder that already holds a silo is never written into:
     // provisioning would refuse anyway, and by then the marker and the
     // credentials would already have been replaced.
-    if VaultPaths::new(path.clone()).exists() {
+    if VaultPaths::new(path.to_path_buf()).exists() {
         return Err(format!(
             "{} already holds a silo. Pick an empty folder.",
             path.display()
@@ -175,15 +194,13 @@ fn plan_new_silo(
     // A folder that holds anything else is refused too. The silo would share
     // it, and removing the silo with its files later would take everything
     // else in there with it.
-    if location.is_some()
-        && std::fs::read_dir(&path).is_ok_and(|mut entries| entries.next().is_some())
-    {
+    if chosen && std::fs::read_dir(path).is_ok_and(|mut entries| entries.next().is_some()) {
         return Err(format!(
             "{} is not empty. Pick an empty folder.",
             path.display()
         ));
     }
-    Ok(path)
+    Ok(())
 }
 
 /// What SilentSilo writes at the top of a silo folder. Removing a silo with
@@ -199,6 +216,14 @@ fn is_silo_entry(name: &str) -> bool {
 /// Deletes a silo's own files from `root`, then `root` itself if that left
 /// it empty.
 fn remove_silo_files(root: &std::path::Path) -> std::io::Result<()> {
+    remove_silo_entries(root)?;
+    if std::fs::read_dir(root)?.next().is_none() {
+        std::fs::remove_dir(root)?;
+    }
+    Ok(())
+}
+
+fn remove_silo_entries(root: &std::path::Path) -> std::io::Result<()> {
     for entry in std::fs::read_dir(root)? {
         let entry = entry?;
         if !is_silo_entry(&entry.file_name().to_string_lossy()) {
@@ -210,10 +235,84 @@ fn remove_silo_files(root: &std::path::Path) -> std::io::Result<()> {
             std::fs::remove_file(entry.path())?;
         }
     }
-    if std::fs::read_dir(root)?.next().is_none() {
-        std::fs::remove_dir(root)?;
-    }
     Ok(())
+}
+
+/// Undoes a join that stopped part way, so trying again starts clean
+/// instead of being refused over a half-made silo.
+///
+/// Armed from the moment the folder is registered. Each step it undoes is
+/// marked as it happens, so a failure early on never clears secrets this
+/// join did not write. Call [`JoinCleanup::done`] once the silo is whole.
+pub(crate) struct JoinCleanup {
+    app: AppHandle,
+    entry: SiloEntry,
+    /// Whether the join made the folder, rather than being given an empty one.
+    made_folder: bool,
+    credentials: bool,
+    storage: bool,
+    armed: bool,
+}
+
+impl JoinCleanup {
+    pub(crate) fn new(app: &AppHandle, joined: &JoinedFolder) -> Self {
+        Self {
+            app: app.clone(),
+            entry: joined.entry.clone(),
+            made_folder: joined.made_folder,
+            credentials: false,
+            storage: false,
+            armed: true,
+        }
+    }
+
+    pub(crate) fn wrote_credentials(&mut self) {
+        self.credentials = true;
+    }
+
+    pub(crate) fn wrote_storage(&mut self) {
+        self.storage = true;
+    }
+
+    pub(crate) fn done(mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for JoinCleanup {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        let id = self.entry.id;
+        if let Ok(app_data) = app_data_dir(&self.app) {
+            let mut registry = load_registry(&app_data);
+            if registry.get(id).is_some() {
+                registry.remove(id);
+                let _ = save_registry(&app_data, &registry);
+            }
+        }
+        if let Ok(mut active) = self.app.state::<AppState>().active_silo.lock()
+            && active.as_ref().is_some_and(|s| s.id == id)
+        {
+            *active = None;
+        }
+        if self.credentials {
+            clear_credentials(id);
+        }
+        if self.storage {
+            clear_s3_config(id);
+        }
+        silentsilo_vault::wipe_machine_state(&self.entry.path);
+        let removed = if self.made_folder {
+            remove_silo_files(&self.entry.path)
+        } else {
+            remove_silo_entries(&self.entry.path)
+        };
+        if let Err(e) = removed {
+            crate::diagnostics::warn("join", format_args!("a failed join left files: {e}"));
+        }
+    }
 }
 
 /// Creates a silo and makes it the open one.
@@ -270,6 +369,7 @@ fn silo_create_impl(
     })
     .map_err(|e| explain_denied_write(&e.to_string(), &path))?;
 
+    let _opening = crate::state::opening(&app, &path);
     let session = VaultSession::provision(path.clone(), vault_id, &device_secret)
         .map_err(|e| explain_denied_write(&e.to_string(), &path))?;
     let vfs = Vfs::new(&session);
@@ -297,7 +397,8 @@ fn silo_create_impl(
     *state.active_silo.lock().map_err(|e| e.to_string())? = Some(entry.clone());
     crate::state::open_focused_session(&app, session)?;
     // Anything the Explorer verbs queued while no silo was open lands here,
-    // rather than being dropped because there was nowhere to put it.
+    // rather than being dropped because there was nowhere to put it. What
+    // fails goes back in the queue and is reported (`shell-upload-failed`).
     let _ = crate::commands::vault::process_shell_upload_queue(&app);
     Ok(SiloView::from(&entry))
 }
@@ -318,7 +419,7 @@ pub async fn silo_open(
 
     if !entry.is_present() {
         return Err(format!(
-            "Nothing at {}. If it's on a removable drive, plug it in first.",
+            "Nothing at {}. If it is on a removable drive, plug it in first.",
             entry.path.display()
         ));
     }
@@ -330,7 +431,7 @@ pub async fn silo_open(
     mark_silo_opened(&app, &entry)?;
     *state.active_silo.lock().map_err(|e| e.to_string())? = Some(entry.clone());
     state.bump_epoch();
-    crate::state::touch(&state, entry.id);
+    crate::state::touch_if_open(&state, entry.id);
     Ok(SiloView::from(&entry))
 }
 
@@ -392,7 +493,7 @@ pub fn silo_idle_status(
 /// the others go on counting down.
 #[tauri::command(async)]
 pub fn silo_touch(state: State<'_, AppState>) -> Result<(), String> {
-    crate::state::touch(&state, crate::state::focused_id(&state)?);
+    crate::state::touch_if_open(&state, crate::state::focused_id(&state)?);
     Ok(())
 }
 
@@ -524,7 +625,7 @@ fn silo_forget_impl(app: &AppHandle, id: String, delete_files: bool) -> Result<(
 
     if delete_files && entry.path.exists() {
         remove_silo_files(&entry.path).map_err(|e| {
-            format!("removed from the list, but the files could not be deleted: {e}")
+            format!("Removed from the list, but the files could not be deleted: {e}")
         })?;
     }
     Ok(())
@@ -558,7 +659,7 @@ pub fn silo_add_existing(
 ) -> Result<SiloView, String> {
     let path = PathBuf::from(path);
     if !VaultPaths::new(path.clone()).exists() {
-        return Err(format!("{} doesn't look like a silo.", path.display()));
+        return Err(format!("{} does not look like a silo.", path.display()));
     }
 
     let app_data = app_data_dir(&app)?;
@@ -575,7 +676,7 @@ pub fn silo_add_existing(
     // deleted as soon as the keyring accepts them, so the folders failing
     // the check were the healthy ones.
     let id = silentsilo_vault::read_marker(&path)
-        .map_err(|e| format!("could not identify that silo: {e}"))?
+        .map_err(|e| format!("Could not identify that silo: {e}"))?
         .vault_id;
 
     // The list is keyed by silo, so a second folder of the same silo would
@@ -622,7 +723,7 @@ pub fn silo_add_existing(
             vault_id: id,
             device_secret,
         })
-        .map_err(|e| format!("could not record this computer's access to that silo: {e}"))?;
+        .map_err(|e| format!("Could not record this computer's access to that silo: {e}"))?;
     }
     let name = name
         .map(|n| n.trim().to_string())
@@ -651,6 +752,12 @@ pub fn silo_add_existing(
     Ok(SiloView::from(&entry))
 }
 
+/// A folder a join just set up, and whether the join made it.
+pub(crate) struct JoinedFolder {
+    pub entry: SiloEntry,
+    pub made_folder: bool,
+}
+
 /// Registers a silo for a vault that already exists elsewhere.
 ///
 /// Used by both join paths. The id is not ours to choose — it comes from the
@@ -661,7 +768,7 @@ pub(crate) fn register_joined_silo(
     vault_id: Uuid,
     name: &str,
     location: Option<String>,
-) -> Result<SiloEntry, String> {
+) -> Result<JoinedFolder, String> {
     let name = name.trim();
     if name.is_empty() {
         return Err("Give the silo a name.".into());
@@ -670,33 +777,39 @@ pub(crate) fn register_joined_silo(
     let app_data = app_data_dir(app)?;
     let registry = load_registry(&app_data);
     if registry.silos.iter().any(|s| s.id == vault_id) {
-        return Err("That silo is already on this machine.".into());
+        return Err("That silo is already on this computer.".into());
     }
     if registry.name_taken(name, None) {
         return Err(format!("You already have a silo called “{name}”."));
     }
 
+    let chosen = location.is_some();
     let path = match location {
         Some(chosen) => PathBuf::from(chosen),
         None => available_path(&default_silo_parent(app), name),
     };
-    if VaultPaths::new(path.clone()).exists() {
-        return Err(format!(
-            "{} already holds a silo. Pick an empty folder.",
-            path.display()
-        ));
-    }
+    // The same rule as creating one: a join into a folder holding other
+    // files would share it, and the cleanup of a failed join must never
+    // touch anything it did not write.
+    refuse_unusable_folder(&path, chosen)?;
+    let made_folder = !path.exists();
     std::fs::create_dir_all(&path)
-        .map_err(|e| format!("could not create {}: {e}", path.display()))?;
-    silentsilo_vault::write_marker(&path, vault_id).map_err(|e| e.to_string())?;
-
-    Ok(SiloEntry {
-        id: vault_id,
-        name: name.to_string(),
-        path,
-        last_opened: 0,
-        auto_lock_minutes: None,
-    })
+        .map_err(|e| format!("Could not create {}: {e}", path.display()))?;
+    let joined = JoinedFolder {
+        entry: SiloEntry {
+            id: vault_id,
+            name: name.to_string(),
+            path,
+            last_opened: 0,
+            auto_lock_minutes: None,
+        },
+        made_folder,
+    };
+    if let Err(e) = silentsilo_vault::write_marker(&joined.entry.path, vault_id) {
+        drop(JoinCleanup::new(app, &joined));
+        return Err(e.to_string());
+    }
+    Ok(joined)
 }
 
 /// Records a freshly joined silo and makes it the open one.
@@ -769,7 +882,12 @@ mod denied_write_tests {
             "io error: Access is denied. (os error 5)",
             Path::new("C:/Users/x/Documents/SilentSilo/Personal"),
         );
-        assert!(msg.contains("security software"), "{msg}");
+        if cfg!(windows) {
+            assert!(msg.contains("security software"), "{msg}");
+        } else {
+            assert!(!msg.contains("Windows"), "{msg}");
+        }
+        assert!(msg.contains("different folder"), "{msg}");
         // One line: a message with newlines and source indentation in it
         // reaches the user exactly as written.
         assert!(!msg.contains(char::is_control), "{msg}");
@@ -854,6 +972,28 @@ mod creation_plan_tests {
             Path::new("D:/silos"),
         );
         assert!(plan.unwrap_err().contains("not empty"));
+    }
+
+    #[test]
+    fn a_join_answers_to_the_same_folder_rule_as_creating() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("thesis.docx"), b"mine").unwrap();
+        let err = super::refuse_unusable_folder(dir.path(), true).unwrap_err();
+        assert!(err.contains("not empty"), "{err}");
+
+        let empty = tempfile::tempdir().unwrap();
+        assert!(super::refuse_unusable_folder(empty.path(), true).is_ok());
+    }
+
+    #[test]
+    fn undoing_a_join_in_a_folder_it_was_given_keeps_the_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("Chosen");
+        std::fs::create_dir_all(root.join("blobs")).unwrap();
+        std::fs::write(root.join("silo.json"), b"x").unwrap();
+        super::remove_silo_entries(&root).unwrap();
+        assert!(root.is_dir(), "the folder the user picked stays");
+        assert!(std::fs::read_dir(&root).unwrap().next().is_none());
     }
 
     #[test]

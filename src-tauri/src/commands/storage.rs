@@ -84,6 +84,8 @@ pub async fn s3_save_config(
         return Err("This silo already backs up there as a second copy.".into());
     }
     match targets.first_mut() {
+        // The place changes, the role does not: a never-delete copy that
+        // became the first one stays never-delete when edited here.
         Some(first) => first.config = config.clone(),
         None => targets.push(silentsilo_vault::BackupTarget {
             config: config.clone(),
@@ -158,6 +160,10 @@ pub struct BackupTargetView {
     /// Changes this target has not received. Per target, because a disk in a
     /// drawer being twelve changes behind says nothing about the bucket.
     pub ops_behind: usize,
+    /// Files this target does not have yet. Counted apart from changes: a
+    /// pass can deliver every change and still leave a file behind, and a
+    /// copy that said "Up to date" then was missing the file itself.
+    pub blobs_behind: usize,
     /// Seconds until sync tries this target again, 0 when it is due now.
     pub retry_in: i64,
     /// True when the app never sends this target a delete. It grows for
@@ -200,39 +206,60 @@ fn backup_targets_list_impl(app: &AppHandle) -> Result<Vec<BackupTargetView>, St
     // back up to" is worth answering without a password. What cannot be
     // answered is how far behind each one is, and 0 is the honest stand-in
     // for "not known right now".
-    let numbers: Vec<(i64, usize, i64)> = {
+    let (numbers, unlocked): (Vec<(i64, usize, i64)>, bool) = {
         let state = app.state::<crate::state::AppState>();
         let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
         match sessions.get(&silo.id) {
-            Some(s) => targets
-                .iter()
-                .map(|target| {
-                    let id = target.config.target_id();
-                    (
-                        silentsilo_vfs::target_last_success(&s.conn, id).unwrap_or(0),
-                        silentsilo_vfs::pending_count_for(&s.conn, id).unwrap_or(0),
-                        silentsilo_vfs::target_retry_in(&s.conn, id, now).unwrap_or(0),
-                    )
-                })
-                .collect(),
-            None => vec![(0, 0, 0); targets.len()],
+            Some(s) => (
+                targets
+                    .iter()
+                    .map(|target| {
+                        let id = target.config.target_id();
+                        (
+                            silentsilo_vfs::target_last_success(&s.conn, id).unwrap_or(0),
+                            silentsilo_vfs::pending_count_for(&s.conn, id).unwrap_or(0),
+                            silentsilo_vfs::target_retry_in(&s.conn, id, now).unwrap_or(0),
+                        )
+                    })
+                    .collect(),
+                true,
+            ),
+            None => (vec![(0, 0, 0); targets.len()], false),
         }
     };
+
+    // The content ledger is a database of its own beside the silo, so this
+    // needs no session lock. Same stand-in as above while locked.
+    let blobs: Vec<usize> = targets
+        .iter()
+        .map(|target| {
+            if unlocked {
+                silentsilo_vault::list_undelivered_blob_ids(&silo.path, target.config.target_id())
+                    .len()
+            } else {
+                0
+            }
+        })
+        .collect();
 
     Ok(targets
         .into_iter()
         .zip(numbers)
+        .zip(blobs)
         .enumerate()
         .map(
-            |(index, (target, (last_success, ops_behind, retry_in)))| BackupTargetView {
-                id: target.config.target_id().to_string(),
-                label: target.label,
-                config: StoreConfigView::from(&target.config),
-                primary: index == 0,
-                last_success,
-                ops_behind,
-                retry_in,
-                archive: !target.role.allows_delete(),
+            |(index, ((target, (last_success, ops_behind, retry_in)), blobs_behind))| {
+                BackupTargetView {
+                    id: target.config.target_id().to_string(),
+                    label: target.label,
+                    config: StoreConfigView::from(&target.config),
+                    primary: index == 0,
+                    last_success,
+                    ops_behind,
+                    blobs_behind,
+                    retry_in,
+                    archive: !target.role.allows_delete(),
+                }
             },
         )
         .collect())
@@ -279,12 +306,12 @@ pub async fn backup_target_add(
 /// Fills one target from another, so a large silo can be copied over a
 /// cable instead of a home connection. Both targets must already be
 /// configured: seeding an unconfigured place would be a copy the app then
-/// forgets. Needs no vault key and decrypts nothing; interrupting is safe
-/// and running it again carries on.
+/// forgets. Decrypts no content; the vault key only decides which records
+/// are current. Interrupting is safe and running it again carries on.
 #[tauri::command]
 pub async fn backup_target_seed(app: AppHandle, from: String, to: String) -> Result<usize, String> {
     if from == to {
-        return Err("Choose two different places.".into());
+        return Err("Choose two different copies.".into());
     }
     // Only for the silo on screen, unlocked: this rewrites a copy's records
     // and key files, which is not something a locked silo should be doing.
@@ -297,10 +324,20 @@ pub async fn backup_target_seed(app: AppHandle, from: String, to: String) -> Res
         targets
             .iter()
             .find(|t| t.config.target_id().to_string() == id)
-            .ok_or_else(|| "That place is not set up for this silo.".to_string())
+            .ok_or_else(|| "That copy is not set up for this silo.".to_string())
     };
     let source = find(&from)?.config.open().map_err(|e| e.to_string())?;
     let dest = find(&to)?.config.open().map_err(|e| e.to_string())?;
+    // The key decides what may be written over: a copy that missed a
+    // rotation must not put the old key back on the other one.
+    let dek = {
+        let state = app.state::<crate::state::AppState>();
+        let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
+        sessions
+            .get(&silo.id)
+            .map(|s| s.dek.clone())
+            .ok_or_else(|| "Unlock the silo first.".to_string())?
+    };
 
     // Progress goes out as an event rather than a return value: this runs for
     // hours on the volumes it exists for, and a spinner with no number on it
@@ -310,9 +347,10 @@ pub async fn backup_target_seed(app: AppHandle, from: String, to: String) -> Res
     state
         .seed_cancelled
         .store(false, std::sync::atomic::Ordering::Relaxed);
-    let outcome = silentsilo_sync::seed_target(
+    let outcome = silentsilo_sync::seed_target_checked(
         &*source,
         &*dest,
+        &dek,
         // Passed on whole: the object count stands still for the length of
         // one large blob, and the bytes are what moves while it does. Core
         // paces these at four a second, so there is no throttling to do
@@ -406,11 +444,89 @@ pub async fn backup_target_protection(
 #[tauri::command(async)]
 pub fn backup_target_remove(app: AppHandle, id: String) -> Result<(), String> {
     let silo = crate::state::unlocked_silo(&app)?;
-    let targets: Vec<_> = silentsilo_vault::load_targets(silo.id)
+    let targets = without_target(silentsilo_vault::load_targets(silo.id), &id);
+    silentsilo_vault::save_targets(silo.id, &targets).map_err(|e| e.to_string())
+}
+
+/// The list with one target removed. When that was the main one, the next
+/// main one is a copy the app keeps tidy if there is one, not whichever came
+/// second: the Backup screen edits the main connection as the silo's own,
+/// and a never-delete copy moved there by accident read as an ordinary one.
+/// A never-delete copy only leads when nothing else is left, and keeps its
+/// role (`s3_save_config` changes the place, never the role).
+fn without_target(
+    targets: Vec<silentsilo_vault::BackupTarget>,
+    id: &str,
+) -> Vec<silentsilo_vault::BackupTarget> {
+    let removed_main = targets
+        .first()
+        .is_some_and(|t| t.config.target_id().to_string() == id);
+    let mut left: Vec<_> = targets
         .into_iter()
         .filter(|t| t.config.target_id().to_string() != id)
         .collect();
-    silentsilo_vault::save_targets(silo.id, &targets).map_err(|e| e.to_string())
+    if removed_main && let Some(at) = left.iter().position(|t| t.role.allows_delete()) {
+        let main = left.remove(at);
+        left.insert(0, main);
+    }
+    left
+}
+
+#[cfg(test)]
+mod removal_tests {
+    use super::without_target;
+    use silentsilo_store::StoreConfig;
+    use silentsilo_vault::{BackupTarget, TargetRole};
+
+    fn target(path: &str, role: TargetRole) -> BackupTarget {
+        BackupTarget {
+            config: StoreConfig::Folder { path: path.into() },
+            label: path.into(),
+            role,
+        }
+    }
+
+    fn id(t: &BackupTarget) -> String {
+        t.config.target_id().to_string()
+    }
+
+    #[test]
+    fn removing_the_main_copy_promotes_one_the_app_keeps_tidy() {
+        let list = vec![
+            target("/main", TargetRole::Working),
+            target("/archive", TargetRole::Archive),
+            target("/second", TargetRole::Working),
+        ];
+        let main = id(&list[0]);
+        let left = without_target(list, &main);
+        assert_eq!(left[0].label, "/second");
+        assert_eq!(left[1].label, "/archive");
+    }
+
+    #[test]
+    fn a_never_delete_copy_left_alone_stays_never_delete() {
+        let list = vec![
+            target("/main", TargetRole::Working),
+            target("/archive", TargetRole::Archive),
+        ];
+        let main = id(&list[0]);
+        let left = without_target(list, &main);
+        assert_eq!(left.len(), 1);
+        assert!(!left[0].role.allows_delete());
+    }
+
+    #[test]
+    fn removing_another_copy_leaves_the_order_alone() {
+        let list = vec![
+            target("/archive", TargetRole::Archive),
+            target("/second", TargetRole::Working),
+            target("/third", TargetRole::Working),
+        ];
+        let third = id(&list[2]);
+        let left = without_target(list, &third);
+        assert_eq!(left[0].label, "/archive");
+        assert_eq!(left[1].label, "/second");
+    }
 }
 
 #[cfg(test)]

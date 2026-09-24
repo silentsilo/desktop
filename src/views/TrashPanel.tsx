@@ -120,7 +120,7 @@ export function TrashPanel({
           className="danger"
           disabled={busy || entries.length === 0}
           onClick={onEmptyTrash}
-          title="Permanently delete everything in the trash"
+          title="Delete everything in the trash for good"
         >
           <Trash2 size={15} />
           Empty trash
@@ -149,7 +149,7 @@ export function TrashPanel({
               onClick={() => onDeleteForever(selected)}
             >
               <Trash2 size={14} />
-              Delete forever
+              Delete for good
             </button>
             <button type="button" className="link" onClick={() => setSelectedIds(new Set())}>
               Clear
@@ -206,7 +206,7 @@ export function TrashPanel({
                   </span>
                 </div>
                 <span className="trash-row-size">
-                  {entry.kind === "file" ? formatBytes(entry.size_bytes) : "—"}
+                  {entry.kind === "file" ? formatBytes(entry.size_bytes) : "-"}
                 </span>
                 <span className="trash-row-date">{formatDate(entry.updated_at)}</span>
                 <div className="trash-row-actions">
@@ -223,8 +223,8 @@ export function TrashPanel({
                     type="button"
                     className="danger"
                     disabled={busy}
-                    title="Delete permanently"
-                    aria-label={`Delete ${entry.name} permanently`}
+                    title="Delete for good"
+                    aria-label={`Delete ${entry.name} for good`}
                     onClick={() => onDeleteForever([entry])}
                   >
                     <Trash2 size={14} />

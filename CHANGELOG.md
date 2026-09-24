@@ -7,6 +7,13 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+Update every computer and phone that uses a silo before replacing its
+encryption key. A device still on 1.1 can keep writing under the old key to a
+never-delete copy and hold up the others until it updates. A never-delete copy
+itself keeps the old key after a replacement and gets no new backups: remove
+it under Backup, which leaves what is stored there, and add a new one. Until
+then it shows as not backed up, and it no longer holds up the others.
+
 ### Added
 
 - Browser extension support, off by default under Settings > Browser
@@ -20,13 +27,104 @@ silo from opening needs a major version rather than a note.
   a browser whose extension listing does not exist yet is not registered.
   Firefox is registered only once the Firefox Add-ons listing holds the
   extension's id, so no one else can publish an add-on under it first.
-  Filling needs a security key or Windows Hello on the silo.
+  Filling needs a security key or Windows Hello on the silo. After a
+  confirmed fill, a window that was hidden or minimised goes back there.
 - The extension's popup has an "Open SilentSilo" button when the silo is
   locked. It brings this window to the front, where you unlock as usual;
   then click the extension again. The extension cannot unlock anything.
 
+### Changed
+
+- Syncing runs the same code as the Android app, from the shared core, so
+  one set of tests covers both. The desktop kept its own copy until now.
+- Shorter, plainer texts across the app. Most hints are now a sentence or
+  two, and technical terms on screen are replaced with everyday words.
+- One set of names across the app. Credentials is now Passwords, with one
+  saved item called an entry, and Security keys is now Keys. The trash
+  offers Move to trash, Delete for good and Empty trash, the status bar
+  says Synced or Sync failed, and a key rotation is called Replace the
+  encryption key. Screens say backup storage, this computer and never-delete
+  copy, in British spelling.
+- Settings opens on an Overview of what keeps the silo safe: backup,
+  copies, recovery code, the printed kit, a key you can carry and the last
+  backup test, each with the action that fixes it. Backup and Copies are one
+  page, Verification is Test backup, Keys and Auto-lock are Unlocking, and
+  Devices and Activity are one page. Replacing the encryption key, turning
+  off the recovery code and removing the silo moved to Advanced.
+- General, Browser extension and Updates and about belong to the app and
+  open from the silo list and the unlock screen too. The default auto-lock
+  can be changed there, and the theme can follow the system.
+- A new silo walks through its recovery code and backup storage right after
+  its first key, and either can be left for later.
+- Choosing backup storage starts on a drive or NAS folder, with the other
+  kinds named in plain words.
+- Opening another silo starts on its files, not on the page the last one was
+  left on.
+- Protected folders are now called Auto-import folders, which says what they
+  do: files from them are copied into the silo each time it unlocks, and
+  deleting one on the computer leaves the silo's copy alone.
+- The Backup page has a Test backup button and says when the backup was last
+  tested on this computer.
+
 ### Fixed
 
+- A file edited and then deleted for good before the next sync could leave
+  another computer with a copy of that edit it could not open. Emptying the
+  trash now keeps content no backup holds yet until the next sync has sent
+  it.
+- Photos a phone sends land in the same folder on every computer, also when
+  the Phone folder had been deleted. Two computers importing at once could
+  each keep them in a folder of their own.
+- Changes made on a computer that was offline for more than a month now
+  reach the other computers. If one of them compacted the history right
+  after they arrived, the others could miss them for good.
+- A file added to a folder while another computer emptied that folder from
+  the trash now shows on every computer, including one set up again from
+  backup storage afterwards, which used to drop it.
+- Rebuilding a silo after it fell behind no longer brings back old changes.
+  With a backup copy that was not reachable, such as an unplugged drive, a
+  rebuild wrote old history again as new changes: folders emptied from the
+  trash came back and older edits could replace newer ones.
+- After replacing the encryption key, photos sent from a phone leave the
+  inbox again, and old deleted content is cleaned up again. A never-delete
+  copy still under the old key held both up.
+- A folder import no longer stops half way at a subfolder it cannot read;
+  it skips it and carries on. Setting up a silo from backup storage that
+  fails part way can be tried again at once, and refuses a folder that is
+  not empty, as creating a silo does.
+- A silo's idle lock no longer clears a password copied from another silo,
+  and a key change checks the key you touch before changing anything. A
+  backup copy that missed a key change can no longer put the old key back
+  on the others.
+- A key change can no longer leave a silo that nothing opens. The keys and
+  the recovery code are now saved together with the new key; a crash or a
+  locked file between them used to strand it.
+- A key change stops before it starts when a backup storage cannot be
+  opened, instead of skipping it and leaving the old key working there. A
+  damaged record no longer blocks a key change for good.
+- A backup drive that is not plugged in shows as unreachable, not as an
+  empty copy, and syncing no longer creates its folder again and fills it as
+  a new copy. An old copy no longer hides that this computer needs to catch
+  up from a snapshot.
+- Copying one backup storage into another no longer puts records under a
+  retired key over current ones.
+- A silo whose main file was removed by a sync client opens from its spare
+  copy instead of showing as unplugged.
+- A photo the phone sent twice can no longer be imported with the wrong
+  content.
+- Release builds no longer run with the update signing key in reach. The
+  installer is built first and signed afterwards, and in the release
+  workflow only a separate job that builds nothing signs and publishes.
+- The third-party notices cover every platform a bundle ships for, not only
+  Windows.
+- Texts that promised more than the app does are corrected. Replacing a
+  recovery code or removing a key now says, before you confirm, that a
+  never-delete copy keeps the old one. The emergency kit no longer names
+  platforms or promises to say where your files are. Windows Hello and
+  Touch ID are no longer asked to be touched or called a security key.
+  Disconnect says it stops every copy. Sorting by size or date says
+  smallest or newest first rather than A-Z. The 30-day note on deleting
+  appears only when there is backup storage.
 - A security key removed on one computer stays removed. Another computer
   that still had it could publish it again, and it came back everywhere.
 - Leaving Favourites open no longer keeps the silo from locking itself.
@@ -64,6 +162,16 @@ silo from opening needs a major version rather than a note.
   sent two to four in the same second, because the check restarted every
   time the window redrew while the first request was still out. It was
   still once a day, and the requests carried nothing new.
+- Switching to a silo that is already unlocked now reads its trash, the
+  Explorer queue, the auto-import folders and the free disk space. Restored
+  items show in Files at once, a failed delete puts the entry back, a
+  damaged local copy can be rebuilt after a key unlock too, and a failed
+  update install says so on the unlock screen.
+- Imports keep custom fields, extra web addresses and one-time code secrets
+  SilentSilo cannot use in the entry's notes, and say what went there and
+  which passkeys were left out. A CSV export no longer puts a quote before
+  phone numbers or @handles, and importing it again removes the quotes it
+  added.
 
 ## [1.1.0] - Phones, and computers that agree
 

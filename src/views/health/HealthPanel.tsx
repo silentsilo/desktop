@@ -23,6 +23,7 @@ const FIX_LABELS: Record<HealthFix, string> = {
   backup: "Set up backup",
   keys: "Add a security key",
   recovery: "Create a recovery code",
+  verify: "Test backup",
 };
 
 /** The breach check, as a state the page can be in. */
@@ -138,13 +139,13 @@ export function HealthPanel({ findings, entries, onOpenEntry, onOpenFix }: Props
             </button>
           </div>
           <p className="hint">
-            Compares your passwords against the Have I Been Pwned corpus. Only the first five
-            characters of each password's hash leave this computer; the passwords themselves
-            never do, and nothing in this silo is changed by the check.
+            Compares your passwords with the Have I Been Pwned database. Only the first five
+            characters of each password&apos;s hash are sent, and the check changes nothing in this
+            silo.
           </p>
           {breaches.kind === "unavailable" && (
             <p className="hint">
-              The breach service could not be reached. Nothing was checked; try again later.
+              The breach service could not be reached, so nothing was checked. Try again later.
             </p>
           )}
           {breaches.kind === "done" && (
@@ -192,7 +193,7 @@ function BreachResults({
                 type="button"
                 className="health-entry"
                 onClick={() => onOpenEntry(id)}
-                title={`Open ${nameOf(id)} in Credentials`}
+                title={`Open ${nameOf(id)} in Passwords`}
               >
                 <span className="health-entry-name">{nameOf(id)}</span>
                 <span className="health-entry-sub">
@@ -289,7 +290,7 @@ function EntryButton({
         type="button"
         className="health-entry"
         onClick={() => onOpen(entry.id)}
-        title={`Open ${entry.service} in Credentials`}
+        title={`Open ${entry.service} in Passwords`}
       >
         <span className="health-entry-name">{entry.service || "Untitled"}</span>
         {subtitle && <span className="health-entry-sub">{subtitle}</span>}

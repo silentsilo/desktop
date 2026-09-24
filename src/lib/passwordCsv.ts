@@ -1,5 +1,6 @@
 import type { PasswordEntry } from "./types";
 import { parseTotpInput } from "./totp";
+import { appendNotes, noExtras, type ImportExtras } from "./passwordImport";
 
 /** Exporters we recognise by header row. `generic` is the fallback: match
  * whatever columns look right by name, so an unknown tool's export still has
@@ -16,6 +17,7 @@ export type CsvFormat =
   | "roboform"
   | "firefox"
   | "apple"
+  | "silentsilo"
   | "generic";
 
 export type ImportResult = {
@@ -24,6 +26,7 @@ export type ImportResult = {
   /** Rows recognised but deliberately not imported (e.g. Bitwarden secure
    * notes, which have no password to store in our schema). */
   skipped: number;
+  extras: ImportExtras;
 };
 
 export class CsvImportError extends Error {}
@@ -120,6 +123,14 @@ export function detectFormat(headers: string[]): CsvFormat {
       ? "onepassword"
       : "apple";
   }
+  // This app's own export, told apart so its formula guard can come off.
+  const normalized = headers.map(normalizeHeader);
+  if (
+    normalized.length === EXPORT_HEADERS.length &&
+    EXPORT_HEADERS.every((h, i) => normalized[i] === h)
+  ) {
+    return "silentsilo";
+  }
   // Chrome's export is exactly name,url,username,password,note (Edge writes
   // the same) — checked after the others because those columns are common
   // enough to collide.
@@ -164,16 +175,18 @@ function pick(row: string[], index: Map<string, number>, field: string): string 
   return "";
 }
 
-function applyTotp(entry: PasswordEntry, raw: string): void {
-  if (!raw) return;
+/** Returns false when there was a value and it could not be read as TOTP. */
+function applyTotp(entry: PasswordEntry, raw: string): boolean {
+  if (!raw) return true;
   // Accepts both a bare base32 secret and a full otpauth:// URI, which is
   // what 1Password and (usually) Bitwarden export.
   const parsed = parseTotpInput(raw);
-  if (!parsed) return;
+  if (!parsed) return false;
   entry.totp_secret = parsed.secret;
   entry.totp_digits = parsed.digits;
   entry.totp_period = parsed.period;
   entry.totp_algorithm = parsed.algorithm;
+  return true;
 }
 
 /**
@@ -192,39 +205,72 @@ export function csvToEntries(text: string, now: () => number = Date.now): Import
 
   if (!FIELD_ALIASES.password.some((alias) => index.has(alias))) {
     throw new CsvImportError(
-      "No password column found. This doesn't look like a password export.",
+      "No password column found. This does not look like a password export.",
     );
   }
 
   const entries: PasswordEntry[] = [];
   let skipped = 0;
+  const extras = noExtras();
+  // Only this app's own file had the guard added, so only there does it
+  // come off. The password and TOTP columns are never guarded.
+  const unguard = format === "silentsilo" ? removeFormulaGuard : (value: string) => value;
 
   for (const row of dataRows) {
+    const field = (name: string) => unguard(pick(row, index, name));
     const password = pick(row, index, "password");
     const totpRaw = pick(row, index, "totp");
-    const service = pick(row, index, "service");
+    const service = field("service");
 
     if (!password && !totpRaw) {
       skipped++;
       continue;
     }
+
+    let url = field("url");
+    const noteLines: string[] = [];
+    if (format === "bitwarden") {
+      // Bitwarden writes every address of a login into one cell, comma
+      // separated, and custom fields one per line in `fields`.
+      const [first = "", ...more] = url
+        .split(",")
+        .map((u) => u.trim())
+        .filter(Boolean);
+      url = first;
+      noteLines.push(...more.map((u) => `Web address: ${u}`));
+      extras.extraUris += more.length;
+      const at = index.get("fields");
+      const fields = (at === undefined ? "" : (row[at] ?? ""))
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean);
+      noteLines.push(...fields);
+      extras.customFields += fields.length;
+    }
+
     // A row with secrets but no name is still worth keeping; fall back to
     // the URL or username so it's findable rather than blank in the list.
-    const name = service || pick(row, index, "url") || pick(row, index, "username") || "Untitled";
+    const name = service || url || field("username") || "Untitled";
 
     const timestamp = now();
     const entry: PasswordEntry = {
       id: crypto.randomUUID(),
       service: name,
-      username: pick(row, index, "username"),
+      username: field("username"),
       password,
-      url: pick(row, index, "url"),
-      notes: pick(row, index, "notes"),
-      category: pick(row, index, "category") || "General",
+      url,
+      notes: "",
+      category: field("category") || "General",
       created_at: timestamp,
       updated_at: timestamp,
     };
-    applyTotp(entry, totpRaw);
+    // Steam and HOTP secrets have no codes here, but they are still the
+    // user's second factor.
+    if (!applyTotp(entry, totpRaw)) {
+      noteLines.push(`Two-factor secret: ${totpRaw}`);
+      extras.unsupportedOtp += 1;
+    }
+    entry.notes = appendNotes(field("notes"), noteLines);
     entries.push(entry);
   }
 
@@ -232,15 +278,39 @@ export function csvToEntries(text: string, now: () => number = Date.now): Import
     throw new CsvImportError("No importable logins found in that file.");
   }
 
-  return { format, entries, skipped };
+  return { format, entries, skipped, extras };
+}
+
+/**
+ * Whether a spreadsheet opening the export would run this cell.
+ *
+ * `=` always starts a formula. `+`, `-` and `@` are only guarded with a
+ * function call, a DDE pipe or a sheet reference behind them, so a phone
+ * number such as "+40 721 000 000", a negative amount or an @handle is
+ * written as it is: the quote would otherwise travel into whichever manager
+ * imports the file. A value already starting with quotes before one of
+ * these characters is guarded too, so the importer can take exactly one
+ * quote back off.
+ */
+function needsFormulaGuard(value: string): boolean {
+  if (/^[=\t\r]/.test(value)) return true;
+  if (/^'+[=+\-@\t\r]/.test(value)) return true;
+  if (!/^[+\-@]/.test(value)) return false;
+  const rest = value.slice(1);
+  return /[|!=]/.test(rest) || /[A-Za-z_.]\s*\(/.test(rest);
+}
+
+/** Undoes the guard on this app's own export, including the wider one
+ * earlier versions added before every leading =, +, - and @. */
+export function removeFormulaGuard(value: string): string {
+  return /^'+[=+\-@\t\r]/.test(value) ? value.slice(1) : value;
 }
 
 function escapeCsvField(value: string, exact = false): string {
-  // Leading =/+/-/@ make spreadsheet apps evaluate the cell as a formula;
-  // prefixing a quote keeps a name like "=HYPERLINK(...)" inert when the file
-  // is opened in Excel. Not for a password or a TOTP secret: another
+  // Prefixing a quote keeps a name like "=HYPERLINK(...)" inert when the
+  // file is opened in Excel. Not for a password or a TOTP secret: another
   // manager importing the file would store the quote as part of it.
-  const guarded = !exact && /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  const guarded = !exact && needsFormulaGuard(value) ? `'${value}` : value;
   // Quoted when it starts or ends with a space too: readers, this one
   // included, trim an unquoted field, and a password " pass " came back as
   // "pass".
@@ -310,6 +380,8 @@ export function formatLabel(format: CsvFormat): string {
       return "Firefox";
     case "apple":
       return "Apple Passwords";
+    case "silentsilo":
+      return "SilentSilo";
     case "generic":
       return "generic CSV";
   }

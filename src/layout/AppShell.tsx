@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { BrandLogo } from "../components/BrandLogo";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { formatBytes } from "../lib/format";
+import { formatAge, formatBytes } from "../lib/format";
 import type { SyncProgress, View } from "../lib/types";
 
 export type SyncIndicator = {
@@ -55,18 +55,6 @@ function describeProgress(p: SyncProgress): string {
 
 /// Deliberately vague past an hour: "3 minutes ago" is actionable, "47
 /// minutes ago" is not, and precision the user cannot act on reads as noise.
-function describeAge(at: number): string {
-  const seconds = Math.round((Date.now() - at) / 1000);
-  if (seconds < 45) return "just now";
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return hours === 1 ? "an hour ago" : `${hours} hours ago`;
-  // "49 hours ago" made the reader do arithmetic to learn it was the day
-  // before yesterday.
-  const days = Math.round(hours / 24);
-  return days === 1 ? "yesterday" : `${days} days ago`;
-}
 
 const SIDEBAR_COLLAPSED_KEY = "silentsilo.sidebar.collapsed";
 
@@ -91,6 +79,9 @@ type Props = {
   /** Findings worth acting on, badged on the Health tab. Excludes the
    * informational ones, which would make the number permanent. */
   healthCount?: number;
+  /** Whether any of those findings is serious, which is when the badge is
+   * red rather than amber. */
+  healthUrgent?: boolean;
   children: ReactNode;
   title?: string;
   theme: "dark" | "light";
@@ -124,7 +115,7 @@ const NAV: { id: View; label: string; title: string; icon: typeof FolderClosed }
   // two views below it are where everything else lives.
   { id: "favorites", label: "Favourites", title: "Favourites", icon: Star },
   { id: "files", label: "Files", title: "Files", icon: FolderClosed },
-  { id: "passwords", label: "Credentials", title: "Credentials", icon: KeyRound },
+  { id: "passwords", label: "Passwords", title: "Passwords", icon: KeyRound },
   { id: "health", label: "Health", title: "Health", icon: HeartPulse },
   { id: "trash", label: "Trash", title: "Trash", icon: Trash2 },
   { id: "settings", label: "Settings", title: "Settings", icon: Settings2 },
@@ -137,6 +128,7 @@ export function AppShell({
   storage,
   trashCount = 0,
   healthCount = 0,
+  healthUrgent = false,
   children,
   title,
   theme,
@@ -189,13 +181,21 @@ export function AppShell({
           )}
         </button>
 
-        <nav className="sidebar-nav" aria-label="Main Navigation">
+        <nav className="sidebar-nav" aria-label="Main navigation">
           {NAV.map((item) => {
             const Icon = item.icon;
             const active = view === item.id;
             const badgeCount =
               item.id === "trash" ? trashCount : item.id === "health" ? healthCount : 0;
             const badgeLabel = badgeCount > 99 ? "99+" : String(badgeCount);
+            // Red is for something broken. Items in the trash are not, and
+            // Health is amber unless one of its findings is serious.
+            const badgeTone =
+              item.id === "trash"
+                ? " tab-badge-neutral"
+                : item.id === "health" && !healthUrgent
+                  ? " tab-badge-warn"
+                  : "";
             const updateDot = item.id === "settings" && updateAvailable !== null;
             const title =
               updateDot
@@ -220,14 +220,16 @@ export function AppShell({
                 <span className="tab-icon-wrap">
                   <Icon size={18} />
                   {collapsed && badgeCount > 0 && (
-                    <span className="tab-badge tab-badge-dot" aria-hidden />
+                    <span className={`tab-badge tab-badge-dot${badgeTone}`} aria-hidden />
                   )}
                   {collapsed && updateDot && (
                     <span className="tab-badge tab-badge-dot tab-badge-update" aria-hidden />
                   )}
                 </span>
                 {!collapsed && <span className="tab-label">{item.label}</span>}
-                {!collapsed && badgeCount > 0 && <span className="tab-badge">{badgeLabel}</span>}
+                {!collapsed && badgeCount > 0 && (
+                  <span className={`tab-badge${badgeTone}`}>{badgeLabel}</span>
+                )}
                 {!collapsed && updateDot && <span className="tab-badge tab-badge-update">Update</span>}
               </button>
             );
@@ -249,9 +251,9 @@ export function AppShell({
               type="button"
               className="sidebar-storage sidebar-storage-vertical"
               onClick={onOpenBackup}
-              title={`${formatBytes(storage.localBytes)} on this disk${
+              title={`${formatBytes(storage.localBytes)} on this computer${
                 storage.unsyncedBytes > 0
-                  ? `, ${formatBytes(storage.unsyncedBytes)} waiting to back up`
+                  ? `, ${formatBytes(storage.unsyncedBytes)} waiting to sync`
                   : ""
               }. Click to open Backup.`}
             >
@@ -265,15 +267,15 @@ export function AppShell({
               type="button"
               className="sidebar-storage"
               onClick={onOpenBackup}
-              title="What this silo occupies on this disk. Click to open Backup."
+              title="What this silo occupies on this computer. Click to open Backup."
             >
               <span className="sidebar-storage-line">
                 <span>{formatBytes(storage.localBytes)}</span>
-                <span className="sidebar-storage-limit">on this disk</span>
+                <span className="sidebar-storage-limit">on this computer</span>
               </span>
               {storage.unsyncedBytes > 0 && (
                 <span className="sidebar-storage-note">
-                  {formatBytes(storage.unsyncedBytes)} waiting to back up
+                  {formatBytes(storage.unsyncedBytes)} waiting to sync
                 </span>
               )}
             </button>
@@ -285,7 +287,7 @@ export function AppShell({
               type="button"
               className="btn-theme"
               onClick={onToggleTheme}
-              title={theme === "light" ? "Switch to Dark Mode" : "Switch to Light Mode"}
+              title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
               aria-label="Toggle theme"
             >
               {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
@@ -340,7 +342,9 @@ export function AppShell({
             <button
               type="button"
               className="status-sync"
-              onClick={onSyncNow}
+              // A failure is explained on the Backup page, with the reason
+              // and what to do; retrying from here repeated it without a word.
+              onClick={sync.state === "error" ? onOpenBackup : onSyncNow}
               disabled={sync.state === "syncing"}
               title={sync.lastError ?? "Sync now"}
             >
@@ -358,24 +362,24 @@ export function AppShell({
                 : sync.state === "syncing"
                 ? "Syncing…"
                 : sync.state === "error"
-                  ? "Backup failed. Click to retry"
+                  ? "Sync failed. Click for details"
                   : sync.pending > 0
-                    ? `${sync.pending} change${sync.pending === 1 ? "" : "s"} to send`
+                    ? `${sync.pending} change${sync.pending === 1 ? "" : "s"} waiting to sync`
                     : sync.lastSyncAt
-                      ? `Backed up ${describeAge(sync.lastSyncAt)}`
-                      : "Backup connected"}
+                      ? `Synced ${formatAge(sync.lastSyncAt)}`
+                      : "Backup storage connected"}
             </button>
           ) : (
             <button
               type="button"
               className="status-sync"
               onClick={onOpenBackup}
-              title="Open Backup to connect storage"
+              title="Open Backup to connect backup storage"
             >
               {/* Neutral, not green: a silo with no backup is not a state
                   worth a reassuring colour, it is the one Health flags. */}
               <span className="dot neutral" />
-              Local silo only
+              Not backed up. This silo is only on this computer.
             </button>
           )}
             {statusSummary && <span className="status-summary">{statusSummary}</span>}

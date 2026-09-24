@@ -443,13 +443,15 @@ const handlers: Record<string, Handler> = {
   // overwrites the stored envelope. The old fixed string made a double call
   // look identical to a single one on screen, which is precisely the bug this
   // screen cannot afford to hide.
-  recovery_generate: () =>
-    Array.from({ length: 8 }, () =>
+  recovery_generate: () => ({
+    code: Array.from({ length: 8 }, () =>
       Array.from(
         { length: 4 },
         () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)],
       ).join(""),
     ).join("-"),
+    unchanged_targets: [],
+  }),
   // Reached by pressing Unlock, so the real path runs rather than the app
   // being dropped into a state it never enters by itself.
   vault_unlock: () => {
@@ -692,12 +694,14 @@ const handlers: Record<string, Handler> = {
         primary: true,
         last_success: now - 90,
         ops_behind: 0,
+        // The 8 KB file the status line says is waiting to sync.
+        blobs_behind: 1,
         retry_in: 0,
         archive: false,
       },
       {
         id: "22222222-2222-2222-2222-222222222222",
-        label: "Disc extern, birou",
+        label: "External disk, office",
         config: { kind: "folder", path: "E:\\SiloArchive" },
         primary: false,
         last_success: filled ? seededAt! : now - 47 * 24 * 3600,
@@ -930,7 +934,7 @@ const handlers: Record<string, Handler> = {
     kept: [],
     retired: ["Backup key"],
     recovery_code: "MOCK-CODE-1111-2222-3333-4444-5555-6666",
-    unchanged_targets: ["Disc extern, birou"],
+    unchanged_targets: ["External disk, office"],
   }),
   // ?rotating models a key change that stopped half way, which otherwise
   // needs a crash at exactly the right moment to reproduce.
@@ -964,7 +968,7 @@ const handlers: Record<string, Handler> = {
     },
     {
       id: "t2",
-      label: "Disc extern, birou",
+      label: "External disk, office",
       records_read: 1284,
       blobs_checked: 310,
       bytes_read: args.deep ? 2_400_000_000 : 0,

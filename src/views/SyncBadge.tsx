@@ -35,17 +35,17 @@ const LOOK: Record<
   uploading: {
     Icon: CloudUpload,
     label: "Uploading",
-    title: "Uploading to the backup now.",
+    title: "Uploading to backup storage now.",
   },
   downloading: {
     Icon: CloudDownload,
     label: "Downloading",
-    title: "Downloading from the backup now.",
+    title: "Downloading from backup storage now.",
   },
   absent: {
     Icon: CloudAlert,
     label: "Missing",
-    title: "The content is on no backup and not on this computer, so it cannot be opened.",
+    title: "The content is in no backup storage and not on this computer, so it cannot be opened.",
   },
 };
 

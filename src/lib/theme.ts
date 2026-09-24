@@ -35,7 +35,20 @@ export function rememberTheme(theme: Theme) {
   localStorage.setItem(THEME_KEY, theme);
 }
 
-type ThemeControl = { theme: Theme; toggle: () => void };
+/** Goes back to following the operating system. */
+export function forgetTheme() {
+  localStorage.removeItem(THEME_KEY);
+}
+
+/** What the user picked in Settings: a theme, or the system's. */
+export type ThemeChoice = Theme | "system";
+
+type ThemeControl = {
+  theme: Theme;
+  toggle: () => void;
+  choice: ThemeChoice;
+  choose: (choice: ThemeChoice) => void;
+};
 
 /**
  * Exists so the shells can offer the toggle without every screen between

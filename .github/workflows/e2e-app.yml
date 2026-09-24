@@ -1,0 +1,45 @@
+name: End-to-end
+
+# The real app, driven over WebDriver: `npm run test:app`. Every night and on
+# demand, never on push: the e2e build compiles the whole backend again.
+on:
+  schedule:
+    - cron: "43 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: e2e
+      - run: npm ci
+      - run: npm run build
+      - run: cargo build -p silentsilo --features e2e --locked
+        env:
+          CARGO_TARGET_DIR: target/e2e
+      - run: cargo install tauri-driver --version 2.0.6 --locked
+      # The driver has to match the WebView2 the runner has.
+      - name: msedgedriver
+        shell: pwsh
+        run: |
+          $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          $version = (Get-ItemProperty $key).pv
+          Invoke-WebRequest "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip" -OutFile edgedriver.zip
+          Expand-Archive edgedriver.zip -DestinationPath "$env:RUNNER_TEMP\edgedriver"
+          "MSEDGEDRIVER=$env:RUNNER_TEMP\edgedriver\msedgedriver.exe" | Out-File -Append $env:GITHUB_ENV
+      - run: npm run test:app

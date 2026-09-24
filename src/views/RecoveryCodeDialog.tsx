@@ -34,13 +34,13 @@ export function RecoveryCodeDialog({ code, siloName, onDone }: Props) {
         <div className="modal-body recovery-reveal">
           <p>
             {siloName ? <strong>{siloName}</strong> : "This silo"} has a new recovery code. The
-            one you wrote down before no longer opens it. Write this one down now: it is shown
-            once.
+            old one stops working, except on a never-delete copy. Write this one down now: it is
+            shown once.
           </p>
           <code className="recovery-code">{code}</code>
           <p className="hint is-error">
             <AlertTriangle size={14} />
-            Lose this code and all your keys and the silo cannot be opened again.
+            If you lose this code and all your keys, the silo cannot be opened again.
           </p>
         </div>
         <div className="modal-actions">

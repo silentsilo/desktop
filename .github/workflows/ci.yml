@@ -36,6 +36,10 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      # The release scripts' own logic, run without the signing token: the
+      # latest.json platform map, the version order and the browser host gate.
+      - run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-manifest.test.ps1
+      - run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/browser-host-release.test.ps1
       - run: cargo fmt --all -- --check
       # `--locked` on every cargo command below. The domain crates come from
       # silentsilo/core by git, and a lockfile left rewritten by a local

@@ -69,3 +69,6 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+# End-to-end tests of the real app: a constant in place of the security key,
+# and every file under SILENTSILO_E2E_DIR. Debug builds only.
+e2e = ["silentsilo-fido/test-authenticator"]
