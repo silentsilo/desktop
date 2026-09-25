@@ -72,6 +72,8 @@ then it shows as not backed up, and it no longer holds up the others.
 
 ### Fixed
 
+- Short messages now appear at the bottom right. At the top they covered the
+  buttons of the banner they were often about.
 - A file edited and then deleted for good before the next sync could leave
   another computer with a copy of that edit it could not open. Emptying the
   trash now keeps content no backup holds yet until the next sync has sent

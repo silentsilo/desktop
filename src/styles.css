@@ -2565,7 +2565,10 @@ ol.key-add-steps {
 
 .toast-host {
   position: fixed;
-  top: 1rem;
+  /* Bottom right, clear of the status bar like the selection toolbar. At
+     the top they covered the actions of whatever banner the page showed,
+     often the one the toast was about. */
+  bottom: 4.25rem;
   right: 1rem;
   z-index: 1000;
   display: flex;
@@ -2643,7 +2646,7 @@ ol.key-add-steps {
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(-6px);
+    transform: translateY(6px);
   }
 
   to {
