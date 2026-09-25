@@ -69,6 +69,7 @@ then it shows as not backed up, and it no longer holds up the others.
   deleting one on the computer leaves the silo's copy alone.
 - The Backup page has a Test backup button and says when the backup was last
   tested on this computer.
+- The screens before a silo opens show the app's version at the bottom.
 
 ### Fixed
 

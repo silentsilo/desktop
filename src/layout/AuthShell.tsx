@@ -51,9 +51,10 @@ export function AuthShell({ title, subtitle, children }: AuthShellProps) {
       {children}
       {/* Only on the screens before a silo opens: these are the product's
           front door, where a publisher line belongs. Inside the app it
-          would be furniture. */}
+          would be furniture. The version is here so a screenshot sent for
+          help says which one it is; inside, the sidebar shows it. */}
       <footer className="auth-footer" aria-label="Publisher">
-        © {new Date().getFullYear()} Software Hive S.R.L.
+        © {new Date().getFullYear()} Software Hive S.R.L. · v{__APP_VERSION__}
       </footer>
     </main>
   );
