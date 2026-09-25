@@ -693,21 +693,17 @@ textarea:focus {
   flex-shrink: 0;
 }
 
-/* Out of the way of a centred card, and above the atmosphere layer so it
-   stays clickable. Fixed rather than absolute so it stays reachable on the
-   tall forms, which scroll past several screenfuls. */
-.auth-theme-toggle {
+/* Settings and theme, out of the way of a centred card, and above the
+   atmosphere layer so they stay clickable. Fixed rather than absolute so
+   they stay reachable on the tall forms, which scroll past several
+   screenfuls. One row with a gap: placed one by one, they touched. */
+.auth-corner {
   position: fixed;
   top: 1rem;
   right: 1rem;
   z-index: 2;
-}
-
-.auth-settings-toggle {
-  position: fixed;
-  top: 1rem;
-  right: 3.5rem;
-  z-index: 2;
+  display: flex;
+  gap: 0.5rem;
 }
 
 .card.auth-card.app-settings-card {

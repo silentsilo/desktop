@@ -26,21 +26,23 @@ export function AuthShell({ title, subtitle, children }: AuthShellProps) {
           the toggle here covers the picker, unlock, enrolment, recovery and
           restore at once — all of which a person can be looking at for a
           while, and none of which could change the theme before. */}
-      <ThemeToggle className="auth-theme-toggle" />
-      {/* Updates, startup and the browser extension belong to the app, and
-          an update toast says to install from Settings: they have to be
-          reachable before any silo is unlocked. */}
-      {openSettings && (
-        <button
-          type="button"
-          className="btn-theme auth-settings-toggle"
-          onClick={openSettings}
-          title="App settings"
-          aria-label="App settings"
-        >
-          <Settings2 size={16} />
-        </button>
-      )}
+      <div className="auth-corner">
+        {/* Updates, startup and the browser extension belong to the app, and
+            an update toast says to install from Settings: they have to be
+            reachable before any silo is unlocked. */}
+        {openSettings && (
+          <button
+            type="button"
+            className="btn-theme"
+            onClick={openSettings}
+            title="App settings"
+            aria-label="App settings"
+          >
+            <Settings2 size={16} />
+          </button>
+        )}
+        <ThemeToggle />
+      </div>
       <div className="brand">
         <BrandLogo showWordmark={false} size={56} />
         {title && <h1 className="brand-title">{title}</h1>}
