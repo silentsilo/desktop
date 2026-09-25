@@ -24,14 +24,14 @@ license = "AGPL-3.0-or-later"
 # patched lockfile fails loudly rather than shipping.
 
 [workspace.dependencies]
-silentsilo-core = { git = "https://github.com/silentsilo/core", tag = "v1.7.1" }
-silentsilo-crypto = { git = "https://github.com/silentsilo/core", tag = "v1.7.1" }
-silentsilo-vault = { git = "https://github.com/silentsilo/core", tag = "v1.7.1" }
-silentsilo-vfs = { git = "https://github.com/silentsilo/core", tag = "v1.7.1" }
-silentsilo-store = { git = "https://github.com/silentsilo/core", tag = "v1.7.1" }
-silentsilo-sync = { git = "https://github.com/silentsilo/core", tag = "v1.7.1" }
-silentsilo-fido = { git = "https://github.com/silentsilo/core", tag = "v1.7.1" }
-silentsilo-app = { git = "https://github.com/silentsilo/core", tag = "v1.7.1" }
+silentsilo-core = { git = "https://github.com/silentsilo/core", tag = "v1.7.2" }
+silentsilo-crypto = { git = "https://github.com/silentsilo/core", tag = "v1.7.2" }
+silentsilo-vault = { git = "https://github.com/silentsilo/core", tag = "v1.7.2" }
+silentsilo-vfs = { git = "https://github.com/silentsilo/core", tag = "v1.7.2" }
+silentsilo-store = { git = "https://github.com/silentsilo/core", tag = "v1.7.2" }
+silentsilo-sync = { git = "https://github.com/silentsilo/core", tag = "v1.7.2" }
+silentsilo-fido = { git = "https://github.com/silentsilo/core", tag = "v1.7.2" }
+silentsilo-app = { git = "https://github.com/silentsilo/core", tag = "v1.7.2" }
 silentsilo-shell = { path = "crates/silentsilo-shell" }
 
 rand = "0.9"
