@@ -313,6 +313,25 @@ export function AppSettingsSection({
               </p>
             )}
             {browserExtensionError && <p className="hint is-error">{browserExtensionError}</p>}
+            {browserExtension?.enabled && (browserExtension.recent?.length ?? 0) > 0 && (
+              <div className="browser-recent">
+                <p className="hint">
+                  Filled since SilentSilo started. If you do not recognise one, turn the extension
+                  off and check this computer.
+                </p>
+                <ul>
+                  {browserExtension.recent.map((fill) => (
+                    <li key={`${fill.at}-${fill.site}-${fill.label}`}>
+                      {fill.label} on {fill.site},{" "}
+                      {new Date(fill.at * 1000).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <ExtensionStoreLinks links={EXTENSION_STORES} />
           </>
         )}

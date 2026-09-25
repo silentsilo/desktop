@@ -32,6 +32,10 @@ then it shows as not backed up, and it no longer holds up the others.
 - The extension's popup has an "Open SilentSilo" button when the silo is
   locked. It brings this window to the front, where you unlock as usual;
   then click the extension again. The extension cannot unlock anything.
+- Settings > Browser extension lists the fills since SilentSilo started:
+  site, login and time. One you do not recognise means something else on
+  this computer asked for it. Searching from the extension is limited to a
+  few queries a minute.
 
 ### Changed
 

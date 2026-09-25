@@ -197,6 +197,11 @@ mod relay {
                     break;
                 }
             }
+            // Answers queued behind a failed write, a fill's among them.
+            outgoing.close();
+            while let Ok(mut frame) = outgoing.try_recv() {
+                frame.zeroize();
+            }
         };
 
         let to_browser = out.clone();
@@ -229,7 +234,8 @@ mod relay {
                     Ok(Some(Frame::TooLarge)) => error_answer("", "bad-request", MALFORMED),
                     _ => break,
                 };
-                if out.send(frame).await.is_err() {
+                if let Err(mpsc::error::SendError(mut unsent)) = out.send(frame).await {
+                    unsent.zeroize();
                     break;
                 }
             }

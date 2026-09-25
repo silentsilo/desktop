@@ -433,6 +433,11 @@ mod imp {
                     break;
                 }
             }
+            // Answers queued behind a failed write, a fill's among them.
+            rx.close();
+            while let Ok(mut frame) = rx.try_recv() {
+                frame.zeroize();
+            }
         };
         let read = async move {
             loop {
@@ -453,7 +458,9 @@ mod imp {
                 let tx = tx.clone();
                 requests.spawn(async move {
                     let answer = handler(state, frame).await;
-                    let _ = tx.send(answer).await;
+                    if let Err(mpsc::error::SendError(mut unsent)) = tx.send(answer).await {
+                        unsent.zeroize();
+                    }
                     drop(permit);
                 });
                 while requests.try_join_next().is_some() {}

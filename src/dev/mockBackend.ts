@@ -154,6 +154,7 @@ let browserExtension = {
   bundled: !flag("nohost"),
   enabled: false,
   running: false,
+  recent: [{ site: "github.com", label: "GitHub", at: Math.floor(Date.now() / 1000) - 600 }],
 };
 
 // ── Events ──────────────────────────────────────────────────────────

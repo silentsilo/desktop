@@ -58,6 +58,14 @@ pub fn lookups_overall() -> Bucket {
     Bucket::new(60, Duration::from_millis(500))
 }
 
+/// `search` across every connection, on top of the lookup rations. A
+/// search names logins saved for other sites, with their usernames, so a
+/// client sweeping two-letter queries could list the whole silo without a
+/// prompt; a person types a few queries a minute.
+pub fn searches_overall() -> Bucket {
+    Bucket::new(15, Duration::from_secs(4))
+}
+
 /// `fill` on one connection. Each one is a dialog in front of the person.
 pub fn fills_per_connection() -> Bucket {
     Bucket::new(3, Duration::from_secs(20))
@@ -214,6 +222,28 @@ mod tests {
             .filter(|n| bucket.take(start + Duration::from_millis(10 * n)))
             .count();
         assert!(allowed < 30, "{allowed} of 676 searches went through");
+    }
+
+    /// Across connections too: a fresh connection per query used to reset
+    /// the ration, and the app-wide lookups one allows 120 a minute.
+    #[test]
+    fn listing_the_silo_through_search_takes_most_of_an_hour() {
+        let start = Instant::now();
+        let mut searches = searches_overall();
+        // As fast as the lookup ration lets a client go: two a second.
+        let minutes_for_all = (0..676u64)
+            .scan(start, |at, _| {
+                while !searches.take(*at) {
+                    *at += Duration::from_millis(500);
+                }
+                Some(*at)
+            })
+            .last()
+            .map_or(0, |end| end.duration_since(start).as_secs() / 60);
+        assert!(minutes_for_all >= 40, "{minutes_for_all} minutes");
+        // A person trying a few queries is never held up.
+        let mut person = searches_overall();
+        assert!((0..10).all(|n| person.take(start + Duration::from_secs(3 * n))));
     }
 
     #[test]

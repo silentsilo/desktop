@@ -398,4 +398,6 @@ export type BrowserExtensionStatus = {
   enabled: boolean;
   /** Whether the pipe is actually open, which "enabled" alone does not say. */
   running: boolean;
+  /** Fills that sent a password since the app started, newest first. */
+  recent: { site: string; label: string; at: number }[];
 };

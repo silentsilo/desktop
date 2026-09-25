@@ -13,6 +13,7 @@ mod limits;
 mod logins;
 mod protocol;
 
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
@@ -44,6 +45,12 @@ pub struct BrowserBridge {
     pending: Mutex<Option<Pending>>,
     /// `logins` and `search` across every connection.
     lookups: Mutex<Bucket>,
+    /// `search` alone, across every connection.
+    searches: Mutex<Bucket>,
+    /// The last fills that sent a password, newest first, shown under
+    /// Settings > Browser extension so one nobody meant stands out. Memory
+    /// only: gone when the app quits.
+    recent: Mutex<VecDeque<RecentFill>>,
     /// Set when a fill ends without being confirmed: declined, timed out, or
     /// its connection gone.
     cooldown: Mutex<Cooldown>,
@@ -60,6 +67,8 @@ impl Default for BrowserBridge {
             refs: Mutex::default(),
             pending: Mutex::default(),
             lookups: Mutex::new(limits::lookups_overall()),
+            searches: Mutex::new(limits::searches_overall()),
+            recent: Mutex::default(),
             cooldown: Mutex::default(),
             fills: Mutex::new(limits::fills_overall()),
             shown: Mutex::default(),
@@ -101,6 +110,17 @@ pub struct FillPrompt {
     mismatch: Option<String>,
 }
 
+/// A fill that sent a password: where, which login, when (Unix seconds).
+#[derive(Serialize, Clone)]
+pub struct RecentFill {
+    site: String,
+    label: String,
+    at: i64,
+}
+
+/// How many fills Settings lists.
+const RECENT_FILLS: usize = 20;
+
 #[derive(Serialize)]
 pub struct ExtensionStatus {
     /// Windows only for now: the host and its registration are Windows's.
@@ -110,6 +130,7 @@ pub struct ExtensionStatus {
     bundled: bool,
     enabled: bool,
     running: bool,
+    recent: Vec<RecentFill>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -224,6 +245,10 @@ fn status_of(app: &AppHandle) -> ExtensionStatus {
         bundled: host_bundled(),
         enabled: silentsilo_shell::browser_pipe::extension_enabled(),
         running: app.state::<BrowserBridge>().running(),
+        recent: lock(&app.state::<BrowserBridge>().recent)
+            .iter()
+            .cloned()
+            .collect(),
     }
 }
 
@@ -335,10 +360,12 @@ async fn answer(app: &AppHandle, connection: &Connection, frame: Frame) -> Vec<u
             Ok(()) => list_logins(app, &id, &origin).await,
             Err(failure) => Err(failure),
         },
-        Request::Search { query } => match lookup_allowed(app, connection) {
-            Ok(()) => search(app, &id, &query).await,
-            Err(failure) => Err(failure),
-        },
+        Request::Search { query } => {
+            match lookup_allowed(app, connection).and_then(|()| search_allowed(app)) {
+                Ok(()) => search(app, &id, &query).await,
+                Err(failure) => Err(failure),
+            }
+        }
         Request::Fill { origin, reference } => {
             fill(app, connection, &id, &origin, &reference).await
         }
@@ -354,6 +381,16 @@ fn lookup_allowed(app: &AppHandle, connection: &Connection) -> Result<(), Failur
     let bridge = app.state::<BrowserBridge>();
     let mut mine = lock(&connection.limits);
     if limits::take_lookup(&mut mine.lookups, &mut lock(&bridge.lookups), now) {
+        Ok(())
+    } else {
+        Err(Failure::with(Code::Busy, TOO_MANY))
+    }
+}
+
+/// A `search` within its own app-wide ration, after the lookup ones.
+fn search_allowed(app: &AppHandle) -> Result<(), Failure> {
+    let bridge = app.state::<BrowserBridge>();
+    if lock(&bridge.searches).take(Instant::now()) {
         Ok(())
     } else {
         Err(Failure::with(Code::Busy, TOO_MANY))
@@ -725,6 +762,18 @@ async fn fill(
         return Err(Code::UnknownRef.into());
     }
     let secret = read_secret(app, silo, entry).await?;
+    {
+        let bridge = app.state::<BrowserBridge>();
+        let mut recent = lock(&bridge.recent);
+        recent.push_front(RecentFill {
+            site: prompt.site.clone(),
+            label: prompt.label.clone(),
+            at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs() as i64),
+        });
+        recent.truncate(RECENT_FILLS);
+    }
     Ok(protocol::fill_answer(
         id,
         &secret.username,

@@ -382,8 +382,11 @@ flowchart LR
   admits no host.
 - **What a client may ask is rationed** (`browser/limits.rs`). `logins`,
   `search` and `show` share a bucket of 20 per connection, one more per
-  second, and one of 60 across all connections, one more per half second. A
-  `search` under two characters finds nothing. `fill` has 3 per connection,
+  second, and one of 60 across all connections, one more per half second.
+  `search` also has its own of 15 across all connections, one more per 4
+  seconds: a search names logins saved for other sites, with usernames, so
+  a sweep of two-letter queries would list the silo, and now takes most of
+  an hour. A `search` under two characters finds nothing. `fill` has 3 per connection,
   one more per 20 seconds, and 4 across all connections, one more per 30
   seconds. After a fill ends without a confirmation (declined, timed out, or
   its connection gone), no fill dialog opens for 10 seconds, whoever asks.
@@ -391,7 +394,13 @@ flowchart LR
   neither `fill` ration (`limits::admit_fill`), so clicks during a
   confirmation do not use up the fills after it.
   The Fill button stays inert for 700 ms after a question appears, and the
-  key prompt names the login and the site. A `show` within 3 seconds of the
+  key prompt names the login and the site.
+- **Fills are listed** under Settings > Browser extension: site, login and
+  time of each fill that sent a password since the app started, the last
+  20, in memory only. A program running as this user can click Fill itself,
+  and Windows Hello face recognition can pass with nobody doing anything;
+  the list is where such a fill shows up. A security key, or a Hello PIN or
+  fingerprint, needs a person. A `show` within 3 seconds of the
   last one acted on, from any connection, is refused. Past any of these the
   answer is `busy`.
 - **`show` brings the window forward** and does nothing else. The popup's

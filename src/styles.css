@@ -6643,3 +6643,11 @@ button.storage-option:hover:where(:not(:disabled)) {
     gap: 0.6rem;
   }
 }
+
+/* Settings > Browser extension: fills since the app started. */
+.browser-recent ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
