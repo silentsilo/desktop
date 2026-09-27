@@ -50,20 +50,40 @@ jobs:
           New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\e2e-runs" | Out-Null
           "@echo off`r`n`"$driver`" --verbose `"--log-path=$log`" %*" | Out-File -Encoding ascii "$env:RUNNER_TEMP\edgedriver\msedgedriver-logged.cmd"
           "MSEDGEDRIVER=$env:RUNNER_TEMP\edgedriver\msedgedriver-logged.cmd" | Out-File -Append $env:GITHUB_ENV
-      # The app alone for 30 seconds: whether it starts, stays up, and what it
-      # says. Without a driver, so a failure below can be told apart.
+      # The app alone, asked for a debugging port the way the driver asks:
+      # whether its WebView2 answers there, how soon, and where it writes the
+      # file the driver looks for. Without a driver, so a failure below can be
+      # told apart.
       - name: The app starts on its own
         shell: pwsh
         run: |
           $dir = "$env:RUNNER_TEMP\e2e-runs\alone"
           New-Item -ItemType Directory -Force $dir | Out-Null
           $env:SILENTSILO_E2E_DIR = $dir
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9222"
           "session $((Get-Process -Id $PID).SessionId), interactive $([Environment]::UserInteractive), user $env:USERNAME"
           $app = Start-Process target/e2e/debug/silentsilo.exe -PassThru `
             -RedirectStandardOutput "$dir\stdout.txt" -RedirectStandardError "$dir\stderr.txt"
-          Start-Sleep -Seconds 30
-          if ($app.HasExited) { "exited with $($app.ExitCode)" } else { "still running"; Stop-Process -Id $app.Id -Force }
-          Get-ChildItem -Recurse $dir | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 200
+          $answered = $null
+          foreach ($second in 1..90) {
+            Start-Sleep -Seconds 1
+            try { $answered = Invoke-RestMethod http://127.0.0.1:9222/json/version -TimeoutSec 2; "debugging port answered after $second s: $($answered.Browser)"; break } catch {}
+            if ($app.HasExited) { "exited with $($app.ExitCode) after $second s"; break }
+          }
+          if (-not $answered) { "debugging port never answered" }
+          "--- DevToolsActivePort files"
+          foreach ($root in @("$env:LOCALAPPDATA", $dir, $env:TEMP)) {
+            Get-ChildItem -Path $root -Recurse -Filter DevToolsActivePort -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+          }
+          "--- WebView2 folders under LOCALAPPDATA"
+          Get-ChildItem -Path $env:LOCALAPPDATA -Recurse -Directory -Filter EBWebView -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+          "--- msedgewebview2 processes"
+          Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Select-Object -First 3 | ForEach-Object { $_.CommandLine.Substring(0, [Math]::Min(400, $_.CommandLine.Length)) }
+          "--- Edge and WebView2 policies"
+          foreach ($key in 'HKLM:\SOFTWARE\Policies\Microsoft\Edge', 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2', 'HKCU:\SOFTWARE\Policies\Microsoft\Edge') {
+            if (Test-Path $key) { $key; Get-ItemProperty $key | Out-String -Width 200 }
+          }
+          if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
           Get-Content "$dir\stdout.txt", "$dir\stderr.txt" -Tail 60 -ErrorAction SilentlyContinue
       - run: npm run test:app
         env:
