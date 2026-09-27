@@ -44,12 +44,8 @@ jobs:
           Invoke-WebRequest "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip" -OutFile edgedriver.zip
           Expand-Archive edgedriver.zip -DestinationPath "$env:RUNNER_TEMP\edgedriver"
           "WebView2 $version"
-          # A wrapper, so the driver writes its own log for a failure to be read.
-          $driver = "$env:RUNNER_TEMP\edgedriver\msedgedriver.exe"
-          $log = "$env:RUNNER_TEMP\e2e-runs\msedgedriver.log"
           New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\e2e-runs" | Out-Null
-          "@echo off`r`n`"$driver`" --verbose `"--log-path=$log`" %*" | Out-File -Encoding ascii "$env:RUNNER_TEMP\edgedriver\msedgedriver-logged.cmd"
-          "MSEDGEDRIVER=$env:RUNNER_TEMP\edgedriver\msedgedriver-logged.cmd" | Out-File -Append $env:GITHUB_ENV
+          "MSEDGEDRIVER=$env:RUNNER_TEMP\edgedriver\msedgedriver.exe" | Out-File -Append $env:GITHUB_ENV
       # The app alone, asked for a debugging port the way the driver asks:
       # whether its WebView2 answers there, how soon, and where it writes the
       # file the driver looks for. Without a driver, so a failure below can be
