@@ -27,6 +27,8 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           key: e2e
+          # Saved on a failure too, or every failing night rebuilds from nothing.
+          cache-on-failure: true
       - run: npm ci
       - run: npm run build
       - run: cargo build -p silentsilo --features e2e --locked
@@ -41,5 +43,33 @@ jobs:
           $version = (Get-ItemProperty $key).pv
           Invoke-WebRequest "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip" -OutFile edgedriver.zip
           Expand-Archive edgedriver.zip -DestinationPath "$env:RUNNER_TEMP\edgedriver"
-          "MSEDGEDRIVER=$env:RUNNER_TEMP\edgedriver\msedgedriver.exe" | Out-File -Append $env:GITHUB_ENV
+          "WebView2 $version"
+          # A wrapper, so the driver writes its own log for a failure to be read.
+          $driver = "$env:RUNNER_TEMP\edgedriver\msedgedriver.exe"
+          $log = "$env:RUNNER_TEMP\e2e-runs\msedgedriver.log"
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\e2e-runs" | Out-Null
+          "@echo off`r`n`"$driver`" --verbose `"--log-path=$log`" %*" | Out-File -Encoding ascii "$env:RUNNER_TEMP\edgedriver\msedgedriver-logged.cmd"
+          "MSEDGEDRIVER=$env:RUNNER_TEMP\edgedriver\msedgedriver-logged.cmd" | Out-File -Append $env:GITHUB_ENV
+      # The app alone for 30 seconds: whether it starts, stays up, and what it
+      # says. Without a driver, so a failure below can be told apart.
+      - name: The app starts on its own
+        shell: pwsh
+        run: |
+          $dir = "$env:RUNNER_TEMP\e2e-runs\alone"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          $env:SILENTSILO_E2E_DIR = $dir
+          "session $((Get-Process -Id $PID).SessionId), interactive $([Environment]::UserInteractive), user $env:USERNAME"
+          $app = Start-Process target/e2e/debug/silentsilo.exe -PassThru `
+            -RedirectStandardOutput "$dir\stdout.txt" -RedirectStandardError "$dir\stderr.txt"
+          Start-Sleep -Seconds 30
+          if ($app.HasExited) { "exited with $($app.ExitCode)" } else { "still running"; Stop-Process -Id $app.Id -Force }
+          Get-ChildItem -Recurse $dir | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 200
+          Get-Content "$dir\stdout.txt", "$dir\stderr.txt" -Tail 60 -ErrorAction SilentlyContinue
       - run: npm run test:app
+        env:
+          SILENTSILO_E2E_RUNS: ${{ runner.temp }}/e2e-runs
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: e2e-app
+          path: ${{ runner.temp }}/e2e-runs

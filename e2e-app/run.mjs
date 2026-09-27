@@ -32,7 +32,10 @@ for (const [what, path] of [
   }
 }
 
-const run = mkdtempSync(join(tmpdir(), "silentsilo-e2e-"));
+// SILENTSILO_E2E_RUNS keeps the run where CI can upload it on a failure.
+const runs = process.env.SILENTSILO_E2E_RUNS ?? tmpdir();
+mkdirSync(runs, { recursive: true });
+const run = mkdtempSync(join(runs, "silentsilo-e2e-"));
 const shared = join(run, "shared");
 mkdirSync(shared);
 console.log(`files under ${run}`);
