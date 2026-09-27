@@ -27,3 +27,23 @@ pub fn isolate() {
         std::env::set_var("SILENTSILO_TEST_WORK_BASE", local.join("work"));
     }
 }
+
+/// WebDriver asks WebView2 for a debugging port through
+/// `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`. On some machines, the CI runner
+/// among them, the window's own arguments replace that variable instead of
+/// adding to it, and the driver never finds the port. So the driver's go
+/// after ours.
+pub fn driver_args<R: tauri::Runtime>(context: &mut tauri::Context<R>) {
+    let Some(extra) = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS")
+        .ok()
+        .filter(|args| !args.trim().is_empty())
+    else {
+        return;
+    };
+    for window in &mut context.config_mut().app.windows {
+        window.additional_browser_args = Some(match window.additional_browser_args.take() {
+            Some(own) => format!("{own} {extra}"),
+            None => extra.clone(),
+        });
+    }
+}

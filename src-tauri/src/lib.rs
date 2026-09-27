@@ -124,6 +124,10 @@ pub fn run() {
     e2e::isolate();
 
     let startup_args: Vec<String> = std::env::args().collect();
+    #[allow(unused_mut)]
+    let mut context = tauri::generate_context!();
+    #[cfg(feature = "e2e")]
+    e2e::driver_args(&mut context);
 
     let builder = tauri::Builder::default();
 
@@ -337,7 +341,7 @@ pub fn run() {
             browser::browser_fill_confirm,
             browser::browser_fill_cancel,
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while running SilentSilo")
         .run(|app_handle, event| {
             // `Exit` too: a Windows logoff or shutdown ends the loop through
