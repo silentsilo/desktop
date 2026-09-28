@@ -7,6 +7,8 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+## [1.2.0] - Browser extension, and sync that stays in step
+
 Update every computer and phone that uses a silo before replacing its
 encryption key. A device still on 1.1 can keep writing under the old key to a
 never-delete copy and hold up the others until it updates. A never-delete copy
