@@ -30,9 +30,12 @@ describe("extension store links", () => {
     expect(ExtensionStoreLinks({ links: links("") })).toBeNull();
   });
 
-  it("shows nothing today: no listing exists yet", () => {
-    expect(EXTENSION_STORES.map((s) => s.url)).toEqual(["", "", "", ""]);
-    expect(renderToStaticMarkup(<ExtensionStoreLinks links={EXTENSION_STORES} />)).toBe("");
+  it("shows the listings that exist: Chrome, Brave and Firefox, not Edge yet", () => {
+    const html = renderToStaticMarkup(<ExtensionStoreLinks links={EXTENSION_STORES} />);
+    expect(html).toContain("Get it for Chrome");
+    expect(html).toContain("Get it for Brave");
+    expect(html).toContain("Get it for Firefox");
+    expect(html).not.toContain("Edge");
   });
 
   it("shows a filled link, and Brave with Chrome's", () => {
