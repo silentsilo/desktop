@@ -579,12 +579,15 @@ async fn search(app: &AppHandle, id: &str, query: &str) -> Result<Vec<u8>, Failu
 /// dialog under a click aimed at the first one.
 ///
 /// After a confirmation the window goes back to hidden or minimised if that
-/// is how the dialog found it, so the person is left in the browser.
+/// is how the dialog found it, and the window that was in front when the
+/// fill came in (the browser) gets the focus back, so the person is left on
+/// the page that was filled.
 struct PendingGuard {
     app: AppHandle,
     request_id: String,
     confirmed: bool,
     before: WindowBefore,
+    browser: Option<silentsilo_shell::ForegroundWindow>,
 }
 
 /// The main window as a fill's dialog found it.
@@ -637,6 +640,9 @@ impl Drop for PendingGuard {
                         let _ = window.minimize();
                     }
                     WindowBefore::Shown => {}
+                }
+                if let Some(browser) = self.browser {
+                    browser.activate();
                 }
             }
         }
@@ -748,6 +754,7 @@ async fn fill(
         request_id: prompt.request_id.clone(),
         confirmed: false,
         before: window_before(app),
+        browser: silentsilo_shell::foreground_window(),
     };
     let _ = app.emit("browser-fill-request", &prompt);
     bring_to_front(app);

@@ -456,8 +456,13 @@ flowchart LR
   sized up front and wiped after the write. One fill waits at a time
   (`busy`), for 90 seconds (`cancelled`); a lock or focus change while it
   waits ends it. After a confirmed fill the window goes back to hidden or
-  minimised when that is how the request found it; a window that was on
-  screen stays where it is. A silo that is unlocked but whose logins cannot
+  minimised when that is how the request found it, and on Windows the window
+  that was in front when the request came in gets the focus back
+  (`silentsilo_shell::foreground_window`, taken by its root owner so the
+  popup, which closes when the app comes up, resolves to its browser
+  window). A window that was on screen stays open behind the browser.
+  Windows lets the app hand the focus over because it holds the foreground
+  at that moment; on macOS nothing is remembered yet. A silo that is unlocked but whose logins cannot
   be read is answered `read-failed`, never `locked`: an extension that
   predates the code shows its generic line for it.
 - **Installed as an externalBin**, merged in by `build-release-local.ps1`

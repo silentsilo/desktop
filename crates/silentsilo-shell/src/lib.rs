@@ -5,6 +5,7 @@ pub mod browser_pipe;
 mod cli;
 mod clipboard;
 pub mod disk_space;
+mod foreground;
 mod hardening;
 mod identity;
 #[cfg(target_os = "macos")]
@@ -21,6 +22,7 @@ mod windows;
 pub use autostart::{autostart_enabled, autostart_supported, ensure_autostart, set_autostart};
 pub use cli::{ShellAction, parse_args};
 pub use clipboard::read_file_paths as read_clipboard_file_paths;
+pub use foreground::{ForegroundWindow, foreground_window};
 pub use hardening::harden_process;
 pub use identity::{platform, system_name};
 pub use os_integration::{ensure_os_integration, register_os_integration};

@@ -7,6 +7,11 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+### Fixed
+
+- After you confirm a fill, the browser comes back to the front, on the page
+  that was filled. SilentSilo stayed on top when it had been open on screen.
+
 ## [1.2.1] - The extension for Edge
 
 ### Added
