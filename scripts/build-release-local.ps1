@@ -88,13 +88,19 @@ if (-not $?) { throw "Cargo.lock does not point at silentsilo/core" }
 # resolved graph, so a lockfile that moved after them makes that sentence
 # false: 1.0.0 shipped a file with no OpenSSL and no SQLCipher in it. Commit
 # dates rather than file times, because a fresh clone gives every file the
-# same mtime. Both changed in one commit is fine; the lockfile changing after
-# is not.
+# same mtime. Both changed in one commit is fine. A lockfile that changed
+# after is fine only when regenerating gives the same file but for its date
+# line: a version bump moves the lockfile and none of the components.
 $noticesAt = [int](git log -1 --format=%ct -- THIRD-PARTY-NOTICES.txt)
-foreach ($lock in 'Cargo.lock', 'package-lock.json') {
-    $lockAt = [int](git log -1 --format=%ct -- $lock)
-    if ($lockAt -gt $noticesAt) {
-        throw "THIRD-PARTY-NOTICES.txt is older than $lock. Run 'npm run notices', commit, retag, then build."
+$lockAt = ('Cargo.lock', 'package-lock.json' | ForEach-Object { [int](git log -1 --format=%ct -- $_) } |
+    Measure-Object -Maximum).Maximum
+if ($lockAt -gt $noticesAt) {
+    $committed = Get-Content THIRD-PARTY-NOTICES.txt | Where-Object { $_ -notmatch '^Generated from the resolved dependency graph on ' }
+    node scripts\generate-notices.mjs | Out-Null
+    $fresh = Get-Content THIRD-PARTY-NOTICES.txt | Where-Object { $_ -notmatch '^Generated from the resolved dependency graph on ' }
+    git checkout -- THIRD-PARTY-NOTICES.txt
+    if (Compare-Object $committed $fresh -SyncWindow 0) {
+        throw "THIRD-PARTY-NOTICES.txt no longer matches the lockfiles. Run 'npm run notices', commit, retag, then build."
     }
 }
 
