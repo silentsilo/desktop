@@ -45,21 +45,57 @@ pub fn foreground_window() -> Option<ForegroundWindow> {
 }
 
 impl ForegroundWindow {
-    /// Puts the window back in front, if it still exists. Windows allows this
-    /// only while this process holds the foreground, which it does right after
-    /// the person confirmed in it.
-    pub fn activate(self) {
+    /// Gives this window the foreground back from `ours`, the app's own
+    /// window (a raw handle), which held it above everything while it asked.
+    ///
+    /// `ours` loses always-on-top here, synchronously: the toolkit's own call
+    /// lands later, and a browser brought forward under a window still on top
+    /// stays hidden. Windows then grants the foreground only while this
+    /// process holds it, which it gets back a moment after the Windows Hello
+    /// prompt closes, so the handover is retried briefly on its own thread.
+    /// If it never takes, `ours` goes to the bottom so the page is at least
+    /// in view.
+    pub fn take_back_from(self, ours: Option<isize>) {
         #[cfg(windows)]
         {
-            use ::windows::Win32::Foundation::HWND;
-            use ::windows::Win32::UI::WindowsAndMessaging::{IsWindow, SetForegroundWindow};
-            let hwnd = HWND(self.hwnd as *mut core::ffi::c_void);
-            // SAFETY: the handle is checked with IsWindow before use.
-            unsafe {
-                if IsWindow(Some(hwnd)).as_bool() {
-                    let _ = SetForegroundWindow(hwnd);
-                }
+            let browser = self.hwnd;
+            std::thread::spawn(move || hand_over(browser, ours));
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = ours;
+        }
+    }
+}
+
+#[cfg(windows)]
+fn hand_over(browser: isize, ours: Option<isize>) {
+    use ::windows::Win32::Foundation::HWND;
+    use ::windows::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, HWND_BOTTOM, HWND_NOTOPMOST, IsWindow, SWP_NOACTIVATE, SWP_NOMOVE,
+        SWP_NOSIZE, SetForegroundWindow, SetWindowPos,
+    };
+    let browser = HWND(browser as *mut core::ffi::c_void);
+    let ours = ours.map(|h| HWND(h as *mut core::ffi::c_void));
+    let flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE;
+    // SAFETY: both handles are only passed to window calls, which fail
+    // harmlessly on a window that has gone; the browser's is checked first.
+    unsafe {
+        if !IsWindow(Some(browser)).as_bool() {
+            return;
+        }
+        if let Some(ours) = ours {
+            let _ = SetWindowPos(ours, Some(HWND_NOTOPMOST), 0, 0, 0, 0, flags);
+        }
+        for _ in 0..30 {
+            let _ = SetForegroundWindow(browser);
+            if GetForegroundWindow() == browser {
+                return;
             }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        if let Some(ours) = ours {
+            let _ = SetWindowPos(ours, Some(HWND_BOTTOM), 0, 0, 0, 0, flags);
         }
     }
 }

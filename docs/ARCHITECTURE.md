@@ -461,8 +461,13 @@ flowchart LR
   (`silentsilo_shell::foreground_window`, taken by its root owner so the
   popup, which closes when the app comes up, resolves to its browser
   window). A window that was on screen stays open behind the browser.
-  Windows lets the app hand the focus over because it holds the foreground
-  at that moment; on macOS nothing is remembered yet. A silo that is unlocked but whose logins cannot
+  The app drops always-on-top itself, synchronously, first: Tauri's call
+  lands later, and a browser brought forward under a window still on top
+  stays hidden (a maximised SilentSilo covered it entirely). Windows grants
+  the foreground only while the app holds it, which it gets back a moment
+  after the Windows Hello prompt closes, so the handover is retried for up
+  to 1.5 s; if it never takes, the app's window goes to the bottom instead.
+  On macOS nothing is remembered yet. A silo that is unlocked but whose logins cannot
   be read is answered `read-failed`, never `locked`: an extension that
   predates the code shows its generic line for it.
 - **Installed as an externalBin**, merged in by `build-release-local.ps1`

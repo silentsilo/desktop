@@ -642,7 +642,11 @@ impl Drop for PendingGuard {
                     WindowBefore::Shown => {}
                 }
                 if let Some(browser) = self.browser {
-                    browser.activate();
+                    #[cfg(windows)]
+                    let ours = window.hwnd().ok().map(|h| h.0 as isize);
+                    #[cfg(not(windows))]
+                    let ours = None;
+                    browser.take_back_from(ours);
                 }
             }
         }
