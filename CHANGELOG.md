@@ -7,6 +7,8 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+## [1.2.2] - Back to the browser after a fill
+
 ### Fixed
 
 - After you confirm a fill, the browser comes back to the front, on the page

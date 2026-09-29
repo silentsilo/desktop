@@ -5743,7 +5743,7 @@ dependencies = [
 
 [[package]]
 name = "silentsilo"
-version = "1.2.1"
+version = "1.2.2"
 dependencies = [
  "async-trait",
  "hex",
@@ -5799,7 +5799,7 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-browser-host"
-version = "1.2.1"
+version = "1.2.2"
 dependencies = [
  "serde_json",
  "silentsilo-shell",
@@ -5884,7 +5884,7 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-shell"
-version = "1.2.1"
+version = "1.2.2"
 dependencies = [
  "block2",
  "dirs",
