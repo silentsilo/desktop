@@ -3,7 +3,9 @@
   "chrome_web_store": [
     "chrome-extension://aclndafepjjiljjfdlddckiledfjbbbn/"
   ],
-  "edge_add_ons": [],
+  "edge_add_ons": [
+    "chrome-extension://hdooeejnpbnlcecjafbaffbgjlafkgpk/"
+  ],
   "firefox_add_ons": [
     "browser@silentsilo.com"
   ]

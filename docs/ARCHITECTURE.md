@@ -286,8 +286,8 @@ flowchart LR
   caller on neither before it opens the pipe. The lists are compiled in.
   `allowed-origins.json` holds the store ids: `chrome_web_store` holds the
   Chrome Web Store id, `firefox_add_ons` holds `browser@silentsilo.com`,
-  and `edge_add_ons` stays empty until the Edge listing exists (Brave
-  installs from the Chrome Web Store and has no list).
+  and `edge_add_ons` holds the Edge Add-ons id (Brave installs from the
+  Chrome Web Store and has no list).
   `allowed-origins.dev.json` holds the development Chromium id, let in only
   by debug builds and builds with the `dev-extension` feature. It is pinned
   by a developer's own key, which no repository holds. A Firefox id is

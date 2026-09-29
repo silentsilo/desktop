@@ -30,12 +30,12 @@ describe("extension store links", () => {
     expect(ExtensionStoreLinks({ links: links("") })).toBeNull();
   });
 
-  it("shows the listings that exist: Chrome, Brave and Firefox, not Edge yet", () => {
+  it("shows every listing: Chrome, Edge, Brave and Firefox", () => {
     const html = renderToStaticMarkup(<ExtensionStoreLinks links={EXTENSION_STORES} />);
     expect(html).toContain("Get it for Chrome");
+    expect(html).toContain("Get it for Edge");
     expect(html).toContain("Get it for Brave");
     expect(html).toContain("Get it for Firefox");
-    expect(html).not.toContain("Edge");
   });
 
   it("shows a filled link, and Brave with Chrome's", () => {

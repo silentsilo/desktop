@@ -6,7 +6,7 @@
  * crates/silentsilo-browser-host/allowed-origins.json.
  */
 const CHROME_WEB_STORE = "https://chromewebstore.google.com/detail/aclndafepjjiljjfdlddckiledfjbbbn";
-const EDGE_ADD_ONS = "";
+const EDGE_ADD_ONS = "https://microsoftedge.microsoft.com/addons/detail/hdooeejnpbnlcecjafbaffbgjlafkgpk";
 const FIREFOX_ADD_ONS = "https://addons.mozilla.org/firefox/addon/silentsilo/";
 
 export interface StoreLink {

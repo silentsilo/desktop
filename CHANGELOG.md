@@ -7,6 +7,14 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+## [1.2.1] - The extension for Edge
+
+### Added
+
+- The browser extension from Edge Add-ons works with this version. The
+  installer registers SilentSilo for Edge as it does for Chrome, Brave and
+  Firefox, and Settings > Browser extension links to the Edge listing.
+
 ## [1.2.0] - Browser extension, and sync that stays in step
 
 Update every computer and phone that uses a silo before replacing its
