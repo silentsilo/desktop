@@ -497,6 +497,29 @@ function CloudStep({
   );
 }
 
+/** The kinds that need no sign-in, in the order they are offered. */
+const OWN_STORAGE = [
+  {
+    kind: "folder",
+    label: "Drive or NAS folder",
+    title: "A network share, an external drive or a synced folder",
+    Icon: HardDrive,
+  },
+  {
+    kind: "s3",
+    label: "S3 bucket",
+    title: "Backblaze B2, Cloudflare R2, Wasabi, AWS or any S3-compatible storage",
+    Icon: Cloud,
+  },
+  {
+    kind: "web-dav",
+    label: "WebDAV server",
+    title: "Nextcloud, ownCloud, Synology, kDrive or any WebDAV server",
+    Icon: Server,
+  },
+  { kind: "sftp", label: "SFTP server", title: "Any server you reach over SSH", Icon: Terminal },
+] as const;
+
 type Props = {
   draft: StoreDraft;
   onChange: (draft: StoreDraft) => void;
@@ -538,45 +561,36 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
     <>
       <div className="field">
         <span>Where should the encrypted copy live?</span>
-        <div className="store-kind-picker">
-          <button
-            type="button"
-            className={draft.kind === "folder" ? "" : "secondary"}
-            onClick={() => setKind("folder")}
-          >
-            <HardDrive size={15} />A drive or NAS folder
-          </button>
-          <button
-            type="button"
-            className={draft.kind === "s3" ? "" : "secondary"}
-            onClick={() => setKind("s3")}
-          >
-            <Cloud size={15} />A cloud bucket (S3)
-          </button>
-          <button
-            type="button"
-            className={draft.kind === "web-dav" ? "" : "secondary"}
-            onClick={() => setKind("web-dav")}
-          >
-            <Server size={15} />
-            Nextcloud or WebDAV
-          </button>
-          <button
-            type="button"
-            className={draft.kind === "sftp" ? "" : "secondary"}
-            onClick={() => setKind("sftp")}
-          >
-            <Terminal size={15} />A server over SFTP
-          </button>
-          {clouds.map((kind) => (
+        {clouds.length > 0 && (
+          <>
+            <p className="store-kind-group">An account you already have</p>
+            <div className="store-kind-grid is-accounts">
+              {clouds.map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  className={draft.kind === kind ? "" : "secondary"}
+                  onClick={() => setKind(kind)}
+                >
+                  <CloudCog size={15} />
+                  {CLOUD_NAME[kind]}
+                </button>
+              ))}
+            </div>
+            <p className="store-kind-group">Storage you run or rent</p>
+          </>
+        )}
+        <div className="store-kind-grid">
+          {OWN_STORAGE.map(({ kind, label, title, Icon }) => (
             <button
               key={kind}
               type="button"
+              title={title}
               className={draft.kind === kind ? "" : "secondary"}
               onClick={() => setKind(kind)}
             >
-              <CloudCog size={15} />
-              {CLOUD_NAME[kind]}
+              <Icon size={15} />
+              {label}
             </button>
           ))}
         </div>

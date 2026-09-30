@@ -107,7 +107,8 @@ export function EmergencyKit({ siloName, code, variant }: Props) {
             <ul className="kit-substeps">
               <li>
                 <strong>Set up from backup storage</strong>, then sign in to this silo&apos;s
-                backup storage (S3-compatible bucket, folder or network share, WebDAV or SFTP).
+                backup storage (OneDrive, Dropbox, Google Drive, S3-compatible bucket, folder
+                or network share, WebDAV or SFTP).
                 Its details are left off this sheet on purpose.
               </li>
               <li>

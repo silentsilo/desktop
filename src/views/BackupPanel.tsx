@@ -543,7 +543,7 @@ export function BackupPanel({
             {connected ? "Change backup storage" : "Choose backup storage"}
           </h3>
           <p>
-            Any S3-compatible bucket, a folder or network share, WebDAV, or SFTP.
+            Your OneDrive, Dropbox or Google Drive, or storage you run or rent.
             {connected && " Saving replaces the current backup storage."}
           </p>
 

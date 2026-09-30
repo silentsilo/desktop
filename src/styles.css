@@ -5638,6 +5638,35 @@ button.pw-gen-toggle {
   flex: 1;
 }
 
+/* The storage choice: tiles that wrap rather than squeeze their labels. */
+.store-kind-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.store-kind-grid.is-accounts {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 720px) {
+  .store-kind-grid,
+  .store-kind-grid.is-accounts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.store-kind-grid button {
+  justify-content: flex-start;
+  white-space: nowrap;
+}
+
+.store-kind-group {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 /* Server and port read as one address, so they sit on one line. */
 .sftp-host-row {
   display: grid;
