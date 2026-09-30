@@ -351,9 +351,11 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                   there is called Disconnect and clears everything, so a
                   second way to do it here would mean two buttons with
                   different consequences. */}
-              {(!target.primary || isCloudKind(target.config.kind)) && (
+              {(!target.primary || (isCloudKind(target.config.kind) && state.health !== "current")) && (
                 <div className="key-list-actions">
-                  {isCloudKind(target.config.kind) && (
+                  {/* Only where the copy is behind: a sign-in that stopped
+                      working shows as a copy that stopped being written. */}
+                  {isCloudKind(target.config.kind) && state.health !== "current" && (
                     <button
                       type="button"
                       className="secondary"
