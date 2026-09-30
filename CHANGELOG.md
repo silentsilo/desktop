@@ -21,6 +21,8 @@ storage you have now as well.
   Google Drive account after you sign in.
 - **Sign in again** on a OneDrive, Dropbox or Google Drive copy whose sign-in
   stopped working. Only the same account is accepted.
+- kDrive (Infomaniak) in the WebDAV form: enter the drive's ID and an app
+  password, and the address is filled in.
 
 ## [1.2.2] - Back to the browser after a fill
 

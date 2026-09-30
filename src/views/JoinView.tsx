@@ -32,7 +32,8 @@ function defaultSiloName(draft: StoreDraft): string {
     return draft.folder.split(/[\\/]/).filter(Boolean).pop() ?? "";
   }
   if (draft.kind === "web-dav") {
-    return draft.dav.url.split("/").filter(Boolean).pop() ?? "";
+    const url = draft.dav.preset === "kdrive" ? draft.dav.kdriveFolder : draft.dav.url;
+    return url.split("/").filter(Boolean).pop() ?? "";
   }
   if (draft.kind === "sftp") {
     return draft.sftp.path.split("/").filter(Boolean).pop() ?? draft.sftp.host;

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { isCloudView, type StoreConfigView } from "../lib/types";
 import { CLOUD_NAME } from "../lib/cloud";
+import { KDRIVE_DEFAULT_FOLDER, parseKdriveUrl } from "../lib/kdrive";
 import { formatAppError } from "../lib/errors";
 import { formatBytes, formatDay } from "../lib/format";
 import { detectPreset } from "../lib/s3Presets";
@@ -80,6 +81,20 @@ function StoredSummary({ stored }: { stored: StoreConfigView }) {
       ))}
     </dl>
   );
+}
+
+/** A saved WebDAV connection back in the form, on the kDrive tab when it is one. */
+function davFromStored(url: string, username: string): StoreDraft["dav"] {
+  const kdrive = parseKdriveUrl(url);
+  return {
+    preset: kdrive ? "kdrive" : "any",
+    url,
+    username,
+    // Secrets are never sent back; blank means "unchanged".
+    password: "",
+    kdriveId: kdrive?.id ?? "",
+    kdriveFolder: kdrive ? kdrive.folder : KDRIVE_DEFAULT_FOLDER,
+  };
 }
 
 type Props = {
@@ -194,7 +209,7 @@ export function BackupPanel({
         setDraft((prev) => ({
           ...prev,
           kind: "web-dav",
-          dav: { url: stored.url, username: stored.username, password: "" },
+          dav: davFromStored(stored.url, stored.username),
         }));
         setWhere(stored.url);
         return;

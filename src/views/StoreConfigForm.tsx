@@ -37,6 +37,7 @@ import {
   DEFAULT_CLOUD_FOLDER,
 } from "../lib/cloud";
 import { formatBytes } from "../lib/format";
+import { KDRIVE_DEFAULT_FOLDER, kdriveIdFrom, kdriveUrl } from "../lib/kdrive";
 import { S3ConfigForm } from "./S3ConfigForm";
 import { PLAIN_HTTP_WARNING, isPlainHttp } from "../lib/plainHttp";
 
@@ -81,12 +82,25 @@ const EMPTY_CLOUD_FORM: CloudForm = {
   folder: DEFAULT_CLOUD_FOLDER,
 };
 
+/**
+ * A WebDAV server, typed as an address, or kDrive, whose address is built
+ * from the drive's ID and a folder.
+ */
+export type DavForm = {
+  preset: "any" | "kdrive";
+  url: string;
+  username: string;
+  password: string;
+  kdriveId: string;
+  kdriveFolder: string;
+};
+
 export type StoreDraft = {
   kind: StoreKind;
   preset: S3Preset;
   s3: S3Form;
   folder: string;
-  dav: { url: string; username: string; password: string };
+  dav: DavForm;
   sftp: SftpForm;
   cloud: Record<CloudKind, CloudForm>;
 };
@@ -98,7 +112,14 @@ export const EMPTY_STORE_DRAFT: StoreDraft = {
   preset: S3_PRESETS[S3_PRESETS.length - 1]!,
   s3: DEFAULT_S3_FORM,
   folder: "",
-  dav: { url: "", username: "", password: "" },
+  dav: {
+    preset: "any",
+    url: "",
+    username: "",
+    password: "",
+    kdriveId: "",
+    kdriveFolder: KDRIVE_DEFAULT_FOLDER,
+  },
   sftp: {
     host: "",
     port: "22",
@@ -129,7 +150,10 @@ export function storeDraftPayload(draft: StoreDraft) {
     case "web-dav":
       return {
         kind: "web-dav" as const,
-        url: draft.dav.url,
+        url:
+          draft.dav.preset === "kdrive"
+            ? kdriveUrl(draft.dav.kdriveId, draft.dav.kdriveFolder)
+            : draft.dav.url,
         username: draft.dav.username,
         // Blank is meaningful: the backend reads it as "keep the stored one".
         password: draft.dav.password.trim() ? draft.dav.password : null,
@@ -188,7 +212,9 @@ export function missingStoreFields(draft: StoreDraft, hasStoredSecret: boolean):
       return draft.folder.trim() ? [] : ["folder"];
     case "web-dav":
       return [
-        !draft.dav.url.trim() && "address",
+        draft.dav.preset === "kdrive"
+          ? !kdriveIdFrom(draft.dav.kdriveId) && "kDrive ID"
+          : !draft.dav.url.trim() && "address",
         !draft.dav.username.trim() && "username",
         !draft.dav.password.trim() && !hasStoredSecret && "password",
       ].filter((v): v is string => typeof v === "string");
@@ -493,6 +519,7 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
   const setKind = (kind: StoreKind) => onChange({ ...draft, kind });
   const setSftp = (patch: Partial<SftpForm>) =>
     onChange({ ...draft, sftp: { ...draft.sftp, ...patch } });
+  const setDav = (patch: Partial<DavForm>) => onChange({ ...draft, dav: { ...draft.dav, ...patch } });
   // A build without a provider's client details leaves it out.
   const [clouds, setClouds] = useState<CloudKind[]>([]);
   useEffect(() => {
@@ -604,23 +631,70 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
 
       {draft.kind === "web-dav" && (
         <>
-          <label className="field">
-            <span>Address</span>
-            <input
-              value={draft.dav.url}
-              onChange={(e) => onChange({ ...draft, dav: { ...draft.dav, url: e.target.value } })}
-              placeholder="https://cloud.example.com/remote.php/dav/files/you/silentsilo"
-              spellCheck={false}
-            />
-            <p className="hint">
-              The folder inside your Nextcloud, ownCloud, Synology or other WebDAV server. It is
-              created if it does not exist.
-            </p>
-            {isPlainHttp(draft.dav.url) && <p className="hint">{PLAIN_HTTP_WARNING}</p>}
-          </label>
+          <div className="field">
+            <span>Server</span>
+            <div className="store-kind-picker">
+              <button
+                type="button"
+                className={draft.dav.preset === "any" ? "" : "secondary"}
+                onClick={() => setDav({ preset: "any" })}
+              >
+                Any WebDAV server
+              </button>
+              <button
+                type="button"
+                className={draft.dav.preset === "kdrive" ? "" : "secondary"}
+                onClick={() => setDav({ preset: "kdrive" })}
+              >
+                kDrive (Infomaniak)
+              </button>
+            </div>
+          </div>
+          {draft.dav.preset === "kdrive" ? (
+            <div className="s3-form-row">
+              <label className="field">
+                <span>kDrive ID</span>
+                <input
+                  value={draft.dav.kdriveId}
+                  onChange={(e) => setDav({ kdriveId: kdriveIdFrom(e.target.value) })}
+                  placeholder="123456"
+                  inputMode="numeric"
+                  spellCheck={false}
+                />
+                <p className="hint">
+                  The number after /drive/ in the address bar when kDrive is open in your
+                  browser.
+                </p>
+              </label>
+              <label className="field">
+                <span>Folder in kDrive</span>
+                <input
+                  value={draft.dav.kdriveFolder}
+                  onChange={(e) => setDav({ kdriveFolder: e.target.value })}
+                  spellCheck={false}
+                />
+                <p className="hint">Created if it does not exist.</p>
+              </label>
+            </div>
+          ) : (
+            <label className="field">
+              <span>Address</span>
+              <input
+                value={draft.dav.url}
+                onChange={(e) => onChange({ ...draft, dav: { ...draft.dav, url: e.target.value } })}
+                placeholder="https://cloud.example.com/remote.php/dav/files/you/silentsilo"
+                spellCheck={false}
+              />
+              <p className="hint">
+                The folder inside your Nextcloud, ownCloud, Synology or other WebDAV server. It is
+                created if it does not exist.
+              </p>
+              {isPlainHttp(draft.dav.url) && <p className="hint">{PLAIN_HTTP_WARNING}</p>}
+            </label>
+          )}
           <div className="s3-form-row">
             <label className="field">
-              <span>Username</span>
+              <span>{draft.dav.preset === "kdrive" ? "Infomaniak email" : "Username"}</span>
               <input
                 value={draft.dav.username}
                 onChange={(e) =>
@@ -642,8 +716,9 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
               autoComplete="off"
             />
               <p className="hint">
-                On Nextcloud, use an app password, not your account password. You can revoke it
-                on its own.
+                {draft.dav.preset === "kdrive"
+                  ? "An app password from your Infomaniak profile, not your account password. It is required when the account has two-step sign-in, and you can revoke it on its own."
+                  : "On Nextcloud, use an app password, not your account password. You can revoke it on its own."}
               </p>
             </label>
           </div>
