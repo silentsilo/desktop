@@ -28,6 +28,8 @@ storage you have now as well.
 
 - A silo you have not changed the setting for locks after 30 minutes unused,
   not 15. The choices now go up to 6 hours.
+- Sync on OneDrive, Dropbox and Google Drive makes fewer requests, most of
+  all on a Google Drive that holds several silos.
 
 ## [1.2.2] - Back to the browser after a fill
 
