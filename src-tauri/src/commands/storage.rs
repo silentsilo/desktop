@@ -444,10 +444,15 @@ pub async fn backup_target_seed(app: AppHandle, from: String, to: String) -> Res
     // before writing, finds everything present and marks it delivered.
     // Reconciling by hand here would be a second implementation of that,
     // free to disagree with the first. Released first, or the pass would
-    // find the flag taken and stand down without doing it.
+    // find the flag taken and stand down without doing it. In the
+    // background: asking a slow provider about every object takes minutes,
+    // and the fill is done; its report refreshes the panel when it lands.
     drop(seeding);
     drop(sync_off);
-    let _ = crate::commands::sync::run_sync_pass(&app, &silo).await;
+    let pass_app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let _ = crate::commands::sync::run_sync_pass(&pass_app, &silo).await;
+    });
 
     Ok(outcome.copied)
 }
