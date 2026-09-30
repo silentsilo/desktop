@@ -426,11 +426,16 @@ jobs:
   # from `npm ci --ignore-scripts`, and the artifacts the jobs above left.
   #
   # `!cancelled()` because one platform failing must not withhold what did
-  # build: the release is a draft either way. A manual run signs too, so the
-  # path is exercised before a tag, and attaches nothing.
+  # build: the release is a draft either way. Tags only: the updater key signs
+  # what Windows installs as an update, so it never signs a branch. A manual
+  # run keeps the unsigned builds as artifacts of the jobs above.
+  #
+  # The `release` environment holds the key and admits only `v*` tags, so a
+  # workflow pushed to some branch cannot read it either.
   publish:
     needs: [build-extract, build-macos-app, build-linux-app]
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/') }}
+    environment: release
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -510,14 +515,16 @@ jobs:
       # 404 every asset URL, latest.json's installer included. A re-run is
       # exactly when that happens, so it is checked rather than assumed.
       - name: Refuse to attach to a published release
-        if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Through the environment, never pasted into the script.
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
         run: |
-          state=$(gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" --json isDraft -q .isDraft 2>/dev/null || echo absent)
+          state=$(gh release view "$TAG" --repo "$REPO" --json isDraft -q .isDraft 2>/dev/null || echo absent)
           if [ "$state" = "false" ]; then
-            echo "::error::${{ github.ref_name }} is already published. Attaching here would put it back in draft and break every download. Upload the files by hand instead."
+            echo "::error::$TAG is already published. Attaching here would put it back in draft and break every download. Upload the files by hand instead."
             exit 1
           fi
           echo "release is $state, safe to attach"
@@ -525,11 +532,9 @@ jobs:
       # Releases are titled "SilentSilo 1.2.1", not by their tag.
       - name: Release title
         id: title
-        if: startsWith(github.ref, 'refs/tags/')
         run: echo "name=SilentSilo ${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Attach to the draft
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -540,11 +545,3 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           body: "Built against silentsilo/core ${{ steps.pin.outputs.tag }} (${{ steps.pin.outputs.commit }})."
           files: ship/*
-
-      - name: Keep the signed files of a manual run
-        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: signed
-          path: ship/
-          retention-days: 7
