@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Cloud,
   CloudCog,
@@ -539,6 +539,8 @@ type Props = {
  * three kinds.
  */
 export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joining }: Props) {
+  const latest = useRef(draft);
+  latest.current = draft;
   const setKind = (kind: StoreKind) => onChange({ ...draft, kind });
   const setSftp = (patch: Partial<SftpForm>) =>
     onChange({ ...draft, sftp: { ...draft.sftp, ...patch } });
@@ -601,10 +603,13 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
           kind={draft.kind}
           form={draft.cloud[draft.kind]}
           set={(patch) => {
-            const kind = draft.kind as CloudKind;
+            // The draft as it is now: a sign-in finishing later must not
+            // undo what was typed meanwhile.
+            const current = latest.current;
+            const kind = current.kind as CloudKind;
             onChange({
-              ...draft,
-              cloud: { ...draft.cloud, [kind]: { ...draft.cloud[kind], ...patch } },
+              ...current,
+              cloud: { ...current.cloud, [kind]: { ...current.cloud[kind], ...patch } },
             });
           }}
           busy={busy}
