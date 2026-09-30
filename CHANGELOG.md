@@ -31,6 +31,16 @@ storage you have now as well.
 - Sync on OneDrive, Dropbox and Google Drive makes fewer requests, most of
   all on a Google Drive that holds several silos.
 
+### Fixed
+
+- After a key change, the new recovery code is shown even when this
+  computer's copy of the silo could not be replaced at once; unlocking
+  finishes it. Before, an antivirus holding a file for a second turned the
+  change into an error, and the new code was never seen while the old one
+  no longer worked.
+- Settings > Browser extension no longer lists recent fills while their
+  silo is locked, and forgets them once it locks.
+
 ## [1.2.2] - Back to the browser after a fill
 
 ### Fixed

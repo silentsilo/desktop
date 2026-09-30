@@ -819,13 +819,16 @@ fn commit_keys_and_snapshot(
 
     silentsilo_vault::rotation::commit_rotation_with(root, keys, authority, Some(recovery))
         .map_err(|e| e.to_string())?;
+    // Past the commit nothing may return an error: the caller would drop the
+    // new recovery code, and the old one no longer works. Unlock adopts the
+    // staged snapshot, so a rename refused here is finished there.
     if let Err(e) = silentsilo_core::rename_with_retry(&staged_db, &paths.db_enc_path()) {
-        // Unlock adopts the staged snapshot, so this is finished there.
+        crate::diagnostics::warn(
+            "rotation",
+            format_args!("snapshot left staged, adopted on the next unlock: {e}"),
+        );
         crate::commands::vault::lock_all_silos(app);
-        return Err(format!(
-            "The new key is in use, but this computer's copy of the silo was not updated ({e}). \
-             Unlock the silo again to finish."
-        ));
+        return Ok(());
     }
     // The spare copy as well, or the fallback path opens the old one and
     // reports the database as corrupt. The next lock writes it again.

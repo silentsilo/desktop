@@ -113,6 +113,9 @@ pub struct FillPrompt {
 /// A fill that sent a password: where, which login, when (Unix seconds).
 #[derive(Serialize, Clone)]
 pub struct RecentFill {
+    /// Whose fill it was: shown only while that silo is open.
+    #[serde(skip)]
+    silo: Uuid,
     site: String,
     label: String,
     at: i64,
@@ -245,11 +248,19 @@ fn status_of(app: &AppHandle) -> ExtensionStatus {
         bundled: host_bundled(),
         enabled: silentsilo_shell::browser_pipe::extension_enabled(),
         running: app.state::<BrowserBridge>().running(),
-        recent: lock(&app.state::<BrowserBridge>().recent)
-            .iter()
-            .cloned()
-            .collect(),
+        recent: recent_while_open(app),
     }
+}
+
+/// The fills of silos open now. Those of a silo that has locked since are
+/// forgotten: Settings is reachable with every silo locked, and the list
+/// says which login went to which site.
+fn recent_while_open(app: &AppHandle) -> Vec<RecentFill> {
+    let open = app.state::<AppState>().open_silo_ids();
+    let bridge = app.state::<BrowserBridge>();
+    let mut recent = lock(&bridge.recent);
+    recent.retain(|fill| open.contains(&fill.silo));
+    recent.iter().cloned().collect()
 }
 
 #[tauri::command]
@@ -777,6 +788,7 @@ async fn fill(
         let bridge = app.state::<BrowserBridge>();
         let mut recent = lock(&bridge.recent);
         recent.push_front(RecentFill {
+            silo,
             site: prompt.site.clone(),
             label: prompt.label.clone(),
             at: std::time::SystemTime::now()
