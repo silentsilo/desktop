@@ -47,7 +47,7 @@
         "installerHooks": "nsis-hooks.nsh"
       }
     },
-    "shortDescription": "Zero-knowledge encrypted vault",
+    "shortDescription": "End-to-end encrypted vault",
     "longDescription": "Encrypted vault for files and passwords, unlocked by a FIDO2 security key or Windows Hello, with optional backup to storage you control.",
     "resources": {
       "../THIRD-PARTY-NOTICES.txt": "THIRD-PARTY-NOTICES.txt"

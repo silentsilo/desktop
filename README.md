@@ -4,9 +4,12 @@ End-to-end encrypted vault for files and passwords, unlocked by a FIDO2
 security key or Windows Hello, with a written-down recovery code as the
 fallback. AGPL-3.0.
 
-Everything runs locally: no account, no server. Backup is optional, to
-storage you control: an S3-compatible bucket, a WebDAV share, an SFTP server
-or a plain folder. Whatever holds it only ever sees ciphertext.
+Everything runs locally: no SilentSilo account, no SilentSilo server. Backup
+is optional, to storage you choose: your OneDrive, Dropbox or Google Drive, an
+S3-compatible bucket, a WebDAV share, an SFTP server or a plain folder. File
+contents and names are encrypted before they leave. What the storage can still
+see, such as sizes, times and the name of the silo folder, is listed in
+[CRYPTO.md](https://github.com/silentsilo/core/blob/main/docs/CRYPTO.md#what-the-storage-provider-learns).
 
 Every feature is in every copy. There is no paid tier, no licence key and
 nothing held back.

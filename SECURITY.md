@@ -19,13 +19,19 @@ tested against.
 
 ## Scope
 
-SilentSilo is local-first and zero-knowledge by design: there is no server
-and no account. A storage provider holding a silo's backup sees ciphertext,
-plus one small manifest naming a random vault id.
+SilentSilo is local-first by design: there is no SilentSilo server and no
+SilentSilo account. A storage provider holding a silo's backup gets the
+encrypted silo; what it can still read without a key is listed in the
+cryptography specification.
 
-Four things reach the network, and nothing else does. The first is the
-backup storage the user configures, which is optional and carries only the
-ciphertext described in the cryptography specification. The second is the
+Four things reach the network. The first is the backup storage the user
+configures, which is optional and carries only the ciphertext described in
+the cryptography specification. For OneDrive, Dropbox and Google Drive it
+also takes the provider's sign-in, done in the user's browser with PKCE, the
+token refresh, and a read of the account's address and free space. The app
+asks only for its own folder at each (`Files.ReadWrite.AppFolder`,
+Dropbox's app folder, `drive.file`), and the refresh token stays on the
+computer. The second is the
 updater, which asks `releases.silentsilo.com` whether a newer version exists
 and downloads
 it from GitHub; update packages are signed, and the app verifies that
