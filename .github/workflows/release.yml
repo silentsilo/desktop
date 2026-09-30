@@ -252,6 +252,8 @@ jobs:
       # `tauri build` and there is no separate step to move them to.
       - name: Build, unsigned
         if: steps.apple.outputs.signed == 'false'
+        env:
+          SILENTSILO_GOOGLE_CLIENT_SECRET: ${{ secrets.SILENTSILO_GOOGLE_CLIENT_SECRET }}
         run: npx tauri build --ci --target universal-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":false}}' -- --locked
 
       - name: Build, sign and notarise
@@ -263,6 +265,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SILENTSILO_GOOGLE_CLIENT_SECRET: ${{ secrets.SILENTSILO_GOOGLE_CLIENT_SECRET }}
         run: npx tauri build --ci --target universal-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":false}}' -- --locked
 
       # The archive the macOS updater downloads, which the bundler would
@@ -389,6 +392,8 @@ jobs:
       - name: Build
         env:
           APPIMAGE_EXTRACT_AND_RUN: 1
+          # Compiled into core's Google Drive sign-in; unset leaves it out.
+          SILENTSILO_GOOGLE_CLIENT_SECRET: ${{ secrets.SILENTSILO_GOOGLE_CLIENT_SECRET }}
         run: npx tauri build --ci --config '{"bundle":{"createUpdaterArtifacts":false}}' -- --locked
 
       # The tree is listed before anything is copied out of it, so a missing

@@ -45,6 +45,18 @@ if (-not (Test-Path $keyFile)) {
     throw "Updater signing key not found at $keyFile"
 }
 
+# Google's token endpoint wants the desktop client's secret. Google calls it
+# not confidential and it ends up inside the binary, but it stays out of the
+# repositories. Core reads it at compile time; a build without it has no
+# Google Drive, so a release refuses to go without it.
+$googleSecretFile = Join-Path $HOME ".silentsilo-release\google-client-secret.txt"
+if (-not $env:SILENTSILO_GOOGLE_CLIENT_SECRET) {
+    if (-not (Test-Path $googleSecretFile)) {
+        throw "Google's client secret is not at $googleSecretFile. Without it this build has no Google Drive."
+    }
+    $env:SILENTSILO_GOOGLE_CLIENT_SECRET = (Get-Content $googleSecretFile -Raw).Trim()
+}
+
 # The three version-bearing files must agree, or the updater compares one
 # version while the binary reports another. Cheap to check, expensive to miss.
 $confVersion = (Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json).version
