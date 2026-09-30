@@ -25,6 +25,7 @@ import {
 } from "./StoreConfigForm";
 import {
   isCloudKind,
+  isCloudView,
   type CloudKind,
   type CloudSignIn,
   type SeedProgress,
@@ -44,7 +45,7 @@ function whereIs(config: StoreConfigView): string {
     case "sftp":
       return `${config.username}@${config.host}`;
     default:
-      return `${CLOUD_NAME[config.kind]} · ${config.account}`;
+      return CLOUD_NAME[config.kind];
   }
 }
 
@@ -325,6 +326,9 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                   {target.primary && <span className="copy-tag">main</span>}
                   {target.archive && <span className="copy-tag">never deletes</span>}
                 </strong>
+                {isCloudView(target.config) && (
+                  <span className="hint">{target.config.account}</span>
+                )}
                 <span className={`hint copy-state is-${state.health}`}>{state.headline}</span>
                 <span className="hint">{state.detail}</span>
                 {target.archive && (

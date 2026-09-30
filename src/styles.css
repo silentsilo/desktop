@@ -6244,6 +6244,25 @@ button.storage-option:hover:where(:not(:disabled)) {
   /* The row's text is three stacked lines, so the icon and the button line
      up with the top of it rather than floating in the middle. */
   align-items: flex-start;
+  /* With several buttons the text keeps its width and the buttons move to
+     a line of their own, rather than squeezing a name letter by letter. */
+  flex-wrap: wrap;
+}
+
+.copies-list .protected-row-text {
+  flex-basis: 16rem;
+}
+
+.copies-list .key-list-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.copies-list .key-list-actions button {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.85rem;
 }
 
 /* The row is `justify-content: space-between`, which is right when it ends in

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
 
 use silentsilo_core::{CoreError, CoreResult};
@@ -34,6 +34,9 @@ pub struct AppState {
     /// scratch sweep after a lock keeps their working copies: it runs from
     /// other threads and would otherwise delete a copy being opened.
     pub opening: Mutex<Vec<PathBuf>>,
+    /// A copy is being filled. The fill holds the sync flag for its whole
+    /// run, so a pressed Sync says so instead of waiting on it.
+    pub seeding: AtomicBool,
 }
 
 impl std::ops::Deref for AppState {

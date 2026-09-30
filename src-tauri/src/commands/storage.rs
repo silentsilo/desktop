@@ -358,6 +358,7 @@ pub async fn backup_target_seed(app: AppHandle, from: String, to: String) -> Res
     // No pass alongside: one pushing into the copy being filled would
     // interleave its writes with the seed's.
     let sync_off = crate::commands::sync::hold_sync(&app).await?;
+    let seeding = Seeding::start(&app);
     let targets = silentsilo_vault::load_targets(silo.id);
     let find = |id: &str| {
         targets
@@ -444,10 +445,32 @@ pub async fn backup_target_seed(app: AppHandle, from: String, to: String) -> Res
     // Reconciling by hand here would be a second implementation of that,
     // free to disagree with the first. Released first, or the pass would
     // find the flag taken and stand down without doing it.
+    drop(seeding);
     drop(sync_off);
     let _ = crate::commands::sync::run_sync_pass(&app, &silo).await;
 
     Ok(outcome.copied)
+}
+
+/// Marks a fill as running for as long as it lives.
+struct Seeding(AppHandle);
+
+impl Seeding {
+    fn start(app: &AppHandle) -> Self {
+        app.state::<crate::state::AppState>()
+            .seeding
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        Self(app.clone())
+    }
+}
+
+impl Drop for Seeding {
+    fn drop(&mut self) {
+        self.0
+            .state::<crate::state::AppState>()
+            .seeding
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+    }
 }
 
 /// Stops a running seed.

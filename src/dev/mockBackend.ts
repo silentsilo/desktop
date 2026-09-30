@@ -710,6 +710,22 @@ const handlers: Record<string, Handler> = {
         retry_in: filled ? 0 : 900,
         archive: flag("archive"),
       },
+      // A cloud copy with a long account, so its row can be seen wrap.
+      {
+        id: "33333333-3333-3333-3333-333333333333",
+        label: "",
+        config: {
+          kind: "google-drive",
+          account: "tiberius.alexandru.stanciu.example@gmail.com",
+          folder: "Silo",
+        },
+        primary: false,
+        last_success: 0,
+        ops_behind: 12,
+        blobs_behind: 3,
+        retry_in: 0,
+        archive: false,
+      },
     ];
   },
   backup_target_add: () => null,

@@ -169,29 +169,54 @@ export function seedHeadline(p: SeedProgress): string {
     p.objects_total === 1 ? "" : "s"
   }`;
   if (p.bytes_total <= 0) return `Copying: ${objects}.`;
+  // Rounded, a few MB of records left reads as "1.2 GB of 1.2 GB" while
+  // hundreds of items still go across.
+  if (onlySmallLeft(p)) {
+    return `Copying: ${objects}. The ${formatBytes(p.bytes_total)} of files is across; only small items are left.`;
+  }
   return `Copying: ${objects}, ${formatBytes(p.bytes_done)} of ${formatBytes(p.bytes_total)}.`;
+}
+
+/** Items still to go, and less than 1% of the bytes with them. */
+function onlySmallLeft(p: SeedProgress): boolean {
+  return (
+    p.objects_done < p.objects_total &&
+    p.bytes_total > 0 &&
+    p.bytes_total - p.bytes_done < p.bytes_total / 100
+  );
 }
 
 /**
  * The same thing in the width of a button, where one number is all there is
- * room for. The bytes, because that is the one that moves while a large
- * object goes across, which is the whole reason they are reported.
+ * room for. The bytes while they move, since a large object holds the count
+ * still; the items once every byte is across and small ones are left.
  */
 export function seedLabel(p: SeedProgress): string {
-  if (p.bytes_total <= 0) return `${p.objects_done} of ${p.objects_total}…`;
+  if (p.bytes_total <= 0 || onlySmallLeft(p) || p.bytes_done >= p.bytes_total) {
+    return `${p.objects_done} of ${p.objects_total}…`;
+  }
   return `${formatBytes(p.bytes_done)} of ${formatBytes(p.bytes_total)}…`;
 }
 
 /**
+ * What one object costs in time, as bytes: the requests around it. On a
+ * provider that takes several calls per object, hundreds of small records
+ * are minutes of work that the bytes alone would call done.
+ */
+const OBJECT_WEIGHT = 4 * 1024 * 1024;
+
+/**
  * How far along the bar is, 0 to 100.
  *
- * Bytes wherever there are any: they move during a large object, and an
- * object skipped or failed is credited whole when it is done with, so the
- * bar still ends where the object count does.
+ * Bytes and objects together: the bytes move during a large object, and
+ * each object adds its own cost, so the bar cannot reach the end while
+ * small objects are still going across. An object skipped or failed is
+ * credited whole when it is done with, so the bar ends where the count does.
  */
 export function seedPercent(p: SeedProgress): number {
-  const done = p.bytes_total > 0 ? p.bytes_done : p.objects_done;
-  const total = p.bytes_total > 0 ? p.bytes_total : p.objects_total;
+  const bytes = Math.max(0, p.bytes_total);
+  const done = Math.min(p.bytes_done, bytes) + p.objects_done * OBJECT_WEIGHT;
+  const total = bytes + p.objects_total * OBJECT_WEIGHT;
   if (total <= 0) return 0;
   return Math.min(100, Math.max(0, (done / total) * 100));
 }

@@ -128,6 +128,15 @@ pub async fn sync_now(app: AppHandle) -> Result<SyncReport, String> {
     // The silo on screen: pressing Sync is about the one being looked at,
     // unlike the background pass, which is about all of them.
     let silo = crate::state::active_silo(&app)?;
+    if app
+        .state::<crate::state::AppState>()
+        .seeding
+        .load(Ordering::SeqCst)
+    {
+        return Err(
+            "A copy is being filled. Sync runs when the fill finishes or is stopped.".into(),
+        );
+    }
     // Pressing the button clears every backoff timer first. The wait exists
     // to stop this device hammering a target that is not answering, which is
     // not the situation when someone is sitting there asking for a pass now.

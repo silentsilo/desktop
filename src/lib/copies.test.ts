@@ -135,6 +135,17 @@ describe("how far a fill has got", () => {
     expect(seedHeadline(seed())).toBe("Copying: 12 of 500 items, 1 GB of 4 GB.");
   });
 
+  it("says only small items are left rather than a rounded total twice", () => {
+    expect(
+      seedHeadline({
+        objects_done: 440,
+        objects_total: 652,
+        bytes_done: 1_288_000_000,
+        bytes_total: 1_288_490_188,
+      }),
+    ).toBe("Copying: 440 of 652 items. The 1.2 GB of files is across; only small items are left.");
+  });
+
   it("leaves the bytes out when the listing gave no sizes", () => {
     expect(seedHeadline(seed({ bytes_done: 0, bytes_total: 0 }))).toBe(
       "Copying: 12 of 500 items.",
@@ -144,15 +155,32 @@ describe("how far a fill has got", () => {
   it("puts the moving number on the button, where only one fits", () => {
     expect(seedLabel(seed())).toBe("1 GB of 4 GB…");
     expect(seedLabel(seed({ bytes_done: 0, bytes_total: 0 }))).toBe("12 of 500…");
+    // Every byte across and small objects left: the count is what moves.
+    expect(seedLabel(seed({ bytes_done: 4_294_967_296, objects_done: 333 }))).toBe(
+      "333 of 500…",
+    );
   });
 
-  it("drives the bar off the bytes, and off the objects when there are none", () => {
-    expect(seedPercent(seed())).toBe(25);
+  it("counts objects as well as bytes, and objects alone when there are no sizes", () => {
+    expect(seedPercent(seed({ objects_done: 0, objects_total: 0 }))).toBe(25);
     expect(seedPercent(seed({ bytes_done: 0, bytes_total: 0, objects_done: 250 }))).toBe(50);
     expect(seedPercent(seed({ objects_total: 0, bytes_done: 0, bytes_total: 0 }))).toBe(0);
   });
 
+  it("does not reach the end with half the objects still to go", () => {
+    // 1.2 GB across, 333 of 652 small records done: the case that read 100%.
+    const percent = seedPercent({
+      objects_done: 333,
+      objects_total: 652,
+      bytes_done: 1_288_490_188,
+      bytes_total: 1_288_490_188,
+    });
+    expect(percent).toBeGreaterThan(50);
+    expect(percent).toBeLessThan(80);
+  });
+
   it("never overshoots, whatever a retrying backend reports", () => {
-    expect(seedPercent(seed({ bytes_done: 9_999_999_999 }))).toBe(100);
+    expect(seedPercent(seed({ bytes_done: 9_999_999_999, objects_done: 600 }))).toBe(100);
+    expect(seedPercent(seed({ bytes_done: 9_999_999_999 }))).toBeLessThan(100);
   });
 });

@@ -164,6 +164,7 @@ pub fn run() {
             core: silentsilo_app::AppState::default(),
             session_epoch: std::sync::atomic::AtomicU64::new(0),
             opening: Mutex::new(Vec::new()),
+            seeding: std::sync::atomic::AtomicBool::new(false),
         })
         .manage(browser::BrowserBridge::default())
         .manage(commands::cloud::SignInSlot::default())
