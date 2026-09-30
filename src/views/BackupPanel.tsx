@@ -622,7 +622,10 @@ export function BackupPanel({
             </span>
             <div>
               <strong>Storage you already own.</strong>
-              <p>A bucket, a NAS folder, a Nextcloud, an SFTP account. No SilentSilo server.</p>
+              <p>
+                Your OneDrive, Dropbox or Google Drive, or a bucket, a NAS folder, a Nextcloud, an
+                SFTP account. No SilentSilo server.
+              </p>
             </div>
           </li>
           <li>

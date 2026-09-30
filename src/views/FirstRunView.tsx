@@ -104,8 +104,9 @@ export function FirstRunView({ siloId, siloName, busy, onCreateCode, onCopyCode,
         </h2>
         <p className="hint">Step 2 of 2</p>
         <p>
-          This silo is only on this computer. Backup storage keeps an encrypted copy on a drive,
-          NAS, cloud bucket or server you control, and lets another computer set it up too.
+          This silo is only on this computer. Backup storage keeps an encrypted copy in your
+          OneDrive, Dropbox or Google Drive, or on a drive, NAS, cloud bucket or server you
+          control, and lets another computer set it up too.
         </p>
         {skippedCode && (
           <p className="hint">You skipped the recovery code. Settings, Overview reminds you until you make one.</p>

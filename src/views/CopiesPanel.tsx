@@ -314,7 +314,16 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
         </li>
 
         {list.map((target) => {
-          const state = copyState(target, now);
+          // A copy being filled is being written to, whatever the last
+          // pass said; the fill records it as written when it ends.
+          const state =
+            seeding === target.id
+              ? {
+                  health: "behind" as const,
+                  headline: "Being filled from the main copy",
+                  detail: "It counts as up to date once the fill finishes.",
+                }
+              : copyState(target, now);
           return (
             <li key={target.id} className="key-list-item">
               <span className={`copy-icon is-${state.health}`} aria-hidden>
