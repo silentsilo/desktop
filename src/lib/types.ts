@@ -4,7 +4,7 @@ export type VaultMeta = {
 };
 
 /** Selectable idle-timeout durations before the silo auto-locks. */
-export const AUTO_LOCK_OPTIONS_MINUTES = [5, 15, 30, 60, 120] as const;
+export const AUTO_LOCK_OPTIONS_MINUTES = [5, 15, 30, 60, 120, 240, 360] as const;
 
 export type FolderEntry = {
   id: string;

@@ -24,6 +24,11 @@ storage you have now as well.
 - kDrive (Infomaniak) in the WebDAV form: enter the drive's ID and an app
   password, and the address is filled in.
 
+### Changed
+
+- A silo you have not changed the setting for locks after 30 minutes unused,
+  not 15. The choices now go up to 6 hours.
+
 ## [1.2.2] - Back to the browser after a fill
 
 ### Fixed

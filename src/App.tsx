@@ -81,7 +81,7 @@ import { formatAppError } from "./lib/errors";
 import { AppSettingsContext } from "./lib/appSettings";
 
 const AUTO_LOCK_KEY = "silentsilo.autoLockMinutes";
-const DEFAULT_AUTO_LOCK_MINUTES = 15;
+const DEFAULT_AUTO_LOCK_MINUTES = 30;
 
 const AUTO_UPDATE_KEY = "silentsilo.update.auto";
 const UPDATE_LAST_CHECK_KEY = "silentsilo.update.lastCheckAt";
