@@ -35,7 +35,7 @@ test("a new silo is backed up, passes its backup test and survives a lock", asyn
 
   await sees(driver, "Backup storage");
   await click(driver, "Set up backup storage");
-  await click(driver, "A drive or NAS folder");
+  await click(driver, "Drive or NAS folder");
   const storage = join(shared, "storage");
   mkdirSync(storage);
   await answerNextDialog(driver, storage);

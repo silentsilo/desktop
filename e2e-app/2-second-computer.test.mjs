@@ -19,7 +19,7 @@ after(async () => {
 test("a second computer sets the silo up from backup storage with the key", async () => {
   await sees(driver, "New silo");
   await click(driver, "Set up from backup storage");
-  await click(driver, "A drive or NAS folder");
+  await click(driver, "Drive or NAS folder");
   await answerNextDialog(driver, join(shared, "storage"));
   await click(driver, "Browse");
   await click(driver, "See what is there");
