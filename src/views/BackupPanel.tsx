@@ -12,7 +12,8 @@ import {
   Server,
   Unplug,
 } from "lucide-react";
-import type { StoreConfigView } from "../lib/types";
+import { isCloudView, type StoreConfigView } from "../lib/types";
+import { CLOUD_NAME } from "../lib/cloud";
 import { formatAppError } from "../lib/errors";
 import { formatBytes, formatDay } from "../lib/format";
 import { detectPreset } from "../lib/s3Presets";
@@ -35,6 +36,7 @@ const KIND_LABEL: Record<StoreConfigView["kind"], string> = {
   folder: "Folder",
   "web-dav": "WebDAV",
   sftp: "SFTP",
+  ...CLOUD_NAME,
 };
 
 /**
@@ -58,6 +60,8 @@ function StoredSummary({ stored }: { stored: StoreConfigView }) {
     rows.push(["Path", stored.path]);
   } else if (stored.kind === "web-dav") {
     rows.push(["Address", stored.url], ["Username", stored.username]);
+  } else if (isCloudView(stored)) {
+    rows.push(["Account", stored.account], ["Folder", stored.folder]);
   } else {
     rows.push(
       ["Server", `${stored.username}@${stored.host}:${stored.port}`],
@@ -193,6 +197,21 @@ export function BackupPanel({
           dav: { url: stored.url, username: stored.username, password: "" },
         }));
         setWhere(stored.url);
+        return;
+      }
+      if (isCloudView(stored)) {
+        const kind = stored.kind;
+        setDraft((prev) => ({
+          ...prev,
+          kind,
+          cloud: {
+            ...prev.cloud,
+            // No sign-in id: saving without a new sign-in keeps the stored
+            // one, for the same folder.
+            [kind]: { signIn: null, account: stored.account, freeBytes: null, folder: stored.folder },
+          },
+        }));
+        setWhere(`${CLOUD_NAME[kind]}, ${stored.folder}`);
         return;
       }
       if (stored.kind === "sftp") {

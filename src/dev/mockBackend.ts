@@ -757,6 +757,28 @@ const handlers: Record<string, Handler> = {
   // protection and is not, for the one operation that matters.
   backup_target_protection: () => ({ versioning: true, object_lock: false }),
   backup_target_remove: () => null,
+  // A sign-in that "happens in the browser" after a short wait, so the
+  // waiting state and the connected account can both be seen.
+  cloud_providers: () => ["onedrive", "dropbox", "google-drive"],
+  cloud_sign_in: (args) =>
+    new Promise((resolve) =>
+      setTimeout(
+        () =>
+          resolve({
+            id: "5b0f3a2e-9c1d-4e8f-a7b6-2d4c6e8f0a1b",
+            account: {
+              id: `${String(args.kind ?? "cloud")}-account`,
+              label: args.kind === "google-drive" ? "alex@gmail.com" : "alex@outlook.com",
+              freeBytes: 812 * 1024 ** 3,
+              totalBytes: 1024 ** 4,
+            },
+          }),
+        800,
+      ),
+    ),
+  cloud_cancel_sign_in: () => null,
+  cloud_list_silos: () => ["Silo"],
+  backup_target_reconnect: () => null,
   // Two silos open, so the switcher, the picker badge and the Explorer
   // silo chooser are all reachable without a security key.
   silo_open_list: () => silos,

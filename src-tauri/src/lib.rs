@@ -166,10 +166,14 @@ pub fn run() {
             opening: Mutex::new(Vec::new()),
         })
         .manage(browser::BrowserBridge::default())
+        .manage(commands::cloud::SignInSlot::default())
         .setup(move |app| {
             // Nothing is unlocked yet, so any decrypted scratch on disk is
             // what a crash, a kill or a power cut left behind.
             let _ = silentsilo_vault::wipe_work_dirs_except(&[]);
+            // OneDrive, Dropbox and Google Drive targets open through the
+            // tokens the vault keeps.
+            silentsilo_vault::install_cloud();
             // Before the window is shown, so no field exists yet for Edge to
             // remember.
             #[cfg(windows)]
@@ -323,6 +327,11 @@ pub fn run() {
             commands::sync::vault_verify,
             commands::sync::vault_test_restore,
             commands::storage::sftp_probe_host_key,
+            commands::cloud::cloud_providers,
+            commands::cloud::cloud_sign_in,
+            commands::cloud::cloud_cancel_sign_in,
+            commands::cloud::cloud_list_silos,
+            commands::cloud::backup_target_reconnect,
             commands::sync::sync_status,
             commands::sync::sync_now,
             commands::sync::sync_fetch_blob,

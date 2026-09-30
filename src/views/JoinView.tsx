@@ -7,6 +7,7 @@ import { open as openDialog } from "../lib/dialog";
 import { AuthShell } from "../layout/AuthShell";
 import { RecoveryCodeInput } from "../components/RecoveryCodeInput";
 import { formatAppError } from "../lib/errors";
+import { isCloudKind } from "../lib/types";
 import {
   EMPTY_STORE_DRAFT,
   missingStoreFields,
@@ -35,6 +36,9 @@ function defaultSiloName(draft: StoreDraft): string {
   }
   if (draft.kind === "sftp") {
     return draft.sftp.path.split("/").filter(Boolean).pop() ?? draft.sftp.host;
+  }
+  if (isCloudKind(draft.kind)) {
+    return draft.cloud[draft.kind].folder;
   }
   return draft.s3.bucket;
 }
@@ -149,6 +153,7 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
             }}
             hasStoredSecret={false}
             busy={disabled}
+            joining
           />
         </div>
 

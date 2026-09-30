@@ -1,12 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Cloud,
+  CloudCog,
   FolderOpen,
   HardDrive,
   KeyRound,
+  LogIn,
   Server,
   ShieldCheck,
   Terminal,
+  UserCheck,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "../lib/dialog";
@@ -19,7 +22,21 @@ import {
   type S3Form,
   type S3Preset,
 } from "../lib/s3Presets";
-import type { StoreKind } from "../lib/types";
+import {
+  CLOUD_KINDS,
+  isCloudKind,
+  type CloudKind,
+  type CloudSignIn,
+  type StoreKind,
+} from "../lib/types";
+import {
+  CLOUD_COMPANY,
+  CLOUD_NAME,
+  CLOUD_PLACE,
+  cloudFolderProblem,
+  DEFAULT_CLOUD_FOLDER,
+} from "../lib/cloud";
+import { formatBytes } from "../lib/format";
 import { S3ConfigForm } from "./S3ConfigForm";
 import { PLAIN_HTTP_WARNING, isPlainHttp } from "../lib/plainHttp";
 
@@ -44,6 +61,26 @@ export type SftpForm = {
   fingerprint: string;
 };
 
+/**
+ * A OneDrive, Dropbox or Google Drive copy. The sign-in itself stays in the
+ * app's Rust side; this holds only its id and what to show about it.
+ */
+export type CloudForm = {
+  /** The sign-in to save the copy with; null keeps the stored one. */
+  signIn: string | null;
+  /** The account shown, from the sign-in or from the stored copy. */
+  account: string;
+  freeBytes: number | null;
+  folder: string;
+};
+
+const EMPTY_CLOUD_FORM: CloudForm = {
+  signIn: null,
+  account: "",
+  freeBytes: null,
+  folder: DEFAULT_CLOUD_FOLDER,
+};
+
 export type StoreDraft = {
   kind: StoreKind;
   preset: S3Preset;
@@ -51,6 +88,7 @@ export type StoreDraft = {
   folder: string;
   dav: { url: string; username: string; password: string };
   sftp: SftpForm;
+  cloud: Record<CloudKind, CloudForm>;
 };
 
 /// Starts on a folder: the choice most people can make without an account
@@ -72,10 +110,19 @@ export const EMPTY_STORE_DRAFT: StoreDraft = {
     passphrase: "",
     fingerprint: "",
   },
+  cloud: {
+    onedrive: EMPTY_CLOUD_FORM,
+    dropbox: EMPTY_CLOUD_FORM,
+    "google-drive": EMPTY_CLOUD_FORM,
+  },
 };
 
 /** What the backend expects, for whichever kind is selected. */
 export function storeDraftPayload(draft: StoreDraft) {
+  if (isCloudKind(draft.kind)) {
+    const cloud = draft.cloud[draft.kind];
+    return { kind: draft.kind, signIn: cloud.signIn, folder: cloud.folder.trim() };
+  }
   switch (draft.kind) {
     case "folder":
       return { kind: "folder" as const, path: draft.folder };
@@ -129,6 +176,13 @@ export function storeDraftPayload(draft: StoreDraft) {
  * one for the first time, where there is nothing to fall back on.
  */
 export function missingStoreFields(draft: StoreDraft, hasStoredSecret: boolean): string[] {
+  if (isCloudKind(draft.kind)) {
+    const cloud = draft.cloud[draft.kind];
+    return [
+      !cloud.signIn && !cloud.account && `a ${CLOUD_NAME[draft.kind]} sign-in`,
+      !cloud.folder.trim() && "folder name",
+    ].filter((v): v is string => typeof v === "string");
+  }
   switch (draft.kind) {
     case "folder":
       return draft.folder.trim() ? [] : ["folder"];
@@ -270,12 +324,161 @@ function HostKeyStep({
   );
 }
 
+/**
+ * Signing in to the provider, in the user's own browser.
+ *
+ * The app never sees the password or the second factor: the provider's
+ * page opens in the default browser, and what comes back is the account to
+ * show and an id the save refers to. Setting up from backup storage then
+ * lists the silo folders the account holds instead of asking for a name.
+ */
+function CloudStep({
+  kind,
+  form,
+  set,
+  busy,
+  joining,
+}: {
+  kind: CloudKind;
+  form: CloudForm;
+  set: (patch: Partial<CloudForm>) => void;
+  busy: boolean;
+  joining: boolean;
+}) {
+  const [signingIn, setSigningIn] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [found, setFound] = useState<string[] | null>(null);
+
+  const signIn = async () => {
+    setSigningIn(true);
+    setError(null);
+    setFound(null);
+    try {
+      const done = await invoke<CloudSignIn>("cloud_sign_in", { kind });
+      // One update: `set` closes over the draft of the render this started
+      // in, so a second call would undo the first.
+      const folders = joining
+        ? await invoke<string[]>("cloud_list_silos", { signIn: done.id })
+        : null;
+      setFound(folders);
+      set({
+        signIn: done.id,
+        account: done.account.label,
+        freeBytes: done.account.freeBytes,
+        ...(folders && folders.length > 0 ? { folder: folders[0]! } : {}),
+      });
+    } catch (e) {
+      setError(formatAppError(e));
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  const folderProblem = form.folder ? cloudFolderProblem(form.folder) : null;
+
+  return (
+    <>
+      <div className="host-key">
+        {form.account && !signingIn ? (
+          <>
+            <div className="host-key-line">
+              <UserCheck size={16} />
+              <span>
+                Connected as <strong>{form.account}</strong>
+                {form.freeBytes !== null ? `, ${formatBytes(form.freeBytes)} free` : ""}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy}
+              onClick={() => void signIn()}
+            >
+              Use another account
+            </button>
+          </>
+        ) : signingIn ? (
+          <>
+            <p className="hint" role="status">
+              <span className="spinner" aria-hidden /> Finish signing in to {CLOUD_NAME[kind]} in
+              your browser, then come back here.
+            </p>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => void invoke("cloud_cancel_sign_in").catch(() => {})}
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" disabled={busy} onClick={() => void signIn()}>
+              <LogIn size={15} />
+              Connect {CLOUD_NAME[kind]}
+            </button>
+            <p className="hint">
+              Opens {CLOUD_COMPANY[kind]}&apos;s sign-in page in your browser. SilentSilo never
+              sees your password, and gets access only to its own folder.
+            </p>
+          </>
+        )}
+        {error ? (
+          <p className="hint is-error" role="status">
+            {error}
+          </p>
+        ) : null}
+      </div>
+
+      {joining && found !== null ? (
+        found.length > 0 ? (
+          <label className="field">
+            <span>Silo folder</span>
+            <select
+              value={form.folder}
+              disabled={busy}
+              onChange={(e) => set({ folder: e.target.value })}
+            >
+              {found.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <p className="hint">The folders in {CLOUD_PLACE[kind]}.</p>
+          </label>
+        ) : (
+          <p className="hint is-error" role="status">
+            There is no silo in {CLOUD_PLACE[kind]} yet. Sync once from the computer that has it.
+          </p>
+        )
+      ) : !joining ? (
+        <label className="field">
+          <span>Folder name</span>
+          <input
+            value={form.folder}
+            disabled={busy}
+            onChange={(e) => set({ folder: e.target.value })}
+            spellCheck={false}
+          />
+          <p className={`hint${folderProblem ? " is-error" : ""}`}>
+            {folderProblem ??
+              `In ${CLOUD_PLACE[kind]}. ${CLOUD_COMPANY[kind]} sees this name. Your files inside are encrypted.`}
+          </p>
+        </label>
+      ) : null}
+    </>
+  );
+}
+
 type Props = {
   draft: StoreDraft;
   onChange: (draft: StoreDraft) => void;
   /** Whether a password is already stored, which changes what blank means. */
   hasStoredSecret: boolean;
   busy: boolean;
+  /** Setting up from backup storage: a cloud account lists its silos. */
+  joining?: boolean;
 };
 
 /**
@@ -286,10 +489,23 @@ type Props = {
  * the restore flow could only reach a bucket while Settings could reach
  * three kinds.
  */
-export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy }: Props) {
+export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joining }: Props) {
   const setKind = (kind: StoreKind) => onChange({ ...draft, kind });
   const setSftp = (patch: Partial<SftpForm>) =>
     onChange({ ...draft, sftp: { ...draft.sftp, ...patch } });
+  // A build without a provider's client details leaves it out.
+  const [clouds, setClouds] = useState<CloudKind[]>([]);
+  useEffect(() => {
+    let live = true;
+    void invoke<string[]>("cloud_providers")
+      .then((kinds) => {
+        if (live) setClouds(CLOUD_KINDS.filter((k) => kinds.includes(k)));
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
 
   return (
     <>
@@ -325,8 +541,35 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy }: Prop
           >
             <Terminal size={15} />A server over SFTP
           </button>
+          {clouds.map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              className={draft.kind === kind ? "" : "secondary"}
+              onClick={() => setKind(kind)}
+            >
+              <CloudCog size={15} />
+              {CLOUD_NAME[kind]}
+            </button>
+          ))}
         </div>
       </div>
+
+      {isCloudKind(draft.kind) && (
+        <CloudStep
+          kind={draft.kind}
+          form={draft.cloud[draft.kind]}
+          set={(patch) => {
+            const kind = draft.kind as CloudKind;
+            onChange({
+              ...draft,
+              cloud: { ...draft.cloud, [kind]: { ...draft.cloud[kind], ...patch } },
+            });
+          }}
+          busy={busy}
+          joining={joining ?? false}
+        />
+      )}
 
       {draft.kind === "folder" && (
         <label className="field">

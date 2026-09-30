@@ -1,3 +1,4 @@
+pub mod cloud;
 pub mod fido;
 pub mod pwned;
 pub mod recovery;

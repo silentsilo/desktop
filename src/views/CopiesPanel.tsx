@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Copy, HardDrive, Laptop, Plus, Trash2, Truck, X } from "lucide-react";
+import { Copy, HardDrive, Laptop, LogIn, Plus, Trash2, Truck, X } from "lucide-react";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useEventSubscription } from "../hooks/useEventSubscription";
 import { coalesceLatest, coalesceRuns } from "../lib/coalesce";
@@ -23,7 +23,14 @@ import {
   storeDraftPayload,
   type StoreDraft,
 } from "./StoreConfigForm";
-import type { SeedProgress, StoreConfigView } from "../lib/types";
+import {
+  isCloudKind,
+  type CloudKind,
+  type CloudSignIn,
+  type SeedProgress,
+  type StoreConfigView,
+} from "../lib/types";
+import { CLOUD_NAME } from "../lib/cloud";
 
 /** A short phrase naming where a target points, for the row's title. */
 function whereIs(config: StoreConfigView): string {
@@ -34,8 +41,10 @@ function whereIs(config: StoreConfigView): string {
       return config.path;
     case "web-dav":
       return config.url;
-    default:
+    case "sftp":
       return `${config.username}@${config.host}`;
+    default:
+      return `${CLOUD_NAME[config.kind]} · ${config.account}`;
   }
 }
 
@@ -228,6 +237,26 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
     void invoke("cancel_seed").catch(() => {});
   };
 
+  /// A new sign-in for a cloud copy whose old one stopped working: access
+  /// removed in the account, a password change, or months unused. Only the
+  /// same account is accepted, or the copy would point at an empty folder.
+  const reconnect = async (id: string, kind: CloudKind) => {
+    setError(null);
+    setNote(null);
+    setWorking(true);
+    try {
+      const signIn = await invoke<CloudSignIn>("cloud_sign_in", { kind });
+      await invoke("backup_target_reconnect", { id, signIn: signIn.id });
+      setNote(`Signed in to ${CLOUD_NAME[kind]} again.`);
+      await refresh();
+      onActivity();
+    } catch (e) {
+      setError(formatAppError(e));
+    } finally {
+      setWorking(false);
+    }
+  };
+
   const remove = async (id: string) => {
     setError(null);
     setWorking(true);
@@ -309,48 +338,64 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                   there is called Disconnect and clears everything, so a
                   second way to do it here would mean two buttons with
                   different consequences. */}
-              {!target.primary && (
+              {(!target.primary || isCloudKind(target.config.kind)) && (
                 <div className="key-list-actions">
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busy || working || seeding !== null}
-                    onClick={() => void seed(target.id)}
-                    title="Copy everything from the main copy into this one"
-                  >
-                    {seeding === target.id ? (
-                      <span className="spinner" aria-hidden />
-                    ) : (
-                      <Truck size={14} />
-                    )}
-                    {seeding === target.id
-                      ? seedProgress
-                        ? seedLabel(seedProgress)
-                        : "Copying…"
-                      : "Fill from the main copy"}
-                  </button>
-                  {seeding === target.id && (
+                  {isCloudKind(target.config.kind) && (
                     <button
                       type="button"
                       className="secondary"
-                      disabled={seedCancelling}
-                      onClick={cancelSeed}
-                      title="Stop copying. What already arrived stays, and running it again carries on."
+                      disabled={busy || working || seeding !== null}
+                      onClick={() => void reconnect(target.id, target.config.kind as CloudKind)}
+                      title="Sign in again, with the same account"
                     >
-                      <X size={14} />
-                      {seedCancelling ? "Stopping…" : "Stop"}
+                      <LogIn size={14} />
+                      Sign in again
                     </button>
                   )}
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busy || working || seeding !== null}
-                    onClick={() => setConfirmRemove(target)}
-                    title="Stop backing up to this copy"
-                  >
-                    <Trash2 size={14} />
-                    Remove
-                  </button>
+                  {!target.primary && (
+                    <>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy || working || seeding !== null}
+                        onClick={() => void seed(target.id)}
+                        title="Copy everything from the main copy into this one"
+                      >
+                        {seeding === target.id ? (
+                          <span className="spinner" aria-hidden />
+                        ) : (
+                          <Truck size={14} />
+                        )}
+                        {seeding === target.id
+                          ? seedProgress
+                            ? seedLabel(seedProgress)
+                            : "Copying…"
+                          : "Fill from the main copy"}
+                      </button>
+                      {seeding === target.id && (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={seedCancelling}
+                          onClick={cancelSeed}
+                          title="Stop copying. What already arrived stays, and running it again carries on."
+                        >
+                          <X size={14} />
+                          {seedCancelling ? "Stopping…" : "Stop"}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy || working || seeding !== null}
+                        onClick={() => setConfirmRemove(target)}
+                        title="Stop backing up to this copy"
+                      >
+                        <Trash2 size={14} />
+                        Remove
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </li>

@@ -7,6 +7,21 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+Update every computer that uses a silo before making OneDrive, Dropbox or
+Google Drive its only storage: 1.2 cannot reach them. Until then, keep the
+storage you have now as well.
+
+### Added
+
+- OneDrive, Dropbox and Google Drive as storage. Click Connect, sign in in
+  your browser, and SilentSilo writes the encrypted silo into its own folder
+  in your account. The app never sees the password and can reach nothing
+  else in the account.
+- Setting up from backup storage lists the silos in a OneDrive, Dropbox or
+  Google Drive account after you sign in.
+- **Sign in again** on a OneDrive, Dropbox or Google Drive copy whose sign-in
+  stopped working. Only the same account is accepted.
+
 ## [1.2.2] - Back to the browser after a fill
 
 ### Fixed

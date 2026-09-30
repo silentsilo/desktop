@@ -30,6 +30,35 @@ export function formatAppError(err: unknown): string {
   ) {
     return msg;
   }
+  // OneDrive, Dropbox and Google Drive. Before the rules below: "cancelled"
+  // here is the browser sign-in, and "refused access" is not a password.
+  const provider = /\b(onedrive|dropbox|google drive)\b/i.exec(msg)?.[1];
+  const cloudName = provider
+    ? ({ onedrive: "OneDrive", dropbox: "Dropbox", "google drive": "Google Drive" } as const)[
+        provider.toLowerCase() as "onedrive" | "dropbox" | "google drive"
+      ]
+    : null;
+  if (cloudName && lower.includes(" again")) {
+    if (lower.includes("sign in to")) {
+      return `${cloudName} no longer accepts this computer's sign-in. Use Sign in again on this copy.`;
+    }
+  }
+  if (cloudName && lower.includes("is full")) {
+    return `${cloudName} is full. Free some space there, or keep this silo somewhere else too.`;
+  }
+  if (lower.includes("sign-in was cancelled")) {
+    return "The sign-in was cancelled in the browser.";
+  }
+  if (
+    lower.includes("sign-in") ||
+    lower.includes("work or school") ||
+    lower.includes("daily upload limit") ||
+    (cloudName && lower.includes("different"))
+  ) {
+    // Core's own sentences, without the storage prefix.
+    const text = msg.replace(/^(storage rejected the request|storage error|could not reach storage):\s*/i, "");
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
   // Cancelled and timed out are only about a key when the error came from a
   // key prompt. Mapped on the word alone, a storage timeout was reported as
   // the security key's, and a stopped upload as a cancelled key prompt.

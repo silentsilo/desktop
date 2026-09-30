@@ -45,7 +45,7 @@ session map and the event names the frontend listens to. `silentsilo-shell`
 is the only crate here that talks to the operating system, and it is the one
 a port to another desktop platform rewrites.
 
-The 114 commands are the whole contract with the frontend, along with their
+The 119 commands are the whole contract with the frontend, along with their
 parameter names, their event names and payload shapes, and the error strings
 `src/lib/errors.ts` matches on. None of those may change without changing
 the frontend in the same commit.
@@ -259,6 +259,39 @@ there. The re-wrapped keys and the new recovery envelope commit with the key
 in core (`rotation::commit_rotation_with`); past that commit an error locks
 the silo. A seed runs with the silo's key (`seed_target_checked`), so a copy
 that missed a rotation cannot put the old key back on another.
+
+## Cloud sign-in
+
+OneDrive, Dropbox and Google Drive copies are reached by signing in, not
+with keys the user pastes. `cloud_sign_in` hands core's
+`silentsilo_vault::cloud_sign_in` an opener for the system browser; core
+binds the loopback listener, runs PKCE and the code exchange, asks the
+provider which account it reached and keeps the tokens in the process as a
+pending sign-in. The command returns the account to show and an id, nothing
+else: no code or token ever reaches the frontend.
+
+The form then saves the copy with `{kind, signIn, folder}`. Core builds the
+target from the pending sign-in's account, never from anything the UI sent,
+and `storage::describe` opens it with the pending tokens for the usual
+checks (foreign vault, test write). Only after the list is saved does
+`Described::adopt` store the refresh token under the target id, so a check
+that fails leaves no token behind. Joining from backup storage does the
+same after `save_s3_config`, inside the join's cleanup.
+
+`backup_target_reconnect` gives a copy a new sign-in when the old one stops
+working, and refuses another account: the copy would point at an empty
+folder. Removing a copy, or disconnecting, ends Dropbox sign-ins at Dropbox
+(`end_cloud_sign_in`); Google's revocation would end every computer's
+sign-in to that account, and Microsoft has none for personal accounts, so
+those are only forgotten here. Saving a shorter list forgets the dropped
+targets' tokens in core either way.
+
+One sign-in runs at a time (`SignInSlot`). Cancel, or starting another,
+drops the waiting future, which closes the listener and frees its port. The
+error for that says "stopped", not "cancelled": `errors.ts` reads the
+second word as a security key prompt. `cloud_providers` lists what this
+build can sign in to; a build without Google's client secret leaves Google
+Drive out.
 
 ## Browser extension
 

@@ -1,8 +1,9 @@
 # Setting up storage that survives a bad day
 
 SilentSilo backs up to storage you own. Any S3-compatible bucket, WebDAV
-share, SFTP account or plain folder works, and nothing here is required to
-use the app. This page is about the setup that holds up when something goes
+share, SFTP account or plain folder works, and so does a OneDrive, Dropbox
+or Google Drive account you sign in to. Nothing here is required to use the
+app. This page is about the setup that holds up when something goes
 wrong: a drive fails, a laptop is stolen, ransomware runs as you.
 
 The rule worth keeping is the old one. Three copies of anything you care
@@ -160,6 +161,30 @@ handful of documents that would actually hurt to lose.
 A second drive you rotate weekly, kept unplugged between times, beats an
 always-connected one with clever permissions. The threat that takes your
 files is running as you, with your rights, on your machine.
+
+## OneDrive, Dropbox and Google Drive
+
+Choose the provider under Settings, Backup and click Connect. Its sign-in
+page opens in your browser; SilentSilo never sees the password and gets
+access only to its own folder: `Apps/SilentSilo` on OneDrive and Dropbox,
+`SilentSilo` in Google Drive. Inside it each silo has a folder whose name
+you choose. The provider sees that name, the account, the sizes and the
+times of what is written. Everything inside is encrypted.
+
+These count as a copy somewhere else, and they are working copies: the
+provider can delete, and OneDrive and Dropbox keep old versions you would
+restore by hand. "Never-delete copy" still stops SilentSilo from deleting
+there, but nothing on the provider's side enforces it.
+
+OneDrive is for personal Microsoft accounts, Microsoft 365 Personal and
+Family included. Work or school accounts would have to give the app access
+to every file, so they are not offered.
+
+If a provider stops accepting the sign-in (access removed in the account, a
+changed password, months unused), the copy says so and **Sign in again** on
+it fixes it. Only the same account is accepted there. Removing the copy
+ends the sign-in on this computer; to remove the app from the account as
+well, do it in the provider's own security settings.
 
 ## Cold storage
 

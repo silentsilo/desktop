@@ -12,6 +12,45 @@ use tauri::{AppHandle, Emitter, Manager};
 /// the password again.
 pub use silentsilo_app::{StoreConfigInput, StoreConfigView};
 
+/// A target described by the UI, and the store to check it with. A cloud
+/// target being set up opens with the sign-in the app holds: nothing is
+/// stored under it until it is saved.
+pub(crate) struct Described {
+    pub config: silentsilo_store::StoreConfig,
+    pub store: Box<dyn silentsilo_store::ObjectStore>,
+    sign_in: Option<uuid::Uuid>,
+}
+
+pub(crate) fn describe(
+    input: StoreConfigInput,
+    existing: Option<silentsilo_store::StoreConfig>,
+) -> Result<Described, String> {
+    let sign_in = input.sign_in();
+    let config = input.into_config(existing)?;
+    let store = match sign_in {
+        Some(id) => silentsilo_vault::open_with_sign_in(id, &config),
+        None => config.open(),
+    }
+    .map_err(|e| e.to_string())?;
+    Ok(Described {
+        config,
+        store,
+        sign_in,
+    })
+}
+
+impl Described {
+    /// Once the target is saved: its sign-in is stored under it.
+    pub(crate) async fn adopt(&self) -> Result<(), String> {
+        match self.sign_in {
+            Some(id) => silentsilo_vault::adopt_cloud_sign_in(id, &self.config)
+                .await
+                .map_err(|e| e.to_string()),
+            None => Ok(()),
+        }
+    }
+}
+
 /// The attach-time gate: a place that already holds a different silo is
 /// refused before anything is saved. The first pass against it would
 /// overwrite the other vault's manifest and key envelopes, killing that
@@ -60,11 +99,11 @@ pub async fn s3_save_config(
     config: StoreConfigInput,
 ) -> Result<StoreConfigView, String> {
     let silo = crate::state::active_silo(&app)?;
-    let config = config.into_config(crate::state::silo_store_config(&app))?;
-    let store = config.open().map_err(|e| e.to_string())?;
+    let described = describe(config, crate::state::silo_store_config(&app))?;
+    let config = described.config.clone();
     // Another silo's place is refused before the test write lands in it.
-    refuse_foreign_vault(&app, &silo, &*store).await?;
-    store.check().await.map_err(|e| e.to_string())?;
+    refuse_foreign_vault(&app, &silo, &*described.store).await?;
+    described.store.check().await.map_err(|e| e.to_string())?;
     // Replaces the first target and leaves any others alone. This screen
     // edits one connection, and a silo may now have more than one: saving
     // through the list is what stops the two views of the same thing
@@ -98,6 +137,7 @@ pub async fn s3_save_config(
         }),
     }
     silentsilo_vault::save_targets(silo.id, &targets).map_err(|e| e.to_string())?;
+    described.adopt().await?;
     Ok(StoreConfigView::from(&config))
 }
 
@@ -115,10 +155,7 @@ pub async fn s3_test_config(app: AppHandle, config: StoreConfigInput) -> Result<
             return Err("The silo is locked.".into());
         }
     }
-    let store = config
-        .into_config(crate::state::silo_store_config(&app))?
-        .open()
-        .map_err(|e| e.to_string())?;
+    let store = describe(config, crate::state::silo_store_config(&app))?.store;
     // The same gate saving applies, so "Test connection" cannot pass a place
     // that saving is about to refuse; asked before the test write.
     refuse_foreign_vault(&app, &silo, &*store).await?;
@@ -128,9 +165,10 @@ pub async fn s3_test_config(app: AppHandle, config: StoreConfigInput) -> Result<
 /// Forgets the connection details. What is already in storage is left alone
 /// — it is the user's storage, and deleting their data because they
 /// disconnected would be the wrong default.
-#[tauri::command(async)]
-pub fn s3_disconnect(app: AppHandle) -> Result<(), String> {
+#[tauri::command]
+pub async fn s3_disconnect(app: AppHandle) -> Result<(), String> {
     let silo = crate::state::unlocked_silo(&app)?;
+    end_cloud_sign_ins(&silentsilo_vault::load_targets(silo.id)).await;
     // Every target, not just the first: "disconnect" means this silo stops
     // backing up, and leaving a second one configured would keep it doing
     // precisely what the user asked it to stop. Saving an empty list clears
@@ -277,12 +315,12 @@ pub async fn backup_target_add(
     label: String,
     archive: bool,
 ) -> Result<(), String> {
-    let config = config.into_config(None)?;
-    let store = config.open().map_err(|e| e.to_string())?;
-    store.check().await.map_err(|e| e.to_string())?;
+    let described = describe(config, None)?;
+    let config = described.config.clone();
+    described.store.check().await.map_err(|e| e.to_string())?;
 
     let silo = crate::state::active_silo(&app)?;
-    refuse_foreign_vault(&app, &silo, &*store).await?;
+    refuse_foreign_vault(&app, &silo, &*described.store).await?;
     let mut targets = silentsilo_vault::load_targets(silo.id);
     // The same place twice is not a second copy, however it was typed.
     if targets
@@ -300,7 +338,8 @@ pub async fn backup_target_add(
             silentsilo_vault::TargetRole::Working
         },
     });
-    silentsilo_vault::save_targets(silo.id, &targets).map_err(|e| e.to_string())
+    silentsilo_vault::save_targets(silo.id, &targets).map_err(|e| e.to_string())?;
+    described.adopt().await
 }
 
 /// Fills one target from another, so a large silo can be copied over a
@@ -434,18 +473,33 @@ pub fn cancel_seed(state: tauri::State<crate::state::AppState>) {
 pub async fn backup_target_protection(
     config: StoreConfigInput,
 ) -> Result<silentsilo_store::Protection, String> {
-    let config = config.into_config(None)?;
-    Ok(config.open().map_err(|e| e.to_string())?.protection().await)
+    Ok(describe(config, None)?.store.protection().await)
 }
 
 /// Stops backing up to one target. What is already there is left alone: it is
 /// the user's storage, and deleting their copy because they stopped writing
 /// to it would be the wrong default.
-#[tauri::command(async)]
-pub fn backup_target_remove(app: AppHandle, id: String) -> Result<(), String> {
+#[tauri::command]
+pub async fn backup_target_remove(app: AppHandle, id: String) -> Result<(), String> {
     let silo = crate::state::unlocked_silo(&app)?;
-    let targets = without_target(silentsilo_vault::load_targets(silo.id), &id);
+    let all = silentsilo_vault::load_targets(silo.id);
+    let removed: Vec<_> = all
+        .iter()
+        .filter(|t| t.config.target_id().to_string() == id)
+        .cloned()
+        .collect();
+    end_cloud_sign_ins(&removed).await;
+    let targets = without_target(all, &id);
     silentsilo_vault::save_targets(silo.id, &targets).map_err(|e| e.to_string())
+}
+
+/// Ends the sign-ins of cloud targets being dropped, at the provider where
+/// that touches nothing else. Saving the shorter list forgets them here
+/// either way.
+async fn end_cloud_sign_ins(targets: &[silentsilo_vault::BackupTarget]) {
+    for target in targets.iter().filter(|t| t.config.cloud().is_some()) {
+        silentsilo_vault::end_cloud_sign_in(&target.config).await;
+    }
 }
 
 /// The list with one target removed. When that was the main one, the next
@@ -582,6 +636,13 @@ mod deserialisation_tests {
                 },
                 "hostFingerprint": "SHA256:abc"
             }),
+            serde_json::json!({
+                "kind": "onedrive",
+                "signIn": "6f1c2c7e-3a0b-4d7e-9a53-3b1f2d9c0e11",
+                "folder": "Silo"
+            }),
+            serde_json::json!({ "kind": "dropbox", "signIn": null, "folder": "Silo" }),
+            serde_json::json!({ "kind": "google-drive", "signIn": null, "folder": "Silo 2" }),
         ];
 
         for payload in payloads {

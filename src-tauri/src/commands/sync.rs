@@ -376,10 +376,7 @@ pub async fn vault_preview_join(
 ) -> Result<JoinPreview, String> {
     // The bucket details are passed in rather than read from a silo,
     // because at this point there is no silo — that is the whole situation.
-    let store = config
-        .into_config(None)?
-        .open()
-        .map_err(|e| e.to_string())?;
+    let store = crate::commands::storage::describe(config, None)?.store;
     let Some(manifest) = sync::read_manifest(&*store)
         .await
         .map_err(|e| e.to_string())?
@@ -411,10 +408,11 @@ pub async fn vault_join_from_storage(
 ) -> Result<VaultMeta, String> {
     silentsilo_fido::require_fido_ready().map_err(|e| e.to_string())?;
 
-    let s3_config = config.into_config(None)?;
-    let store = s3_config.open().map_err(|e| e.to_string())?;
+    let described = crate::commands::storage::describe(config, None)?;
+    let s3_config = described.config.clone();
+    let store = &described.store;
 
-    let manifest = sync::read_manifest(&*store)
+    let manifest = sync::read_manifest(&**store)
         .await
         .map_err(|e| e.to_string())?
         .ok_or_else(|| {
@@ -423,7 +421,7 @@ pub async fn vault_join_from_storage(
         })?;
     let vault_id = manifest.vault_id;
 
-    let envelopes = sync::fetch_key_envelopes(&*store)
+    let envelopes = sync::fetch_key_envelopes(&**store)
         .await
         .map_err(|e| e.to_string())?;
     if envelopes.is_empty() {
@@ -462,7 +460,7 @@ pub async fn vault_join_from_storage(
         keys: keys.keys.clone(),
     };
     let join = silentsilo_app::flows::key_join_open(
-        &*store,
+        &**store,
         &offer,
         &hex::encode(&unlock.credential_id),
         &unlock.wrap_key,
@@ -494,8 +492,9 @@ pub async fn vault_join_from_storage(
     // without the user entering the details a second time.
     silentsilo_vault::save_s3_config(vault_id, &s3_config).map_err(|e| e.to_string())?;
     cleanup.wrote_storage();
+    described.adopt().await?;
 
-    let session = provision_joined_silo(&*store, &join, root.clone(), &device_secret).await?;
+    let session = provision_joined_silo(&**store, &join, root.clone(), &device_secret).await?;
 
     let dek_for_fetch = session.dek.clone();
     crate::commands::silo::adopt_joined_silo(&app, &state, entry)?;
@@ -513,7 +512,7 @@ pub async fn vault_join_from_storage(
             },
         );
     };
-    let plan = sync::fetch_join_plan_reporting(&*store, &dek_for_fetch, &mut report)
+    let plan = sync::fetch_join_plan_reporting(&**store, &dek_for_fetch, &mut report)
         .await
         .map_err(|e| e.to_string())?;
 

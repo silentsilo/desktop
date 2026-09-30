@@ -111,7 +111,29 @@ export type SecurityKeyInfo = {
 export type Authenticator = "security-key" | "this-device";
 
 /** Where a silo's backup lives. The shapes differ because the questions do. */
-export type StoreKind = "s3" | "folder" | "web-dav" | "sftp";
+export type StoreKind = "s3" | "folder" | "web-dav" | "sftp" | CloudKind;
+
+/** Storage reached by signing in to an account the user already has. */
+export type CloudKind = "onedrive" | "dropbox" | "google-drive";
+
+export const CLOUD_KINDS: CloudKind[] = ["onedrive", "dropbox", "google-drive"];
+
+export function isCloudKind(kind: string): kind is CloudKind {
+  return (CLOUD_KINDS as string[]).includes(kind);
+}
+
+/** Who a sign-in reached, as `cloud_sign_in` returns it. */
+export type CloudAccount = {
+  id: string;
+  label: string;
+  freeBytes: number | null;
+  totalBytes: number | null;
+};
+
+export type CloudSignIn = {
+  id: string;
+  account: CloudAccount;
+};
 
 export type StoreConfigView =
   | {
@@ -134,7 +156,14 @@ export type StoreConfigView =
       auth_method: string;
       /** Shown back to the user, which is the entire point of a fingerprint. */
       host_fingerprint: string | null;
-    };
+    }
+  | CloudConfigView;
+
+export type CloudConfigView = { kind: CloudKind; account: string; folder: string };
+
+export function isCloudView(view: StoreConfigView): view is CloudConfigView {
+  return isCloudKind(view.kind);
+}
 
 /**
  * What the explorer needs to label each file, read in one call.

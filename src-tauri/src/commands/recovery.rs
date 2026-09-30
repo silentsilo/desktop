@@ -441,12 +441,13 @@ pub async fn vault_join_with_recovery(
     name: String,
     location: Option<String>,
 ) -> Result<silentsilo_core::VaultMeta, String> {
-    let s3_config = config.into_config(None)?;
-    let store = s3_config.open().map_err(|e| e.to_string())?;
+    let described = crate::commands::storage::describe(config, None)?;
+    let s3_config = described.config.clone();
+    let store = &described.store;
 
     // Nothing local is touched yet: the bucket has to hold a silo, that silo
     // has to have a published code, and the code has to open it.
-    let join = silentsilo_app::flows::recovery_join_begin(&*store, &code).await?;
+    let join = silentsilo_app::flows::recovery_join_begin(&**store, &code).await?;
 
     // Local state starts here. Everything above could fail without leaving
     // anything behind, and everything below is undone if it fails, so the
@@ -471,13 +472,14 @@ pub async fn vault_join_with_recovery(
     cleanup.wrote_credentials();
     silentsilo_vault::save_s3_config(join.vault_id, &s3_config).map_err(|e| e.to_string())?;
     cleanup.wrote_storage();
+    described.adopt().await?;
 
     // The published key envelopes come down with it, so the security keys
     // still in the user's possession keep working on this machine. No key
     // was touched here, so none of them proved anything: every `policy` they
     // claim is cleared. See `provision_joined_silo`.
     let session =
-        crate::commands::sync::provision_joined_silo(&*store, &join, root.clone(), &device_secret)
+        crate::commands::sync::provision_joined_silo(&**store, &join, root.clone(), &device_secret)
             .await?;
     crate::commands::silo::adopt_joined_silo(&app, &state, entry)?;
 
@@ -488,7 +490,7 @@ pub async fn vault_join_with_recovery(
     // where a silently partial result is worst, since there is nothing left
     // to compare it against.
     let handle = app.clone();
-    let plan = sync::fetch_join_plan_reporting(&*store, join.dek(), &mut move |done, total| {
+    let plan = sync::fetch_join_plan_reporting(&**store, join.dek(), &mut move |done, total| {
         let _ = handle.emit("join-progress", (done, total));
     })
     .await
