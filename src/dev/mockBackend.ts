@@ -716,7 +716,7 @@ const handlers: Record<string, Handler> = {
         label: "",
         config: {
           kind: "google-drive",
-          account: "tiberius.alexandru.stanciu.example@gmail.com",
+          account: "a.rather.long.mailbox.name@example.com",
           folder: "Silo",
         },
         primary: false,
