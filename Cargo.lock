@@ -1641,7 +1641,7 @@ dependencies = [
  "asn1-rs",
  "displaydoc",
  "nom",
- "num-bigint",
+ "num-bigint 0.4.8",
  "num-traits",
  "rusticata-macros",
 ]
@@ -3100,18 +3100,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "internal-russh-num-bigint"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae8e22120c32fb4d19ec55fba35015f57095cd95a2e3b732e44457f5915b2ee8"
-dependencies = [
- "num-integer",
- "num-traits",
- "rand 0.10.2",
- "rand_core 0.10.1",
-]
-
-[[package]]
 name = "ipnet"
 version = "2.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3666,7 +3654,7 @@ version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "35bd024e8b2ff75562e5f34e7f4905839deb4b22955ef5e73d2fea1b9813cb23"
 dependencies = [
- "num-bigint",
+ "num-bigint 0.4.8",
  "num-complex",
  "num-integer",
  "num-iter",
@@ -3682,6 +3670,18 @@ checksum = "c89e69e7e0f03bea5ef08013795c25018e101932225a656383bd384495ecc367"
 dependencies = [
  "num-integer",
  "num-traits",
+]
+
+[[package]]
+name = "num-bigint"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93e7820bc0a80a0238e650327316f929ba18d5be054b647490a3a6a339f3e7c0"
+dependencies = [
+ "num-integer",
+ "num-traits",
+ "rand 0.10.2",
+ "rand_core 0.10.1",
 ]
 
 [[package]]
@@ -3724,7 +3724,7 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f83d14da390562dca69fc84082e73e548e1ad308d24accdedd2720017cb37824"
 dependencies = [
- "num-bigint",
+ "num-bigint 0.4.8",
  "num-integer",
  "num-traits",
 ]
@@ -5020,9 +5020,9 @@ dependencies = [
 
 [[package]]
 name = "russh"
-version = "0.62.4"
+version = "0.63.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8b67b5a0d8068c89dcbe9d95df986af7a851d1f3c604525274c37468e60464f"
+checksum = "036204edbd199552a5b3832f63c60dcdf395dc44c7f06b4af1c0e8139cc11bce"
 dependencies = [
  "aes 0.9.1",
  "aws-lc-rs",
@@ -5051,13 +5051,12 @@ dependencies = [
  "hex-literal",
  "hmac 0.13.0",
  "inout 0.2.2",
- "internal-russh-num-bigint",
  "keccak",
  "log",
  "md5",
  "ml-kem",
  "module-lattice",
- "num-bigint",
+ "num-bigint 0.5.1",
  "p256",
  "p384",
  "p521",
@@ -5781,8 +5780,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-app"
-version = "1.8.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.8.2#4648da866e06fd8b31ad369f7a0e429f5fd584e9"
+version = "1.8.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.8.3#c7084ae3eb615742254e9a344f1c9cd9b89de0c2"
 dependencies = [
  "hex",
  "serde",
@@ -5809,8 +5808,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-cloud"
-version = "1.8.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.8.2#4648da866e06fd8b31ad369f7a0e429f5fd584e9"
+version = "1.8.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.8.3#c7084ae3eb615742254e9a344f1c9cd9b89de0c2"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -5830,8 +5829,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-core"
-version = "1.8.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.8.2#4648da866e06fd8b31ad369f7a0e429f5fd584e9"
+version = "1.8.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.8.3#c7084ae3eb615742254e9a344f1c9cd9b89de0c2"
 dependencies = [
  "serde",
  "thiserror 2.0.19",
@@ -5840,8 +5839,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-crypto"
-version = "1.8.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.8.2#4648da866e06fd8b31ad369f7a0e429f5fd584e9"
+version = "1.8.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.8.3#c7084ae3eb615742254e9a344f1c9cd9b89de0c2"
 dependencies = [
  "aes-gcm 0.10.3",
  "blake3",
@@ -5858,8 +5857,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-fido"
-version = "1.8.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.8.2#4648da866e06fd8b31ad369f7a0e429f5fd584e9"
+version = "1.8.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.8.3#c7084ae3eb615742254e9a344f1c9cd9b89de0c2"
 dependencies = [
  "aes 0.8.4",
  "base64 0.22.1",
@@ -5886,8 +5885,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-s3"
-version = "1.8.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.8.2#4648da866e06fd8b31ad369f7a0e429f5fd584e9"
+version = "1.8.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.8.3#c7084ae3eb615742254e9a344f1c9cd9b89de0c2"
 dependencies = [
  "aws-credential-types",
  "aws-sdk-s3",
@@ -5922,8 +5921,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-store"
-version = "1.8.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.8.2#4648da866e06fd8b31ad369f7a0e429f5fd584e9"
+version = "1.8.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.8.3#c7084ae3eb615742254e9a344f1c9cd9b89de0c2"
 dependencies = [
  "async-trait",
  "percent-encoding",
@@ -5944,8 +5943,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-sync"
-version = "1.8.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.8.2#4648da866e06fd8b31ad369f7a0e429f5fd584e9"
+version = "1.8.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.8.3#c7084ae3eb615742254e9a344f1c9cd9b89de0c2"
 dependencies = [
  "hex",
  "rusqlite",
@@ -5964,8 +5963,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-vault"
-version = "1.8.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.8.2#4648da866e06fd8b31ad369f7a0e429f5fd584e9"
+version = "1.8.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.8.3#c7084ae3eb615742254e9a344f1c9cd9b89de0c2"
 dependencies = [
  "aes-gcm 0.10.3",
  "argon2 0.5.3",
@@ -5989,8 +5988,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-vfs"
-version = "1.8.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.8.2#4648da866e06fd8b31ad369f7a0e429f5fd584e9"
+version = "1.8.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.8.3#c7084ae3eb615742254e9a344f1c9cd9b89de0c2"
 dependencies = [
  "base64 0.22.1",
  "blake3",
