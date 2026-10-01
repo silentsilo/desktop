@@ -2,7 +2,8 @@
 
 ## Reporting a vulnerability
 
-Report vulnerabilities privately to **security@silentsilo.com**. Please do
+Report vulnerabilities privately to **security@silentsilo.com**, or with
+**Report a vulnerability** under this repository's Security tab. Please do
 not open a public issue for anything that could be a vulnerability: anything
 touching key material, the FIDO2 flows, the recovery code, or what a silo
 writes to disk.
