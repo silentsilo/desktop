@@ -8,10 +8,10 @@ Each is listed with its version and its licence, and the full text of every
 licence follows, once per distinct text. Where a component ships its own
 copyright or NOTICE file, that file is what is reproduced here.
 
-Generated from the resolved dependency graph on 2026-10-01, for x86_64-pc-windows-msvc, x86_64-unknown-linux-gnu, aarch64-apple-darwin, x86_64-apple-darwin.
+Generated from the resolved dependency graph on 2026-10-02, for x86_64-pc-windows-msvc, x86_64-unknown-linux-gnu, aarch64-apple-darwin, x86_64-apple-darwin.
 Regenerate with: npm run notices
 
-Components: 678
+Components: 679
 
 ==============================================================================
 COMPONENTS
@@ -1814,7 +1814,7 @@ pad 0.1.6 (crate)
   licence: MIT
   text:    see [214]
 
-pageant 0.2.1 (crate)
+pageant 0.2.3 (crate)
   licence: Apache-2.0
   source:  https://github.com/warp-tech/russh
   text:    declares Apache-2.0 and ships no file; the standard text is at [4]
@@ -3170,6 +3170,11 @@ windows-strings 0.4.2 (crate)
   text:    see [331] [332]
 
 windows-strings 0.5.1 (crate)
+  licence: MIT OR Apache-2.0
+  source:  https://github.com/microsoft/windows-rs
+  text:    see [331] [332]
+
+windows-sys 0.52.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
   text:    see [331] [332]

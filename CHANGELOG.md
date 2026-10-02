@@ -7,9 +7,12 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
-Update every computer that uses a silo before making OneDrive, Dropbox or
-Google Drive its only storage: 1.2 cannot reach them. Until then, keep the
-storage you have now as well.
+## [1.3.0] - OneDrive, Dropbox and Google Drive
+
+Update every computer and phone that uses a silo (desktop 1.3, Android 1.2)
+before making OneDrive, Dropbox or Google Drive its only storage: older
+versions cannot reach them. Until then, keep the storage you have now as
+well.
 
 ### Added
 
