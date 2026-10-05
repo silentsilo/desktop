@@ -66,6 +66,19 @@ describe("entryFingerprint", () => {
   });
 });
 
+describe("entryFingerprint, fields and history", () => {
+  it("separates entries whose custom fields differ", () => {
+    const a = entry({ id: "x", fields: [{ name: "PIN", value: "1", hidden: true }] });
+    const b = entry({ id: "x", fields: [{ name: "PIN", value: "2", hidden: true }] });
+    expect(entryFingerprint(a)).not.toBe(entryFingerprint(b));
+  });
+
+  it("does not let a history make an entry look new", () => {
+    const kept = entry({ history: [{ saved_at: 1, password: "old" }] });
+    expect(entryFingerprint(kept)).toBe(entryFingerprint(entry()));
+  });
+});
+
 describe("dropDuplicates", () => {
   it("keeps everything when the silo is empty", () => {
     const incoming = [entry({ service: "A" }), entry({ service: "B" })];
@@ -135,10 +148,8 @@ describe("describeExtras", () => {
   });
 
   it("names what went into notes and what was left out", () => {
-    expect(
-      describeExtras({ customFields: 3, extraUris: 1, unsupportedOtp: 2, passkeys: 1 }),
-    ).toBe(
-      "Moved into notes: 3 custom fields, 1 extra web address and 2 two-factor secrets" +
+    expect(describeExtras({ extraUris: 1, unsupportedOtp: 2, passkeys: 1 })).toBe(
+      "Moved into notes: 1 extra web address and 2 two-factor secrets" +
         " SilentSilo cannot show codes for. Left out: 1 passkey, which SilentSilo does not store.",
     );
   });

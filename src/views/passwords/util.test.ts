@@ -176,3 +176,20 @@ describe("a protected note in lists and search", () => {
     expect(searchTextFor(note({ require_reauth: true }))).not.toContain("abandon");
   });
 });
+
+describe("custom fields in search", () => {
+  it("matches a field by name, and by value only when it is not hidden", () => {
+    const text = searchTextFor(
+      entry({
+        fields: [
+          { name: "Customer number", value: "40021", hidden: false },
+          { name: "Card PIN", value: "9876", hidden: true },
+        ],
+      }),
+    );
+    expect(text).toContain("customer number");
+    expect(text).toContain("40021");
+    expect(text).toContain("card pin");
+    expect(text).not.toContain("9876");
+  });
+});

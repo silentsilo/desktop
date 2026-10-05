@@ -566,6 +566,14 @@ crates are in core's map.
 
 - **The desktop app is free and stays that way; wording is accountability,
   never warranty.** Every copy change goes through that filter.
+- **An entry's history is written in `savePasswordEntry`, not by the
+  editor.** Every save from the window passes there, a star or a restore as
+  much as an edit, and `withHistory` (`lib/entryHistory.ts`) decides from the
+  stored version whether anything the entry says changed. It reads that
+  version from a ref, because the state update in the same function has not
+  run when the entry is sent. A version never holds attachments: core counts
+  blobs only from the entry itself, so one referenced from history alone
+  would be swept.
 - **Every door into a silo provisions through core, not through this app.**
   The key join, the recovery-code join and `vault_repair_from_storage` all
   end in `commands::sync::provision_joined_silo`, a call to core's

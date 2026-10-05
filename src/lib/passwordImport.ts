@@ -16,7 +16,8 @@ import type { PasswordEntry } from "./types";
 
 /** Fields that say where an entry lives or when it was touched, not what it
  * holds. `category` and `favorite` are how the user filed the credential,
- * not part of it: an entry moved or starred is still the same login. */
+ * not part of it: an entry moved or starred is still the same login. Its
+ * `history` is what it held before, which an import never carries. */
 const IGNORED_FIELDS = new Set([
   "id",
   "created_at",
@@ -24,6 +25,7 @@ const IGNORED_FIELDS = new Set([
   "attachments",
   "category",
   "favorite",
+  "history",
 ]);
 
 /**
@@ -40,10 +42,13 @@ export function entryFingerprint(entry: PasswordEntry): string {
     // Empty, absent and false all mean "not set", and an exporter that writes
     // an empty column must not read as different from one that omits it.
     if (value === undefined || value === null || value === "" || value === false) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
     // An absent type means login, so an entry saved before the other kinds
     // existed fingerprints the same as an import that spells it out.
     if (key === "type" && value === "login") continue;
-    parts.push(`${key}=${String(value)}`);
+    // An object (custom fields, a passkey) by its content: `String` made
+    // every one "[object Object]", so two different entries matched.
+    parts.push(`${key}=${typeof value === "object" ? JSON.stringify(value) : String(value)}`);
   }
   return parts.join("\u0000");
 }
@@ -84,7 +89,6 @@ export function dropDuplicates(
  * here at all and are only counted.
  */
 export type ImportExtras = {
-  customFields: number;
   extraUris: number;
   /** Two-factor secrets with no codes shown: Steam, HOTP, or unreadable. */
   unsupportedOtp: number;
@@ -92,7 +96,7 @@ export type ImportExtras = {
 };
 
 export function noExtras(): ImportExtras {
-  return { customFields: 0, extraUris: 0, unsupportedOtp: 0, passkeys: 0 };
+  return { extraUris: 0, unsupportedOtp: 0, passkeys: 0 };
 }
 
 /** Notes with lines added after what was already there. */
@@ -104,9 +108,6 @@ export function appendNotes(notes: string, lines: string[]): string {
 export function describeExtras(extras: ImportExtras): string {
   const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   const moved: string[] = [];
-  if (extras.customFields > 0) {
-    moved.push(count(extras.customFields, "custom field", "custom fields"));
-  }
   if (extras.extraUris > 0) {
     moved.push(count(extras.extraUris, "extra web address", "extra web addresses"));
   }

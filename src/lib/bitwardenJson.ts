@@ -1,4 +1,4 @@
-import type { PasswordEntry } from "./types";
+import type { CustomField, PasswordEntry } from "./types";
 import { parseTotpInput } from "./totp";
 import { appendNotes, noExtras, type ImportExtras } from "./passwordImport";
 
@@ -85,19 +85,19 @@ export function bitwardenJsonToEntries(
   const extras = noExtras();
 
   for (const item of parsed.items) {
-    // Any kind of item can carry custom fields, and a hidden one is often a
-    // secret, so they go into notes rather than being dropped.
-    const fieldLines = (item.fields ?? [])
+    // Any kind of item can carry custom fields. Type 1 is hidden and stays
+    // masked here; type 3 links to another field and carries no value.
+    const fields: CustomField[] = (item.fields ?? [])
       .filter((f) => f.type !== 3 && (f.name || f.value))
-      .map((f) => `${f.name ?? ""}: ${f.value ?? ""}`);
-    const before = entries.length;
+      .map((f) => ({ name: f.name ?? "", value: f.value ?? "", hidden: f.type === 1 }));
     const base: PasswordEntry = {
       id: crypto.randomUUID(),
       service: item.name ?? "",
       username: "",
       password: "",
       url: "",
-      notes: appendNotes(item.notes ?? "", fieldLines),
+      notes: item.notes ?? "",
+      ...(fields.length > 0 ? { fields } : {}),
       category: (item.folderId && folderNames.get(item.folderId)) || "General",
       created_at: now(),
       updated_at: now(),
@@ -198,7 +198,6 @@ export function bitwardenJsonToEntries(
         // Anything newer than this importer knows.
         skipped += 1;
     }
-    if (entries.length > before) extras.customFields += fieldLines.length;
   }
 
   return { entries, skipped, extras };

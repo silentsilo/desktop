@@ -3,7 +3,12 @@ import { platformStrings, type Os } from "../../lib/platformStrings";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFileDialog } from "../../lib/dialog";
 import { ChevronDown, ChevronRight, Paperclip } from "lucide-react";
-import type { PasswordAttachment, PasswordCategory, PasswordEntry } from "../../lib/types";
+import type {
+  CustomField,
+  PasswordAttachment,
+  PasswordCategory,
+  PasswordEntry,
+} from "../../lib/types";
 import { parseTotpInput, DEFAULT_TOTP_ALGORITHM, DEFAULT_TOTP_DIGITS, DEFAULT_TOTP_PERIOD } from "../../lib/totp";
 import { formatBytes } from "../../lib/format";
 import { formatAppError } from "../../lib/errors";
@@ -139,7 +144,10 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
   /// longer points at them is stored. Deleted first, a failed save left the
   /// stored entry pointing at content that was gone.
   const handleSave = useCallback(async () => {
-    if (!(await onSave(draft))) return;
+    // A row left with neither a name nor a value is one the user added and
+    // never used. None left means no `fields` at all, as before 1.4.
+    const fields = (draft.fields ?? []).filter((f) => f.name.trim() || f.value);
+    if (!(await onSave({ ...draft, fields: fields.length > 0 ? fields : undefined }))) return;
     const kept = new Set((draft.attachments ?? []).map((a) => a.blob_id));
     for (const a of initial.attachments ?? []) {
       if (!kept.has(a.blob_id)) {
@@ -503,6 +511,79 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
               ))}
           </select>
         </label>
+
+        <div className="field field-full">
+          <span>Custom fields</span>
+          <div className="pw-custom-fields">
+            {(draft.fields ?? []).map((field, i) => {
+              const update = (change: Partial<CustomField>) =>
+                setDraft((d) => ({
+                  ...d,
+                  fields: (d.fields ?? []).map((f, j) => (j === i ? { ...f, ...change } : f)),
+                }));
+              return (
+                <div key={i} className="pw-custom-field">
+                  <input
+                    type="text"
+                    aria-label="Field name"
+                    placeholder="Name"
+                    autoComplete="off"
+                    value={field.name}
+                    onChange={(e) => update({ name: e.target.value })}
+                  />
+                  <input
+                    type={field.hidden && !passwordVisible ? "password" : "text"}
+                    aria-label={`Value of ${field.name || "this field"}`}
+                    placeholder="Value"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={field.value}
+                    onChange={(e) => update({ value: e.target.value })}
+                  />
+                  <label className="pw-custom-hidden" title="Masked, and copied like a password">
+                    <input
+                      type="checkbox"
+                      checked={field.hidden}
+                      onChange={(e) => update({ hidden: e.target.checked })}
+                    />
+                    <span>Hidden</span>
+                  </label>
+                  <button
+                    type="button"
+                    className="pw-inline-btn danger"
+                    title="Remove field"
+                    aria-label="Remove field"
+                    onClick={() =>
+                      setDraft((d) => ({
+                        ...d,
+                        fields: (d.fields ?? []).filter((_, j) => j !== i),
+                      }))
+                    }
+                  >
+                    <IconTrash size={13} />
+                  </button>
+                </div>
+              );
+            })}
+            <button
+              type="button"
+              className="pw-attach-btn"
+              onClick={() =>
+                setDraft((d) => ({
+                  ...d,
+                  fields: [...(d.fields ?? []), { name: "", value: "", hidden: false }],
+                }))
+              }
+            >
+              <IconPlus size={14} />
+              <span>Add a field</span>
+            </button>
+          </div>
+          <p className="hint">
+            A customer number, a PIN, a security question. Hidden ones are masked like the
+            password.
+          </p>
+        </div>
 
         <div className="field field-full">
           <span>Attached files</span>

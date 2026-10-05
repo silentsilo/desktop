@@ -35,6 +35,8 @@ import type {
   SyncProgress,
 } from "./lib/types";
 import { AUTO_LOCK_OPTIONS_MINUTES } from "./lib/types";
+import { withHistory } from "./lib/entryHistory";
+import { loadHistoryPolicy } from "./lib/historySetting";
 import { silosToLock } from "./lib/autoLock";
 import { decideConfirmSlot } from "./lib/confirmSlot";
 import { overwriteConfirmLabel, overwriteMessage } from "./lib/overwrite";
@@ -348,6 +350,10 @@ export default function App() {
   const [newKeyLabel, setNewKeyLabel] = useState("");
   const [keyAddSuccess, setKeyAddSuccess] = useState<string | null>(null);
   const [passwordEntries, setPasswordEntries] = useState<PasswordEntry[]>([]);
+  /// The entries as last rendered, for a save that needs the stored version
+  /// before its own state update runs.
+  const passwordEntriesRef = useRef(passwordEntries);
+  passwordEntriesRef.current = passwordEntries;
   /// The stored category list, or null when the silo never saved one; the
   /// panel derives a starting list from the entries in that case.
   const [passwordCategories, setPasswordCategories] = useState<PasswordCategory[] | null>(null);
@@ -3318,7 +3324,15 @@ export default function App() {
   /// worked, and the editor then deleted the content of any attachment it
   /// had removed.
   const savePasswordEntry = useCallback(
-    async (entry: PasswordEntry): Promise<boolean> => {
+    async (edited: PasswordEntry): Promise<boolean> => {
+      // Every save from this window goes through here, so this is where a
+      // changed entry keeps its previous version. Read from the ref: the
+      // state update below has not run yet when the entry is sent.
+      const entry = withHistory(
+        passwordEntriesRef.current.find((e) => e.id === edited.id),
+        edited,
+        loadHistoryPolicy(),
+      );
       let before: PasswordEntry | undefined;
       setPasswordEntries((prev) => {
         const idx = prev.findIndex((e) => e.id === entry.id);

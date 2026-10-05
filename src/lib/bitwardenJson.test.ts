@@ -81,7 +81,7 @@ describe("bitwardenJsonToEntries", () => {
     expect(ssh.ssh_fingerprint).toBe("SHA256:abc");
   });
 
-  it("keeps custom fields, extra addresses and unusable 2FA in notes, and counts passkeys", () => {
+  it("keeps custom fields as fields, extra addresses and unusable 2FA in notes", () => {
     const text = JSON.stringify({
       items: [
         {
@@ -110,12 +110,12 @@ describe("bitwardenJsonToEntries", () => {
     expect(login.notes).toBe(
       [
         "main account",
-        "PIN: 4321",
         "Web address: https://steamcommunity.com",
         "Two-factor secret: steam://ABCDEFGHIJ",
       ].join("\n"),
     );
-    expect(extras).toEqual({ customFields: 1, extraUris: 1, unsupportedOtp: 1, passkeys: 1 });
+    expect(login.fields).toEqual([{ name: "PIN", value: "4321", hidden: true }]);
+    expect(extras).toEqual({ extraUris: 1, unsupportedOtp: 1, passkeys: 1 });
   });
 
   it("refuses a password-protected export with advice, not a parse error", () => {

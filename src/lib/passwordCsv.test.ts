@@ -169,7 +169,7 @@ describe("csvToEntries", () => {
     });
   });
 
-  it("keeps Bitwarden's extra addresses, custom fields and unusable 2FA in notes", () => {
+  it("keeps Bitwarden's custom fields as masked fields, and the rest in notes", () => {
     const csv = [
       "folder,favorite,type,name,notes,fields,reprompt,login_uri,login_username,login_password,login_totp",
       'Games,0,login,Steam,my note,"PIN: 4321\nRegion: EU",0,"https://a.com,https://b.com",alice,pw,steam://ABCDE',
@@ -179,10 +179,13 @@ describe("csvToEntries", () => {
     expect(result.entries[0]!.url).toBe("https://a.com");
     expect(result.entries[0]!.totp_secret).toBeUndefined();
     expect(result.entries[0]!.notes).toBe(
-      "my note\nWeb address: https://b.com\nPIN: 4321\nRegion: EU\nTwo-factor secret: steam://ABCDE",
+      "my note\nWeb address: https://b.com\nTwo-factor secret: steam://ABCDE",
     );
+    expect(result.entries[0]!.fields).toEqual([
+      { name: "PIN", value: "4321", hidden: true },
+      { name: "Region", value: "EU", hidden: true },
+    ]);
     expect(result.extras).toEqual({
-      customFields: 2,
       extraUris: 1,
       unsupportedOtp: 1,
       passkeys: 0,

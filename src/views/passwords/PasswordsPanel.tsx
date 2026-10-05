@@ -6,6 +6,7 @@ import { Download, KeyRound, MousePointerClick, ShieldCheck, Upload } from "luci
 import { ViewHeader } from "../../components/ViewHeader";
 import type {
   CredentialType,
+  HistoryVersion,
   PasswordAttachment,
   PasswordCategory,
   PasswordEntry,
@@ -20,6 +21,7 @@ import {
   type ImportExtras,
 } from "../../lib/passwordImport";
 import { withEdits } from "../../lib/passwordEntry";
+import { restoredFrom, withoutHistory } from "../../lib/entryHistory";
 import { formatAppError } from "../../lib/errors";
 import { runsOnOpen } from "../../lib/executable";
 import { ConfirmDialog } from "../ConfirmDialog";
@@ -453,6 +455,18 @@ export function PasswordsPanel({
   /// the entry: the user should be answering about this login, not about
   /// whichever one the pane happened to be showing.
   const [pendingDelete, setPendingDelete] = useState<PasswordEntry | null>(null);
+  /// Clearing removes old passwords for good, on every device.
+  const [pendingClearHistory, setPendingClearHistory] = useState<PasswordEntry | null>(null);
+
+  /// A restore changes the secret, so it is gated like an edit. Not asked
+  /// about: the current version goes into the history, so it can be undone.
+  const restoreVersion = useCallback(
+    async (entry: PasswordEntry, version: HistoryVersion) => {
+      if (!(await ensureVerified(entry))) return;
+      await onSaveEntry(restoredFrom(entry, version, Date.now()));
+    },
+    [ensureVerified, onSaveEntry]
+  );
 
   const confirmDelete = useCallback(() => {
     if (!pendingDelete) return;
@@ -874,6 +888,8 @@ export function PasswordsPanel({
                 onToggleFavorite={(entry) => onSaveEntry(withEdits(entry, { favorite: !entry.favorite }))}
                 onEdit={(entry) => void startEdit(entry)}
                 onDelete={() => setPendingDelete(selected)}
+                onRestoreVersion={(entry, version) => void restoreVersion(entry, version)}
+                onClearHistory={(entry) => setPendingClearHistory(entry)}
               />
             ) : filtered.length > 0 ? (
               <div className="pw-detail-placeholder">
@@ -910,6 +926,27 @@ export function PasswordsPanel({
           busy={busy}
           onConfirm={confirmDelete}
           onCancel={() => setPendingDelete(null)}
+        />
+      )}
+
+      {pendingClearHistory && (
+        <ConfirmDialog
+          title="Clear this entry's history?"
+          message={`The earlier versions of “${pendingClearHistory.service}”, with their passwords, are removed${
+            backedUp ? " from every device on the next sync" : ""
+          }. The current version stays.${
+            backedUp && archiveTargets > 0
+              ? " A never-delete copy keeps them until that storage's own rules remove them."
+              : ""
+          }`}
+          confirmLabel="Clear history"
+          danger
+          busy={busy}
+          onConfirm={() => {
+            void onSaveEntry(withoutHistory(pendingClearHistory));
+            setPendingClearHistory(null);
+          }}
+          onCancel={() => setPendingClearHistory(null)}
         />
       )}
     </div>

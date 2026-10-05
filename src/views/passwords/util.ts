@@ -78,6 +78,8 @@ export function searchTextFor(entry: PasswordEntry): string {
     entry.id_country,
     entry.ssh_fingerprint,
     entry.ssh_public_key,
+    // A hidden field is found by its name, never by its value.
+    ...(entry.fields ?? []).flatMap((f) => (f.hidden ? [f.name] : [f.name, f.value])),
   ]
     .filter(Boolean)
     .join("\n")

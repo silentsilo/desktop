@@ -1,4 +1,4 @@
-import type { PasswordEntry } from "./types";
+import type { CustomField, PasswordEntry } from "./types";
 import { parseTotpInput } from "./totp";
 import { appendNotes, noExtras, type ImportExtras } from "./passwordImport";
 
@@ -229,6 +229,7 @@ export function csvToEntries(text: string, now: () => number = Date.now): Import
 
     let url = field("url");
     const noteLines: string[] = [];
+    let customFields: CustomField[] = [];
     if (format === "bitwarden") {
       // Bitwarden writes every address of a login into one cell, comma
       // separated, and custom fields one per line in `fields`.
@@ -239,13 +240,19 @@ export function csvToEntries(text: string, now: () => number = Date.now): Import
       url = first;
       noteLines.push(...more.map((u) => `Web address: ${u}`));
       extras.extraUris += more.length;
+      // One "name: value" per line. The CSV does not say which were hidden
+      // in Bitwarden, so every one comes in masked.
       const at = index.get("fields");
-      const fields = (at === undefined ? "" : (row[at] ?? ""))
+      customFields = (at === undefined ? "" : (row[at] ?? ""))
         .split(/\r?\n/)
         .map((l) => l.trim())
-        .filter(Boolean);
-      noteLines.push(...fields);
-      extras.customFields += fields.length;
+        .filter(Boolean)
+        .map((line) => {
+          const colon = line.indexOf(": ");
+          return colon < 0
+            ? { name: "", value: line, hidden: true }
+            : { name: line.slice(0, colon), value: line.slice(colon + 2), hidden: true };
+        });
     }
 
     // A row with secrets but no name is still worth keeping; fall back to
@@ -263,6 +270,7 @@ export function csvToEntries(text: string, now: () => number = Date.now): Import
       category: field("category") || "General",
       created_at: timestamp,
       updated_at: timestamp,
+      ...(customFields.length > 0 ? { fields: customFields } : {}),
     };
     // Steam and HOTP secrets have no codes here, but they are still the
     // user's second factor.

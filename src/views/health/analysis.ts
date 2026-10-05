@@ -9,6 +9,7 @@
  */
 
 import { entryFingerprint } from "../../lib/passwordImport";
+import { reusesOldPassword } from "../../lib/entryHistory";
 import type { PasswordEntry } from "../../lib/types";
 import { formatBytes } from "../../lib/format";
 import { passwordStrength, typeOf } from "../passwords/util";
@@ -111,6 +112,18 @@ export function analyseHealth(
         "If one site leaks it, every account with the same password is exposed. Change these first.",
       entries: affected,
       groups: reused,
+    });
+  }
+
+  const backToOld = entries.filter(reusesOldPassword).sort(byService);
+  if (backToOld.length > 0) {
+    findings.push({
+      id: "reused-old",
+      severity: "medium",
+      title: `${plural(backToOld.length, "entry is", "entries are")} back on an earlier password`,
+      detail:
+        "The password in use is one the entry had before. If it was changed because it leaked, it is exposed again.",
+      entries: backToOld,
     });
   }
 

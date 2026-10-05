@@ -7,6 +7,17 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+### Added
+
+- Custom fields on every entry: a customer number, a PIN, a security
+  question. A hidden one is masked and copied like a password. Bitwarden
+  imports bring their custom fields here instead of into notes.
+- Earlier versions of each entry. When a password, a field or a note
+  changes, the entry keeps the version before it: the last 10 by default, 30,
+  or as many as fit (Settings, General). Restore puts an old version back and
+  keeps the current one; Clear history removes old passwords for good.
+- Health points out an entry back on a password it had before.
+
 ### Fixed
 
 - A silo now locks after its idle timeout even if the window has crashed or

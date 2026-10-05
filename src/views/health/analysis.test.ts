@@ -47,6 +47,20 @@ describe("analyseHealth", () => {
     expect(analyseHealth([entry()], HEALTHY_SILO, NOW)).toEqual([]);
   });
 
+  it("flags an entry back on a password it had before", () => {
+    const back = entry({
+      password: "8Kq!vRz2mNp#4Wd",
+      history: [{ saved_at: NOW - YEAR, password: "8Kq!vRz2mNp#4Wd" }],
+    });
+    const moved = entry({
+      password: "wR7@tYu9zXc$2Lm",
+      history: [{ saved_at: NOW - YEAR, password: "8Kq!vRz2mNp#4Wd" }],
+    });
+    const findings = analyseHealth([back], HEALTHY_SILO, NOW);
+    expect(ids(findings)).toEqual(["reused-old"]);
+    expect(analyseHealth([moved], HEALTHY_SILO, NOW)).toEqual([]);
+  });
+
   it("groups the entries sharing a password", () => {
     const shared = "8Kq!vRz2mNp#4Wd";
     const findings = analyseHealth(

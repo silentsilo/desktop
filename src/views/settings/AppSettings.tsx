@@ -16,6 +16,8 @@ import { EXTENSION_STORES } from "../../lib/extensionStores";
 import { useTheme, type ThemeChoice } from "../../lib/theme";
 import { AUTO_LOCK_OPTIONS_MINUTES, type BrowserExtensionStatus } from "../../lib/types";
 import { ExtensionStoreLinks } from "../ExtensionStoreLinks";
+import { HISTORY_POLICIES, type HistoryPolicy } from "../../lib/entryHistory";
+import { loadHistoryPolicy, saveHistoryPolicy } from "../../lib/historySetting";
 
 /** The sections that belong to the app rather than to one silo. */
 export type AppSectionId = "general" | "browser" | "updates";
@@ -129,6 +131,7 @@ export function AppSettingsSection({
 }: Props) {
   const platform = platformStrings(os);
   const themeControl = useTheme();
+  const [historyPolicy, setHistoryPolicy] = useState<HistoryPolicy>(loadHistoryPolicy);
 
   // Null until the first read comes back, and again if it fails: the
   // checkbox has no honest state to show before the OS has answered.
@@ -245,6 +248,35 @@ export function AppSettingsSection({
         </div>
         <p className="hint">
           The default for every silo. A silo can have its own under Unlocking.
+        </p>
+
+        <div className="settings-row">
+          <label className="settings-row-label" htmlFor="password-history">
+            Earlier versions of each entry
+          </label>
+          <select
+            id="password-history"
+            className="auto-lock-select"
+            value={String(historyPolicy)}
+            onChange={(e) => {
+              const policy: HistoryPolicy =
+                e.target.value === "fit" ? "fit" : Number.parseInt(e.target.value, 10);
+              setHistoryPolicy(policy);
+              saveHistoryPolicy(policy);
+            }}
+          >
+            {HISTORY_POLICIES.map((policy) => (
+              <option key={String(policy)} value={String(policy)}>
+                {policy === "fit" ? "As many as fit" : `Last ${policy}`}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="hint">
+          Each time a password, a field or a note changes, the entry keeps the version before
+          it. Old passwords stay in the silo until an entry's history is cleared. As many as fit
+          means up to 256 KB per entry, hundreds of versions of an ordinary login. On this
+          computer only.
         </p>
 
         {themeControl && (

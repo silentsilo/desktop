@@ -338,7 +338,21 @@ export type PasswordEntry = {
   totp_digits?: number;
   totp_period?: number;
   totp_algorithm?: "SHA-1" | "SHA-256" | "SHA-512";
+  /** Fields the user named. A hidden one is masked and copied like a
+   * password. Absent on every entry written before 1.4. */
+  fields?: CustomField[];
+  /** Earlier versions, newest first (`lib/entryHistory.ts`). */
+  history?: HistoryVersion[];
 };
+
+export type CustomField = { name: string; value: string; hidden: boolean };
+
+/**
+ * A previous version of an entry. It holds what the entry said, not where it
+ * was filed or what was attached to it: attachments are counted only from
+ * the entry itself, so a blob referenced from history alone would be swept.
+ */
+export type HistoryVersion = Partial<Omit<PasswordEntry, "history">> & { saved_at: number };
 
 export type NavMode = "push" | "replace" | "index";
 

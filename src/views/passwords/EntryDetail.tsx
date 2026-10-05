@@ -1,8 +1,17 @@
 import { useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Contact, CreditCard, Paperclip, Star, StickyNote, TerminalSquare } from "lucide-react";
-import type { PasswordAttachment, PasswordEntry } from "../../lib/types";
-import { formatBytes } from "../../lib/format";
+import {
+  Contact,
+  CreditCard,
+  History,
+  Paperclip,
+  Star,
+  StickyNote,
+  TerminalSquare,
+} from "lucide-react";
+import type { HistoryVersion, PasswordAttachment, PasswordEntry } from "../../lib/types";
+import { formatBytes, formatDate } from "../../lib/format";
+import { changedLabels } from "../../lib/entryHistory";
 import { TotpDisplay } from "./TotpDisplay";
 import {
   cardDigits,
@@ -36,6 +45,9 @@ type Props = {
   onEdit: (entry: PasswordEntry) => void;
   onDelete: (id: string) => void;
   onToggleFavorite: (entry: PasswordEntry) => void;
+  /** Saves `version` as the entry's current state; the panel asks first. */
+  onRestoreVersion: (entry: PasswordEntry, version: HistoryVersion) => void;
+  onClearHistory: (entry: PasswordEntry) => void;
 };
 
 /**
@@ -61,6 +73,8 @@ export function EntryDetail({
   onEdit,
   onDelete,
   onToggleFavorite,
+  onRestoreVersion,
+  onClearHistory,
 }: Props) {
   /// Which entry the user asked to see, rather than a bare "revealed" flag.
   ///
@@ -75,6 +89,8 @@ export function EntryDetail({
   const [shownFor, setShownFor] = useState<string | null>(null);
   const revealed = shownFor === entry.id;
   const [faviconFailed, setFaviconFailed] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const history = entry.history ?? [];
 
   const type = typeOf(entry);
   const icon = type === "login" && showFavicons && entry.url ? faviconUrl(entry.url) : null;
@@ -328,6 +344,14 @@ export function EntryDetail({
           </>
         )}
 
+        {/* After the kind's own fields: they are this entry's, named by the
+            user. A hidden one is covered by the same reveal as the password. */}
+        {(entry.fields ?? []).map((field, i) =>
+          field.hidden
+            ? secretRow(field.name || "Hidden field", field.value, field.value, `f${i}-${entry.id}`)
+            : plainRow(field.name || "Field", field.value, `f${i}-${entry.id}`)
+        )}
+
         {entry.url &&
           (() => {
             // Not a website: shown as it was saved, but not turned into
@@ -405,6 +429,75 @@ export function EntryDetail({
             >
               {copyBadge(`notes-${entry.id}`)}
             </button>
+          </div>
+        )}
+
+        {/* Closed until asked for: old passwords are secrets too, and the
+            list is about recovering something, not reading it every time. */}
+        {history.length > 0 && (
+          <div className="pw-field-row pw-field-notes">
+            <span className="pw-field-label">Earlier versions</span>
+            <div className="pw-history">
+              <button
+                type="button"
+                className="pw-history-toggle"
+                aria-expanded={historyOpen}
+                onClick={() => setHistoryOpen((open) => !open)}
+              >
+                <History size={14} aria-hidden />
+                {history.length === 1 ? "1 version" : `${history.length} versions`}
+              </button>
+              {historyOpen && (
+                <>
+                  {history.map((version, i) => {
+                    const newer = i === 0 ? entry : history[i - 1];
+                    const changed = changedLabels(version, newer);
+                    return (
+                      <div key={`${version.saved_at}-${i}`} className="pw-history-row">
+                        <span className="pw-history-date">{formatDate(version.saved_at)}</span>
+                        <span className="pw-history-what">
+                          {changed.length > 0 ? `Next change: ${changed.join(", ")}` : "No change"}
+                        </span>
+                        {version.password && (
+                          <>
+                            <span className="pw-field-value pw-mask">
+                              {revealed ? version.password : "••••••••"}
+                            </span>
+                            <button
+                              type="button"
+                              className="pw-inline-btn"
+                              title="Copy this password"
+                              aria-label="Copy this password"
+                              onClick={() =>
+                                onCopySecretField(entry, `h${i}-${entry.id}`, version.password ?? "")
+                              }
+                            >
+                              {copyBadge(`h${i}-${entry.id}`)}
+                            </button>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          className="secondary pw-history-restore"
+                          disabled={busy}
+                          onClick={() => onRestoreVersion(entry, version)}
+                        >
+                          Restore
+                        </button>
+                      </div>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    className="link danger pw-history-clear"
+                    disabled={busy}
+                    onClick={() => onClearHistory(entry)}
+                  >
+                    Clear history
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>
