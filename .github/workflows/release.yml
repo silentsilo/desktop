@@ -413,6 +413,39 @@ jobs:
           cp "$out"/appimage/*.AppImage dist-linux/
           ls -l dist-linux
 
+      # The AppImage carries libwayland-* from this Ubuntu 22.04 image, and
+      # on a newer Mesa (Fedora 44 here) WebKit then aborts at start with
+      # "Could not create default EGL display: EGL_BAD_PARAMETER". Every
+      # desktop that runs Wayland already has those libraries, so they go
+      # and the system's are used. Tested on Ubuntu 22.04, Debian 12 and
+      # Fedora 44. The runtime is the one the bundler used, cut from the
+      # front of its own image; only appimagetool is fetched, pinned.
+      - name: Drop the bundled Wayland libraries from the AppImage
+        shell: bash
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: 1
+          APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+        run: |
+          set -euo pipefail
+          img=$(realpath dist-linux/*.AppImage)
+          work=$(mktemp -d)
+          cd "$work"
+          cp "$img" orig.AppImage
+          chmod +x orig.AppImage
+          offset=$(./orig.AppImage --appimage-offset)
+          head -c "$offset" orig.AppImage > runtime
+          ./orig.AppImage --appimage-extract > /dev/null
+          echo "== removing"
+          ls squashfs-root/usr/lib/libwayland-*
+          rm squashfs-root/usr/lib/libwayland-*
+          curl -fsSL -o appimagetool "$APPIMAGETOOL_URL"
+          echo "$APPIMAGETOOL_SHA256  appimagetool" | sha256sum -c -
+          chmod +x appimagetool
+          ARCH=x86_64 ./appimagetool --no-appstream --runtime-file runtime squashfs-root repacked.AppImage
+          cp repacked.AppImage "$img"
+          ls -l "$img"
+
       # Kept whatever the trigger was, and what `publish` signs. On a manual
       # run this is the whole point.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

@@ -120,6 +120,13 @@ pub fn run() {
     // undone, so applying them first is the whole point: a DLL that gets in
     // ahead of this call has already won.
     silentsilo_shell::harden_process();
+    // WebKitGTK's DMA-BUF renderer paints a white window on some GPU stacks
+    // (Fedora 44 in a VM). A value the user set wins.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        // SAFETY: first thing in `run`, before any other thread exists.
+        unsafe { std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1") };
+    }
     #[cfg(feature = "e2e")]
     e2e::isolate();
 

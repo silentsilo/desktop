@@ -7,6 +7,12 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+### Fixed
+
+- Linux: the AppImage no longer carries its own Wayland libraries, which
+  stopped it from starting on Fedora 44, and the window no longer stays
+  white on GPU stacks where WebKitGTK's DMA-BUF renderer fails.
+
 ## [1.3.0] - OneDrive, Dropbox and Google Drive
 
 Update every computer and phone that uses a silo (desktop 1.3, Android 1.2)
