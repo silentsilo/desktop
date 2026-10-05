@@ -9,6 +9,10 @@ silo from opening needs a major version rather than a note.
 
 ### Fixed
 
+- A silo now locks after its idle timeout even if the window has crashed or
+  hung. The timer used to run only in the window, so a dead window left the
+  silo open until the app quit. The app now checks from its own process too,
+  two minutes after the window would have.
 - Linux: the AppImage no longer carries its own Wayland libraries, which
   stopped it from starting on Fedora 44, and the window no longer stays
   white on GPU stacks where WebKitGTK's DMA-BUF renderer fails.

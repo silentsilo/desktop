@@ -244,6 +244,15 @@ poisoned, rather than reporting a lock that closed nothing. On exit each
 open silo is closed once, and closing writes its snapshot; nothing flushes
 before it.
 
+Auto-lock is decided twice. The window's sweep asks `silo_idle_status`
+every 15 seconds and locks a silo past its own timeout, or the app-wide one
+set under General. A Rust task does the same every 30 seconds with two
+minutes' margin (`spawn_idle_backstop`), for a window that crashed or hung,
+which used to leave the silo open until the app quit. The app-wide default
+lives in the window's settings; the window tells Rust at start and on every
+change (`app_set_auto_lock_default`), and no silo opens before it has. A
+silo the backstop locks is announced as `silo-idle-locked`.
+
 Removing a silo from the list keeps its ciphered working copy unless the
 files go too: while the folder stays, that copy can hold the only record of
 changes since the last snapshot.

@@ -309,6 +309,11 @@ export default function App() {
       // Kept for this session; the next start falls back to the default.
     }
   };
+  // Rust's idle backstop follows the same default, and has no window of its
+  // own to read it from.
+  useEffect(() => {
+    void invoke("app_set_auto_lock_default", { minutes: autoLockMinutes }).catch(() => {});
+  }, [autoLockMinutes]);
   /// The focused silo's own timeout. Null means it follows the default,
   /// which is a different statement from "never".
   const [siloAutoLockMinutes, setSiloAutoLockMinutes] = useState<number | null>(null);
@@ -446,6 +451,21 @@ export default function App() {
         resetExplorer();
         void refreshBootstrap();
         // The picker marks which silos open without a key.
+        void refreshSilos();
+      }),
+    [],
+  );
+
+  // Rust locks a silo idle well past its limit when this window's own sweep
+  // did not (the window hung, or sat throttled while hidden). Only the silo
+  // on screen changes what is on screen.
+  useEventSubscription(
+    () =>
+      listen<string>("silo-idle-locked", (event) => {
+        if (event.payload === focusedSiloRef.current) {
+          resetExplorer();
+          void refreshBootstrap();
+        }
         void refreshSilos();
       }),
     [],

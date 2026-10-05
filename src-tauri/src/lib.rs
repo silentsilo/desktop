@@ -172,6 +172,9 @@ pub fn run() {
             session_epoch: std::sync::atomic::AtomicU64::new(0),
             opening: Mutex::new(Vec::new()),
             seeding: std::sync::atomic::AtomicBool::new(false),
+            auto_lock_default_minutes: std::sync::atomic::AtomicU32::new(
+                state::DEFAULT_AUTO_LOCK_MINUTES,
+            ),
         })
         .manage(browser::BrowserBridge::default())
         .manage(commands::cloud::SignInSlot::default())
@@ -201,6 +204,7 @@ pub fn run() {
             commands::fido::bind_fido_parent_hwnd(app.handle());
             handle_shell_action(app.handle(), startup_args);
             commands::sync::spawn_auto_sync(app.handle().clone());
+            commands::vault::spawn_idle_backstop(app.handle().clone());
             // Only when Settings > Browser extension is on; off, the pipe
             // does not exist.
             browser::start_if_enabled(app.handle());
@@ -245,6 +249,7 @@ pub fn run() {
             commands::silo::silo_open_list,
             commands::silo::silo_idle_status,
             commands::silo::silo_set_auto_lock,
+            commands::silo::app_set_auto_lock_default,
             commands::silo::silo_touch,
             commands::silo::silo_blur,
             commands::silo::silo_rename,

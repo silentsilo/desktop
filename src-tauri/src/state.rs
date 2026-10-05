@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::time::Instant;
 
 use silentsilo_core::{CoreError, CoreResult};
@@ -37,7 +37,14 @@ pub struct AppState {
     /// A copy is being filled. The fill holds the sync flag for its whole
     /// run, so a pressed Sync says so instead of waiting on it.
     pub seeding: AtomicBool,
+    /// The app-wide auto-lock, in minutes, for a silo without its own. Set
+    /// under General and kept by the window; told to Rust at start and on
+    /// every change, so the idle backstop follows it with no window.
+    pub auto_lock_default_minutes: AtomicU32,
 }
+
+/// What the window starts with until the user picks another.
+pub const DEFAULT_AUTO_LOCK_MINUTES: u32 = 30;
 
 impl std::ops::Deref for AppState {
     type Target = silentsilo_app::AppState;

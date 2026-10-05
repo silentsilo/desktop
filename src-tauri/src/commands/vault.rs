@@ -686,6 +686,59 @@ pub fn lock_all_silos(app: &AppHandle) {
     let _ = app.emit("silos-locked", ());
 }
 
+/// How far past its limit an idle silo is locked from here rather than by
+/// the window. The window's own sweep locks first, every 15 seconds; this
+/// is for a window that has crashed or hung, which left the silo open until
+/// the app quit, and for one throttled while hidden.
+const IDLE_BACKSTOP_MARGIN_SECS: u64 = 120;
+const IDLE_BACKSTOP_TICK: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Whether a silo idle for `idle_secs` is past the backstop: its own limit
+/// if it has one, else the app-wide one, plus the margin.
+fn past_idle_backstop(idle_secs: u64, own: Option<u32>, default_minutes: u32) -> bool {
+    let limit = own.filter(|m| *m > 0).unwrap_or(default_minutes);
+    limit > 0 && idle_secs >= u64::from(limit) * 60 + IDLE_BACKSTOP_MARGIN_SECS
+}
+
+/// Locks idle silos from Rust, for as long as the app runs. On its own task
+/// rather than the sync loop's: a pass uploading for an hour holds that one.
+pub fn spawn_idle_backstop(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(IDLE_BACKSTOP_TICK).await;
+            let handle = app.clone();
+            let _ = tauri::async_runtime::spawn_blocking(move || lock_idle_silos(&handle)).await;
+        }
+    });
+}
+
+fn lock_idle_silos(app: &AppHandle) {
+    let Ok(app_data) = crate::state::app_data_dir(app) else {
+        return;
+    };
+    let registry = silentsilo_vault::load_registry(&app_data);
+    let state = app.state::<AppState>();
+    let default_minutes = state.auto_lock_default_minutes.load(Ordering::Relaxed);
+    let due: Vec<Uuid> = crate::state::idle_seconds(&state)
+        .into_iter()
+        .filter(|(id, idle)| {
+            let own = registry.get(*id).and_then(|e| e.auto_lock_minutes);
+            past_idle_backstop(*idle, own, default_minutes)
+        })
+        .map(|(id, _)| id)
+        .collect();
+    if due.is_empty() {
+        return;
+    }
+    take_back_clipboard(app, Some(&due));
+    for id in due {
+        if state.close_session(id).is_ok() {
+            let _ = app.emit("silo-idle-locked", id.to_string());
+        }
+    }
+    tell_if_scratch_survived(app, state.sweep_scratch());
+}
+
 /// The focused silo's metadata, for a silo that is already unlocked, so
 /// switching to it does not ask again for a key already presented.
 #[tauri::command(async)]
@@ -2542,5 +2595,44 @@ mod unlock_rule_tests {
             "envelope-b",
             "a retired key must not be what unlocks the silo"
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_backstop_waits_past_the_limit_the_window_uses() {
+        // 30 minutes, the window's sweep would lock at 1800 s.
+        assert!(!past_idle_backstop(1800, None, 30));
+        assert!(!past_idle_backstop(
+            1800 + IDLE_BACKSTOP_MARGIN_SECS - 1,
+            None,
+            30
+        ));
+        assert!(past_idle_backstop(
+            1800 + IDLE_BACKSTOP_MARGIN_SECS,
+            None,
+            30
+        ));
+    }
+
+    #[test]
+    fn a_silo_of_its_own_setting_follows_it() {
+        let five = 5 * 60 + IDLE_BACKSTOP_MARGIN_SECS;
+        assert!(past_idle_backstop(five, Some(5), 360));
+        assert!(!past_idle_backstop(five, Some(60), 5));
+    }
+
+    #[test]
+    fn zero_never_locks_and_an_unset_silo_follows_the_default() {
+        assert!(!past_idle_backstop(u64::MAX / 2, None, 0));
+        // The registry never stores 0 for a silo; read as "follow the default".
+        assert!(past_idle_backstop(
+            15 * 60 + IDLE_BACKSTOP_MARGIN_SECS,
+            Some(0),
+            15
+        ));
     }
 }

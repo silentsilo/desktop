@@ -512,6 +512,14 @@ pub fn silo_set_auto_lock(app: AppHandle, id: String, minutes: Option<u32>) -> R
     save_registry(&app_data, &registry).map_err(|e| e.to_string())
 }
 
+/// The app-wide auto-lock the window holds, for the idle backstop.
+#[tauri::command(async)]
+pub fn app_set_auto_lock_default(state: State<'_, AppState>, minutes: u32) {
+    state
+        .auto_lock_default_minutes
+        .store(minutes, std::sync::atomic::Ordering::Relaxed);
+}
+
 /// Steps back to the picker without locking anything.
 ///
 /// The counterpart to keeping silos open: leaving the one on screen is not
