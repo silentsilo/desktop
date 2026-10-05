@@ -566,6 +566,15 @@ crates are in core's map.
 
 - **The desktop app is free and stays that way; wording is accountability,
   never warranty.** Every copy change goes through that filter.
+- **A KeePass import encrypts attachments before anyone has said yes.**
+  `passwords_read_kdbx` (`commands/kdbx.rs`) reads the database and puts
+  each attached file straight into the silo as a blob, so the bytes never
+  cross to the window or touch the disk in clear. The entries then wait for
+  the filing question like any import, and a cancel, an empty entry or a
+  duplicate deletes the blobs it made (`PasswordsPanel`, `dropBlobs`). What
+  an entry becomes is decided in `lib/kdbx.ts`, with the CSV importers'
+  rules. The export decrypts each attachment through the scratch directory
+  and removes it as soon as it is read.
 - **An entry's history is written in `savePasswordEntry`, not by the
   editor.** Every save from the window passes there, a star or a restore as
   much as an edit, and `withHistory` (`lib/entryHistory.ts`) decides from the

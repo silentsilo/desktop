@@ -1,5 +1,6 @@
 pub mod cloud;
 pub mod fido;
+pub mod kdbx;
 pub mod pwned;
 pub mod recovery;
 pub mod shell;

@@ -17,6 +17,7 @@ import {
   applyImportCategory,
   describeExtras,
   dropDuplicates,
+  noExtras,
   type ImportCategoryChoice,
   type ImportExtras,
 } from "../../lib/passwordImport";
@@ -27,6 +28,9 @@ import { runsOnOpen } from "../../lib/executable";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { EntryList } from "./EntryList";
 import { ImportFilingDialog } from "./ImportFilingDialog";
+import { KdbxPasswordDialog } from "./KdbxPasswordDialog";
+import { attachmentBlobs, kdbxToEntries, type KdbxEntry } from "../../lib/kdbx";
+import { loadHistoryPolicy } from "../../lib/historySetting";
 import { EntryDetail } from "./EntryDetail";
 import { EntryEditor } from "./EntryEditor";
 import { CategoryRail, TYPE_ICONS } from "./CategoryRail";
@@ -135,7 +139,14 @@ export function PasswordsPanel({
     unit: [string, string];
     skippedUnit: [string, string];
     extras: ImportExtras;
+    /** Attachments a KeePass import already encrypted into the silo, which
+     * a cancel deletes again. */
+    blobs?: string[];
   } | null>(null);
+  /** A KeePass database being opened for import, or the export's password
+   * being asked for. */
+  const [kdbx, setKdbx] = useState<{ mode: "open" | "export"; path: string } | null>(null);
+  const [kdbxError, setKdbxError] = useState<string | null>(null);
   /// Whether the "finish editing first" notice is up. Clicking another row
   /// mid-edit does nothing on purpose, and doing nothing silently read as
   /// the list being broken.
@@ -479,10 +490,20 @@ export function PasswordsPanel({
     setTransferError(null);
     const picked = await openFileDialog({
       multiple: false,
-      filters: [{ name: "Password export (CSV or Bitwarden JSON)", extensions: ["csv", "json"] }],
+      filters: [
+        {
+          name: "Password export (KeePass, CSV or Bitwarden JSON)",
+          extensions: ["kdbx", "csv", "json"],
+        },
+      ],
     });
     const path = typeof picked === "string" ? picked : picked?.[0];
     if (!path) return;
+    if (path.toLowerCase().endsWith(".kdbx")) {
+      setKdbxError(null);
+      setKdbx({ mode: "open", path });
+      return;
+    }
 
     setTransferBusy(true);
     try {
@@ -519,6 +540,52 @@ export function PasswordsPanel({
     }
   }, []);
 
+  /// Content a KeePass import encrypted for entries that will not be stored.
+  const dropBlobs = useCallback((blobIds: string[]) => {
+    for (const blobId of blobIds) {
+      void invoke("password_delete_attachment", { blobId }).catch(() => {});
+    }
+  }, []);
+
+  /// The database opened: its entries go to the same filing question as any
+  /// import. Its attachments are already in the silo, encrypted.
+  const openKdbx = useCallback(
+    async (password: string, keyFile: string | null) => {
+      if (!kdbx) return;
+      setTransferBusy(true);
+      setKdbxError(null);
+      try {
+        const read = await invoke<KdbxEntry[]>("passwords_read_kdbx", {
+          path: kdbx.path,
+          password: password || null,
+          keyFile,
+        });
+        const { entries: imported, skipped } = kdbxToEntries(read, loadHistoryPolicy());
+        dropBlobs(attachmentBlobs(skipped));
+        setKdbx(null);
+        setPendingImport({
+          imported,
+          skipped: skipped.length,
+          source: "KeePass",
+          unit: ["entry", "entries"],
+          skippedUnit: ["empty entry", "empty entries"],
+          extras: noExtras(),
+          blobs: attachmentBlobs(imported),
+        });
+      } catch (e) {
+        setKdbxError(formatAppError(e));
+      } finally {
+        setTransferBusy(false);
+      }
+    },
+    [dropBlobs, kdbx]
+  );
+
+  const cancelImport = useCallback(() => {
+    if (pendingImport?.blobs) dropBlobs(pendingImport.blobs);
+    setPendingImport(null);
+  }, [dropBlobs, pendingImport]);
+
   const finishImport = useCallback(
     (choice: ImportCategoryChoice) => {
       if (!pendingImport) return;
@@ -532,6 +599,10 @@ export function PasswordsPanel({
       // second copy; only an exact match is dropped as a duplicate.
       const { fresh, duplicates } = dropDuplicates(entries, imported);
       if (fresh.length > 0) onImportEntries(fresh);
+      if (pendingImport.blobs) {
+        const kept = new Set(attachmentBlobs(fresh));
+        dropBlobs(pendingImport.blobs.filter((id) => !kept.has(id)));
+      }
 
       const plural = (n: number, [one, many]: [string, string]) => (n === 1 ? one : many);
       const notes: string[] = [];
@@ -541,7 +612,9 @@ export function PasswordsPanel({
 
       setTransferNotice(
         fresh.length === 0 && duplicates > 0
-          ? `Nothing new in that file: all ${duplicates} ${plural(duplicates, unit)} are already in this silo.`
+          ? `Nothing new in that file: ${
+              duplicates === 1 ? `the ${unit[0]} is` : `all ${duplicates} ${unit[1]} are`
+            } already in this silo.`
           : [
               `Imported ${fresh.length} ${plural(fresh.length, unit)} from ${source}${suffix}.`,
               describeExtras(extras),
@@ -550,7 +623,44 @@ export function PasswordsPanel({
               .join(" ")
       );
     },
-    [entries, onImportEntries, pendingImport]
+    [dropBlobs, entries, onImportEntries, pendingImport]
+  );
+
+  /// Every entry, every kind, encrypted: the file KeePassXC and KeePassDX
+  /// open. Entries that ask again before revealing ask once, for the batch.
+  const startKdbxExport = useCallback(async () => {
+    setTransferError(null);
+    setConfirmingExport(false);
+    if (exportNeedsTouch(entries)) {
+      const asking = entries.find((e) => e.require_reauth)!;
+      if (!(await ensureVerified(asking, "export"))) return;
+    }
+    setKdbxError(null);
+    setKdbx({ mode: "export", path: "" });
+  }, [ensureVerified, entries]);
+
+  const finishKdbxExport = useCallback(
+    async (password: string) => {
+      const path = await saveFileDialog({
+        defaultPath: "silentsilo-passwords.kdbx",
+        filters: [{ name: "KeePass database", extensions: ["kdbx"] }],
+      });
+      if (!path) return;
+      setTransferBusy(true);
+      setKdbxError(null);
+      try {
+        await invoke("passwords_write_kdbx", { path, password, entries: JSON.stringify(entries) });
+        setKdbx(null);
+        setTransferNotice(
+          `Exported ${entries.length} ${entries.length === 1 ? "entry" : "entries"} to a KeePass file, encrypted with the password you chose. It opens in KeePassXC and KeePassDX.`
+        );
+      } catch (e) {
+        setKdbxError(formatAppError(e));
+      } finally {
+        setTransferBusy(false);
+      }
+    },
+    [entries]
   );
 
   const handleExport = useCallback(async () => {
@@ -632,7 +742,7 @@ export function PasswordsPanel({
           className="pw-transfer-btn"
           disabled={busy || transferBusy}
           onClick={() => void handleImport()}
-          title="Import logins from another password manager or browser: CSV from Bitwarden, LastPass, 1Password, Proton Pass, Dashlane, NordPass, KeePass, RoboForm, Chrome, Edge, Firefox or Apple Passwords, plus Bitwarden JSON"
+          title="Import from another password manager or browser: a KeePass database (.kdbx), CSV from Bitwarden, LastPass, 1Password, Proton Pass, Dashlane, NordPass, KeePass, RoboForm, Chrome, Edge, Firefox or Apple Passwords, plus Bitwarden JSON"
         >
           <Upload size={15} />
           <span>Import</span>
@@ -646,7 +756,7 @@ export function PasswordsPanel({
             setTransferNotice(null);
             setConfirmingExport(true);
           }}
-          title="Export all logins as a CSV file"
+          title="Export to a KeePass database, or the logins to a CSV file"
         >
           <Download size={15} />
           <span>Export</span>
@@ -694,27 +804,45 @@ export function PasswordsPanel({
           } from ${pendingImport.source}.`}
           categories={categories.map((c) => c.name)}
           onConfirm={finishImport}
-          onCancel={() => setPendingImport(null)}
+          onCancel={cancelImport}
+        />
+      )}
+
+      {kdbx && (
+        <KdbxPasswordDialog
+          mode={kdbx.mode}
+          busy={transferBusy}
+          error={kdbxError}
+          onSubmit={(password, keyFile) =>
+            void (kdbx.mode === "open" ? openKdbx(password, keyFile) : finishKdbxExport(password))
+          }
+          onCancel={() => setKdbx(null)}
         />
       )}
 
       {confirmingExport && (
-        <div className="pw-export-warning" role="alertdialog" aria-label="Confirm plaintext export">
+        <div className="pw-export-warning" role="alertdialog" aria-label="Choose an export">
           <div>
-            <strong>This export is not encrypted.</strong>
+            <strong>Export to a KeePass file or to CSV.</strong>
             <p>
-              Every login, with its password and TOTP secret, is written to a readable file for
-              another password manager to import. Cards, identities, SSH keys and notes are not
-              included. Anyone who opens the file can read your logins, so delete it once you are
-              done.
+              A KeePass file (.kdbx) holds every entry, with its fields, attached files and
+              history, encrypted with a password you choose. KeePassXC and KeePassDX open it.
+            </p>
+            <p>
+              A CSV file is not encrypted. It holds the logins only, with their passwords and TOTP
+              secrets, for another password manager to import. Anyone who opens it can read them,
+              so delete it once you are done.
             </p>
           </div>
           <div className="pw-export-warning-actions">
             <button type="button" className="secondary" onClick={() => setConfirmingExport(false)}>
               Cancel
             </button>
-            <button type="button" disabled={transferBusy} onClick={() => void handleExport()}>
-              Export anyway
+            <button type="button" className="secondary" disabled={transferBusy} onClick={() => void handleExport()}>
+              CSV, not encrypted
+            </button>
+            <button type="button" disabled={transferBusy} onClick={() => void startKdbxExport()}>
+              KeePass file
             </button>
           </div>
         </div>

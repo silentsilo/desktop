@@ -928,6 +928,57 @@ const handlers: Record<string, Handler> = {
     fingerprint: "SHA256:generatedgeneratedgeneratedgeneratedgenerate",
   }),
   vault_upsert_password: () => null,
+  // A small KeePassXC database: a nested group, a field, a version in its
+  // history, an attached file. "wrong" is the wrong password.
+  passwords_read_kdbx: (args) =>
+    args.password === "wrong"
+      ? Promise.reject("That password or key file does not open this database.")
+      : [
+          {
+            group: ["Work", "Servers"],
+            tags: ["vpn"],
+            created: 1700000000000,
+            modified: 1710000000000,
+            title: "Office VPN",
+            username: "alex",
+            password: "vpn-now-1234",
+            url: "https://vpn.example.com",
+            notes: "Ask IT for the profile.",
+            otp: "otpauth://totp/VPN:alex?secret=JBSWY3DPEHPK3PXP",
+            fields: [{ name: "Account number", value: "88-1200", protected: false }],
+            attachments: [
+              { blob_id: "bbbbbbbb-0000-0000-0000-00000000kd01", name: "vpn.ovpn", size_bytes: 2048, blob_key: "k" },
+            ],
+            history: [
+              {
+                title: "Office VPN",
+                username: "alex",
+                password: "vpn-before-0000",
+                url: "https://vpn.example.com",
+                notes: "",
+                otp: null,
+                fields: [],
+                modified: 1705000000000,
+              },
+            ],
+          },
+          {
+            group: [],
+            tags: [],
+            created: null,
+            modified: null,
+            title: "",
+            username: "",
+            password: "",
+            url: "",
+            notes: "",
+            otp: null,
+            fields: [],
+            attachments: [],
+            history: [],
+          },
+        ],
+  passwords_write_kdbx: () => null,
   vault_delete_password: () => null,
   copy_secret_to_clipboard: () => null,
   browser_fill_pending: () => mockFillPrompt(),

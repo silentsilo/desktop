@@ -250,6 +250,8 @@ pub fn run() {
             commands::silo::silo_idle_status,
             commands::silo::silo_set_auto_lock,
             commands::silo::app_set_auto_lock_default,
+            commands::kdbx::passwords_read_kdbx,
+            commands::kdbx::passwords_write_kdbx,
             commands::silo::silo_touch,
             commands::silo::silo_blur,
             commands::silo::silo_rename,

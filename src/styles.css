@@ -4355,6 +4355,21 @@ ol.key-add-steps {
   line-height: 1.5;
 }
 
+.pw-kdbx-keyfile {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.pw-kdbx-keyfile .hint {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .pw-export-warning-actions {
   display: flex;
   gap: 0.5rem;

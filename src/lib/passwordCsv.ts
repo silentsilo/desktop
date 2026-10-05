@@ -176,7 +176,7 @@ function pick(row: string[], index: Map<string, number>, field: string): string 
 }
 
 /** Returns false when there was a value and it could not be read as TOTP. */
-function applyTotp(entry: PasswordEntry, raw: string): boolean {
+export function applyTotp(entry: PasswordEntry, raw: string): boolean {
   if (!raw) return true;
   // Accepts both a bare base32 secret and a full otpauth:// URI, which is
   // what 1Password and (usually) Bitwarden export.

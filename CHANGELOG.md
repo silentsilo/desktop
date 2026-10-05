@@ -17,6 +17,12 @@ silo from opening needs a major version rather than a note.
   or as many as fit (Settings, General). Restore puts an old version back and
   keeps the current one; Clear history removes old passwords for good.
 - Health points out an entry back on a password it had before.
+- KeePass import and export. Import opens a `.kdbx` with its password and
+  key file: groups become categories ("Work / Servers"), extra fields become
+  custom fields, attached files come along encrypted, and each entry's
+  KeePass history becomes its history here. Export writes every entry, of
+  every kind, to a KDBX 4 file under a password you choose (Argon2id), which
+  KeePassXC and KeePassDX open: the way out is as easy as the way in.
 
 ### Fixed
 

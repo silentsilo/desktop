@@ -49,6 +49,11 @@ silentsilo-app = { workspace = true }
 # The same version russh already pulls in for SFTP, so generating SSH keys
 # for credential entries costs no new crate in the tree.
 ssh-key = { version = "0.7.0-rc.11", default-features = false, features = ["ed25519", "std"] }
+# KeePass databases, for import and export (MIT). KDBX 4 writing is behind
+# its own feature.
+keepass = { version = "0.15", features = ["save_kdbx4"] }
+# Its timestamps; already in the tree through it.
+chrono = { version = "0.4", default-features = false }
 # Only for the background sync timer; Tauri already runs on this runtime.
 tokio = { version = "1", features = ["macros", "sync", "time"] }
 

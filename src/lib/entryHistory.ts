@@ -57,7 +57,7 @@ function sameContent(a: Partial<PasswordEntry>, b: Partial<PasswordEntry>): bool
 }
 
 /** Newest first, cut to the policy and then to the byte budget. */
-function trimmed(history: HistoryVersion[], policy: HistoryPolicy): HistoryVersion[] {
+export function trimmed(history: HistoryVersion[], policy: HistoryPolicy): HistoryVersion[] {
   const kept = policy === "fit" ? [...history] : history.slice(0, Math.max(0, policy));
   while (kept.length > 0 && JSON.stringify(kept).length > HISTORY_BYTES) kept.pop();
   return kept;

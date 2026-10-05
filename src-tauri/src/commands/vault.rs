@@ -1112,7 +1112,7 @@ pub async fn vault_import_file(
 /// storage connected gets a message about *that*, not a decryption failure.
 /// Every copy is tried: the first target being unreachable must not fail an
 /// export the second could serve.
-async fn ensure_blobs_local(app: &AppHandle, blob_ids: &[Uuid]) -> Result<(), String> {
+pub(crate) async fn ensure_blobs_local(app: &AppHandle, blob_ids: &[Uuid]) -> Result<(), String> {
     let root = vault_dir(app)?;
     let missing: Vec<Uuid> = blob_ids
         .iter()
@@ -1793,6 +1793,61 @@ pub async fn password_attach_file(
         })
     })
     .await
+}
+
+/// An attachment made from bytes already in memory, as an import has them:
+/// encrypted straight into the silo, never written in clear.
+pub(crate) fn encrypt_attachment_bytes(
+    snapshot: &crate::state::SessionSnapshot,
+    name: &str,
+    bytes: &[u8],
+) -> Result<PasswordAttachment, String> {
+    let blob_id = Uuid::new_v4();
+    let content_key = silentsilo_crypto::generate_content_key();
+    let blob_key = silentsilo_crypto::wrap_content_key(&content_key, &snapshot.kek)
+        .map_err(|e| e.to_string())?;
+    let blob_path = silentsilo_vault::VaultPaths::new(snapshot.root.clone()).blob_path(blob_id);
+    let result = silentsilo_crypto::encrypt_stream(
+        &mut std::io::Cursor::new(bytes),
+        &blob_path,
+        &content_key,
+        Uuid::now_v7(),
+        blob_id,
+    )
+    .map_err(|e| e.to_string())?;
+    let _ = silentsilo_vault::record_blob_present(
+        &snapshot.root,
+        blob_id,
+        result.size_bytes as i64,
+        false,
+    );
+    Ok(PasswordAttachment {
+        blob_id: blob_id.to_string(),
+        name: name.to_string(),
+        size_bytes: result.plain_bytes as i64,
+        blob_key,
+    })
+}
+
+/// An attachment's content, for an export that writes it into another file.
+/// Decrypted through the scratch directory, which a lock sweeps, and removed
+/// as soon as it is read.
+pub(crate) fn decrypt_attachment_bytes(
+    snapshot: &crate::state::SessionSnapshot,
+    blob_id: &str,
+    blob_key: &str,
+) -> Result<zeroize::Zeroizing<Vec<u8>>, String> {
+    let blob_id = Uuid::parse_str(blob_id).map_err(|e| e.to_string())?;
+    let key = silentsilo_crypto::unwrap_content_key(blob_key, &snapshot.kek)
+        .map_err(|_| "An attached file's key could not be read.".to_string())?;
+    let dir = open_scratch_dir(&snapshot.root);
+    silentsilo_vault::create_private_dir(&dir).map_err(|e| e.to_string())?;
+    let dest = dir.join(format!("export-{}", Uuid::new_v4()));
+    let blob_path = silentsilo_vault::VaultPaths::new(snapshot.root.clone()).blob_path(blob_id);
+    let decrypted = decrypt_blob(&blob_path, &dest, &key, blob_id).map_err(|e| e.to_string());
+    let bytes = decrypted.and_then(|_| std::fs::read(&dest).map_err(|e| e.to_string()));
+    let _ = std::fs::remove_file(&dest);
+    bytes.map(zeroize::Zeroizing::new)
 }
 
 /// Opens an attachment the way a vault file opens: decrypted into the
