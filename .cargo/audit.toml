@@ -1,0 +1,10 @@
+[advisories]
+ignore = [
+    # rsa: Marvin timing side channel (RUSTSEC-2023-0071), pulled in by russh
+    # for SFTP. No patched release exists upstream. The exposure here is a
+    # client signing once per connection attempt, where the would-be oracle
+    # is the server the user chose to trust; password auth and Ed25519 keys,
+    # the common cases, never touch this code. Re-check whenever russh or
+    # rsa moves.
+    "RUSTSEC-2023-0071",
+]
