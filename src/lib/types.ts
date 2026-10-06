@@ -276,6 +276,10 @@ export type PasswordAttachment = {
  * every entry was before the other kinds existed. */
 export type CredentialType = "login" | "card" | "identity" | "ssh_key" | "note";
 
+/** What a save was, for the silo's activity log. "imported" is logged once
+ * for the whole import instead. */
+export type EntryChange = "created" | "edited" | "restored" | "history_cleared" | "imported";
+
 /**
  * One credential, stored as a single sealed JSON object and synced whole.
  *

@@ -467,6 +467,10 @@ fn stalest(ids: impl Iterator<Item = Uuid>, touched: &HashMap<Uuid, Instant>) ->
 /// The session is dropped before anything is removed: Windows will not
 /// delete a file that still has an open handle.
 fn close_one(session: VaultSession) {
+    // The lock is the session's last event.
+    if let Err(e) = silentsilo_app::record_lock(&session) {
+        crate::diagnostics::warn("audit", e);
+    }
     if let Err(e) = session.seal_for_lock() {
         crate::diagnostics::warn("lock", format_args!("local snapshot failed: {e}"));
     }

@@ -269,6 +269,35 @@ in core (`rotation::commit_rotation_with`); past that commit an error locks
 the silo. A seed runs with the silo's key (`seed_target_checked`), so a copy
 that missed a rotation cannot put the old key back on another.
 
+## Activity log
+
+Core owns the format, the queue on this computer and its delivery (core's
+ARCHITECTURE.md and `FORMATS.md`). This app decides what is an event and
+when it is written (`src-tauri/src/audit.rs`). Nothing is written until a
+log is turned on for the silo; until then every call returns at once.
+
+- What leaves the silo is recorded before it happens: a secret shown or
+  copied, a file or attachment opened or saved outside, a login filled in the
+  browser, passwords exported. A change inside the silo is recorded before
+  it is stored too, so nothing happens unrecorded; one that then fails
+  leaves an event for something attempted. Imports are the exception: one
+  event with the count, after the fact, never refused.
+- An organisation's silo whose event cannot be written is locked
+  (`audit::record_in`) and the action refused; the window hears
+  `silo-audit-locked`. A personal one logs a diagnostic and goes on.
+- The window holds the entries, so showing one is something only it sees.
+  `audit_note` takes exactly two notes from it, `entry_revealed` and
+  `passwords_imported`; everything else is recorded in the command that does
+  it. A copy carries what it was (`CopiedSecret`) and is recorded inside
+  `copy_secret_to_clipboard`, before the clipboard holds it. A save says what
+  it was (`EntryChange`), which only the window knows: new or edited, a
+  restore, cleared history, one of an import.
+- The lock is the session's last event (`silentsilo_app::record_lock`, from
+  `close_one`), which also closes the batch into a segment for the next
+  pass.
+- Recording takes the sessions mutex and the queue's file lock, so it is
+  never called with the sessions mutex held.
+
 ## Cloud sign-in
 
 OneDrive, Dropbox and Google Drive copies are reached by signing in, not

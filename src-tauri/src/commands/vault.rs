@@ -199,6 +199,8 @@ struct ImportCounters {
     done: u32,
     total: u32,
     skipped: u32,
+    /// Files now in the silo, for the activity log.
+    added: u32,
 }
 
 fn emit_import_progress(app: &AppHandle, progress: ImportProgress) {
@@ -337,9 +339,12 @@ fn import_folder_recursive(
                 },
             );
             // Keep going if a single file fails (locked/system files, etc.).
-            if let Err(e) = import_one(app, snapshot, parent_folder_id, &path) {
-                counters.skipped = counters.skipped.saturating_add(1);
-                crate::diagnostics::warn("import", format_args!("skipped a file: {e}"));
+            match import_one(app, snapshot, parent_folder_id, &path) {
+                Ok(_) => counters.added = counters.added.saturating_add(1),
+                Err(e) => {
+                    counters.skipped = counters.skipped.saturating_add(1);
+                    crate::diagnostics::warn("import", format_args!("skipped a file: {e}"));
+                }
             }
         } else if meta.is_dir() {
             let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) else {
@@ -432,7 +437,7 @@ fn import_folder_impl(app: &AppHandle, folder_id: Uuid, source: &Path) -> Result
         total: total_files,
         ..ImportCounters::default()
     };
-    import_folder_recursive(
+    let walked = import_folder_recursive(
         app,
         &snapshot,
         top_folder.id,
@@ -440,7 +445,10 @@ fn import_folder_impl(app: &AppHandle, folder_id: Uuid, source: &Path) -> Result
         &mut visited,
         &mut counters,
         &state.import_cancelled,
-    )?;
+    );
+    // Cancelled or not, what landed is in the silo.
+    log_added(app, snapshot.id, counters.added);
+    walked?;
 
     emit_import_progress(
         app,
@@ -517,6 +525,7 @@ pub(crate) fn process_shell_upload_queue(app: &AppHandle) -> Result<u32, String>
         requeue_uploads(&requeue);
         let _ = app.emit("shell-upload-failed", &failed);
     }
+    log_added(app, snapshot.id, imported);
     Ok(imported)
 }
 
@@ -613,6 +622,14 @@ pub async fn vault_unlock(
         wipe_open_scratch(&session.paths.root);
 
         crate::state::open_focused_session(&app, session)?;
+        let label = keys
+            .find_by_credential_id(&unlock.credential_id)
+            .map(|key| key.label.clone())
+            .unwrap_or_default();
+        crate::audit::record(
+            &app,
+            crate::audit::event(crate::audit::codes::UNLOCKED).with("key", label),
+        )?;
         // Any shell-upload paths queued while locked are left in the queue for
         // the frontend to fetch (via shell_upload_queue_pending) and offer a
         // destination-folder picker, instead of silently landing in Inbox.
@@ -872,8 +889,15 @@ pub async fn vault_import_files_to_folder(
                 return Err(SILO_CLOSED.to_string());
             }
             let source = PathBuf::from(&path);
-            imported.push(import_one(&app, &snapshot, folder_id, &source)?);
+            match import_one(&app, &snapshot, folder_id, &source) {
+                Ok(file) => imported.push(file),
+                Err(e) => {
+                    log_added(&app, snapshot.id, imported.len() as u32);
+                    return Err(e);
+                }
+            }
         }
+        log_added(&app, snapshot.id, imported.len() as u32);
         Ok(imported)
     })
     .await
@@ -954,6 +978,7 @@ pub async fn vault_paste_paths(
             // it was copied) — silently skipped, same as a no-op paste of it.
         }
 
+        log_added(&app, snapshot.id, result.imported_files);
         Ok(result)
     })
     .await
@@ -992,14 +1017,36 @@ pub fn vault_rename_folder(
 }
 
 #[tauri::command(async)]
-pub fn vault_trash_file(file_id: String, state: State<AppState>) -> Result<(), String> {
+pub fn vault_trash_file(
+    app: AppHandle,
+    file_id: String,
+    state: State<AppState>,
+) -> Result<(), String> {
     let file_id = Uuid::parse_str(&file_id).map_err(|e| e.to_string())?;
+    let name = with_vfs(&state, |_session, vfs| {
+        vfs.get_file(file_id).map(|f| f.name)
+    })?;
+    crate::audit::record(
+        &app,
+        crate::audit::event(crate::audit::codes::FILE_TRASHED).on(file_id.to_string(), name),
+    )?;
     with_vfs(&state, |_session, vfs| vfs.trash_file(file_id))
 }
 
 #[tauri::command(async)]
-pub fn vault_trash_folder(folder_id: String, state: State<AppState>) -> Result<(), String> {
+pub fn vault_trash_folder(
+    app: AppHandle,
+    folder_id: String,
+    state: State<AppState>,
+) -> Result<(), String> {
     let folder_id = Uuid::parse_str(&folder_id).map_err(|e| e.to_string())?;
+    let path = with_vfs(&state, |_session, vfs| {
+        vfs.get_folder(folder_id).map(|f| f.path)
+    })?;
+    crate::audit::record(
+        &app,
+        crate::audit::event(crate::audit::codes::FILE_TRASHED).on(folder_id.to_string(), path),
+    )?;
     with_vfs(&state, |_session, vfs| vfs.trash_folder(folder_id))
 }
 
@@ -1032,6 +1079,11 @@ pub fn vault_restore_folder(
 /// carrying the same blob id.
 #[tauri::command]
 pub async fn vault_empty_trash(app: AppHandle) -> Result<u64, String> {
+    log_purge(
+        &app,
+        crate::audit::event(crate::audit::codes::FILE_PURGED).with("what", "trash"),
+    )
+    .await?;
     let app2 = app.clone();
     let (removed, blob_ids, root, silo_id) = run_blocking(move || {
         let state = app2.state::<AppState>();
@@ -1067,6 +1119,11 @@ pub async fn vault_purge_items(app: AppHandle, ids: Vec<String>) -> Result<u64, 
         .iter()
         .map(|id| Uuid::parse_str(id).map_err(|e| e.to_string()))
         .collect::<Result<_, _>>()?;
+    log_purge(
+        &app,
+        crate::audit::event(crate::audit::codes::FILE_PURGED).with("count", ids.len()),
+    )
+    .await?;
 
     let app2 = app.clone();
     let (removed, blob_ids, root, silo_id) = run_blocking(move || {
@@ -1103,9 +1160,29 @@ pub async fn vault_import_file(
 
     run_blocking(move || {
         let snapshot = crate::state::snapshot_focused_session(&app.state::<AppState>())?;
-        import_one(&app, &snapshot, folder_id, &source)
+        let file = import_one(&app, &snapshot, folder_id, &source)?;
+        log_added(&app, snapshot.id, 1);
+        Ok(file)
     })
     .await
+}
+
+/// Files added, logged once per import rather than once per file. After
+/// the fact and never refused: the files are already in the silo.
+fn log_added(app: &AppHandle, silo_id: Uuid, count: u32) {
+    if count > 0 {
+        let _ = crate::audit::record_in(
+            app,
+            silo_id,
+            crate::audit::event(crate::audit::codes::FILE_ADDED).with("count", count),
+        );
+    }
+}
+
+/// A purge about to happen, in the focused silo's log.
+async fn log_purge(app: &AppHandle, event: silentsilo_audit::Event) -> Result<(), String> {
+    let app = app.clone();
+    run_blocking(move || crate::audit::record(&app, event)).await
 }
 
 /// Downloads any of `blob_ids` this device doesn't hold.
@@ -1165,7 +1242,7 @@ pub async fn vault_export_file(
     // The row and its wrapped key under one short lock, before the network
     // and before the decrypt: neither of those may hold the sessions mutex,
     // or every small command in the app queues behind a large file.
-    let (blob_id, wrapped_key) = {
+    let (blob_id, name, wrapped_key) = {
         let state = app.state::<AppState>();
         let session_guard = state.focused_session()?;
         let session = session_guard
@@ -1174,12 +1251,18 @@ pub async fn vault_export_file(
         let vfs = Vfs::new(session);
         let file = vfs.get_file(file_id).map_err(|e| e.to_string())?;
         let wrapped = vfs.blob_key(file_id).map_err(|e| e.to_string())?;
-        (file.blob_id, wrapped)
+        (file.blob_id, file.name, wrapped)
     };
     ensure_blobs_local(&app, &[blob_id]).await?;
 
     run_blocking(move || {
         let snapshot = crate::state::snapshot_focused_session(&app.state::<AppState>())?;
+        crate::audit::record_in(
+            &app,
+            snapshot.id,
+            crate::audit::event(crate::audit::codes::FILE_SAVED_OUTSIDE)
+                .on(file_id.to_string(), name),
+        )?;
         let key = unwrap_export_key(&wrapped_key, &snapshot.kek)?;
         let blob_path = silentsilo_vault::VaultPaths::new(snapshot.root.clone()).blob_path(blob_id);
         decrypt_blob(&blob_path, &dest, &key, blob_id).map_err(|e| e.to_string())?;
@@ -1290,7 +1373,7 @@ pub async fn vault_export_folder(
     // keys — read under one short lock at database speed. The download and
     // the decrypts run against the plan, holding nothing, so listing a
     // folder while a large export runs stays instant.
-    let plan = {
+    let (plan, folder_path) = {
         let state = app.state::<AppState>();
         let session_guard = state.focused_session()?;
         let session = session_guard
@@ -1302,7 +1385,7 @@ pub async fn vault_export_folder(
         let dest_base = safe_join(&PathBuf::from(&dest_dir), &folder.name)?;
         let mut plan = vec![ExportItem::Dir(dest_base.clone())];
         plan_export(&vfs, folder_id, &dest_base, &mut plan)?;
-        plan
+        (plan, folder.path)
     };
 
     let blob_ids: Vec<Uuid> = plan
@@ -1316,6 +1399,13 @@ pub async fn vault_export_folder(
 
     run_blocking(move || {
         let snapshot = crate::state::snapshot_focused_session(&app.state::<AppState>())?;
+        crate::audit::record_in(
+            &app,
+            snapshot.id,
+            crate::audit::event(crate::audit::codes::FILE_SAVED_OUTSIDE)
+                .on(folder_id.to_string(), folder_path)
+                .with("files", blob_ids.len()),
+        )?;
         let paths = silentsilo_vault::VaultPaths::new(snapshot.root.clone());
         let mut exported = 0u32;
         for item in &plan {
@@ -1487,6 +1577,11 @@ pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), Stri
         // title bar says something the user recognises.
         let dest = safe_join(&dir, &name)?;
         let _ = std::fs::remove_file(&dest);
+        crate::audit::record_in(
+            &app2,
+            snapshot.id,
+            crate::audit::event(crate::audit::codes::FILE_OPENED).on(file_id.to_string(), &name),
+        )?;
 
         let key =
             silentsilo_crypto::unwrap_content_key(&wrapped_key, &snapshot.kek).map_err(|_| {
@@ -1527,11 +1622,48 @@ pub fn vault_read_passwords(state: State<AppState>) -> Result<String, String> {
     Ok(format!("[{}]", entries.join(",")))
 }
 
+/// What a save was, for the activity log. The window knows: whether the
+/// entry existed, and whether this save restores or clears its history.
+#[derive(serde::Deserialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum EntryChange {
+    Created,
+    Edited,
+    Restored,
+    HistoryCleared,
+    /// One of many in an import, logged once for the whole import.
+    Imported,
+}
+
+impl EntryChange {
+    fn code(self) -> Option<u16> {
+        use crate::audit::codes;
+        match self {
+            EntryChange::Created => Some(codes::ENTRY_CREATED),
+            EntryChange::Edited => Some(codes::ENTRY_EDITED),
+            EntryChange::Restored => Some(codes::ENTRY_RESTORED),
+            EntryChange::HistoryCleared => Some(codes::HISTORY_CLEARED),
+            EntryChange::Imported => None,
+        }
+    }
+}
+
+/// The name an entry is shown under, for the log.
+fn entry_label(parsed: &serde_json::Value) -> String {
+    parsed
+        .get("service")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string()
+}
+
 /// Creates or replaces one entry, keyed by the id the panel generated.
 #[tauri::command(async)]
 pub fn vault_upsert_password(
+    app: AppHandle,
     id: String,
     json: String,
+    change: Option<EntryChange>,
     state: State<AppState>,
 ) -> Result<(), String> {
     let id = Uuid::parse_str(&id).map_err(|e| format!("That entry id is not valid: {e}"))?;
@@ -1546,6 +1678,20 @@ pub fn vault_upsert_password(
         Some(inner) if inner == id.to_string() => {}
         Some(_) => return Err("The entry id does not match the entry.".into()),
         None => return Err("The entry has no id.".into()),
+    }
+
+    // The category list is a row of its own, not an entry anyone edited.
+    let is_entry = !parsed
+        .get("type")
+        .and_then(|v| v.as_str())
+        .is_some_and(|t| t.starts_with("meta:"));
+    if let Some(code) = change.unwrap_or(EntryChange::Edited).code()
+        && is_entry
+    {
+        crate::audit::record(
+            &app,
+            crate::audit::event(code).on(id.to_string(), entry_label(&parsed)),
+        )?;
     }
 
     let session_guard = state.focused_session()?;
@@ -1566,10 +1712,22 @@ pub fn vault_upsert_password(
 /// On the blocking pool because taking the clipboard means waiting for
 /// whoever holds it, which `silentsilo-shell` does by sleeping between
 /// retries for up to a fifth of a second.
+///
+/// `audit` says what the secret was, for the silo's activity log; it is
+/// written before the clipboard holds anything. The recovery code on its
+/// way to paper is the one copy without it.
 #[tauri::command]
-pub async fn copy_secret_to_clipboard(app: AppHandle, text: String) -> Result<(), String> {
+pub async fn copy_secret_to_clipboard(
+    app: AppHandle,
+    text: String,
+    audit: Option<crate::audit::CopiedSecret>,
+) -> Result<(), String> {
     let copied = text.clone();
     let owner = crate::state::focused_id(&app.state::<AppState>()).ok();
+    if let (Some(audit), Some(owner)) = (audit, owner) {
+        let app = app.clone();
+        run_blocking(move || crate::audit::record_in(&app, owner, audit.event())).await?;
+    }
     run_blocking(move || silentsilo_shell::set_secret_clipboard(&copied)).await?;
     if let Ok(mut held) = CLIPBOARD_OWNER.lock() {
         *held = owner;
@@ -1624,10 +1782,21 @@ fn clipboard_goes(owner: Option<Uuid>, closing: Option<&[Uuid]>) -> bool {
     }
 }
 
-/// Removes one entry outright. There is no trash for logins.
+/// Removes one entry outright. There is no trash for logins. `label` is
+/// the name it had, for the activity log.
 #[tauri::command(async)]
-pub fn vault_delete_password(id: String, state: State<AppState>) -> Result<(), String> {
+pub fn vault_delete_password(
+    app: AppHandle,
+    id: String,
+    label: Option<String>,
+    state: State<AppState>,
+) -> Result<(), String> {
     let id = Uuid::parse_str(&id).map_err(|e| format!("That entry id is not valid: {e}"))?;
+    crate::audit::record(
+        &app,
+        crate::audit::event(crate::audit::codes::ENTRY_DELETED)
+            .on(id.to_string(), label.unwrap_or_default()),
+    )?;
     let session_guard = state.focused_session()?;
     let session = session_guard
         .as_ref()
@@ -1862,6 +2031,7 @@ pub async fn password_open_attachment(
     blob_id: String,
     name: String,
     blob_key: String,
+    entry_label: Option<String>,
 ) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
 
@@ -1881,6 +2051,13 @@ pub async fn password_open_attachment(
         // name cannot walk out of the scratch directory.
         let dest = safe_join(&dir, &name)?;
         let _ = std::fs::remove_file(&dest);
+        crate::audit::record_in(
+            &app2,
+            snapshot.id,
+            crate::audit::event(crate::audit::codes::FILE_OPENED)
+                .on(blob_id.to_string(), &name)
+                .with("entry", entry_label.unwrap_or_default()),
+        )?;
 
         let key =
             silentsilo_crypto::unwrap_content_key(&blob_key, &snapshot.kek).map_err(|_| {
@@ -1962,6 +2139,7 @@ pub async fn passwords_write_export_csv(
     app: AppHandle,
     path: String,
     contents: String,
+    count: Option<u32>,
 ) -> Result<(), String> {
     run_blocking(move || {
         let state = app.state::<AppState>();
@@ -1970,6 +2148,12 @@ pub async fn passwords_write_export_csv(
             .as_ref()
             .ok_or_else(|| CoreError::VaultLocked.to_string())?;
         drop(session_guard);
+        let mut event =
+            crate::audit::event(crate::audit::codes::PASSWORDS_EXPORTED).with("format", "csv");
+        if let Some(count) = count {
+            event = event.with("count", count);
+        }
+        crate::audit::record(&app, event)?;
 
         let path = PathBuf::from(path);
 
@@ -2692,5 +2876,25 @@ mod tests {
             Some(0),
             15
         ));
+    }
+}
+
+#[cfg(test)]
+mod entry_change_tests {
+    use super::EntryChange;
+    use crate::audit::codes;
+
+    #[test]
+    fn each_save_has_its_code_and_an_import_none() {
+        let code = |s: &str| {
+            serde_json::from_str::<EntryChange>(&format!("\"{s}\""))
+                .unwrap()
+                .code()
+        };
+        assert_eq!(code("created"), Some(codes::ENTRY_CREATED));
+        assert_eq!(code("edited"), Some(codes::ENTRY_EDITED));
+        assert_eq!(code("restored"), Some(codes::ENTRY_RESTORED));
+        assert_eq!(code("history_cleared"), Some(codes::HISTORY_CLEARED));
+        assert_eq!(code("imported"), None);
     }
 }

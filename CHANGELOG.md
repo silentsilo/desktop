@@ -24,6 +24,14 @@ silo from opening needs a major version rather than a note.
   every kind, to a KDBX 4 file under a password you choose (Argon2id), which
   KeePassXC and KeePassDX open: the way out is as easy as the way in.
 
+- The activity log is written: unlocking and locking, showing or copying a
+  secret, opening or saving a file outside the silo, filling a login in the
+  browser, changes to entries and files, imports and exports, and changes
+  to keys and the recovery code. Nothing is written until a log is turned
+  on for the silo, which a later step adds. On an organisation's silo an
+  event that cannot be written locks the silo instead of letting the action
+  go on unrecorded.
+
 ### Fixed
 
 - A OneDrive, Dropbox or Google Drive sign-in you cancel, or replace by

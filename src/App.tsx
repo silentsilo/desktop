@@ -17,6 +17,7 @@ import type {
   BlobStatus,
   Bootstrap,
   DeviceInfo,
+  EntryChange,
   RecoveryStatus,
   SearchHit,
   SpaceReport,
@@ -468,6 +469,25 @@ export default function App() {
   useEventSubscription(
     () =>
       listen<string>("silo-idle-locked", (event) => {
+        if (event.payload === focusedSiloRef.current) {
+          resetExplorer();
+          void refreshBootstrap();
+        }
+        void refreshSilos();
+      }),
+    [],
+  );
+
+  // An organisation's silo whose activity log could not be written locks
+  // itself rather than go on unrecorded. Said here: the action that tried
+  // may have no place of its own to show an error.
+  useEventSubscription(
+    () =>
+      listen<string>("silo-audit-locked", (event) => {
+        toasts.errorText(
+          "The activity log could not be written on this computer, so the silo was locked. " +
+            "Your organisation requires the log. Check that the disk has space, then unlock again.",
+        );
         if (event.payload === focusedSiloRef.current) {
           resetExplorer();
           void refreshBootstrap();
@@ -3324,15 +3344,12 @@ export default function App() {
   /// worked, and the editor then deleted the content of any attachment it
   /// had removed.
   const savePasswordEntry = useCallback(
-    async (edited: PasswordEntry): Promise<boolean> => {
+    async (edited: PasswordEntry, change?: EntryChange): Promise<boolean> => {
       // Every save from this window goes through here, so this is where a
       // changed entry keeps its previous version. Read from the ref: the
       // state update below has not run yet when the entry is sent.
-      const entry = withHistory(
-        passwordEntriesRef.current.find((e) => e.id === edited.id),
-        edited,
-        loadHistoryPolicy(),
-      );
+      const previous = passwordEntriesRef.current.find((e) => e.id === edited.id);
+      const entry = withHistory(previous, edited, loadHistoryPolicy());
       let before: PasswordEntry | undefined;
       setPasswordEntries((prev) => {
         const idx = prev.findIndex((e) => e.id === entry.id);
@@ -3348,6 +3365,7 @@ export default function App() {
           invoke("vault_upsert_password", {
             id: entry.id,
             json: JSON.stringify(entry),
+            change: change ?? (previous ? "edited" : "created"),
           }),
         );
         return true;
@@ -3376,7 +3394,9 @@ export default function App() {
       setPasswordEntries((prev) => prev.filter((e) => e.id !== id));
       begin("entries");
       try {
-        await withPasswordWrite(() => invoke("vault_delete_password", { id }));
+        await withPasswordWrite(() =>
+          invoke("vault_delete_password", { id, label: removed?.service ?? null }),
+        );
         for (const attachment of attachments) {
           void invoke("password_delete_attachment", { blobId: attachment.blob_id }).catch(
             () => {},
@@ -3399,15 +3419,18 @@ export default function App() {
   /// Import writes many entries; each is its own operation, so a failure
   /// part way through leaves the ones already stored rather than nothing.
   const importPasswordEntries = useCallback(
-    async (entries: PasswordEntry[]) => {
+    async (entries: PasswordEntry[], source: string) => {
       begin("entries");
+      let stored = 0;
       try {
         await withPasswordWrite(async () => {
           for (const entry of entries) {
             await invoke("vault_upsert_password", {
               id: entry.id,
               json: JSON.stringify(entry),
+              change: "imported",
             });
+            stored += 1;
             // Upsert on the store side, so the list has to be an upsert too.
             // Appending blindly put two rows under one id, which React then
             // rendered with a duplicate key.
@@ -3424,6 +3447,14 @@ export default function App() {
         toasts.error(e);
       } finally {
         end("entries");
+        // Once for the whole import, with what actually landed.
+        if (stored > 0) {
+          void invoke("audit_note", {
+            note: "passwords_imported",
+            count: stored,
+            format: source,
+          }).catch(() => undefined);
+        }
       }
     },
     [begin, end, toasts, withPasswordWrite],
@@ -3814,7 +3845,7 @@ export default function App() {
             focusEntryId={focusEntryId}
             onSaveEntry={savePasswordEntry}
             onDeleteEntry={(id) => void deletePasswordEntry(id)}
-            onImportEntries={(entries) => void importPasswordEntries(entries)}
+            onImportEntries={(entries, source) => void importPasswordEntries(entries, source)}
             onSaveCategories={(categories) => void savePasswordCategories(categories)}
             onConfirmRun={confirmRun}
           />

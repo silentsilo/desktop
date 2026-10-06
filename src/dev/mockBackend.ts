@@ -982,6 +982,7 @@ const handlers: Record<string, Handler> = {
   passwords_write_kdbx: () => null,
   vault_delete_password: () => null,
   copy_secret_to_clipboard: () => null,
+  audit_note: () => null,
   browser_fill_pending: () => mockFillPrompt(),
   browser_fill_confirm: (args) => {
     fillAnswered = true;

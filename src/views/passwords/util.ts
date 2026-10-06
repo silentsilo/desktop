@@ -420,6 +420,22 @@ export function exportNeedsTouch(entries: PasswordEntry[]): boolean {
  * Separate from [`copyKindFor`] so the two questions, what to copy and by
  * which route, stay answerable on their own and testable together.
  */
+/** What the one-click copy hands over, named for the activity log. */
+export function oneClickField(entry: PasswordEntry): string {
+  switch (typeOf(entry)) {
+    case "card":
+      return "card number";
+    case "note":
+      return "notes";
+    case "identity":
+      return "email";
+    case "ssh_key":
+      return "public key";
+    default:
+      return "password";
+  }
+}
+
 export function oneClickCopyValue(entry: PasswordEntry): string {
   switch (typeOf(entry)) {
     case "login":

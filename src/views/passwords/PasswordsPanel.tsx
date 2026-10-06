@@ -6,6 +6,7 @@ import { Download, KeyRound, MousePointerClick, ShieldCheck, Upload } from "luci
 import { ViewHeader } from "../../components/ViewHeader";
 import type {
   CredentialType,
+  EntryChange,
   HistoryVersion,
   PasswordAttachment,
   PasswordCategory,
@@ -43,6 +44,7 @@ import {
   generatePassword,
   makeColorFor,
   oneClickCopyValue,
+  oneClickField,
   resolveCategories,
   searchTextFor,
   TYPE_LABELS,
@@ -69,9 +71,9 @@ type Props = {
   focusEntryId?: string | null;
   /** Creates or replaces one entry. */
   /** Resolves to whether the entry was stored. */
-  onSaveEntry: (entry: PasswordEntry) => Promise<boolean>;
+  onSaveEntry: (entry: PasswordEntry, change?: EntryChange) => Promise<boolean>;
   onDeleteEntry: (id: string) => void;
-  onImportEntries: (entries: PasswordEntry[]) => void;
+  onImportEntries: (entries: PasswordEntry[], source: string) => void;
   /** Replaces the category list as a whole. */
   onSaveCategories: (categories: PasswordCategory[]) => void;
   /** Asks the user to confirm something that runs when opened. */
@@ -310,8 +312,13 @@ export function PasswordsPanel({
   /// API: on Windows that keeps them out of Clipboard History, which writes
   /// to disk, and out of Cloud Clipboard, and clears them again after a
   /// minute or so.
-  const copySecret = useCallback(async (text: string) => {
-    await invoke("copy_secret_to_clipboard", { text });
+  /// `field` names what was copied for the silo's activity log, which
+  /// records it before the clipboard holds anything.
+  const copySecret = useCallback(async (entry: PasswordEntry, text: string, field: string) => {
+    await invoke("copy_secret_to_clipboard", {
+      text,
+      audit: { entry_id: entry.id, label: entry.service, field },
+    });
   }, []);
 
   /// When each protected entry last passed a key touch. In-memory only and
@@ -348,6 +355,26 @@ export function PasswordsPanel({
     [REAUTH_GRACE_MS]
   );
 
+  /// Showing an entry's secrets: the gate, then the activity log, which an
+  /// organisation's silo may not do without.
+  const requestReveal = useCallback(
+    async (entry: PasswordEntry): Promise<boolean> => {
+      if (!(await ensureVerified(entry))) return false;
+      try {
+        await invoke("audit_note", {
+          note: "entry_revealed",
+          entryId: entry.id,
+          label: entry.service,
+        });
+        return true;
+      } catch (e) {
+        setTransferError(formatAppError(e));
+        return false;
+      }
+    },
+    [ensureVerified]
+  );
+
   const flashCopied = useCallback((key: string) => {
     setCopiedId(key);
     setTimeout(() => setCopiedId(null), 2000);
@@ -366,9 +393,9 @@ export function PasswordsPanel({
   /// A secret belonging to `entry`: passes the entry's re-auth gate, then
   /// goes through the clearing clipboard.
   const copySecretField = useCallback(
-    async (entry: PasswordEntry, key: string, text: string) => {
+    async (entry: PasswordEntry, key: string, text: string, field: string) => {
       if (!(await ensureVerified(entry))) return;
-      await copySecret(text);
+      await copySecret(entry, text, field);
       flashCopied(key);
     },
     [copySecret, ensureVerified, flashCopied]
@@ -387,7 +414,7 @@ export function PasswordsPanel({
       // clipboard on Windows writes what it holds to Clipboard History on
       // disk and syncs it to their other machines.
       if (copyKindFor(entry) === "secret") {
-        await copySecretField(entry, entry.id, value);
+        await copySecretField(entry, entry.id, value, oneClickField(entry));
       } else {
         await copyPlain(entry.id, value);
       }
@@ -405,7 +432,7 @@ export function PasswordsPanel({
   const copyTotp = useCallback(
     async (entry: PasswordEntry, code: string) => {
       if (!(await ensureVerified(entry))) return;
-      await copySecret(code);
+      await copySecret(entry, code, "one-time code");
       flashCopied(`t-${entry.id}`);
     },
     [copySecret, ensureVerified, flashCopied]
@@ -423,6 +450,7 @@ export function PasswordsPanel({
           blobId: attachment.blob_id,
           name: attachment.name,
           blobKey: attachment.blob_key,
+          entryLabel: entry.service,
         });
       } catch (e) {
         setTransferError(formatAppError(e));
@@ -474,7 +502,7 @@ export function PasswordsPanel({
   const restoreVersion = useCallback(
     async (entry: PasswordEntry, version: HistoryVersion) => {
       if (!(await ensureVerified(entry))) return;
-      await onSaveEntry(restoredFrom(entry, version, Date.now()));
+      await onSaveEntry(restoredFrom(entry, version, Date.now()), "restored");
     },
     [ensureVerified, onSaveEntry]
   );
@@ -598,7 +626,7 @@ export function PasswordsPanel({
       // entry whose content changed since the last export still arrives as a
       // second copy; only an exact match is dropped as a duplicate.
       const { fresh, duplicates } = dropDuplicates(entries, imported);
-      if (fresh.length > 0) onImportEntries(fresh);
+      if (fresh.length > 0) onImportEntries(fresh, source);
       if (pendingImport.blobs) {
         const kept = new Set(attachmentBlobs(fresh));
         dropBlobs(pendingImport.blobs.filter((id) => !kept.has(id)));
@@ -690,7 +718,11 @@ export function PasswordsPanel({
 
     setTransferBusy(true);
     try {
-      await invoke("passwords_write_export_csv", { path, contents: entriesToCsv(logins) });
+      await invoke("passwords_write_export_csv", {
+        path,
+        contents: entriesToCsv(logins),
+        count: logins.length,
+      });
       const leftOut =
         entries.length - logins.length > 0
           ? ` Cards, identities, SSH keys and notes (${entries.length - logins.length}) are not part of the CSV format and stayed behind.`
@@ -1010,9 +1042,11 @@ export function PasswordsPanel({
                 onCopyUsername={(entry) => void copyUsername(entry)}
                 onCopyTotp={(entry, code) => void copyTotp(entry, code)}
                 onCopyPlain={(key, text) => void copyPlain(key, text)}
-                onCopySecretField={(entry, key, text) => void copySecretField(entry, key, text)}
+                onCopySecretField={(entry, key, text, field) =>
+                  void copySecretField(entry, key, text, field)
+                }
                 onOpenAttachment={(attachment) => void openAttachment(selected, attachment)}
-                onRequestReveal={ensureVerified}
+                onRequestReveal={requestReveal}
                 onToggleFavorite={(entry) => onSaveEntry(withEdits(entry, { favorite: !entry.favorite }))}
                 onEdit={(entry) => void startEdit(entry)}
                 onDelete={() => setPendingDelete(selected)}
@@ -1071,7 +1105,7 @@ export function PasswordsPanel({
           danger
           busy={busy}
           onConfirm={() => {
-            void onSaveEntry(withoutHistory(pendingClearHistory));
+            void onSaveEntry(withoutHistory(pendingClearHistory), "history_cleared");
             setPendingClearHistory(null);
           }}
           onCancel={() => setPendingClearHistory(null)}

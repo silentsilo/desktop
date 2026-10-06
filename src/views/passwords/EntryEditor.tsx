@@ -75,9 +75,15 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
   /// API: on Windows that keeps them out of Clipboard History, which writes
   /// to disk, and out of Cloud Clipboard, and clears them again after a
   /// minute or so.
-  const copySecret = useCallback(async (text: string) => {
-    await invoke("copy_secret_to_clipboard", { text });
-  }, []);
+  const copySecret = useCallback(
+    async (text: string, field: string) => {
+      await invoke("copy_secret_to_clipboard", {
+        text,
+        audit: { entry_id: draft.id, label: draft.service, field },
+      });
+    },
+    [draft.id, draft.service],
+  );
 
   const applyTotpInput = useCallback((value: string) => {
     setTotpInput(value);
@@ -366,7 +372,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
               type="button"
               className="pw-gen-btn"
               title="Copy password"
-              onClick={() => void copySecret(draft.password)}
+              onClick={() => void copySecret(draft.password, "password")}
             >
               <IconCopy size={15} />
             </button>
@@ -450,7 +456,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
                   entry={draft}
                   now={now}
                   copied={false}
-                  onCopy={(code) => void copySecret(code)}
+                  onCopy={(code) => void copySecret(code, "one-time code")}
                 />
                 <button type="button" className="pw-totp-remove-btn" onClick={() => applyTotpInput("")}>
                   <IconClose size={13} />

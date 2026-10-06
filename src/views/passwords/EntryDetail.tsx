@@ -37,7 +37,8 @@ type Props = {
   /** Non-secret text: goes to the ordinary clipboard. */
   onCopyPlain: (key: string, text: string) => void;
   /** A secret of this entry: re-auth gate, then the clearing clipboard. */
-  onCopySecretField: (entry: PasswordEntry, key: string, text: string) => void;
+  /// `field` names what was copied, for the silo's activity log.
+  onCopySecretField: (entry: PasswordEntry, key: string, text: string, field: string) => void;
   onOpenAttachment: (attachment: PasswordAttachment) => void;
   /** Resolves true when this entry may be shown: either it is unprotected,
    * or the user just proved presence with an enrolled authenticator. */
@@ -153,7 +154,7 @@ export function EntryDetail({
         className="pw-inline-btn"
         title={`Copy ${label.toLowerCase()}`}
         aria-label={`Copy ${label.toLowerCase()}`}
-        onClick={() => onCopySecretField(entry, copyKey, value)}
+        onClick={() => onCopySecretField(entry, copyKey, value, label.toLowerCase())}
       >
         {copyBadge(copyKey)}
       </button>
@@ -335,7 +336,7 @@ export function EntryDetail({
                 title="Copy private key"
                 aria-label="Copy private key"
                 onClick={() =>
-                  onCopySecretField(entry, entry.id, entry.ssh_private_key ?? "")
+                  onCopySecretField(entry, entry.id, entry.ssh_private_key ?? "", "private key")
                 }
               >
                 {copyBadge(entry.id)}
@@ -425,7 +426,7 @@ export function EntryDetail({
               className="pw-inline-btn"
               title="Copy notes"
               aria-label="Copy notes"
-              onClick={() => onCopySecretField(entry, `notes-${entry.id}`, entry.notes)}
+              onClick={() => onCopySecretField(entry, `notes-${entry.id}`, entry.notes, "notes")}
             >
               {copyBadge(`notes-${entry.id}`)}
             </button>
@@ -469,7 +470,12 @@ export function EntryDetail({
                               title="Copy this password"
                               aria-label="Copy this password"
                               onClick={() =>
-                                onCopySecretField(entry, `h${i}-${entry.id}`, version.password ?? "")
+                                onCopySecretField(
+                                  entry,
+                                  `h${i}-${entry.id}`,
+                                  version.password ?? "",
+                                  "earlier password",
+                                )
                               }
                             >
                               {copyBadge(`h${i}-${entry.id}`)}

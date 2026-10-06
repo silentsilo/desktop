@@ -485,6 +485,7 @@ pub async fn fido_add_key(
     silentsilo_fido::require_fido_ready().map_err(|e| e.to_string())?;
 
     let root = vault_dir(&app)?;
+    let silo_id = crate::state::focused_id(&state)?;
     if !is_fido_enrolled(&root) {
         return Err("Enrol the first key before adding more.".into());
     }
@@ -575,6 +576,14 @@ pub async fn fido_add_key(
         revoked: false,
     };
 
+    crate::audit::record_off_thread(
+        &app,
+        silo_id,
+        crate::audit::event(crate::audit::codes::KEY_ADDED)
+            .on(stored.credential_id.clone(), stored.label.clone())
+            .with("kind", stored.kind.clone()),
+    )
+    .await?;
     keys.keys.push(stored.clone());
     // Adding never takes anything away, including when the key being added is
     // itself an organisation one: that already asked for an existing key above.
@@ -666,7 +675,8 @@ pub async fn fido_remove_key(
     credential_id: String,
 ) -> Result<RemoveKeyOutcome, String> {
     let _sync = crate::commands::sync::hold_sync(&app).await?;
-    let root = crate::state::unlocked_silo(&app)?.path;
+    let silo = crate::state::unlocked_silo(&app)?;
+    let root = silo.path.clone();
     let mut keys = load_fido_keys(&root).map_err(|e| e.to_string())?;
     let credential_id = credential_id.trim().to_string();
 
@@ -694,6 +704,17 @@ pub async fn fido_remove_key(
         None
     };
 
+    let label = keys
+        .active()
+        .find(|k| k.credential_id == credential_id)
+        .map(|k| k.label.clone())
+        .unwrap_or_default();
+    crate::audit::record_off_thread(
+        &app,
+        silo.id,
+        crate::audit::event(crate::audit::codes::KEY_REMOVED).on(credential_id.clone(), label),
+    )
+    .await?;
     let Some(key) = keys
         .keys
         .iter_mut()
@@ -1006,6 +1027,12 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
     // around every other guard: the organisation's keys cannot be in the
     // keep list of someone who cannot touch them.
     let org_proof = organisation_proof_if_needed(&app, &keys, "encryption key").await?;
+    crate::audit::record_off_thread(
+        &app,
+        silo.id,
+        crate::audit::event(crate::audit::codes::SILO_KEY_ROTATED).with("kept", keep.len()),
+    )
+    .await?;
 
     // Every target has to be reached, so one that will not open stops this
     // before any touch: skipped, it would keep the old key readable.

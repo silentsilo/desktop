@@ -485,6 +485,13 @@ pub async fn passwords_write_kdbx(
 
     run_blocking(move || {
         let snapshot = crate::state::snapshot_focused_session(&app.state::<AppState>())?;
+        crate::audit::record_in(
+            &app,
+            snapshot.id,
+            crate::audit::event(crate::audit::codes::PASSWORDS_EXPORTED)
+                .with("format", "kdbx")
+                .with("count", entries.len()),
+        )?;
         let db = build_database(&entries, export_config(), &mut |att| {
             decrypt_attachment_bytes(&snapshot, text(att, "blob_id"), text(att, "blob_key"))
         })?;

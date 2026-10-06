@@ -131,6 +131,12 @@ pub async fn recovery_generate(app: AppHandle) -> Result<GeneratedRecovery, Stri
             envelope.created_at = envelope.created_at.max(off + 1);
         }
     }
+    crate::audit::record_off_thread(
+        &app,
+        silo_id,
+        crate::audit::event(crate::audit::codes::RECOVERY_CODE_CHANGED).with("now", "new code"),
+    )
+    .await?;
     save_recovery_envelope(&root, &envelope).map_err(|e| e.to_string())?;
 
     // Published to every target that takes writes, because the situation
@@ -161,6 +167,12 @@ pub async fn recovery_disable(app: AppHandle) -> Result<Vec<String>, String> {
     // Same reasoning as regenerating: turning recovery off entirely is the
     // blunter version of the same lockout.
     require_org_key_if_controlled(&app, "recovery code").await?;
+    crate::audit::record_off_thread(
+        &app,
+        silo.id,
+        crate::audit::event(crate::audit::codes::RECOVERY_CODE_CHANGED).with("now", "off"),
+    )
+    .await?;
 
     // Storage first, disk second. A recovery envelope in a bucket is what
     // makes the written-down code work from a machine that has never seen
@@ -293,7 +305,18 @@ pub async fn vault_unlock_with_recovery(
         let meta = vfs.meta().map_err(|e| e.to_string())?;
         // As every other unlock does: plaintext a crash left behind goes now.
         crate::commands::vault::wipe_open_scratch(&session.paths.root);
+        let silo_id = session.vault_id;
         crate::state::open_focused_session(&app, session)?;
+        crate::audit::record_in(
+            &app,
+            silo_id,
+            crate::audit::event(crate::audit::codes::RECOVERY_CODE_USED),
+        )?;
+        crate::audit::record_in(
+            &app,
+            silo_id,
+            crate::audit::event(crate::audit::codes::UNLOCKED).with("by", "recovery code"),
+        )?;
         Ok(meta)
     })
     .await

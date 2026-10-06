@@ -1,3 +1,4 @@
+mod audit;
 mod browser;
 mod commands;
 mod diagnostics;
@@ -322,6 +323,7 @@ pub fn run() {
             commands::vault::password_open_attachment,
             commands::vault::password_delete_attachment,
             commands::vault::copy_secret_to_clipboard,
+            audit::audit_note,
             commands::vault::passwords_read_import_csv,
             commands::pwned::pwned_range,
             commands::vault::passwords_write_export_csv,

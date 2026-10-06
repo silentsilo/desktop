@@ -783,6 +783,17 @@ async fn fill(
     if (now_silo, now_epoch) != (silo, epoch) {
         return Err(Code::UnknownRef.into());
     }
+    // In the log before the password is read: an organisation's silo that
+    // cannot record it is locked instead.
+    crate::audit::record_off_thread(
+        app,
+        silo,
+        crate::audit::event(crate::audit::codes::BROWSER_FILLED)
+            .on(entry.to_string(), prompt.label.clone())
+            .with("site", prompt.site.clone()),
+    )
+    .await
+    .map_err(|_| Failure::new(Code::Locked))?;
     let secret = read_secret(app, silo, entry).await?;
     {
         let bridge = app.state::<BrowserBridge>();
