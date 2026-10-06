@@ -9,6 +9,7 @@ import { RecoveryCodeInput } from "../components/RecoveryCodeInput";
 import { formatAppError } from "../lib/errors";
 import { isCloudKind } from "../lib/types";
 import {
+  discardSignIns,
   EMPTY_STORE_DRAFT,
   missingStoreFields,
   StoreConfigForm,
@@ -265,7 +266,15 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
               {working ? "Checking…" : "See what is there"}
             </button>
           )}
-          <button type="button" className="secondary" disabled={disabled} onClick={onBack}>
+          <button
+            type="button"
+            className="secondary"
+            disabled={disabled}
+            onClick={() => {
+              discardSignIns(draft);
+              onBack();
+            }}
+          >
             <ArrowLeft size={15} />
             Back
           </button>

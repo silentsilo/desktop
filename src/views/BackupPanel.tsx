@@ -21,6 +21,7 @@ import { detectPreset } from "../lib/s3Presets";
 import { backupHeadline, syncOutcome, type Status, type SyncReport } from "../lib/syncOutcome";
 import { ConfirmDialog } from "./ConfirmDialog";
 import {
+  discardSignIns,
   EMPTY_STORE_DRAFT,
   missingStoreFields,
   StoreConfigForm,
@@ -584,6 +585,7 @@ export function BackupPanel({
                   className="secondary"
                   disabled={working}
                   onClick={() => {
+                    discardSignIns(draft);
                     setStatus({ kind: "idle" });
                     setExpanded(false);
                   }}

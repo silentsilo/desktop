@@ -17,6 +17,7 @@ import {
   type Protection,
 } from "../lib/copies";
 import {
+  discardSignIns,
   EMPTY_STORE_DRAFT,
   missingStoreFields,
   StoreConfigForm,
@@ -500,6 +501,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
               className="secondary"
               disabled={working}
               onClick={() => {
+                discardSignIns(draft);
                 setError(null);
                 setAdding(false);
               }}

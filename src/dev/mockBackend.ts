@@ -793,6 +793,7 @@ const handlers: Record<string, Handler> = {
       ),
     ),
   cloud_cancel_sign_in: () => null,
+  cloud_discard_sign_in: () => null,
   cloud_list_silos: () => ["Silo"],
   backup_target_reconnect: () => null,
   // Two silos open, so the switcher, the picker badge and the Explorer

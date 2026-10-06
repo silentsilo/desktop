@@ -651,6 +651,7 @@ pub async fn vault_lock(app: AppHandle, id: Option<String>) -> Result<(), String
             state.close_session(id)?;
         }
         tell_if_scratch_survived(&app, state.sweep_scratch());
+        crate::commands::cloud::forget_sign_ins_when_all_locked(&app);
         // Every silo closing is news to the screen, which the caller may not
         // own: the updater locks all of them before installing, and when the
         // install then failed, the window went on showing a silo that no
@@ -683,6 +684,7 @@ pub fn lock_all_silos(app: &AppHandle) {
         let _ = state.close_session(id);
     }
     tell_if_scratch_survived(app, state.sweep_scratch());
+    crate::commands::cloud::forget_sign_ins_when_all_locked(app);
     let _ = app.emit("silos-locked", ());
 }
 
@@ -737,6 +739,7 @@ fn lock_idle_silos(app: &AppHandle) {
         }
     }
     tell_if_scratch_survived(app, state.sweep_scratch());
+    crate::commands::cloud::forget_sign_ins_when_all_locked(app);
 }
 
 /// The focused silo's metadata, for a silo that is already unlocked, so

@@ -70,6 +70,28 @@ pub fn cloud_cancel_sign_in(slot: tauri::State<'_, SignInSlot>) -> Result<(), St
     Ok(())
 }
 
+/// Lets go of a finished sign-in nothing will save: the form was cancelled,
+/// or signed in again. A Dropbox one is ended at Dropbox too.
+#[tauri::command]
+pub async fn cloud_discard_sign_in(sign_in: String) -> Result<(), String> {
+    if let Ok(id) = uuid::Uuid::parse_str(sign_in.trim()) {
+        silentsilo_vault::cancel_cloud_sign_in(id).await;
+    }
+    Ok(())
+}
+
+/// Every sign-in not saved yet goes when the last silo locks: nothing
+/// should be able to use its tokens with no silo open.
+pub fn forget_sign_ins_when_all_locked(app: &AppHandle) {
+    if app
+        .state::<crate::state::AppState>()
+        .open_silo_ids()
+        .is_empty()
+    {
+        tauri::async_runtime::spawn(silentsilo_vault::forget_cloud_sign_ins());
+    }
+}
+
 /// The silo folders a sign-in can see, for setting up from backup storage.
 #[tauri::command]
 pub async fn cloud_list_silos(sign_in: String) -> Result<Vec<String>, String> {

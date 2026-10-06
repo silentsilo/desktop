@@ -75,6 +75,20 @@ export type CloudForm = {
   folder: string;
 };
 
+/**
+ * Lets go of the sign-ins a form holds and never saved: on Cancel or Back.
+ * Their tokens otherwise wait in the app until it locks; a Dropbox one is
+ * also ended at Dropbox. One a saved copy adopted is gone already, so this
+ * is safe to call after a save as well.
+ */
+export function discardSignIns(draft: StoreDraft): void {
+  for (const form of Object.values(draft.cloud)) {
+    if (form.signIn) {
+      void invoke("cloud_discard_sign_in", { signIn: form.signIn }).catch(() => {});
+    }
+  }
+}
+
 const EMPTY_CLOUD_FORM: CloudForm = {
   signIn: null,
   account: "",
@@ -381,6 +395,10 @@ function CloudStep({
     setFound(null);
     try {
       const done = await invoke<CloudSignIn>("cloud_sign_in", { kind });
+      // Signed in again: the one it replaces is no longer going anywhere.
+      if (form.signIn && form.signIn !== done.id) {
+        void invoke("cloud_discard_sign_in", { signIn: form.signIn }).catch(() => {});
+      }
       // One update: `set` closes over the draft of the render this started
       // in, so a second call would undo the first.
       const folders = joining

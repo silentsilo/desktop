@@ -295,6 +295,14 @@ sign-in to that account, and Microsoft has none for personal accounts, so
 those are only forgotten here. Saving a shorter list forgets the dropped
 targets' tokens in core either way.
 
+A finished sign-in nothing saves is let go: the form's Cancel or Back, and
+signing in again in the same form, call `cloud_discard_sign_in` for the ones
+it held (`discardSignIns` in `StoreConfigForm`), and when the last silo
+locks every unsaved one goes (`forget_sign_ins_when_all_locked`). Not when
+the form unmounts: a parent may swap it for a progress screen while the save
+it started is still adopting the sign-in. A discard after a save is harmless,
+since adoption already took the sign-in out of the list.
+
 One sign-in runs at a time (`SignInSlot`). Cancel, or starting another,
 drops the waiting future, which closes the listener and frees its port. The
 error for that says "stopped", not "cancelled": `errors.ts` reads the

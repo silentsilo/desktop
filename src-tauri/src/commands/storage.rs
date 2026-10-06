@@ -387,10 +387,15 @@ pub async fn backup_target_seed(app: AppHandle, from: String, to: String) -> Res
     state
         .seed_cancelled
         .store(false, std::sync::atomic::Ordering::Relaxed);
+    // Only the envelopes of keys still in use go across: a never-delete copy
+    // keeps those of removed keys, and nothing would delete them again.
+    let keys = silentsilo_vault::load_fido_keys(&silo.path)
+        .unwrap_or(silentsilo_vault::StoredFidoKeys { keys: Vec::new() });
     let outcome = silentsilo_sync::seed_target_checked(
         &*source,
         &*dest,
         &dek,
+        &keys,
         // Passed on whole: the object count stands still for the length of
         // one large blob, and the bytes are what moves while it does. Core
         // paces these at four a second, so there is no throttling to do

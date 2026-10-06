@@ -26,6 +26,14 @@ silo from opening needs a major version rather than a note.
 
 ### Fixed
 
+- A OneDrive, Dropbox or Google Drive sign-in you cancel, or replace by
+  signing in again, is let go at once, and every unsaved one goes when the
+  last silo locks; a Dropbox one is ended at Dropbox. They used to wait in
+  the app until it quit.
+- Filling a new copy from a never-delete one no longer brings back the key
+  envelope of a key you removed. Only the keys still in use are copied.
+- A key removed while a backup drive was unplugged no longer comes back
+  when the drive is plugged in again.
 - A silo now locks after its idle timeout even if the window has crashed or
   hung. The timer used to run only in the window, so a dead window left the
   silo open until the app quit. The app now checks from its own process too,
