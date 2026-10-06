@@ -291,7 +291,14 @@ and asks for a sync, which carries the policy to the copies; core's pass
 does that part. Reading (`audit_read`) and export (`audit_export`, CSV with
 formula-like cells kept as text, or JSON lines) go through core's
 `read_audit_log` with the silo's content key; where the silo keeps no log,
-the page shows the oplog's list of changes instead. A silo that keeps a log
+the page shows the oplog's list of changes instead. The page asks for 100
+entries at a time: `audit_read` with `refresh` reads every copy (core opens
+only segments it has not opened since the silo was unlocked) and keeps the
+result in `AppState::audit_page`; "Show older" and the search, which runs
+here over the whole log, page through that without reading the copies
+again. What is held is the log in clear, for one silo and one unlock: the
+page closing (`audit_read_close`), a lock or a switch drops it, and every
+close path also calls core's `forget_audit_read`. A silo that keeps a log
 says so in the sidebar for as long as it is open (`AppShell`'s
 `activityLog`, read from `audit_status` when a silo opens and whenever the
 switch moves): whoever uses the silo is told, which an organisation's log

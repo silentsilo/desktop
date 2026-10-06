@@ -17,6 +17,11 @@ silo from opening needs a major version rather than a note.
   or as many as fit (Settings, General). Restore puts an old version back and
   keeps the current one; Clear history removes old passwords for good.
 - Health points out an entry back on a password it had before.
+- The activity log opens quickly when it is large: records are opened on
+  every core and only once while the silo is open, and the Activity page
+  loads 100 at a time and searches the whole log on the app's side. A log
+  of 100,000 events took 15 seconds on every visit; it now takes about half
+  a second the first time and a moment after.
 - An SSH agent. ssh, Git and your editor sign in with the SSH keys kept in
   the silo, which never leave the app: turn it on under Settings, SSH agent,
   and mark each key "Use with the SSH agent". Every use is confirmed in the

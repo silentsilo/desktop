@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Download, History } from "lucide-react";
 import { save as saveFileDialog } from "../lib/dialog";
 import { formatDate } from "../lib/format";
 import { formatAppError } from "../lib/errors";
 import { IconSearch } from "../ui/Icons";
-import type { AuditEntry, AuditLog } from "../lib/types";
+import type { AuditEntry, AuditPage } from "../lib/types";
 
 type Props = {
   devices: { id: string; label: string | null; system_name: string | null }[];
@@ -13,7 +13,7 @@ type Props = {
   needsKey?: boolean;
 };
 
-/** Rows shown before "Show more". */
+/** Rows fetched at a time. */
 const PAGE = 100;
 
 /** What an event carries besides its name, in the order worth reading. */
@@ -48,12 +48,13 @@ function details(entry: AuditEntry): string[] {
  * in a device's run is what a reader of a log most needs to see.
  */
 export function AuditLogList({ devices, needsKey = false }: Props) {
-  const [log, setLog] = useState<AuditLog | null>(null);
+  const [log, setLog] = useState<AuditPage | null>(null);
   const [loading, setLoading] = useState(!needsKey);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [shown, setShown] = useState(PAGE);
   const [notice, setNotice] = useState<string | null>(null);
+  // Answers for a search typed since are dropped.
+  const asked = useRef(0);
 
   const nameOf = useCallback(
     (id: string) => {
@@ -63,33 +64,58 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
     [devices],
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setLog(await invoke<AuditLog>("audit_read"));
-    } catch (e) {
-      setError(formatAppError(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  /** A page from Rust: the first one after reading every copy again
+   * (`refresh`), or the next from the read already held. */
+  const fetchPage = useCallback(
+    async (refresh: boolean, offset: number, term: string, append: boolean) => {
+      const ticket = ++asked.current;
+      setLoading(true);
+      setError(null);
+      const ask = (again: boolean) =>
+        invoke<AuditPage>("audit_read", { refresh: again, offset, limit: PAGE, search: term });
+      try {
+        let page: AuditPage;
+        try {
+          page = await ask(refresh);
+        } catch (e) {
+          // The held read went with a lock or a switch: read it again,
+          // unless that takes a key, which needs the person's click.
+          if (refresh || needsKey) throw e;
+          page = await ask(true);
+        }
+        if (ticket !== asked.current) return;
+        setLog((prev) =>
+          append && prev ? { ...page, entries: [...prev.entries, ...page.entries] } : page,
+        );
+      } catch (e) {
+        if (ticket === asked.current) setError(formatAppError(e));
+      } finally {
+        if (ticket === asked.current) setLoading(false);
+      }
+    },
+    [needsKey],
+  );
+
+  const load = useCallback(() => fetchPage(true, 0, search, false), [fetchPage, search]);
 
   useEffect(() => {
-    if (!needsKey) void load();
-  }, [load, needsKey]);
+    if (!needsKey) void fetchPage(true, 0, "", false);
+    // What was read stays in Rust only while the page is open.
+    return () => {
+      void invoke("audit_read_close").catch(() => {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsKey]);
 
-  const filtered = useMemo(() => {
-    const entries = log?.entries ?? [];
-    const term = search.trim().toLowerCase();
-    if (!term) return entries;
-    return entries.filter((e) =>
-      [e.what, e.l ?? "", nameOf(e.device), ...details(e)].some((v) =>
-        v.toLowerCase().includes(term),
-      ),
-    );
-  }, [log, nameOf, search]);
+  // A search runs in Rust over the whole log, a moment after the typing stops.
+  useEffect(() => {
+    if (!log) return;
+    const timer = window.setTimeout(() => void fetchPage(false, 0, search, false), 250);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
+  const entries = log?.entries ?? [];
   const exportAs = async (format: "csv" | "jsonl") => {
     setNotice(null);
     const path = await saveFileDialog({
@@ -158,10 +184,7 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
           placeholder="Search the log…"
           aria-label="Search the activity log"
           value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setShown(PAGE);
-          }}
+          onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
@@ -183,15 +206,15 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
           </button>
         </div>
       )}
-      {log && filtered.length === 0 && (
+      {log && entries.length === 0 && !loading && (
         <p className="hint">
           {search.trim() ? "Nothing in the log matches." : "Nothing recorded yet."}
         </p>
       )}
 
-      {filtered.length > 0 && (
+      {entries.length > 0 && (
         <ul className="activity-list">
-          {filtered.slice(0, shown).map((e) => (
+          {entries.map((e) => (
             <li key={`${e.device}-${e.i}`} className="activity-row">
               <span className="activity-summary">{e.l ? `${e.what}: ${e.l}` : e.what}</span>
               <span className="hint activity-meta">
@@ -204,15 +227,20 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
       )}
 
       <div className="actions">
-        {filtered.length > shown && (
-          <button type="button" className="secondary" onClick={() => setShown((n) => n + PAGE)}>
+        {log && entries.length < log.matched && (
+          <button
+            type="button"
+            className="secondary"
+            disabled={loading}
+            onClick={() => void fetchPage(false, entries.length, search, true)}
+          >
             Show older
           </button>
         )}
         <button
           type="button"
           className="secondary"
-          disabled={!log || log.entries.length === 0}
+          disabled={!log || log.total === 0}
           onClick={() => void exportAs("csv")}
         >
           <Download size={14} />
@@ -221,7 +249,7 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
         <button
           type="button"
           className="secondary"
-          disabled={!log || log.entries.length === 0}
+          disabled={!log || log.total === 0}
           onClick={() => void exportAs("jsonl")}
         >
           <Download size={14} />

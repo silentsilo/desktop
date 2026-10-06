@@ -179,6 +179,7 @@ pub fn run() {
             auto_lock_default_minutes: std::sync::atomic::AtomicU32::new(
                 state::DEFAULT_AUTO_LOCK_MINUTES,
             ),
+            audit_page: Mutex::new(None),
         })
         .manage(browser::BrowserBridge::default())
         .manage(ssh_agent::SshAgent::default())
@@ -335,6 +336,7 @@ pub fn run() {
             audit::audit_status,
             audit::audit_set_enabled,
             audit::audit_read,
+            audit::audit_read_close,
             audit::audit_export,
             audit::audit_org_start,
             audit::audit_org_retention,

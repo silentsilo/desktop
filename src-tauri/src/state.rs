@@ -41,6 +41,11 @@ pub struct AppState {
     /// under General and kept by the window; told to Rust at start and on
     /// every change, so the idle backstop follows it with no window.
     pub auto_lock_default_minutes: AtomicU32,
+    /// The activity log the Activity page last read, which its "Show older"
+    /// and its search page through without reading every copy again. The
+    /// log in clear: for one silo and one unlock, dropped when the page
+    /// closes and by every path that closes the silo.
+    pub audit_page: Mutex<Option<crate::audit::HeldRead>>,
 }
 
 /// What the window starts with until the user picks another.
@@ -82,7 +87,7 @@ impl Drop for Opening {
 /// A guard even when a panic poisoned the mutex. Only for the paths that
 /// close silos or clear their scratch: a lock that fails over poisoning
 /// would leave them open, which is the worse of the two.
-fn lock_recovering<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+pub(crate) fn lock_recovering<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -400,6 +405,7 @@ impl AppState {
                 // candidate, so a missing entry sorts as maximally stale.
                 stalest(sessions.keys().copied(), &touched).and_then(|stale| {
                     touched.remove(&stale);
+                    self.forget_audit_read(stale);
                     sessions.remove(&stale).map(|old| (stale, old))
                 })
             };
@@ -421,6 +427,8 @@ impl AppState {
     /// Lock into a success that closed nothing.
     pub fn close_session(&self, id: Uuid) -> Result<(), String> {
         let closed = lock_recovering(&self.sessions).remove(&id);
+        self.forget_audit_read(id);
+        *lock_recovering(&self.audit_page) = None;
         self.bump_epoch();
         lock_recovering(&self.last_touched).remove(&id);
         if let Some(session) = closed {

@@ -319,6 +319,13 @@ export type AuditLog = {
   copies_unread: string[];
 };
 
+/** One page of the log, read and searched on the Rust side. */
+export type AuditPage = AuditLog & {
+  /** Entries the search matches, or the whole log's count without one. */
+  matched: number;
+  total: number;
+};
+
 /** What a save was, for the silo's activity log. "imported" is logged once
  * for the whole import instead. */
 export type EntryChange = "created" | "edited" | "restored" | "history_cleared" | "imported";

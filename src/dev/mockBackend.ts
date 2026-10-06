@@ -1039,27 +1039,51 @@ const handlers: Record<string, Handler> = {
   copy_secret_to_clipboard: () => null,
   audit_note: () => null,
   audit_status: () => mockAudit,
-  audit_read: () => ({
-    entries: [
-      {
-        device: "dev-1",
-        what: "Secret copied",
-        i: 2,
-        t: Date.now() - 60_000,
-        c: 11,
-        o: "e1",
-        l: "Bank",
-        x: { field: "password" },
-      },
-      { device: "dev-1", what: "Unlocked", i: 1, t: Date.now() - 120_000, c: 1, x: { key: "YubiKey" } },
-      { device: "dev-1", what: "Activity log started", i: 0, t: Date.now() - 180_000, c: 60 },
-    ],
-    devices: [
-      { device: "dev-1", events: 3, missing_events: [], missing_segments: [], broken_segments: [] },
-    ],
-    unreadable: 0,
-    copies_unread: [],
-  }),
+  /// `?mock=unlocked&biglog` holds 1,000 events, to page through.
+  audit_read: (args) => {
+    const big = flag("biglog");
+    const all = big
+      ? Array.from({ length: 1000 }, (_, k) => ({
+          device: "dev-1",
+          what: k % 2 ? "Secret copied" : "Unlocked",
+          i: 999 - k,
+          t: Date.now() - k * 60_000,
+          c: k % 2 ? 11 : 1,
+          o: "e1",
+          l: k % 3 ? "Bank" : "Mail",
+          x: k % 2 ? { field: "password" } : { key: "YubiKey" },
+        }))
+      : [
+          {
+            device: "dev-1",
+            what: "Secret copied",
+            i: 2,
+            t: Date.now() - 60_000,
+            c: 11,
+            o: "e1",
+            l: "Bank",
+            x: { field: "password" },
+          },
+          { device: "dev-1", what: "Unlocked", i: 1, t: Date.now() - 120_000, c: 1, x: { key: "YubiKey" } },
+          { device: "dev-1", what: "Activity log started", i: 0, t: Date.now() - 180_000, c: 60 },
+        ];
+    const term = String(args.search ?? "").trim().toLowerCase();
+    const hits = term
+      ? all.filter((e) => JSON.stringify(e).toLowerCase().includes(term))
+      : all;
+    const offset = Number(args.offset ?? 0);
+    return {
+      entries: hits.slice(offset, offset + Number(args.limit ?? 100)),
+      matched: hits.length,
+      total: all.length,
+      devices: [
+        { device: "dev-1", events: all.length, missing_events: [], missing_segments: [], broken_segments: [] },
+      ],
+      unreadable: 0,
+      copies_unread: [],
+    };
+  },
+  audit_read_close: () => null,
   audit_export: () => 3,
   audit_org_start: (args) => {
     mockAudit = {

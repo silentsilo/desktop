@@ -137,17 +137,139 @@ pub async fn audit_set_enabled(app: AppHandle, enabled: bool) -> Result<SiloAudi
     .await
 }
 
-/// The focused silo's whole log, newest first, with what is missing from it.
-/// A personal log opens with the silo's key; an organisation's asks for one
-/// of its keys first.
+/// A read of the log, held for the Activity page to page through.
+pub struct HeldRead {
+    silo: Uuid,
+    epoch: u64,
+    read: std::sync::Arc<silentsilo_app::audit_read::LogRead>,
+    names: HashMap<Uuid, String>,
+}
+
+/// Most entries one page carries.
+const MAX_PAGE: usize = 500;
+
+/// One page of the log, newest first, with what is missing from the whole.
+#[derive(serde::Serialize)]
+pub struct AuditPage {
+    entries: Vec<silentsilo_app::audit_read::LogEntry>,
+    /// Entries the search matches, all of them, or the whole log's count
+    /// when there is no search.
+    matched: usize,
+    total: usize,
+    devices: Vec<silentsilo_app::audit_read::DeviceTrail>,
+    unreadable: usize,
+    copies_unread: Vec<String>,
+}
+
+/// Whether an entry matches a lowercased search: its name, its label, the
+/// device's name, and what it carries.
+fn matches(
+    entry: &silentsilo_app::audit_read::LogEntry,
+    names: &HashMap<Uuid, String>,
+    term: &str,
+) -> bool {
+    let has = |text: &str| text.to_lowercase().contains(term);
+    has(&entry.what)
+        || entry.event.l.as_deref().is_some_and(has)
+        || entry.event.o.as_deref().is_some_and(has)
+        || names.get(&entry.device).is_some_and(|n| has(n))
+        || entry.event.x.iter().any(|(key, value)| {
+            has(key)
+                || match value {
+                    serde_json::Value::String(s) => has(s),
+                    other => has(&other.to_string()),
+                }
+        })
+}
+
+fn page_of(held: &HeldRead, offset: usize, limit: usize, search: &str) -> AuditPage {
+    let term = search.trim().to_lowercase();
+    let limit = limit.clamp(1, MAX_PAGE);
+    let read = &held.read;
+    let (entries, matched) = if term.is_empty() {
+        let entries = read
+            .entries
+            .iter()
+            .skip(offset)
+            .take(limit)
+            .cloned()
+            .collect();
+        (entries, read.entries.len())
+    } else {
+        let hits: Vec<&silentsilo_app::audit_read::LogEntry> = read
+            .entries
+            .iter()
+            .filter(|e| matches(e, &held.names, &term))
+            .collect();
+        let entries = hits
+            .iter()
+            .skip(offset)
+            .take(limit)
+            .map(|e| (*e).clone())
+            .collect();
+        (entries, hits.len())
+    };
+    AuditPage {
+        entries,
+        matched,
+        total: read.entries.len(),
+        devices: read.devices.clone(),
+        unreadable: read.unreadable,
+        copies_unread: read.copies_unread.clone(),
+    }
+}
+
+/// A page of the focused silo's log. `refresh` reads it again from this
+/// computer and every copy (an organisation's log asks for one of its keys
+/// first); otherwise the page comes from the last read, which must be of
+/// this silo and this unlock. Only what is shown crosses to the window.
 #[tauri::command]
-pub async fn audit_read(app: AppHandle) -> Result<silentsilo_app::audit_read::LogRead, String> {
+pub async fn audit_read(
+    app: AppHandle,
+    refresh: bool,
+    offset: usize,
+    limit: usize,
+    search: String,
+) -> Result<AuditPage, String> {
+    let state = app.state::<AppState>();
+    let silo = crate::state::focused_id(&state)?;
+    if !refresh {
+        let held = crate::state::lock_recovering(&state.audit_page);
+        return match held.as_ref() {
+            Some(held) if held.silo == silo && held.epoch == state.epoch() => {
+                Ok(page_of(held, offset, limit, &search))
+            }
+            _ => Err(READ_AGAIN.into()),
+        };
+    }
+    let epoch = state.epoch();
     let reader = reader_for(
         &app,
         "Touch the organisation's security key to read the activity log.",
     )
     .await?;
-    crate::commands::sync::read_audit_log(&app, reader).await
+    let read = crate::commands::sync::read_audit_log(&app, reader).await?;
+    let held = HeldRead {
+        silo,
+        epoch,
+        read: std::sync::Arc::new(read),
+        names: device_names(&app).unwrap_or_default(),
+    };
+    let page = page_of(&held, offset, limit, &search);
+    let state = app.state::<AppState>();
+    // Kept only if nothing closed or switched the silo meanwhile.
+    if state.epoch() == epoch {
+        *crate::state::lock_recovering(&state.audit_page) = Some(held);
+    }
+    Ok(page)
+}
+
+const READ_AGAIN: &str = "The activity log needs reading again.";
+
+/// The Activity page closed: what it read goes.
+#[tauri::command(async)]
+pub fn audit_read_close(app: AppHandle) {
+    *crate::state::lock_recovering(&app.state::<AppState>().audit_page) = None;
 }
 
 /// Who reads: the silo's own key, or an organisation key touched now.
@@ -335,5 +457,67 @@ mod tests {
                 "{other}"
             );
         }
+    }
+
+    fn log_of(n: u64) -> HeldRead {
+        use silentsilo_app::audit_read::{LogEntry, LogRead};
+        let device = Uuid::new_v4();
+        let entries = (0..n)
+            .rev()
+            .map(|i| {
+                let mut event =
+                    silentsilo_audit::Event::new(silentsilo_audit::codes::SECRET_COPIED, i as i64)
+                        .on("e1", if i % 3 == 0 { "Mail" } else { "Bank" })
+                        .with("field", "password");
+                event.i = i;
+                LogEntry {
+                    device,
+                    what: "Secret copied".into(),
+                    event,
+                }
+            })
+            .collect();
+        HeldRead {
+            silo: Uuid::new_v4(),
+            epoch: 1,
+            read: std::sync::Arc::new(LogRead {
+                entries,
+                ..LogRead::default()
+            }),
+            names: HashMap::from([(device, "Laptop".to_string())]),
+        }
+    }
+
+    #[test]
+    fn the_log_is_paged_and_searched_here() {
+        let held = log_of(250);
+        let first = page_of(&held, 0, 100, "");
+        assert_eq!(
+            (first.entries.len(), first.matched, first.total),
+            (100, 250, 250)
+        );
+        assert_eq!(first.entries[0].event.i, 249, "newest first");
+        let last = page_of(&held, 200, 100, "");
+        assert_eq!(last.entries.len(), 50);
+
+        let mail = page_of(&held, 0, 30, " MAIL ");
+        assert_eq!(mail.matched, 84);
+        assert_eq!(mail.entries.len(), 30);
+        assert!(
+            mail.entries
+                .iter()
+                .all(|e| e.event.l.as_deref() == Some("Mail"))
+        );
+        assert_eq!(
+            page_of(&held, 0, 10, "laptop").matched,
+            250,
+            "by device name"
+        );
+        assert_eq!(page_of(&held, 0, 10, "password").matched, 250, "by detail");
+        assert_eq!(page_of(&held, 0, 10, "nothing").matched, 0);
+        assert_eq!(
+            page_of(&log_of(600), 0, 100_000, "").entries.len(),
+            MAX_PAGE
+        );
     }
 }
