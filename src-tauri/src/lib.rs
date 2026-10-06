@@ -324,6 +324,8 @@ pub fn run() {
             commands::vault::password_delete_attachment,
             commands::vault::copy_secret_to_clipboard,
             audit::audit_note,
+            audit::audit_status,
+            audit::audit_set_enabled,
             commands::vault::passwords_read_import_csv,
             commands::pwned::pwned_range,
             commands::vault::passwords_write_export_csv,

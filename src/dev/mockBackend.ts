@@ -176,6 +176,8 @@ function emit(event: string, payload: unknown) {
   }
 }
 
+let mockAudit = { enabled: false, organisation: false, retention_days: null, waiting: 0 };
+
 const handlers: Record<string, Handler> = {
   silo_open: (args) => {
     steppedInto = String(args.id ?? "");
@@ -983,6 +985,11 @@ const handlers: Record<string, Handler> = {
   vault_delete_password: () => null,
   copy_secret_to_clipboard: () => null,
   audit_note: () => null,
+  audit_status: () => mockAudit,
+  audit_set_enabled: (args) => {
+    mockAudit = { ...mockAudit, enabled: Boolean(args.enabled) };
+    return mockAudit;
+  },
   browser_fill_pending: () => mockFillPrompt(),
   browser_fill_confirm: (args) => {
     fillAnswered = true;

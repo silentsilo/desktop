@@ -274,7 +274,10 @@ that missed a rotation cannot put the old key back on another.
 Core owns the format, the queue on this computer and its delivery (core's
 ARCHITECTURE.md and `FORMATS.md`). This app decides what is an event and
 when it is written (`src-tauri/src/audit.rs`). Nothing is written until a
-log is turned on for the silo; until then every call returns at once.
+log is turned on for the silo; until then every call returns at once. The
+switch (`audit_set_enabled`, `AuditLogPanel`) acts on this computer at once
+and asks for a sync, which carries the policy to the copies; core's pass
+does that part.
 
 - What leaves the silo is recorded before it happens: a secret shown or
   copied, a file or attachment opened or saved outside, a login filled in the

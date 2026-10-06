@@ -27,10 +27,11 @@ silo from opening needs a major version rather than a note.
 - The activity log is written: unlocking and locking, showing or copying a
   secret, opening or saving a file outside the silo, filling a login in the
   browser, changes to entries and files, imports and exports, and changes
-  to keys and the recovery code. Nothing is written until a log is turned
-  on for the silo, which a later step adds. On an organisation's silo an
-  event that cannot be written locks the silo instead of letting the action
-  go on unrecorded.
+  to keys and the recovery code. It is turned on per silo under Settings,
+  Devices and activity, works with no copies at all, and reaches every copy
+  and device at the next sync. On an organisation's silo the log stays on,
+  and an event that cannot be written locks the silo instead of letting the
+  action go on unrecorded.
 
 ### Fixed
 

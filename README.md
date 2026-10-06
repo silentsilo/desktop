@@ -86,6 +86,13 @@ the encrypted snapshot is a single file rewritten on every change, so two
 machines editing it produce a conflict copy rather than a merge. Sharing a
 silo between computers is what the operation log in a bucket is for.
 
+A silo can keep an activity log (Settings, Devices and activity): unlocking,
+secrets shown or copied, files opened or saved outside the silo, and changes
+to entries, files, keys and the recovery code. Each device encrypts its
+records to the log's key before they leave it, and they are stored with the
+silo's copies; a silo with no copies keeps them on the computer. Anyone who
+can open a personal silo can read its log.
+
 ## Passwords
 
 Logins, cards, identities, SSH keys and secure notes, each entry with its

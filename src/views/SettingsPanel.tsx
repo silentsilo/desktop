@@ -33,6 +33,7 @@ import { formatDate, formatDay } from "../lib/format";
 import { securityKeyDisplayName, usableHere } from "../lib/keyName";
 import { AUTO_LOCK_OPTIONS_MINUTES } from "../lib/types";
 import { ActivityList } from "./ActivityList";
+import { AuditLogPanel } from "./AuditLogPanel";
 import { ProtectedFoldersPanel } from "./ProtectedFolders";
 import type { Update } from "@tauri-apps/plugin-updater";
 import type { SyncIndicator } from "../layout/AppShell";
@@ -662,6 +663,7 @@ export function SettingsPanel(props: Props) {
               in this list with the changes it made.
             </p>
           </div>
+          <AuditLogPanel busy={busy} />
           <ActivityList devices={devices} />
           </>
         )}

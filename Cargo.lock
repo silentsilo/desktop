@@ -5888,8 +5888,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-app"
-version = "1.9.0-beta.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.2#35b695a8a83983f2faa208cf5056799f8fb4e5ff"
+version = "1.9.0-beta.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.3#379fcde83245a2ed181e3a5de26d74d28e569521"
 dependencies = [
  "hex",
  "serde",
@@ -5907,8 +5907,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-audit"
-version = "1.9.0-beta.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.2#35b695a8a83983f2faa208cf5056799f8fb4e5ff"
+version = "1.9.0-beta.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.3#379fcde83245a2ed181e3a5de26d74d28e569521"
 dependencies = [
  "blake3",
  "hex",
@@ -5933,8 +5933,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-cloud"
-version = "1.9.0-beta.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.2#35b695a8a83983f2faa208cf5056799f8fb4e5ff"
+version = "1.9.0-beta.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.3#379fcde83245a2ed181e3a5de26d74d28e569521"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -5954,8 +5954,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-core"
-version = "1.9.0-beta.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.2#35b695a8a83983f2faa208cf5056799f8fb4e5ff"
+version = "1.9.0-beta.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.3#379fcde83245a2ed181e3a5de26d74d28e569521"
 dependencies = [
  "serde",
  "thiserror 2.0.19",
@@ -5964,8 +5964,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-crypto"
-version = "1.9.0-beta.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.2#35b695a8a83983f2faa208cf5056799f8fb4e5ff"
+version = "1.9.0-beta.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.3#379fcde83245a2ed181e3a5de26d74d28e569521"
 dependencies = [
  "aes-gcm 0.10.3",
  "blake3",
@@ -5982,8 +5982,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-fido"
-version = "1.9.0-beta.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.2#35b695a8a83983f2faa208cf5056799f8fb4e5ff"
+version = "1.9.0-beta.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.3#379fcde83245a2ed181e3a5de26d74d28e569521"
 dependencies = [
  "aes 0.8.4",
  "base64 0.22.1",
@@ -6010,8 +6010,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-s3"
-version = "1.9.0-beta.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.2#35b695a8a83983f2faa208cf5056799f8fb4e5ff"
+version = "1.9.0-beta.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.3#379fcde83245a2ed181e3a5de26d74d28e569521"
 dependencies = [
  "aws-credential-types",
  "aws-sdk-s3",
@@ -6046,8 +6046,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-store"
-version = "1.9.0-beta.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.2#35b695a8a83983f2faa208cf5056799f8fb4e5ff"
+version = "1.9.0-beta.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.3#379fcde83245a2ed181e3a5de26d74d28e569521"
 dependencies = [
  "async-trait",
  "percent-encoding",
@@ -6068,8 +6068,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-sync"
-version = "1.9.0-beta.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.2#35b695a8a83983f2faa208cf5056799f8fb4e5ff"
+version = "1.9.0-beta.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.3#379fcde83245a2ed181e3a5de26d74d28e569521"
 dependencies = [
  "hex",
  "rusqlite",
@@ -6089,8 +6089,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-vault"
-version = "1.9.0-beta.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.2#35b695a8a83983f2faa208cf5056799f8fb4e5ff"
+version = "1.9.0-beta.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.3#379fcde83245a2ed181e3a5de26d74d28e569521"
 dependencies = [
  "aes-gcm 0.10.3",
  "argon2 0.5.3",
@@ -6114,8 +6114,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-vfs"
-version = "1.9.0-beta.2"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.2#35b695a8a83983f2faa208cf5056799f8fb4e5ff"
+version = "1.9.0-beta.3"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.3#379fcde83245a2ed181e3a5de26d74d28e569521"
 dependencies = [
  "base64 0.22.1",
  "blake3",

@@ -94,6 +94,33 @@ pub async fn audit_note(
     crate::commands::fido::run_blocking(move || record(&app, event)).await
 }
 
+/// The focused silo's log, as this computer knows it.
+#[tauri::command]
+pub async fn audit_status(app: AppHandle) -> Result<silentsilo_app::AuditStatus, String> {
+    crate::commands::fido::run_blocking(move || {
+        let state = app.state::<AppState>();
+        let id = crate::state::focused_id(&state)?;
+        state.audit_status(id)
+    })
+    .await
+}
+
+/// Turns the focused silo's own log on or off. Takes effect here at once;
+/// the copies get it at the next sync, which the window then asks for.
+#[tauri::command]
+pub async fn audit_set_enabled(
+    app: AppHandle,
+    enabled: bool,
+) -> Result<silentsilo_app::AuditStatus, String> {
+    crate::commands::fido::run_blocking(move || {
+        let state = app.state::<AppState>();
+        let id = crate::state::focused_id(&state)?;
+        state.set_audit_log(id, enabled)?;
+        state.audit_status(id)
+    })
+    .await
+}
+
 /// What a copied secret was, for the log. Sent with the copy, so the event
 /// is written before the clipboard holds it.
 #[derive(serde::Deserialize)]

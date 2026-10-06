@@ -276,6 +276,16 @@ export type PasswordAttachment = {
  * every entry was before the other kinds existed. */
 export type CredentialType = "login" | "card" | "identity" | "ssh_key" | "note";
 
+/** A silo's activity log, as this computer knows it. */
+export type AuditStatus = {
+  enabled: boolean;
+  /** Kept by an organisation: on for good. */
+  organisation: boolean;
+  retention_days: number | null;
+  /** Records on this computer not yet on every copy. */
+  waiting: number;
+};
+
 /** What a save was, for the silo's activity log. "imported" is logged once
  * for the whole import instead. */
 export type EntryChange = "created" | "edited" | "restored" | "history_cleared" | "imported";
