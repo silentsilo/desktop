@@ -33,7 +33,13 @@ silo from opening needs a major version rather than a note.
   from this computer and every copy, says which records are missing from a
   device or do not open, and exports it as CSV or JSON lines. While a silo
   keeps a log, the sidebar says so on every device, and Overview has a line
-  for it. On an organisation's silo the log stays on,
+  for it.
+- An organisation's silo keeps its own activity log, read only with an
+  organisation key: started when the first key is enrolled (one year), or
+  under Settings, Activity for a silo created earlier. A second organisation
+  key reads it too. Reading, exporting, changing the retention (90 days to
+  everything) and removing old records each ask for an organisation key.
+  `docs/ORGANISATIONS.md` says what it records and what it cannot. On an organisation's silo the log stays on,
   and an event that cannot be written locks the silo instead of letting the
   action go on unrecorded.
 

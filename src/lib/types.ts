@@ -281,6 +281,8 @@ export type AuditStatus = {
   enabled: boolean;
   /** There is a log to read here, on or off. */
   kept: boolean;
+  /** The silo is administered by an organisation, whose log it keeps. */
+  org_controlled: boolean;
   /** Kept by an organisation: on for good. */
   organisation: boolean;
   retention_days: number | null;

@@ -142,6 +142,10 @@ an Organisation badge, so nothing about it is hidden from the person using it;
 and it changes nothing about what the key can decrypt. An organisation key
 unlocks exactly like any other.
 
+Such a silo also keeps an activity log for the organisation: every device
+writes it, only the organisation's keys read it, and everyone using the silo
+sees that it is on.
+
 The provisioning procedure, onboarding three ways and offboarding included,
 is in [`docs/ORGANISATIONS.md`](docs/ORGANISATIONS.md).
 

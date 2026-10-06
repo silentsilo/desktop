@@ -97,37 +97,140 @@ pub async fn audit_note(
     crate::commands::fido::run_blocking(move || record(&app, event)).await
 }
 
+/// The log as the window shows it: core's status, and whether the silo is
+/// an organisation's, which decides who may start and read its log.
+#[derive(serde::Serialize)]
+pub struct SiloAuditStatus {
+    #[serde(flatten)]
+    status: silentsilo_app::AuditStatus,
+    org_controlled: bool,
+}
+
+fn status_of(app: &AppHandle) -> Result<SiloAuditStatus, String> {
+    let state = app.state::<AppState>();
+    let id = crate::state::focused_id(&state)?;
+    let root = crate::state::vault_dir(app)?;
+    let org_controlled = silentsilo_vault::load_fido_keys(&root)
+        .map(|keys| keys.is_org_controlled())
+        .unwrap_or(false);
+    Ok(SiloAuditStatus {
+        status: state.audit_status(id)?,
+        org_controlled,
+    })
+}
+
 /// The focused silo's log, as this computer knows it.
 #[tauri::command]
-pub async fn audit_status(app: AppHandle) -> Result<silentsilo_app::AuditStatus, String> {
-    crate::commands::fido::run_blocking(move || {
-        let state = app.state::<AppState>();
-        let id = crate::state::focused_id(&state)?;
-        state.audit_status(id)
-    })
-    .await
+pub async fn audit_status(app: AppHandle) -> Result<SiloAuditStatus, String> {
+    crate::commands::fido::run_blocking(move || status_of(&app)).await
 }
 
 /// Turns the focused silo's own log on or off. Takes effect here at once;
 /// the copies get it at the next sync, which the window then asks for.
 #[tauri::command]
-pub async fn audit_set_enabled(
-    app: AppHandle,
-    enabled: bool,
-) -> Result<silentsilo_app::AuditStatus, String> {
+pub async fn audit_set_enabled(app: AppHandle, enabled: bool) -> Result<SiloAuditStatus, String> {
     crate::commands::fido::run_blocking(move || {
         let state = app.state::<AppState>();
         let id = crate::state::focused_id(&state)?;
         state.set_audit_log(id, enabled)?;
-        state.audit_status(id)
+        status_of(&app)
     })
     .await
 }
 
 /// The focused silo's whole log, newest first, with what is missing from it.
+/// A personal log opens with the silo's key; an organisation's asks for one
+/// of its keys first.
 #[tauri::command]
 pub async fn audit_read(app: AppHandle) -> Result<silentsilo_app::audit_read::LogRead, String> {
-    crate::commands::sync::read_audit_log(&app).await
+    let reader = reader_for(
+        &app,
+        "Touch the organisation's security key to read the activity log.",
+    )
+    .await?;
+    crate::commands::sync::read_audit_log(&app, reader).await
+}
+
+/// Who reads: the silo's own key, or an organisation key touched now.
+async fn reader_for(
+    app: &AppHandle,
+    prompt: &str,
+) -> Result<silentsilo_app::audit_read::Reader, String> {
+    use silentsilo_app::audit_read::Reader;
+    let state = app.state::<AppState>();
+    let id = crate::state::focused_id(&state)?;
+    if !state.audit_status(id)?.organisation {
+        return Ok(Reader::Silo);
+    }
+    let touch = touch_org_key(app, prompt).await?;
+    Ok(Reader::Organisation {
+        credential_id: touch.credential_id,
+        wrap_key: touch.wrap_key,
+    })
+}
+
+async fn touch_org_key(
+    app: &AppHandle,
+    prompt: &str,
+) -> Result<silentsilo_app::audit_admin::OrgKeyTouch, String> {
+    let root = crate::state::vault_dir(app)?;
+    let keys = silentsilo_vault::load_fido_keys(&root).map_err(|e| e.to_string())?;
+    crate::commands::fido::touch_organisation_key(app, &keys, "activity log", prompt)
+        .await
+        .map(|(_, touch)| touch)
+}
+
+/// Starts the organisation's log on the focused silo, read with the key
+/// touched now. The copies get it at the next sync.
+#[tauri::command]
+pub async fn audit_org_start(
+    app: AppHandle,
+    retention_days: Option<u32>,
+) -> Result<SiloAuditStatus, String> {
+    let touch = touch_org_key(
+        &app,
+        "Touch the organisation's security key to start its activity log.",
+    )
+    .await?;
+    crate::commands::fido::run_blocking(move || {
+        let state = app.state::<AppState>();
+        let id = crate::state::focused_id(&state)?;
+        state.start_org_audit_log(id, &touch, retention_days)?;
+        status_of(&app)
+    })
+    .await
+}
+
+/// Changes how long the organisation's log keeps its records.
+#[tauri::command]
+pub async fn audit_org_retention(
+    app: AppHandle,
+    retention_days: Option<u32>,
+) -> Result<SiloAuditStatus, String> {
+    touch_org_key(
+        &app,
+        "Touch the organisation's security key to change how long the log is kept.",
+    )
+    .await?;
+    crate::commands::fido::run_blocking(move || {
+        let state = app.state::<AppState>();
+        let id = crate::state::focused_id(&state)?;
+        state.set_org_audit_retention(id, retention_days)?;
+        status_of(&app)
+    })
+    .await
+}
+
+/// Removes the records past the organisation's retention from every copy
+/// that takes deletes. Returns how many segments went.
+#[tauri::command]
+pub async fn audit_org_expire(app: AppHandle) -> Result<usize, String> {
+    touch_org_key(
+        &app,
+        "Touch the organisation's security key to remove records past the retention.",
+    )
+    .await?;
+    crate::commands::sync::expire_audit_segments(&app).await
 }
 
 #[derive(serde::Deserialize, Clone, Copy)]
@@ -145,7 +248,12 @@ pub async fn audit_export(
     path: String,
     format: ExportFormat,
 ) -> Result<usize, String> {
-    let log = crate::commands::sync::read_audit_log(&app).await?;
+    let reader = reader_for(
+        &app,
+        "Touch the organisation's security key to export the activity log.",
+    )
+    .await?;
+    let log = crate::commands::sync::read_audit_log(&app, reader).await?;
     let names = device_names(&app)?;
     let body = match format {
         ExportFormat::Csv => export_csv(&log.entries, &names),

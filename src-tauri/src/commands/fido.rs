@@ -244,6 +244,30 @@ pub(crate) async fn prove_organisation_key(
     keys: &silentsilo_vault::StoredFidoKeys,
     what: &str,
 ) -> Result<silentsilo_vault::OrgProof, String> {
+    touch_organisation_key(
+        app,
+        keys,
+        what,
+        "Touch the organisation's security key to confirm this change.",
+    )
+    .await
+    .map(|(proof, _)| proof)
+}
+
+/// [`prove_organisation_key`], keeping what the touch gave: the activity log
+/// of an organisation's silo is wrapped and read with it.
+pub(crate) async fn touch_organisation_key(
+    app: &AppHandle,
+    keys: &silentsilo_vault::StoredFidoKeys,
+    what: &str,
+    prompt: &str,
+) -> Result<
+    (
+        silentsilo_vault::OrgProof,
+        silentsilo_app::audit_admin::OrgKeyTouch,
+    ),
+    String,
+> {
     let cred_ids = keys.managed_credential_ids_bytes();
     if cred_ids.is_empty() {
         return Err(format!(
@@ -253,10 +277,7 @@ pub(crate) async fn prove_organisation_key(
     }
     let vault_id = crate::state::silo_credentials(app)?.vault_id.to_string();
 
-    emit_fido_progress(
-        app,
-        "Touch the organisation's security key to confirm this change.",
-    );
+    emit_fido_progress(app, prompt);
     let unlock = run_fido(app, move || {
         silentsilo_fido::derive_unlock_material(&cred_ids, &vault_id, None)
     })
@@ -265,8 +286,17 @@ pub(crate) async fn prove_organisation_key(
     // Both halves of the question, membership and material, are asked by the
     // proof's own constructor, so this and the write path cannot drift apart
     // about what counts as proof.
-    silentsilo_vault::OrgProof::verify(keys, &unlock.credential_id, &unlock.wrap_key)
-        .map_err(|_| "That is not one of this silo's organisation keys.".to_string())
+    let proof = silentsilo_vault::OrgProof::verify(keys, &unlock.credential_id, &unlock.wrap_key)
+        .map_err(|_| "That is not one of this silo's organisation keys.".to_string())?;
+    Ok((proof, org_touch(&unlock)))
+}
+
+/// What the log needs of a key's touch.
+fn org_touch(unlock: &silentsilo_fido::UnlockMaterial) -> silentsilo_app::audit_admin::OrgKeyTouch {
+    silentsilo_app::audit_admin::OrgKeyTouch {
+        credential_id: hex_encode(&unlock.credential_id),
+        wrap_key: zeroize::Zeroizing::new(unlock.wrap_key),
+    }
 }
 
 /// The authority a command writes under, having asked for a key if the silo
@@ -434,6 +464,18 @@ pub async fn fido_enroll_primary(
     // decrypts it. Replaced whole or not at all.
     silentsilo_vault::save_wrapped_dek_bytes(&root, &envelope_bytes).map_err(|e| e.to_string())?;
 
+    // An organisation's silo keeps its activity log from the start, read
+    // with this key. A failure is said and left to Settings, Activity, where
+    // the organisation can start it: the silo itself is enrolled.
+    if organisation.unwrap_or(false) {
+        let touch = org_touch(&unlock);
+        let started = crate::state::focused_id(&state)
+            .and_then(|id| state.start_org_audit_log(id, &touch, Some(DEFAULT_ORG_RETENTION_DAYS)));
+        if let Err(e) = started {
+            crate::diagnostics::warn("audit", format_args!("organisation log not started: {e}"));
+        }
+    }
+
     // Bring the encrypted snapshot up to date, but keep the session. The silo
     // had to be open to enrol at all, and the assertion above already proved
     // this credential derives the key that unlocks it, so closing here only
@@ -462,6 +504,9 @@ pub async fn fido_enroll_primary(
 /// has to have been created as organisation-administered, so a personal silo
 /// can never acquire escrow it did not start with, and an existing
 /// organisation key has to be present to authorise the new one.
+/// How long an organisation's log keeps its records unless it says otherwise.
+pub(crate) const DEFAULT_ORG_RETENTION_DAYS: u32 = 365;
+
 #[tauri::command]
 pub async fn fido_add_key(
     app: AppHandle,
@@ -492,6 +537,8 @@ pub async fn fido_add_key(
 
     let mut keys = load_fido_keys(&root).map_err(|e| e.to_string())?;
     let slot = keys.next_slot();
+    // The organisation key that authorised this one, when it is one.
+    let mut org_reader: Option<silentsilo_app::audit_admin::OrgKeyTouch> = None;
 
     // Asked before the new key is touched, so somebody who is about to be
     // refused is not first walked through a ceremony for nothing.
@@ -509,8 +556,15 @@ pub async fn fido_add_key(
                     .into(),
             );
         }
-        prove_organisation_key(&app, &keys, "organisation keys").await?;
+        let (_, by) = touch_organisation_key(
+            &app,
+            &keys,
+            "organisation keys",
+            "Touch the organisation's security key to confirm this change.",
+        )
+        .await?;
         settle_between_ceremonies().await;
+        org_reader = Some(by);
         silentsilo_vault::POLICY_ORG.to_string()
     } else {
         String::new()
@@ -589,6 +643,25 @@ pub async fn fido_add_key(
     // itself an organisation one: that already asked for an existing key above.
     save_fido_keys(&root, &keys, silentsilo_vault::Authority::Machine)
         .map_err(|e| e.to_string())?;
+
+    // A new organisation key reads the organisation's log too. A silo whose
+    // log was never started starts it now, with both keys.
+    if let Some(by) = org_reader {
+        let new = org_touch(&unlock);
+        let state = app.state::<AppState>();
+        let added = match state.add_org_audit_reader(silo_id, &by, &new) {
+            Err(_) if !state.audit_is_mandatory(silo_id) => state
+                .start_org_audit_log(silo_id, &by, Some(DEFAULT_ORG_RETENTION_DAYS))
+                .and_then(|()| state.add_org_audit_reader(silo_id, &by, &new)),
+            other => other,
+        };
+        if let Err(e) = added {
+            crate::diagnostics::warn(
+                "audit",
+                format_args!("new organisation key not added to the log: {e}"),
+            );
+        }
+    }
 
     Ok(stored)
 }

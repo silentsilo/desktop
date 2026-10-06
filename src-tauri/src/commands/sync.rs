@@ -123,20 +123,23 @@ fn sync_status_impl(app: &AppHandle) -> Result<SyncStatus, String> {
 /// Operations before blobs: a visible file that cannot open yet
 /// self-corrects on the next pass, while unreferenced content looks like an
 /// orphan and may get cleaned up.
-/// The focused silo's activity log, from this computer and every copy,
-/// read with the silo's content key.
+/// The focused silo's activity log, from this computer and every copy.
 pub(crate) async fn read_audit_log(
     app: &AppHandle,
+    reader: silentsilo_app::audit_read::Reader,
 ) -> Result<silentsilo_app::audit_read::LogRead, String> {
     let silo = crate::state::active_silo(app)?;
     let state = app.state::<AppState>();
-    silentsilo_app::audit_read::read_audit_log(
-        &state.core,
-        &DesktopHost { app },
-        &silo,
-        silentsilo_app::audit_read::Reader::Silo,
-    )
-    .await
+    silentsilo_app::audit_read::read_audit_log(&state.core, &DesktopHost { app }, &silo, reader)
+        .await
+}
+
+/// Removes the focused silo's log segments past its retention.
+pub(crate) async fn expire_audit_segments(app: &AppHandle) -> Result<usize, String> {
+    let silo = crate::state::active_silo(app)?;
+    let state = app.state::<AppState>();
+    silentsilo_app::audit_admin::expire_audit_segments(&state.core, &DesktopHost { app }, &silo)
+        .await
 }
 
 #[tauri::command]

@@ -176,7 +176,14 @@ function emit(event: string, payload: unknown) {
   }
 }
 
-let mockAudit = { enabled: false, kept: false, organisation: false, retention_days: null, waiting: 0 };
+let mockAudit = {
+  enabled: false,
+  kept: false,
+  organisation: false,
+  org_controlled: flag("org"),
+  retention_days: null as number | null,
+  waiting: 0,
+};
 
 const handlers: Record<string, Handler> = {
   silo_open: (args) => {
@@ -1008,6 +1015,21 @@ const handlers: Record<string, Handler> = {
     copies_unread: [],
   }),
   audit_export: () => 3,
+  audit_org_start: (args) => {
+    mockAudit = {
+      ...mockAudit,
+      enabled: true,
+      kept: true,
+      organisation: true,
+      retention_days: (args.retentionDays as number | null) ?? null,
+    };
+    return mockAudit;
+  },
+  audit_org_retention: (args) => {
+    mockAudit = { ...mockAudit, retention_days: (args.retentionDays as number | null) ?? null };
+    return mockAudit;
+  },
+  audit_org_expire: () => 0,
   audit_set_enabled: (args) => {
     mockAudit = { ...mockAudit, enabled: Boolean(args.enabled), kept: true };
     return mockAudit;

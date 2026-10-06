@@ -9,6 +9,8 @@ import type { AuditEntry, AuditLog } from "../lib/types";
 
 type Props = {
   devices: { id: string; label: string | null; system_name: string | null }[];
+  /** An organisation's log: read only when asked, since it takes a key. */
+  needsKey?: boolean;
 };
 
 /** Rows shown before "Show more". */
@@ -45,9 +47,9 @@ function details(entry: AuditEntry): string[] {
  * first. Says what is missing rather than leaving it out silently: a hole
  * in a device's run is what a reader of a log most needs to see.
  */
-export function AuditLogList({ devices }: Props) {
+export function AuditLogList({ devices, needsKey = false }: Props) {
   const [log, setLog] = useState<AuditLog | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!needsKey);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [shown, setShown] = useState(PAGE);
@@ -74,8 +76,8 @@ export function AuditLogList({ devices }: Props) {
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!needsKey) void load();
+  }, [load, needsKey]);
 
   const filtered = useMemo(() => {
     const entries = log?.entries ?? [];
@@ -174,6 +176,13 @@ export function AuditLogList({ devices }: Props) {
         </p>
       )}
       {loading && !log && <p className="hint">Reading the log…</p>}
+      {needsKey && !log && !loading && (
+        <div className="actions">
+          <button type="button" className="secondary" onClick={() => void load()}>
+            Read the log
+          </button>
+        </div>
+      )}
       {log && filtered.length === 0 && (
         <p className="hint">
           {search.trim() ? "Nothing in the log matches." : "Nothing recorded yet."}

@@ -286,6 +286,14 @@ says so in the sidebar for as long as it is open (`AppShell`'s
 switch moves): whoever uses the silo is told, which an organisation's log
 in particular owes the people it records.
 
+An organisation's log asks for an organisation key at every step
+(`fido::touch_organisation_key`, which is `prove_organisation_key` keeping
+the wrap key): starting it (`audit_org_start`, or by itself at the first
+enrolment of an organisation key), reading and exporting it, changing the
+retention and removing old segments. Adding an organisation key wraps the
+log's key for it with the touch that authorised the addition; a silo whose
+log was never started starts it there.
+
 - What leaves the silo is recorded before it happens: a secret shown or
   copied, a file or attachment opened or saved outside, a login filled in the
   browser, passwords exported. A change inside the silo is recorded before

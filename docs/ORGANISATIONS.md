@@ -124,6 +124,40 @@ anywhere undoes that.
 Handing a silo over to a new owner is the same flow ending differently: retire
 the organisation keys last, and the silo becomes an ordinary personal one.
 
+## The activity log
+
+An organisation's silo keeps an activity log: unlocking, secrets shown or
+copied, files opened or saved outside the silo, logins filled in the
+browser, and changes to entries, files, keys and the recovery code. Each
+device encrypts its records to a key only the organisation's keys open, so
+the employee's devices write the log and cannot read it.
+
+- A silo created as organisation-administered from 1.4 on starts its log
+  when the first key is enrolled, keeping records for a year. A silo created
+  before 1.4 starts it under Settings, Activity, with an organisation key
+  touched and the retention chosen there (90 days, 1 year, 3 years, or
+  everything).
+- Adding a second organisation key, which asks for the first, lets it read
+  the log too.
+- Once started the log stays on. If a device cannot write a record, it locks
+  the silo instead of carrying on.
+- Reading the log, exporting it, changing the retention and removing records
+  past it each ask for an organisation key. Removing deletes from copies
+  that allow deleting; a never-delete copy keeps everything.
+- Everyone using the silo sees "Activity log, for the organisation" in the
+  sidebar.
+
+What it does not do: a device offline records locally and sends later, so
+the log shows what reached storage. A modified build can stop writing or
+write records that never happened, under its own device; stopped records
+show as numbers missing from that device's run, and nothing can stop the
+second. A retired organisation key still reads the log.
+
+Recording what people do at work is regulated in most places; in the EU it
+falls under the GDPR and employment law. Tell the people using the silo in
+writing before they start, say what is recorded and for how long, and keep
+records no longer than you need them. Take advice on what applies to you.
+
 ## What the app enforces, and what the storage has to
 
 The rules are enforced by the app, not by the cryptography. Someone who edits
