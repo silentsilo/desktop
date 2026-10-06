@@ -103,6 +103,33 @@ fn manifests_go_where_this_user_s_browsers_look_and_come_away_again() {
     assert!(!firefox_manifest.exists());
 }
 
+/// Firefox 147 and later keep profiles in `~/.config/mozilla` and still read
+/// manifests from `~/.mozilla`: both get one.
+#[test]
+fn a_firefox_with_xdg_profiles_gets_the_manifest_where_it_reads_it() {
+    let home = Runtime::new("xdg");
+    std::fs::create_dir_all(home.0.join(".config").join("mozilla")).unwrap();
+    let status = Command::new(HOST)
+        .env("HOME", &home.0)
+        .arg("--install-manifests")
+        .status()
+        .unwrap();
+    assert!(status.success());
+    for dir in [
+        home.0.join(".mozilla").join("native-messaging-hosts"),
+        home.0
+            .join(".config")
+            .join("mozilla")
+            .join("native-messaging-hosts"),
+    ] {
+        assert!(
+            dir.join("com.silentsilo.desktop.json").is_file(),
+            "{}",
+            dir.display()
+        );
+    }
+}
+
 #[test]
 fn without_the_app_it_answers_alone() {
     let runtime = Runtime::new("alone");

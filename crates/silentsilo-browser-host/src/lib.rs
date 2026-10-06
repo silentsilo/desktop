@@ -303,8 +303,12 @@ pub fn registers_for(
 /// the list ([`registers`]) that decides each: Chromium and Brave install
 /// from the Chrome Web Store, so they follow Chrome's. Only browsers with a
 /// configuration directory under `home` are named, so nothing is made for a
-/// browser that is not there. Firefox as a snap reads `~/.mozilla` through
-/// the WebExtensions portal.
+/// browser that is not there. Firefox reads `~/.mozilla/native-messaging-hosts`
+/// however it is installed: as a snap or a flatpak through the WebExtensions
+/// portal, and from 147 on even when its profiles are in `~/.config/mozilla`
+/// (reading the XDG place too is Mozilla bug 2005167, still open), so the
+/// manifest goes there for any sign of Firefox, and into
+/// `~/.config/mozilla/native-messaging-hosts` as well when that exists.
 #[cfg(unix)]
 pub fn user_manifest_places(home: &Path) -> Vec<(&'static str, PathBuf)> {
     let config = home.join(".config");
@@ -319,11 +323,23 @@ pub fn user_manifest_places(home: &Path) -> Vec<(&'static str, PathBuf)> {
         .filter(|(_, dir)| dir.is_dir())
         .map(|(key, dir)| (key, dir.join("NativeMessagingHosts")))
         .collect();
-    if home.join(".mozilla").is_dir() || home.join("snap").join("firefox").is_dir() {
+    let xdg = config.join("mozilla");
+    let firefox_here = [
+        home.join(".mozilla"),
+        xdg.clone(),
+        home.join("snap").join("firefox"),
+        home.join(".var").join("app").join("org.mozilla.firefox"),
+    ]
+    .iter()
+    .any(|dir| dir.is_dir());
+    if firefox_here {
         places.push((
             "firefox",
             home.join(".mozilla").join("native-messaging-hosts"),
         ));
+    }
+    if xdg.is_dir() {
+        places.push(("firefox", xdg.join("native-messaging-hosts")));
     }
     places
 }

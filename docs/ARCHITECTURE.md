@@ -634,8 +634,11 @@ pipe (`browser_pipe`, `#[cfg(unix)]`). What changes, and why it holds:
   `~/.config/microsoft-edge/NativeMessagingHosts`,
   `~/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts` (all as
   `com.silentsilo.desktop.json`, with `allowed_origins`) and
-  `~/.mozilla/native-messaging-hosts` (with `allowed_extensions`; Firefox as
-  a snap reads it through the WebExtensions portal). Nothing is written
+  `~/.mozilla/native-messaging-hosts` (with `allowed_extensions`), for any
+  sign of Firefox: Firefox reads that place as a snap or a flatpak, through
+  the WebExtensions portal, and from 147 on even with its profiles in
+  `~/.config/mozilla` (reading the XDG place too is Mozilla bug 2005167),
+  where a copy goes as well. Nothing is written
   under `/etc`: the `.deb` and the AppImage behave the same, and turning the
   toggle off undoes everything it did. Chromium as a snap or a flatpak does
   not reach native hosts outside its sandbox and is not supported.
