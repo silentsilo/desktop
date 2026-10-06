@@ -55,6 +55,19 @@ describe("extension store links", () => {
     expect(open).toHaveBeenCalledWith(firefox);
   });
 
+  it("says it was chosen before opening the store", () => {
+    const order: string[] = [];
+    const open = vi.fn(() => {
+      order.push("open");
+      return Promise.resolve();
+    });
+    const found = buttons(
+      ExtensionStoreLinks({ links: links(CHROME), open, onChosen: () => order.push("chosen") }),
+    );
+    found[0].props.onClick();
+    expect(order).toEqual(["chosen", "open"]);
+  });
+
   it("shows only https links on a store's own host", () => {
     for (const url of [
       "http://chromewebstore.google.com/detail/x",

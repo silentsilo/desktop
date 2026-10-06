@@ -364,7 +364,19 @@ export function AppSettingsSection({
                 </ul>
               </div>
             )}
-            <ExtensionStoreLinks links={EXTENSION_STORES} />
+            <ExtensionStoreLinks
+              links={EXTENSION_STORES}
+              onChosen={() => {
+                if (
+                  browserExtension?.supported &&
+                  browserExtension.bundled &&
+                  !browserExtension.enabled &&
+                  !browserExtensionBusy
+                ) {
+                  void toggleBrowserExtension(true);
+                }
+              }}
+            />
           </>
         )}
       </div>

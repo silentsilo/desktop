@@ -69,6 +69,9 @@ silo from opening needs a major version rather than a note.
   in your runtime directory, checked at both ends; turning the extension on
   in Settings writes the native messaging manifests for Chrome, Chromium,
   Edge, Brave and Firefox in your home, and turning it off removes them.
+- "Get it for Chrome / Edge / Brave / Firefox" under Settings, Browser
+  extension also turns the extension's connection on. It stays off until
+  then, so someone who never uses the extension has nothing listening.
 - Linux and macOS: the window uses those systems' words instead of
   Windows'. A key that is plugged in but cannot be opened is said as such,
   with the udev rule it needs, instead of as no key at all.

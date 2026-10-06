@@ -431,7 +431,11 @@ flowchart LR
   the opener plugin. The URLs are in `src/lib/extensionStores.ts`, empty
   until each listing exists; an empty one shows no link, and one that is
   not https on the store's own host is never shown. Brave uses the Chrome
-  Web Store link. The installer never installs the extension.
+  Web Store link. The installer never installs the extension. The setting
+  stays off by default, as Bitwarden's and KeePassXC's browser integration
+  do: while it is on, any program of this user can reach the channel. A
+  click on a store link turns it on, since getting the extension says the
+  person wants it to reach the app.
 - **The host checks who started it** (release builds only; tests start it
   from cargo). Its parent must be one of these, under `<Program Files,
   Program Files (x86) or %LOCALAPPDATA%>`, running as this user, with a
