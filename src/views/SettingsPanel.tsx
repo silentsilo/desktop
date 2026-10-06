@@ -115,7 +115,7 @@ const SECTIONS = [
   { id: "verify", group: "silo", label: "Test backup", icon: SearchCheck },
   { id: "recovery", group: "silo", label: "Recovery code", icon: LifeBuoy },
   { id: "keys", group: "silo", label: "Unlocking", icon: KeyRound },
-  { id: "devices", group: "silo", label: "Devices and activity", icon: Laptop },
+  { id: "devices", group: "silo", label: "Activity", icon: Laptop },
   { id: "protected", group: "silo", label: "Auto-import folders", icon: FolderHeart },
   { id: "advanced", group: "silo", label: "Advanced", icon: Wrench },
   { id: "general", group: "app", label: "General", icon: SlidersHorizontal },
@@ -576,7 +576,7 @@ export function SettingsPanel(props: Props) {
           <div className="panel-section">
             <h3>
               <Laptop size={16} />
-              Devices and activity
+              Devices
             </h3>
             <p>
               Every device that has changed something in this silo. A name you give one here is
@@ -663,8 +663,11 @@ export function SettingsPanel(props: Props) {
               in this list with the changes it made.
             </p>
           </div>
-          <AuditLogPanel busy={busy} />
-          <ActivityList devices={devices} />
+          <AuditLogPanel
+            busy={busy}
+            devices={devices}
+            fallback={<ActivityList devices={devices} />}
+          />
           </>
         )}
 

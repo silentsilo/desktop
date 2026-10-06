@@ -28,8 +28,10 @@ silo from opening needs a major version rather than a note.
   secret, opening or saving a file outside the silo, filling a login in the
   browser, changes to entries and files, imports and exports, and changes
   to keys and the recovery code. It is turned on per silo under Settings,
-  Devices and activity, works with no copies at all, and reaches every copy
-  and device at the next sync. On an organisation's silo the log stays on,
+  Activity (was Devices and activity), works with no copies at all, and
+  reaches every copy and device at the next sync. The same page reads it,
+  from this computer and every copy, says which records are missing from a
+  device or do not open, and exports it as CSV or JSON lines. On an organisation's silo the log stays on,
   and an event that cannot be written locks the silo instead of letting the
   action go on unrecorded.
 

@@ -176,7 +176,7 @@ function emit(event: string, payload: unknown) {
   }
 }
 
-let mockAudit = { enabled: false, organisation: false, retention_days: null, waiting: 0 };
+let mockAudit = { enabled: false, kept: false, organisation: false, retention_days: null, waiting: 0 };
 
 const handlers: Record<string, Handler> = {
   silo_open: (args) => {
@@ -986,8 +986,30 @@ const handlers: Record<string, Handler> = {
   copy_secret_to_clipboard: () => null,
   audit_note: () => null,
   audit_status: () => mockAudit,
+  audit_read: () => ({
+    entries: [
+      {
+        device: "dev-1",
+        what: "Secret copied",
+        i: 2,
+        t: Date.now() - 60_000,
+        c: 11,
+        o: "e1",
+        l: "Bank",
+        x: { field: "password" },
+      },
+      { device: "dev-1", what: "Unlocked", i: 1, t: Date.now() - 120_000, c: 1, x: { key: "YubiKey" } },
+      { device: "dev-1", what: "Activity log started", i: 0, t: Date.now() - 180_000, c: 60 },
+    ],
+    devices: [
+      { device: "dev-1", events: 3, missing_events: [], missing_segments: [], broken_segments: [] },
+    ],
+    unreadable: 0,
+    copies_unread: [],
+  }),
+  audit_export: () => 3,
   audit_set_enabled: (args) => {
-    mockAudit = { ...mockAudit, enabled: Boolean(args.enabled) };
+    mockAudit = { ...mockAudit, enabled: Boolean(args.enabled), kept: true };
     return mockAudit;
   },
   browser_fill_pending: () => mockFillPrompt(),

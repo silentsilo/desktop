@@ -277,7 +277,10 @@ when it is written (`src-tauri/src/audit.rs`). Nothing is written until a
 log is turned on for the silo; until then every call returns at once. The
 switch (`audit_set_enabled`, `AuditLogPanel`) acts on this computer at once
 and asks for a sync, which carries the policy to the copies; core's pass
-does that part.
+does that part. Reading (`audit_read`) and export (`audit_export`, CSV with
+formula-like cells kept as text, or JSON lines) go through core's
+`read_audit_log` with the silo's content key; where the silo keeps no log,
+the page shows the oplog's list of changes instead.
 
 - What leaves the silo is recorded before it happens: a secret shown or
   copied, a file or attachment opened or saved outside, a login filled in the

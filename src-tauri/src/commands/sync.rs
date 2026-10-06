@@ -123,6 +123,22 @@ fn sync_status_impl(app: &AppHandle) -> Result<SyncStatus, String> {
 /// Operations before blobs: a visible file that cannot open yet
 /// self-corrects on the next pass, while unreferenced content looks like an
 /// orphan and may get cleaned up.
+/// The focused silo's activity log, from this computer and every copy,
+/// read with the silo's content key.
+pub(crate) async fn read_audit_log(
+    app: &AppHandle,
+) -> Result<silentsilo_app::audit_read::LogRead, String> {
+    let silo = crate::state::active_silo(app)?;
+    let state = app.state::<AppState>();
+    silentsilo_app::audit_read::read_audit_log(
+        &state.core,
+        &DesktopHost { app },
+        &silo,
+        silentsilo_app::audit_read::Reader::Silo,
+    )
+    .await
+}
+
 #[tauri::command]
 pub async fn sync_now(app: AppHandle) -> Result<SyncReport, String> {
     // The silo on screen: pressing Sync is about the one being looked at,

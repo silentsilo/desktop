@@ -279,11 +279,42 @@ export type CredentialType = "login" | "card" | "identity" | "ssh_key" | "note";
 /** A silo's activity log, as this computer knows it. */
 export type AuditStatus = {
   enabled: boolean;
+  /** There is a log to read here, on or off. */
+  kept: boolean;
   /** Kept by an organisation: on for good. */
   organisation: boolean;
   retention_days: number | null;
   /** Records on this computer not yet on every copy. */
   waiting: number;
+};
+
+/** One event of the activity log, as core reads it. */
+export type AuditEntry = {
+  device: string;
+  /** The event's name, from core. */
+  what: string;
+  i: number;
+  t: number;
+  c: number;
+  n?: number;
+  o?: string;
+  l?: string;
+  x?: Record<string, unknown>;
+};
+
+export type AuditTrail = {
+  device: string;
+  events: number;
+  missing_events: [number, number][];
+  missing_segments: number[];
+  broken_segments: number[];
+};
+
+export type AuditLog = {
+  entries: AuditEntry[];
+  devices: AuditTrail[];
+  unreadable: number;
+  copies_unread: string[];
 };
 
 /** What a save was, for the silo's activity log. "imported" is logged once

@@ -326,6 +326,8 @@ pub fn run() {
             audit::audit_note,
             audit::audit_status,
             audit::audit_set_enabled,
+            audit::audit_read,
+            audit::audit_export,
             commands::vault::passwords_read_import_csv,
             commands::pwned::pwned_range,
             commands::vault::passwords_write_export_csv,
