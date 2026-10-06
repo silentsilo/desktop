@@ -597,6 +597,53 @@ flowchart LR
   made while the store lists are empty, has no host, and the hooks skip
   it.
 
+### On Linux
+
+The same host and the same frames over a Unix socket instead of a named
+pipe (`browser_pipe`, `#[cfg(unix)]`). What changes, and why it holds:
+
+- **The socket** is `$XDG_RUNTIME_DIR/silentsilo/browser.sock`, in a
+  directory made `0700` and with the socket itself `0600`. The runtime
+  directory is the user's own, on tmpfs, and no other user can enter it.
+  Without `XDG_RUNTIME_DIR` there is no socket and Settings says so; there
+  is no fallback to `/tmp`, which every user shares. A socket file already
+  there is tried first: one that answers belongs to another running app,
+  and the toggle fails rather than take it over; one that does not is left
+  from a crash and is removed.
+- **The app checks who connected** before reading a byte: `SO_PEERCRED`
+  gives the peer's user and process. It must run as this user, and
+  `/proc/<pid>/exe` must be the host the manifests name (same device and
+  inode). There is no signature to read on Linux: what stands in for it is
+  where the host lives. Installed from the `.deb`, it is
+  `/usr/bin/silentsilo-browser-host`, beside the app and owned by root
+  (Tauri installs an `externalBin` there; the release job builds it and runs
+  `--check-release` first). From the AppImage, whose files exist only while
+  it runs, the app copies its host to
+  `~/.local/share/SilentSilo/browser-host/` when the toggle goes on, and
+  checks against that copy (`install_host_copy`, `installed_host_path`).
+- **The host checks the socket is the app's**: `SO_PEERCRED` on the server
+  must be this user, and the socket is in this user's runtime directory,
+  which nothing else can write. It does not check who started it: on Linux a
+  browser may start it through a portal (Firefox as a snap) or a sandbox
+  helper, so the parent proves nothing.
+- **The manifests** are written per user when the toggle goes on and
+  removed when it goes off, by the host itself (`--install-manifests`,
+  `--remove-manifests`), so the lists of ids stay compiled in one place,
+  for each browser whose configuration directory exists: `~/.config/google-chrome/NativeMessagingHosts`,
+  `~/.config/chromium/NativeMessagingHosts`,
+  `~/.config/microsoft-edge/NativeMessagingHosts`,
+  `~/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts` (all as
+  `com.silentsilo.desktop.json`, with `allowed_origins`) and
+  `~/.mozilla/native-messaging-hosts` (with `allowed_extensions`; Firefox as
+  a snap reads it through the WebExtensions portal). Nothing is written
+  under `/etc`: the `.deb` and the AppImage behave the same, and turning the
+  toggle off undoes everything it did. Chromium as a snap or a flatpak does
+  not reach native hosts outside its sandbox and is not supported.
+
+The checks are weaker than on Windows in one way: a program running as this
+user can replace the AppImage's copy of the host, as it can replace the
+AppImage itself. That is the same user the next section already rules out.
+
 ### What these checks do not stop
 
 They make a forged request cost more than opening a pipe. They do not keep

@@ -17,6 +17,9 @@ pub const MANIFEST_FILE: &str = "silentsilo-browser-host.json";
 /// `allowed_extensions` where Chromium lists origins.
 pub const FIREFOX_MANIFEST_FILE: &str = "silentsilo-browser-host.firefox.json";
 
+/// The file name a browser on Linux looks for: the host's name.
+pub const USER_MANIFEST_FILE: &str = "com.silentsilo.desktop.json";
+
 /// The app's executable, installed beside the host.
 pub const APP_EXE: &str = "SilentSilo.exe";
 
@@ -296,6 +299,35 @@ pub fn registers_for(
 /// [`registers_for`] with this build's lists: whether the installer points
 /// the named browser's key at the host. A browser with no allowed id gets
 /// no key.
+/// Where browsers on Linux read one user's native messaging manifests, with
+/// the list ([`registers`]) that decides each: Chromium and Brave install
+/// from the Chrome Web Store, so they follow Chrome's. Only browsers with a
+/// configuration directory under `home` are named, so nothing is made for a
+/// browser that is not there. Firefox as a snap reads `~/.mozilla` through
+/// the WebExtensions portal.
+#[cfg(unix)]
+pub fn user_manifest_places(home: &Path) -> Vec<(&'static str, PathBuf)> {
+    let config = home.join(".config");
+    let chromium = [
+        ("chrome", config.join("google-chrome")),
+        ("chrome", config.join("chromium")),
+        ("edge", config.join("microsoft-edge")),
+        ("chrome", config.join("BraveSoftware").join("Brave-Browser")),
+    ];
+    let mut places: Vec<(&'static str, PathBuf)> = chromium
+        .into_iter()
+        .filter(|(_, dir)| dir.is_dir())
+        .map(|(key, dir)| (key, dir.join("NativeMessagingHosts")))
+        .collect();
+    if home.join(".mozilla").is_dir() || home.join("snap").join("firefox").is_dir() {
+        places.push((
+            "firefox",
+            home.join(".mozilla").join("native-messaging-hosts"),
+        ));
+    }
+    places
+}
+
 pub fn registers(key: &str) -> Option<bool> {
     let dev = if DEV_ALLOWED { dev_ids() } else { Vec::new() };
     registers_for(
@@ -890,6 +922,8 @@ mod tests {
         ]
     }
 
+    /// Windows paths: read as Windows reads them.
+    #[cfg(windows)]
     #[test]
     fn the_browsers_are_known_where_they_install() {
         for (path, browser) in [
@@ -974,6 +1008,8 @@ mod tests {
         }
     }
 
+    /// Windows paths: read as Windows reads them.
+    #[cfg(windows)]
     #[test]
     fn only_the_system_cmd_is_the_browsers_shell() {
         let system = [PathBuf::from(r"C:\Windows\System32")];

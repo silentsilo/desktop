@@ -65,6 +65,10 @@ silo from opening needs a major version rather than a note.
   other secret, so a silo made there did not open on Windows or the phone,
   and the other way round. A silo made with an earlier Linux build on such a
   key enrols the key again.
+- Linux: the browser extension works here too. The channel is a Unix socket
+  in your runtime directory, checked at both ends; turning the extension on
+  in Settings writes the native messaging manifests for Chrome, Chromium,
+  Edge, Brave and Firefox in your home, and turning it off removes them.
 - Linux and macOS: the window uses those systems' words instead of
   Windows'. A key that is plugged in but cannot be opened is said as such,
   with the udev rule it needs, instead of as no key at all.

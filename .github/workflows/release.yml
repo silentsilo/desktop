@@ -441,7 +441,7 @@ jobs:
             build-essential pkg-config desktop-file-utils \
             libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
             librsvg2-dev libxdo-dev libdbus-1-dev libudev-dev libssl-dev \
-            xdg-utils patchelf squashfs-tools libgdk-pixbuf-2.0-dev
+            xdg-utils patchelf squashfs-tools libgdk-pixbuf-2.0-dev jq
 
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -466,12 +466,33 @@ jobs:
       # that tree could read the key that signs updates for every install.
       # `createUpdaterArtifacts: false` is what lets it out, since the
       # bundler refuses to make an updater artifact it cannot sign.
+      # The browser extension's host, as on Windows: shipped once any store
+      # lists the extension, and only after `--check-release` passes on the
+      # binary that ships. Tauri installs it beside the app (`/usr/bin` in the
+      # .deb), where the app's channel looks for it.
+      - name: The browser host, when a store lists the extension
+        id: host
+        shell: bash
+        run: |
+          set -euo pipefail
+          listed=$(jq '[.chrome_web_store, .edge_add_ons, .firefox_add_ons] | map(. // []) | add | length'                    crates/silentsilo-browser-host/allowed-origins.json)
+          if [ "$listed" -eq 0 ]; then
+            echo "no store lists the extension: built without the host"
+            echo "config=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          cargo build -p silentsilo-browser-host --release --locked
+          target/release/silentsilo-browser-host --check-release
+          mkdir -p src-tauri/binaries
+          cp target/release/silentsilo-browser-host              src-tauri/binaries/silentsilo-browser-host-x86_64-unknown-linux-gnu
+          echo "config=--config src-tauri/tauri.browser-host.json" >> "$GITHUB_OUTPUT"
+
       - name: Build
         env:
           APPIMAGE_EXTRACT_AND_RUN: 1
           # Compiled into core's Google Drive sign-in; unset leaves it out.
           SILENTSILO_GOOGLE_CLIENT_SECRET: ${{ secrets.SILENTSILO_GOOGLE_CLIENT_SECRET }}
-        run: npx tauri build --ci --config '{"bundle":{"createUpdaterArtifacts":false}}' -- --locked
+        run: npx tauri build --ci --config '{"bundle":{"createUpdaterArtifacts":false}}' ${{ steps.host.outputs.config }} -- --locked
 
       # The tree is listed before anything is copied out of it, so a missing
       # file is a readable log line rather than a glob that matched nothing.

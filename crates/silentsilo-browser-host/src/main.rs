@@ -11,7 +11,10 @@
 //! answers `app-not-running` itself. It never starts the app.
 //!
 //! `silentsilo-browser-host --write-manifest` writes both manifests the
-//! browsers read, beside the executable. `--registers <chrome|edge|firefox>`
+//! browsers read, beside the executable. On Linux, `--install-manifests`
+//! writes them where each browser of this user looks, naming this
+//! executable, and `--remove-manifests` takes them away; the app runs both
+//! from its Settings toggle. `--registers <chrome|edge|firefox>`
 //! exits 0 when that browser's registry key should point at them, 1 when its
 //! list is empty. The installer runs both. `--check-release` says whether
 //! this build is fit to ship.
@@ -30,6 +33,10 @@ fn main() -> ExitCode {
         Some("--write-manifest") => return write_manifests(),
         Some("--check-release") => return check_release(),
         Some("--registers") => return registers_key(args.get(1).map(String::as_str)),
+        #[cfg(unix)]
+        Some("--install-manifests") => return user_manifests::install(),
+        #[cfg(unix)]
+        Some("--remove-manifests") => return user_manifests::remove(),
         _ => {}
     }
     let Some(engine) = allowed_caller(&args, &allowed_origins(), &allowed_firefox_ids()) else {
@@ -67,6 +74,66 @@ fn write_manifests() -> ExitCode {
     }
 }
 
+#[cfg(unix)]
+mod user_manifests {
+    use std::path::PathBuf;
+    use std::process::ExitCode;
+
+    use silentsilo_browser_host::{
+        USER_MANIFEST_FILE, allowed_firefox_ids, allowed_origins, firefox_manifest, manifest,
+        registers, user_manifest_places,
+    };
+
+    fn home() -> Option<PathBuf> {
+        std::env::var_os("HOME")
+            .filter(|h| !h.is_empty())
+            .map(PathBuf::from)
+    }
+
+    /// Each browser of this user whose list has an id gets a manifest naming
+    /// this executable; one whose list is empty gets none.
+    pub fn install() -> ExitCode {
+        let (Some(home), Ok(exe)) = (home(), std::env::current_exe()) else {
+            eprintln!("silentsilo-browser-host: no home directory or executable path");
+            return ExitCode::FAILURE;
+        };
+        let mut failed = false;
+        for (key, dir) in user_manifest_places(&home) {
+            let path = dir.join(USER_MANIFEST_FILE);
+            if registers(key) != Some(true) {
+                let _ = std::fs::remove_file(&path);
+                continue;
+            }
+            let body = if key == "firefox" {
+                firefox_manifest(&exe, &allowed_firefox_ids())
+            } else {
+                manifest(&exe, &allowed_origins())
+            };
+            if let Err(e) = std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(&path, body))
+            {
+                eprintln!("silentsilo-browser-host: {}: {e}", path.display());
+                failed = true;
+            }
+        }
+        if failed {
+            ExitCode::FAILURE
+        } else {
+            ExitCode::SUCCESS
+        }
+    }
+
+    /// Takes away every manifest `install` may have written.
+    pub fn remove() -> ExitCode {
+        let Some(home) = home() else {
+            return ExitCode::FAILURE;
+        };
+        for (_, dir) in user_manifest_places(&home) {
+            let _ = std::fs::remove_file(dir.join(USER_MANIFEST_FILE));
+        }
+        ExitCode::SUCCESS
+    }
+}
+
 fn registers_key(key: Option<&str>) -> ExitCode {
     match key.and_then(registers) {
         Some(true) => ExitCode::SUCCESS,
@@ -98,14 +165,11 @@ mod relay {
     use std::process::ExitCode;
     use std::time::Duration;
 
-    use silentsilo_browser_host::{
-        MALFORMED, NOT_OURS, NOT_RUNNING, TOO_LARGE, error_answer, expected_server,
-        not_running_answer, verify_server,
-    };
-    use silentsilo_shell::browser_pipe::{Frame, pipe_name, read_frame, write_frame};
+    use silentsilo_browser_host::{NOT_OURS, NOT_RUNNING, expected_server, verify_server};
+    use silentsilo_shell::browser_pipe::pipe_name;
     use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
-    use tokio::sync::mpsc;
-    use zeroize::Zeroize;
+
+    use super::frames::{answer_alone, bridge};
 
     const ERROR_PIPE_BUSY: i32 = 231;
     /// The server may identify this client but never act as it.
@@ -161,10 +225,20 @@ mod relay {
         let expected = expected_server().map_err(|e| e.to_string())?;
         verify_server(pipe.as_raw_handle(), &expected)
     }
+}
+
+/// Frames between the browser's stdio and the app, whatever carries them.
+#[cfg(any(windows, unix))]
+mod frames {
+    use silentsilo_browser_host::{MALFORMED, TOO_LARGE, error_answer, not_running_answer};
+    use silentsilo_shell::browser_pipe::{Frame, read_frame, write_frame};
+    use tokio::io::{AsyncRead, AsyncWrite};
+    use tokio::sync::mpsc;
+    use zeroize::Zeroize;
 
     /// No app to relay to: each request gets `app-not-running` with
     /// `message`, until the browser closes stdin.
-    async fn answer_alone(message: &str) {
+    pub async fn answer_alone(message: &str) {
         let mut stdin = tokio::io::stdin();
         let mut stdout = tokio::io::stdout();
         while let Ok(Some(frame)) = read_frame(&mut stdin).await {
@@ -184,7 +258,7 @@ mod relay {
 
     /// Frames both ways, unread, until either side closes. Every frame is
     /// wiped once passed on: an answer to a fill carries a password.
-    async fn bridge(pipe: NamedPipeClient) {
+    pub async fn bridge<T: AsyncRead + AsyncWrite>(pipe: T) {
         let (mut from_app, mut to_app) = tokio::io::split(pipe);
         let (out, mut outgoing) = mpsc::channel::<Vec<u8>>(8);
 
@@ -253,7 +327,69 @@ mod relay {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(unix)]
+mod relay {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    use std::process::ExitCode;
+
+    use silentsilo_browser_host::{NOT_OURS, NOT_RUNNING};
+    use silentsilo_shell::browser_pipe::socket_path;
+    use tokio::net::UnixStream;
+
+    use super::frames::{answer_alone, bridge};
+
+    pub fn run() -> ExitCode {
+        let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        else {
+            return ExitCode::FAILURE;
+        };
+        runtime.block_on(async {
+            match UnixStream::connect(match socket_path() {
+                Ok(path) => path,
+                Err(_) => return answer_alone(NOT_RUNNING).await,
+            })
+            .await
+            {
+                Ok(stream) => match check(&stream) {
+                    Ok(()) => bridge(stream).await,
+                    Err(reason) => {
+                        eprintln!("silentsilo-browser-host: not the app's socket: {reason}");
+                        drop(stream);
+                        answer_alone(NOT_OURS).await;
+                    }
+                },
+                Err(_) => answer_alone(NOT_RUNNING).await,
+            }
+        });
+        // Exited outright: the stdin reader sits in a blocking read the
+        // runtime would otherwise wait for.
+        std::process::exit(0)
+    }
+
+    /// Nothing is written before this passes. The server must be this user,
+    /// and the socket's directory this user's alone: nothing else can then
+    /// have made the socket. Who started the host proves nothing here; a
+    /// browser may start it through a portal or a sandbox helper.
+    fn check(stream: &UnixStream) -> Result<(), String> {
+        // SAFETY: getuid cannot fail and touches no memory.
+        let me = unsafe { libc::getuid() };
+        let cred = stream.peer_cred().map_err(|e| e.to_string())?;
+        if cred.uid() != me {
+            return Err("the server runs as another user".into());
+        }
+        let path = socket_path().map_err(|e| e.to_string())?;
+        let dir = path.parent().ok_or("no socket directory")?;
+        let meta = std::fs::symlink_metadata(dir).map_err(|e| e.to_string())?;
+        if !meta.is_dir() || meta.uid() != me || meta.permissions().mode() & 0o077 != 0 {
+            return Err("the socket's directory is not this user's alone".into());
+        }
+        Ok(())
+    }
+}
+
+#[cfg(not(any(windows, unix)))]
 mod relay {
     use std::process::ExitCode;
 

@@ -481,12 +481,12 @@ export type BrowserFillPrompt = {
 
 /** Settings > Browser extension. */
 export type BrowserExtensionStatus = {
-  /** Windows only for now. */
+  /** Windows and Linux for now. */
   supported: boolean;
   /** Whether the native host shipped with this build. */
   bundled: boolean;
   enabled: boolean;
-  /** Whether the pipe is actually open, which "enabled" alone does not say. */
+  /** Whether the channel is actually open, which "enabled" alone does not say. */
   running: boolean;
   /** Fills that sent a password since the app started, newest first. */
   recent: { site: string; label: string; at: number }[];

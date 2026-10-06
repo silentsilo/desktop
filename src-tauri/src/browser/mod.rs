@@ -152,9 +152,9 @@ impl BrowserBridge {
 
 const NOT_BUNDLED: &str = "The browser extension is not part of this build.";
 
-/// Whether `silentsilo-browser-host.exe` sits beside this executable. Without
-/// it nothing could reach the pipe, so the pipe is never opened.
-#[cfg(windows)]
+/// Whether the host sits beside this executable. Without it nothing could
+/// reach the channel, so it is never opened.
+#[cfg(any(windows, target_os = "linux"))]
 fn host_bundled() -> bool {
     std::env::current_exe()
         .map(|exe| {
@@ -164,14 +164,48 @@ fn host_bundled() -> bool {
         .unwrap_or(false)
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 fn host_bundled() -> bool {
     false
 }
 
+/// Where the extension's channel exists. macOS comes with its release.
+const SUPPORTED: bool = cfg!(any(windows, target_os = "linux"));
+const NOT_SUPPORTED: &str = "The browser extension is available on Windows and Linux for now.";
+
+/// On Linux the browsers find the host through manifests in this user's
+/// home, written by the host itself so its lists stay in one place. From an
+/// AppImage the host is copied out first: the image's files go when it
+/// exits.
+#[cfg(target_os = "linux")]
+fn install_manifests() -> Result<(), String> {
+    use silentsilo_shell::browser_pipe::{install_host_copy, installed_host_path};
+    install_host_copy().map_err(|e| format!("the browser host could not be set up: {e}"))?;
+    let host = installed_host_path().map_err(|e| e.to_string())?;
+    let status = std::process::Command::new(&host)
+        .arg("--install-manifests")
+        .status()
+        .map_err(|e| format!("the browser host could not run: {e}"))?;
+    if !status.success() {
+        return Err("The browsers could not be told where SilentSilo is.".into());
+    }
+    Ok(())
+}
+
+/// Takes the manifests away again, so turning the extension off undoes
+/// everything turning it on did.
+#[cfg(target_os = "linux")]
+fn remove_manifests() {
+    if let Ok(host) = silentsilo_shell::browser_pipe::installed_host_path() {
+        let _ = std::process::Command::new(host)
+            .arg("--remove-manifests")
+            .status();
+    }
+}
+
 /// Opens the pipe at startup when the setting is on and the host is there.
 pub fn start_if_enabled(app: &AppHandle) {
-    if !cfg!(windows) || !silentsilo_shell::browser_pipe::extension_enabled() || !host_bundled() {
+    if !SUPPORTED || !silentsilo_shell::browser_pipe::extension_enabled() || !host_bundled() {
         return;
     }
     let app = app.clone();
@@ -182,13 +216,15 @@ pub fn start_if_enabled(app: &AppHandle) {
     });
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 async fn start(app: &AppHandle) -> Result<(), String> {
     use silentsilo_shell::browser_pipe::{ClientCheck, PipeServer};
 
     if !host_bundled() {
         return Err(NOT_BUNDLED.into());
     }
+    #[cfg(target_os = "linux")]
+    install_manifests()?;
     let bridge = app.state::<BrowserBridge>();
     if bridge.running() {
         return Ok(());
@@ -228,9 +264,9 @@ async fn start(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 async fn start(_app: &AppHandle) -> Result<(), String> {
-    Err("The browser extension is available on Windows only for now.".into())
+    Err(NOT_SUPPORTED.into())
 }
 
 /// Closes the pipe. Connections end, and a fill still waiting is answered
@@ -244,7 +280,7 @@ pub fn stop(app: &AppHandle) {
 
 fn status_of(app: &AppHandle) -> ExtensionStatus {
     ExtensionStatus {
-        supported: cfg!(windows),
+        supported: SUPPORTED,
         bundled: host_bundled(),
         enabled: silentsilo_shell::browser_pipe::extension_enabled(),
         running: app.state::<BrowserBridge>().running(),
@@ -274,8 +310,8 @@ pub async fn browser_extension_set(
     app: AppHandle,
     enabled: bool,
 ) -> Result<ExtensionStatus, String> {
-    if enabled && !cfg!(windows) {
-        return Err("The browser extension is available on Windows only for now.".into());
+    if enabled && !SUPPORTED {
+        return Err(NOT_SUPPORTED.into());
     }
     if enabled && !host_bundled() {
         return Err(NOT_BUNDLED.into());
@@ -285,6 +321,8 @@ pub async fn browser_extension_set(
         start(&app).await?;
     } else {
         stop(&app);
+        #[cfg(target_os = "linux")]
+        remove_manifests();
     }
     Ok(status_of(&app))
 }

@@ -360,14 +360,13 @@ mod linux {
         if current().as_deref() != Some(expected) {
             return false;
         }
-        let cleared = if is_wayland() {
+        if is_wayland() {
             Command::new("wl-copy").arg("--clear").status().is_ok()
         } else {
             // xclip has no clear: owning the selection with nothing in it is
             // how the clipboard is emptied.
             feed("xclip", &["-selection", "clipboard"], "").is_ok()
-        };
-        cleared
+        }
     }
 }
 

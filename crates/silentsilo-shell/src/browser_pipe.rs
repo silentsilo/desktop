@@ -1,9 +1,10 @@
 //! The channel between the browser extension's native host and the app.
 //!
 //! The browser starts `silentsilo-browser-host`, which relays native
-//! messaging frames to a named pipe this module serves:
-//! `\\.\pipe\silentsilo-browser-<user SID>`, reachable by the current user
-//! only. Both sides frame the same way the browser does (a 32-bit
+//! messaging frames to a channel this module serves, reachable by the
+//! current user only: on Windows the named pipe
+//! `\\.\pipe\silentsilo-browser-<user SID>`, on Linux the Unix socket
+//! `$XDG_RUNTIME_DIR/silentsilo/browser.sock`. Both sides frame the same way the browser does (a 32-bit
 //! little-endian length, then UTF-8 JSON), so the host copies frames without
 //! reading them. The protocol itself is the app's business; this module only
 //! moves frames. The contract is `docs/PROTOCOL.md` in silentsilo/browser.
@@ -88,6 +89,89 @@ fn setting_path() -> std::path::PathBuf {
 #[cfg(windows)]
 pub use imp::{ClientCheck, HOST_EXE, PipeServer, current_user_sid, pipe_name};
 
+#[cfg(unix)]
+pub use unix::{
+    ClientCheck, HOST_EXE, PipeServer, install_host_copy, installed_host_path, pipe_name,
+    socket_path,
+};
+
+/// Requests one connection may have in progress. Past that the server
+/// stops reading from it until one finishes.
+#[cfg(any(windows, unix))]
+const MAX_IN_FLIGHT: usize = 4;
+
+/// One admitted connection, served until either side or `stop` ends it.
+/// Each request runs as its own task, so a fill waiting for the user does
+/// not hold up a status on the same connection. Every frame written is wiped
+/// afterwards: a fill answer carries a password.
+#[cfg(any(windows, unix))]
+async fn serve<T, S, H, F>(stream: T, handler: H, mut stop: tokio::sync::watch::Receiver<bool>)
+where
+    T: AsyncRead + AsyncWrite + Send + 'static,
+    S: Default + Send + Sync + 'static,
+    H: Fn(std::sync::Arc<S>, Frame) -> F + Clone + Send + Sync + 'static,
+    F: std::future::Future<Output = Vec<u8>> + Send + 'static,
+{
+    use std::sync::Arc;
+    use tokio::sync::{Semaphore, mpsc};
+    use tokio::task::JoinSet;
+    use zeroize::Zeroize;
+
+    let state = Arc::new(S::default());
+    let in_flight = Arc::new(Semaphore::new(MAX_IN_FLIGHT));
+    let (mut reader, mut writer) = tokio::io::split(stream);
+    let (tx, mut rx) = mpsc::channel::<Vec<u8>>(8);
+    let mut requests = JoinSet::new();
+    let write = async move {
+        while let Some(mut frame) = rx.recv().await {
+            let written = write_frame(&mut writer, &frame).await;
+            frame.zeroize();
+            if written.is_err() {
+                break;
+            }
+        }
+        // Answers queued behind a failed write, a fill's among them.
+        rx.close();
+        while let Ok(mut frame) = rx.try_recv() {
+            frame.zeroize();
+        }
+    };
+    let read = async move {
+        loop {
+            // At most MAX_IN_FLIGHT requests at once: the next frame is
+            // read only when one of them has finished.
+            let permit = tokio::select! {
+                permit = in_flight.clone().acquire_owned() => permit,
+                _ = stop.changed() => break,
+            };
+            let Ok(permit) = permit else { break };
+            let frame = tokio::select! {
+                frame = read_frame(&mut reader) => frame,
+                _ = stop.changed() => break,
+            };
+            let Ok(Some(frame)) = frame else { break };
+            let handler = handler.clone();
+            let state = state.clone();
+            let tx = tx.clone();
+            requests.spawn(async move {
+                let answer = handler(state, frame).await;
+                if let Err(mpsc::error::SendError(mut unsent)) = tx.send(answer).await {
+                    unsent.zeroize();
+                }
+                drop(permit);
+            });
+            while requests.try_join_next().is_some() {}
+        }
+        // The other side left, or the server is stopping: a fill still
+        // waiting for confirmation has nobody left to answer to.
+        requests.abort_all();
+        while requests.join_next().await.is_some() {}
+        // The writer ends once this last sender is gone.
+        drop(tx);
+    };
+    tokio::join!(write, read);
+}
+
 #[cfg(windows)]
 mod imp {
     use std::future::Future;
@@ -104,11 +188,9 @@ mod imp {
     use ::windows::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
     use ::windows::core::HSTRING;
     use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
-    use tokio::sync::{Semaphore, mpsc, watch};
-    use tokio::task::JoinSet;
-    use zeroize::Zeroize;
+    use tokio::sync::watch;
 
-    use super::{Frame, read_frame, write_frame};
+    use super::Frame;
     use crate::win_process;
 
     pub use crate::win_process::current_user_sid;
@@ -116,10 +198,6 @@ mod imp {
     /// At most this many connections at once. The browser starts one host
     /// per port, and an extension needs one or two.
     const MAX_INSTANCES: usize = 16;
-
-    /// Requests one connection may have in progress. Past that the server
-    /// stops reading from it until one finishes.
-    const MAX_IN_FLIGHT: usize = 4;
 
     /// How long the server waits before trying again to create an instance
     /// (all of them taken, say), doubling up to the second value.
@@ -401,7 +479,7 @@ mod imp {
         handler: H,
         check: ClientCheck,
         warn: W,
-        mut stop: watch::Receiver<bool>,
+        stop: watch::Receiver<bool>,
     ) where
         S: Default + Send + Sync + 'static,
         H: Fn(Arc<S>, Frame) -> F + Clone + Send + Sync + 'static,
@@ -419,60 +497,364 @@ mod imp {
             warn(format!("refused a connection: {reason}"));
             return;
         }
+        super::serve::<_, S, H, F>(pipe, handler, stop).await;
+    }
+}
 
-        let state = Arc::new(S::default());
-        let in_flight = Arc::new(Semaphore::new(MAX_IN_FLIGHT));
-        let (mut reader, mut writer) = tokio::io::split(pipe);
-        let (tx, mut rx) = mpsc::channel::<Vec<u8>>(8);
-        let mut requests = JoinSet::new();
-        let write = async move {
-            while let Some(mut frame) = rx.recv().await {
-                let written = write_frame(&mut writer, &frame).await;
-                frame.zeroize();
-                if written.is_err() {
-                    break;
+#[cfg(unix)]
+mod unix {
+    use std::future::Future;
+    use std::io;
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+
+    use tokio::net::{UnixListener, UnixStream};
+    use tokio::sync::{Semaphore, watch};
+
+    use super::Frame;
+
+    /// The host's file name, installed beside the app.
+    pub const HOST_EXE: &str = "silentsilo-browser-host";
+
+    /// At most this many connections at once, as on Windows.
+    const MAX_CONNECTIONS: usize = 16;
+
+    fn own_uid() -> u32 {
+        // SAFETY: getuid cannot fail and touches no memory.
+        unsafe { libc::getuid() }
+    }
+
+    /// `$XDG_RUNTIME_DIR/silentsilo/browser.sock`. The runtime directory is
+    /// this user's alone; without one there is nowhere private, and no
+    /// fallback to a directory every user shares.
+    pub fn socket_path() -> io::Result<PathBuf> {
+        let runtime = std::env::var_os("XDG_RUNTIME_DIR")
+            .filter(|dir| !dir.is_empty())
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "XDG_RUNTIME_DIR is not set, so there is no private place for the connection",
+                )
+            })?;
+        Ok(PathBuf::from(runtime)
+            .join("silentsilo")
+            .join("browser.sock"))
+    }
+
+    /// The socket's path, as the host names it.
+    pub fn pipe_name() -> io::Result<String> {
+        socket_path().map(|path| path.to_string_lossy().into_owned())
+    }
+
+    /// Where the browsers find the host. An AppImage's own files exist only
+    /// while it runs, so from one the host is copied out
+    /// ([`install_host_copy`]) and named there.
+    pub fn installed_host_path() -> io::Result<PathBuf> {
+        if std::env::var_os("APPIMAGE").is_some() {
+            return appimage_copy();
+        }
+        Ok(std::env::current_exe()?.with_file_name(HOST_EXE))
+    }
+
+    fn appimage_copy() -> io::Result<PathBuf> {
+        let data = dirs::data_local_dir()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no local data directory"))?;
+        Ok(data.join("SilentSilo").join("browser-host").join(HOST_EXE))
+    }
+
+    /// Copies the host out of the AppImage this runs from, whole or not at
+    /// all. Outside an AppImage there is nothing to copy.
+    pub fn install_host_copy() -> io::Result<()> {
+        if std::env::var_os("APPIMAGE").is_none() {
+            return Ok(());
+        }
+        let source = std::env::current_exe()?.with_file_name(HOST_EXE);
+        let dest = appimage_copy()?;
+        let dir = dest.parent().expect("the copy has a directory");
+        std::fs::create_dir_all(dir)?;
+        let partial = dest.with_extension("partial");
+        std::fs::copy(&source, &partial)?;
+        std::fs::set_permissions(&partial, std::fs::Permissions::from_mode(0o755))?;
+        std::fs::rename(&partial, &dest)
+    }
+
+    /// The same file, by device and inode: a path can be a link to it.
+    fn same_file(a: &Path, b: &Path) -> bool {
+        match (std::fs::metadata(a), std::fs::metadata(b)) {
+            (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
+            _ => false,
+        }
+    }
+
+    /// The executable process `pid` runs.
+    #[cfg(target_os = "linux")]
+    fn image_of(pid: u32) -> io::Result<PathBuf> {
+        Ok(PathBuf::from(format!("/proc/{pid}/exe")))
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn image_of(pid: u32) -> io::Result<PathBuf> {
+        let mut buf = vec![0u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];
+        // SAFETY: the buffer is as large as the call is told.
+        let len =
+            unsafe { libc::proc_pidpath(pid as i32, buf.as_mut_ptr().cast(), buf.len() as u32) };
+        if len <= 0 {
+            return Err(io::Error::last_os_error());
+        }
+        buf.truncate(len as usize);
+        Ok(PathBuf::from(String::from_utf8_lossy(&buf).into_owned()))
+    }
+
+    /// Which process may talk to the app: this user's, running the host the
+    /// manifests name. Linux has no signature to check; the host's place
+    /// stands in for it (root's `/usr/bin` from the package).
+    #[derive(Clone, Debug)]
+    pub struct ClientCheck {
+        pub image: PathBuf,
+    }
+
+    impl ClientCheck {
+        /// The host the browsers are pointed at.
+        pub fn host_beside_this_exe() -> io::Result<Self> {
+            Ok(Self {
+                image: installed_host_path()?,
+            })
+        }
+
+        /// Whether process `pid`, already known to be this user's, passes.
+        pub fn admit(&self, pid: u32) -> Result<(), String> {
+            let image = image_of(pid).map_err(|e| format!("client image: {e}"))?;
+            if !same_file(&image, &self.image) {
+                return Err(format!("the client is not {}", self.image.display()));
+            }
+            Ok(())
+        }
+    }
+
+    /// The socket, bound and waiting for its first client.
+    pub struct PipeServer {
+        listener: UnixListener,
+        path: PathBuf,
+        check: ClientCheck,
+        stop: watch::Receiver<bool>,
+    }
+
+    impl PipeServer {
+        pub async fn bind(stop: watch::Receiver<bool>, check: ClientCheck) -> io::Result<Self> {
+            Self::bind_at(socket_path()?, stop, check).await
+        }
+
+        /// [`bind`](Self::bind) at another path, for tests. The directory is
+        /// made private and must be this user's. A socket already there that
+        /// answers is another app's, and is refused rather than taken; one
+        /// that does not is left from a crash, and goes.
+        pub async fn bind_at(
+            path: PathBuf,
+            stop: watch::Receiver<bool>,
+            check: ClientCheck,
+        ) -> io::Result<Self> {
+            let dir = path
+                .parent()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "no directory"))?;
+            std::fs::create_dir_all(dir)?;
+            let meta = std::fs::symlink_metadata(dir)?;
+            if !meta.is_dir() || meta.uid() != own_uid() {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "the socket's directory is not this user's",
+                ));
+            }
+            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+            if std::fs::symlink_metadata(&path).is_ok() {
+                if UnixStream::connect(&path).await.is_ok() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::AddrInUse,
+                        "another SilentSilo is already serving the browser extension",
+                    ));
+                }
+                std::fs::remove_file(&path)?;
+            }
+            let listener = UnixListener::bind(&path)?;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+            Ok(Self {
+                listener,
+                path,
+                check,
+                stop,
+            })
+        }
+
+        /// Serves until `stop` turns true, then removes the socket. A
+        /// client that is not this user's host is dropped unread.
+        pub async fn run<S, H, F, W>(self, handler: H, warn: W) -> io::Result<()>
+        where
+            S: Default + Send + Sync + 'static,
+            H: Fn(Arc<S>, Frame) -> F + Clone + Send + Sync + 'static,
+            F: Future<Output = Vec<u8>> + Send + 'static,
+            W: Fn(String) + Clone + Send + Sync + 'static,
+        {
+            let Self {
+                listener,
+                path,
+                check,
+                mut stop,
+            } = self;
+            let slots = Arc::new(Semaphore::new(MAX_CONNECTIONS));
+            loop {
+                let accepted = tokio::select! {
+                    accepted = listener.accept() => accepted,
+                    _ = stop.changed() => break,
+                };
+                let stream = match accepted {
+                    Ok((stream, _)) => stream,
+                    Err(e) => {
+                        warn(format!("a connection failed: {e}"));
+                        continue;
+                    }
+                };
+                let Ok(slot) = slots.clone().try_acquire_owned() else {
+                    warn("too many connections at once".into());
+                    continue;
+                };
+                let (handler, check, warn, stop) =
+                    (handler.clone(), check.clone(), warn.clone(), stop.clone());
+                tokio::spawn(async move {
+                    connection::<S, H, F, W>(stream, handler, check, warn, stop).await;
+                    drop(slot);
+                });
+            }
+            let _ = std::fs::remove_file(&path);
+            Ok(())
+        }
+    }
+
+    async fn connection<S, H, F, W>(
+        stream: UnixStream,
+        handler: H,
+        check: ClientCheck,
+        warn: W,
+        stop: watch::Receiver<bool>,
+    ) where
+        S: Default + Send + Sync + 'static,
+        H: Fn(Arc<S>, Frame) -> F + Clone + Send + Sync + 'static,
+        F: Future<Output = Vec<u8>> + Send + 'static,
+        W: Fn(String) + Clone + Send + Sync + 'static,
+    {
+        // Who is on the other end, before a single byte is read.
+        let admitted = match stream.peer_cred() {
+            Ok(cred) if cred.uid() != own_uid() => Err("the client runs as another user".into()),
+            Ok(cred) => match cred.pid() {
+                Some(pid) => tokio::task::spawn_blocking(move || check.admit(pid as u32))
+                    .await
+                    .unwrap_or_else(|e| Err(e.to_string())),
+                None => Err("no client process".to_string()),
+            },
+            Err(e) => Err(format!("no client credentials: {e}")),
+        };
+        if let Err(reason) = admitted {
+            warn(format!("refused a connection: {reason}"));
+            return;
+        }
+        super::serve::<_, S, H, F>(stream, handler, stop).await;
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn private_dir() -> tempfile_like::Dir {
+            tempfile_like::Dir::new()
+        }
+
+        /// A directory under the system temp dir, removed on drop. The crate
+        /// has no tempfile dependency, and needs only this.
+        mod tempfile_like {
+            pub struct Dir(pub std::path::PathBuf);
+            impl Dir {
+                pub fn new() -> Self {
+                    let path = std::env::temp_dir().join(format!(
+                        "silentsilo-pipe-{}-{}",
+                        std::process::id(),
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_nanos()
+                    ));
+                    std::fs::create_dir_all(&path).unwrap();
+                    Self(path)
                 }
             }
-            // Answers queued behind a failed write, a fill's among them.
-            rx.close();
-            while let Ok(mut frame) = rx.try_recv() {
-                frame.zeroize();
+            impl Drop for Dir {
+                fn drop(&mut self) {
+                    let _ = std::fs::remove_dir_all(&self.0);
+                }
             }
-        };
-        let read = async move {
-            loop {
-                // At most MAX_IN_FLIGHT requests at once: the next frame is
-                // read only when one of them has finished.
-                let permit = tokio::select! {
-                    permit = in_flight.clone().acquire_owned() => permit,
-                    _ = stop.changed() => break,
-                };
-                let Ok(permit) = permit else { break };
-                let frame = tokio::select! {
-                    frame = read_frame(&mut reader) => frame,
-                    _ = stop.changed() => break,
-                };
-                let Ok(Some(frame)) = frame else { break };
-                let handler = handler.clone();
-                let state = state.clone();
-                let tx = tx.clone();
-                requests.spawn(async move {
-                    let answer = handler(state, frame).await;
-                    if let Err(mpsc::error::SendError(mut unsent)) = tx.send(answer).await {
-                        unsent.zeroize();
+        }
+
+        #[tokio::test]
+        async fn this_test_process_is_admitted_and_a_stranger_is_not() {
+            let me = std::env::current_exe().unwrap();
+            let check = ClientCheck { image: me };
+            assert!(check.admit(std::process::id()).is_ok());
+            let other = ClientCheck {
+                image: PathBuf::from("/bin/sh"),
+            };
+            assert!(other.admit(std::process::id()).is_err());
+        }
+
+        #[tokio::test]
+        async fn the_socket_is_private_and_a_live_one_is_not_taken() {
+            let dir = private_dir();
+            let path = dir.0.join("ss").join("browser.sock");
+            let check = ClientCheck {
+                image: std::env::current_exe().unwrap(),
+            };
+            let (_stop, rx) = watch::channel(false);
+            let first = PipeServer::bind_at(path.clone(), rx.clone(), check.clone())
+                .await
+                .unwrap();
+            let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+            let dir_mode = std::fs::metadata(path.parent().unwrap())
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777;
+            assert_eq!(dir_mode, 0o700);
+            let second = PipeServer::bind_at(path.clone(), rx.clone(), check.clone()).await;
+            assert_eq!(second.err().unwrap().kind(), io::ErrorKind::AddrInUse);
+            drop(first);
+            // Left behind by the first, which no longer answers: taken over.
+            assert!(PipeServer::bind_at(path, rx, check).await.is_ok());
+        }
+
+        #[tokio::test]
+        async fn frames_go_both_ways_for_an_admitted_client() {
+            let dir = private_dir();
+            let path = dir.0.join("ss").join("browser.sock");
+            let check = ClientCheck {
+                image: std::env::current_exe().unwrap(),
+            };
+            let (stop, rx) = watch::channel(false);
+            let server = PipeServer::bind_at(path.clone(), rx, check).await.unwrap();
+            let serving = tokio::spawn(server.run::<(), _, _, _>(
+                |_state, frame| async move {
+                    match frame {
+                        Frame::Message(body) => [b"echo:".as_slice(), &body].concat(),
+                        Frame::TooLarge => b"too large".to_vec(),
                     }
-                    drop(permit);
-                });
-                while requests.try_join_next().is_some() {}
-            }
-            // The other side left, or the server is stopping: a fill still
-            // waiting for confirmation has nobody left to answer to.
-            requests.abort_all();
-            while requests.join_next().await.is_some() {}
-            // The writer ends once this last sender is gone.
-            drop(tx);
-        };
-        tokio::join!(write, read);
+                },
+                |_warning| {},
+            ));
+            let mut client = UnixStream::connect(&path).await.unwrap();
+            super::super::write_frame(&mut client, b"hi").await.unwrap();
+            let answer = super::super::read_frame(&mut client).await.unwrap();
+            assert_eq!(answer, Some(Frame::Message(b"echo:hi".to_vec())));
+            stop.send(true).unwrap();
+            serving.await.unwrap().unwrap();
+            assert!(!path.exists(), "the socket goes with the server");
+        }
     }
 }
 
@@ -688,6 +1070,7 @@ mod tests {
         )
     }
 
+    #[cfg(windows)]
     type Warnings = std::sync::Arc<std::sync::Mutex<Vec<String>>>;
 
     /// Echoes each request back, counting them.
