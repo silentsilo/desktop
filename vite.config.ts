@@ -16,6 +16,19 @@ export default defineConfig({
   server: {
     port: 1420,
     strictPort: true,
+    // Cargo's build output and the release folders sit in this tree and run
+    // to hundreds of thousands of files; watching them kept the dev server
+    // from answering while cargo wrote into them.
+    watch: {
+      ignored: [
+        "**/target/**",
+        "**/src-tauri/**",
+        "**/crates/**",
+        "**/dist-release/**",
+        "**/private/**",
+        "**/test-results/**",
+      ],
+    },
   },
   // Only Tauri's build facts, never TAURI_SIGNING_*: a variable matching the
   // prefix can end up in the bundle.
