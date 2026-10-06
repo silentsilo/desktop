@@ -60,6 +60,14 @@ silo from opening needs a major version rather than a note.
 - Linux: the AppImage no longer carries its own Wayland libraries, which
   stopped it from starting on Fedora 44, and the window no longer stays
   white on GPU stacks where WebKitGTK's DMA-BUF renderer fails.
+- Linux and macOS: a security key with a PIN is asked for it, in the app,
+  as Windows and Android do. Without the PIN these builds read the key's
+  other secret, so a silo made there did not open on Windows or the phone,
+  and the other way round. A silo made with an earlier Linux build on such a
+  key enrols the key again.
+- Linux and macOS: the window uses those systems' words instead of
+  Windows'. A key that is plugged in but cannot be opened is said as such,
+  with the udev rule it needs, instead of as no key at all.
 
 ## [1.3.0] - OneDrive, Dropbox and Google Drive
 

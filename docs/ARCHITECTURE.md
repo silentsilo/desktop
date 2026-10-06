@@ -269,6 +269,17 @@ in core (`rotation::commit_rotation_with`); past that commit an error locks
 the silo. A seed runs with the silo's key (`seed_target_checked`), so a copy
 that missed a rotation cannot put the old key back on another.
 
+## Security key PIN
+
+On Linux and macOS the app talks to a removable key itself (core's
+`ctap2`), so a key's PIN is asked in the window: `pin::install` gives core a
+prompt that emits `fido-pin-request` from the ceremony's blocking thread and
+waits up to two minutes for `fido_pin_answer`; `SecurityKeyPinDialog` sits
+beside the toasts, so it shows on every screen, unlock and enrolment
+included. A key with a PIN is always asked for it, as Windows asks in its
+own dialog: `hmac-secret` gives another secret without it, and a key asked
+differently on two platforms would open neither's silo on the other.
+
 ## Activity log
 
 Core owns the format, the queue on this computer and its delivery (core's

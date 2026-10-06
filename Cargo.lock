@@ -180,45 +180,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 
 [[package]]
-name = "asn1-rs"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7f43a50ac4fdca5df8e885c21b835997f0a1cdee65494a6847694a98652d9d8"
-dependencies = [
- "asn1-rs-derive",
- "asn1-rs-impl",
- "displaydoc",
- "nom",
- "num-traits",
- "rusticata-macros",
- "thiserror 2.0.19",
- "time",
-]
-
-[[package]]
-name = "asn1-rs-derive"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3109e49b1e4909e9db6515a30c633684d68cdeaa252f215214cb4fa1a5bfee2c"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
- "synstructure",
-]
-
-[[package]]
-name = "asn1-rs-impl"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b18050c2cd6fe86c3a76584ef5e0baf286d038cda203eb6223df2cc413565f7"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
 name = "async-broadcast"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1456,28 +1417,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ctap-hid-fido2"
-version = "3.5.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96157315d868b9012e2a7105d22badfbff69f191d2beb8d6f32487ad85c429e1"
-dependencies = [
- "aes 0.9.1",
- "anyhow",
- "base64 0.22.1",
- "byteorder",
- "cbc 0.2.1",
- "ciborium",
- "hex",
- "hidapi",
- "num",
- "pad",
- "ring",
- "strum",
- "strum_macros",
- "x509-parser",
-]
-
-[[package]]
 name = "ctor"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1652,20 +1591,6 @@ dependencies = [
  "const-oid",
  "pem-rfc7468",
  "zeroize",
-]
-
-[[package]]
-name = "der-parser"
-version = "10.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07da5016415d5a3c4dd39b11ed26f915f52fc4e0dc197d87908bc916e51bc1a6"
-dependencies = [
- "asn1-rs",
- "displaydoc",
- "nom",
- "num-bigint 0.4.8",
- "num-traits",
- "rusticata-macros",
 ]
 
 [[package]]
@@ -3393,12 +3318,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lazy_static"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
-
-[[package]]
 name = "libappindicator"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3579,12 +3498,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "minimal-lexical"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
-
-[[package]]
 name = "minisign-verify"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3710,16 +3623,6 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "libc",
-]
-
-[[package]]
-name = "nom"
-version = "7.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
-dependencies = [
- "memchr",
- "minimal-lexical",
 ]
 
 [[package]]
@@ -4066,15 +3969,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "oid-registry"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12f40cff3dde1b6087cc5d5f5d4d65712f34016a03ed60e9c08dcc392736b5b7"
-dependencies = [
- "asn1-rs",
-]
-
-[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4200,15 +4094,6 @@ dependencies = [
  "primefield",
  "primeorder",
  "sha2 0.11.0",
-]
-
-[[package]]
-name = "pad"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2ad9b889f1b12e0b9ee24db044b5129150d5eada288edc800f789928dc8c0e3"
-dependencies = [
- "unicode-width",
 ]
 
 [[package]]
@@ -5245,15 +5130,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rusticata-macros"
-version = "4.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "faf0c4a6ece9950b9abdb62b1cfcf2a68b3b67a10ba445b3bb85be2a293d0632"
-dependencies = [
- "nom",
-]
-
-[[package]]
 name = "rustix"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5888,8 +5764,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-app"
-version = "1.9.0-beta.6"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.6#3ee3c2719484304a11437605c49ed4bd2cd7eab2"
+version = "1.9.0-beta.7"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.7#6ae444e69dbd1832fcc54d4be60709f6dec53b5f"
 dependencies = [
  "hex",
  "serde",
@@ -5907,8 +5783,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-audit"
-version = "1.9.0-beta.6"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.6#3ee3c2719484304a11437605c49ed4bd2cd7eab2"
+version = "1.9.0-beta.7"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.7#6ae444e69dbd1832fcc54d4be60709f6dec53b5f"
 dependencies = [
  "blake3",
  "hex",
@@ -5933,8 +5809,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-cloud"
-version = "1.9.0-beta.6"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.6#3ee3c2719484304a11437605c49ed4bd2cd7eab2"
+version = "1.9.0-beta.7"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.7#6ae444e69dbd1832fcc54d4be60709f6dec53b5f"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -5954,8 +5830,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-core"
-version = "1.9.0-beta.6"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.6#3ee3c2719484304a11437605c49ed4bd2cd7eab2"
+version = "1.9.0-beta.7"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.7#6ae444e69dbd1832fcc54d4be60709f6dec53b5f"
 dependencies = [
  "serde",
  "thiserror 2.0.19",
@@ -5964,8 +5840,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-crypto"
-version = "1.9.0-beta.6"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.6#3ee3c2719484304a11437605c49ed4bd2cd7eab2"
+version = "1.9.0-beta.7"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.7#6ae444e69dbd1832fcc54d4be60709f6dec53b5f"
 dependencies = [
  "aes-gcm 0.10.3",
  "blake3",
@@ -5982,8 +5858,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-fido"
-version = "1.9.0-beta.6"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.6#3ee3c2719484304a11437605c49ed4bd2cd7eab2"
+version = "1.9.0-beta.7"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.7#6ae444e69dbd1832fcc54d4be60709f6dec53b5f"
 dependencies = [
  "aes 0.8.4",
  "base64 0.22.1",
@@ -5991,8 +5867,8 @@ dependencies = [
  "cbc 0.1.2",
  "ciborium",
  "core-foundation 0.10.1",
- "ctap-hid-fido2",
  "hex",
+ "hidapi",
  "hkdf 0.12.4",
  "hmac 0.12.1",
  "objc2-local-authentication",
@@ -6010,8 +5886,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-s3"
-version = "1.9.0-beta.6"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.6#3ee3c2719484304a11437605c49ed4bd2cd7eab2"
+version = "1.9.0-beta.7"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.7#6ae444e69dbd1832fcc54d4be60709f6dec53b5f"
 dependencies = [
  "aws-credential-types",
  "aws-sdk-s3",
@@ -6046,8 +5922,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-store"
-version = "1.9.0-beta.6"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.6#3ee3c2719484304a11437605c49ed4bd2cd7eab2"
+version = "1.9.0-beta.7"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.7#6ae444e69dbd1832fcc54d4be60709f6dec53b5f"
 dependencies = [
  "async-trait",
  "percent-encoding",
@@ -6068,8 +5944,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-sync"
-version = "1.9.0-beta.6"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.6#3ee3c2719484304a11437605c49ed4bd2cd7eab2"
+version = "1.9.0-beta.7"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.7#6ae444e69dbd1832fcc54d4be60709f6dec53b5f"
 dependencies = [
  "hex",
  "rusqlite",
@@ -6089,8 +5965,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-vault"
-version = "1.9.0-beta.6"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.6#3ee3c2719484304a11437605c49ed4bd2cd7eab2"
+version = "1.9.0-beta.7"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.7#6ae444e69dbd1832fcc54d4be60709f6dec53b5f"
 dependencies = [
  "aes-gcm 0.10.3",
  "argon2 0.5.3",
@@ -6114,8 +5990,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-vfs"
-version = "1.9.0-beta.6"
-source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.6#3ee3c2719484304a11437605c49ed4bd2cd7eab2"
+version = "1.9.0-beta.7"
+source = "git+https://github.com/silentsilo/core?tag=v1.9.0-beta.7#6ae444e69dbd1832fcc54d4be60709f6dec53b5f"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -6363,24 +6239,6 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
-
-[[package]]
-name = "strum"
-version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
-
-[[package]]
-name = "strum_macros"
-version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab85eea0270ee17587ed4156089e10b9e6880ee688791d45a905f5b1ca36f664"
-dependencies = [
- "heck 0.5.0",
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
 
 [[package]]
 name = "subtle"
@@ -7391,12 +7249,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6f5d3c3b1bf09027a88a6bc961fc00497d651009560b5463668dc81b0fa87a8"
 
 [[package]]
-name = "unicode-width"
-version = "0.1.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af"
-
-[[package]]
 name = "universal-hash"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8365,23 +8217,6 @@ dependencies = [
  "curve25519-dalek",
  "rand_core 0.10.1",
  "zeroize",
-]
-
-[[package]]
-name = "x509-parser"
-version = "0.18.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d43b0f71ce057da06bc0851b23ee24f3f86190b07203dd8f567d0b706a185202"
-dependencies = [
- "asn1-rs",
- "data-encoding",
- "der-parser",
- "lazy_static",
- "nom",
- "oid-registry",
- "rusticata-macros",
- "thiserror 2.0.19",
- "time",
 ]
 
 [[package]]

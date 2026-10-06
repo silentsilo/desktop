@@ -4,6 +4,7 @@ mod commands;
 mod diagnostics;
 #[cfg(feature = "e2e")]
 mod e2e;
+mod pin;
 mod state;
 
 /// The fixture builder's escape hatch must not be in a shipped binary.
@@ -206,6 +207,7 @@ pub fn run() {
             handle_shell_action(app.handle(), startup_args);
             commands::sync::spawn_auto_sync(app.handle().clone());
             commands::vault::spawn_idle_backstop(app.handle().clone());
+            pin::install(app.handle().clone());
             // Only when Settings > Browser extension is on; off, the pipe
             // does not exist.
             browser::start_if_enabled(app.handle());
@@ -324,6 +326,7 @@ pub fn run() {
             commands::vault::password_delete_attachment,
             commands::vault::copy_secret_to_clipboard,
             audit::audit_note,
+            pin::fido_pin_answer,
             audit::audit_status,
             audit::audit_set_enabled,
             audit::audit_read,

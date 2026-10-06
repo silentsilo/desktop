@@ -36,6 +36,20 @@ pub struct AppBootstrap {
     platform_enrolled: bool,
     /// The silo currently open, if any. `None` means show the picker.
     silo: Option<crate::commands::silo::SiloView>,
+    /// Which platform's words the window uses: "windows", "linux" or
+    /// "macos". Without it the window took every build for Windows.
+    os: &'static str,
+}
+
+/// The platform this build is for, in the window's terms.
+fn os_name() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "linux") {
+        "linux"
+    } else {
+        "windows"
+    }
 }
 
 /// Asks the authenticators what they can do, which walks the USB bus and can
@@ -90,6 +104,7 @@ fn app_bootstrap_impl(app: &AppHandle) -> Result<AppBootstrap, String> {
         portable_enrolled,
         platform_enrolled,
         silo: silo.as_ref().map(crate::commands::silo::SiloView::from),
+        os: os_name(),
     })
 }
 

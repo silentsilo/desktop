@@ -74,6 +74,7 @@ import { ConfirmDialog } from "./views/ConfirmDialog";
 import { RecoveryCodeDialog } from "./views/RecoveryCodeDialog";
 import { explorerKeysBlocked } from "./lib/explorerKeys";
 import { ShellUploadDialog } from "./views/ShellUploadDialog";
+import { SecurityKeyPinDialog } from "./views/SecurityKeyPinDialog";
 import { BrowserFillDialog } from "./views/BrowserFillDialog";
 import { ShellDownloadDialog } from "./views/ShellDownloadDialog";
 import { TrashPanel } from "./views/TrashPanel";
@@ -3480,7 +3481,14 @@ export default function App() {
     [begin, end, toasts, withPasswordWrite],
   );
 
-  const toastHost = <ToastHost toasts={toastList} onDismiss={toasts.dismiss} />;
+  // With the toasts because every screen shows them: a key's PIN can be
+  // asked at unlock, at enrolment and anywhere a key is touched.
+  const toastHost = (
+    <>
+      <ToastHost toasts={toastList} onDismiss={toasts.dismiss} />
+      <SecurityKeyPinDialog />
+    </>
+  );
   // Rendered alongside the confirmation host, so it reaches whichever screen
   // the user is on when a background pass discovers it.
   // Only above the silo it is about. A prompt raised for one silo and

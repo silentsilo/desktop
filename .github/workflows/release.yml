@@ -61,11 +61,10 @@ jobs:
       # release is a draft either way, and a missing macOS binary is something
       # to notice rather than a reason to have no Linux one.
       fail-fast: false
+      # Linux is built apart, in `build-extract-linux`: the runner's own glibc
+      # is newer than the distributions people recover on.
       matrix:
         include:
-          - os: ubuntu-latest
-            asset: silentsilo-extract-linux-x86_64
-            built: silentsilo-extract
           - os: macos-latest
             asset: silentsilo-extract-macos-aarch64
             built: silentsilo-extract
@@ -124,18 +123,6 @@ jobs:
       # links libdbus needs libdbus present on the machine someone is
       # recovering on, which is the one place to assume nothing. Making the
       # keychain optional in silentsilo-vault is the real fix.
-      - name: D-Bus headers, for the keychain crate the extractor does not use
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          for attempt in 1 2 3; do
-            sudo timeout 180 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update && break
-            echo "apt-get update stalled or failed (attempt $attempt)"
-            sudo pkill -9 -f apt-get || true
-            sudo dpkg --configure -a || true
-            sleep 5
-          done
-          sudo apt-get install -y libdbus-1-dev pkg-config
-
       # `-p` and nothing else: this must not drag in the security key backend,
       # which is the whole reason it builds on three platforms from one
       # source. `--locked` against core's own lockfile: the extractor ships
@@ -155,6 +142,96 @@ jobs:
         with:
           name: ${{ matrix.asset }}
           path: dist/${{ matrix.asset }}
+          retention-days: 7
+
+  # The Linux extractor, in Ubuntu 22.04 like the Linux app: a binary built on
+  # the runner asked for glibc 2.38 and did not start on Ubuntu 22.04 or
+  # Debian 12, which is where someone recovering a silo may well be.
+  build-extract-linux:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    timeout-minutes: 30
+    env:
+      ASSET: silentsilo-extract-linux-x86_64
+    steps:
+      # The keychain crate reaches for D-Bus on Linux, because the vault
+      # stores credentials in the OS keychain and the persistent Linux
+      # backend is secret-service. The extractor never calls that code, but
+      # it links the crate, so the build needs the headers. Making the
+      # keychain optional in silentsilo-vault is the real fix.
+      - name: What the bare image does not have
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git build-essential pkg-config perl \
+            libdbus-1-dev binutils
+
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Which core revision this build is pinned to
+        id: pin
+        shell: bash
+        run: |
+          tag=$(grep -m1 -oE 'silentsilo-core = \{ git = "[^"]+", tag = "([^"]+)"' Cargo.toml \
+                | grep -oE 'tag = "[^"]+"' | cut -d'"' -f2)
+          commit=$(awk '/^name = "silentsilo-core"$/{f=1} f && /^source = /{print; exit}' Cargo.lock \
+                   | grep -oE '#[0-9a-f]{40}' | tr -d '#')
+          if [ -z "$tag" ] || [ -z "$commit" ]; then
+            echo "::error::Cargo.toml pins no core tag, or Cargo.lock records no commit for it"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "core $tag at $commit"
+
+      - name: Clone core at that tag and check the commit
+        shell: bash
+        run: |
+          git clone --quiet --branch "${{ steps.pin.outputs.tag }}" --depth 1 \
+            https://github.com/silentsilo/core core-src
+          got=$(git -C core-src rev-parse HEAD)
+          if [ "$got" != "${{ steps.pin.outputs.commit }}" ]; then
+            echo "::error::core ${{ steps.pin.outputs.tag }} is at $got, but Cargo.lock pins ${{ steps.pin.outputs.commit }}"
+            exit 1
+          fi
+
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: 1.97.1
+
+      - run: cargo test -p silentsilo-extract --release --locked
+        working-directory: core-src
+      - run: cargo build -p silentsilo-extract --release --locked
+        working-directory: core-src
+
+      # Said here rather than found on someone's machine: the newest glibc
+      # symbol the binary asks for has to be one Ubuntu 22.04 has.
+      - name: The binary runs on glibc 2.35
+        shell: bash
+        run: |
+          newest=$(objdump -T core-src/target/release/silentsilo-extract \
+                   | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -uV | tail -1)
+          echo "newest glibc symbol: $newest"
+          if [ "$(printf '%s\nGLIBC_2.35\n' "$newest" | sort -V | tail -1)" != "GLIBC_2.35" ]; then
+            echo "::error::the extractor needs $newest, newer than Ubuntu 22.04's 2.35"
+            exit 1
+          fi
+
+      - name: Name the binary for the platform it runs on
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp core-src/target/release/silentsilo-extract "dist/$ASSET"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: silentsilo-extract-linux-x86_64
+          path: dist/silentsilo-extract-linux-x86_64
           retention-days: 7
 
   # The macOS application: a universal binary (Apple silicon and Intel) in a
@@ -466,7 +543,7 @@ jobs:
   # The `release` environment holds the key and admits only `v*` tags, so a
   # workflow pushed to some branch cannot read it either.
   publish:
-    needs: [build-extract, build-macos-app, build-linux-app]
+    needs: [build-extract, build-extract-linux, build-macos-app, build-linux-app]
     if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/') }}
     environment: release
     runs-on: ubuntu-latest

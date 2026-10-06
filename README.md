@@ -270,7 +270,7 @@ implementations, neither a stub):
 | OS | Backend | Notes |
 |----|---------|-------|
 | Windows | OS WebAuthn API (`webauthn.dll`) | No administrator rights required. |
-| Linux / macOS | CTAP2 over USB HID (`ctap-hid-fido2`) | Linux typically needs `libudev-dev` and `libusb-1.0-0-dev` (or your distro's equivalents) installed to build the HID dependencies. |
+| Linux / macOS | CTAP2 over USB HID, core's own `ctap2` code through `hidapi` | A key with a PIN is asked for it in the app, as Windows does. Building on Linux needs `libudev-dev` (or your distro's equivalent). Using a key needs the udev rule for FIDO keys, which the `libfido2` package installs. |
 
 `silentsilo-fido` lives in core and carries a `hardware` feature that pulls
 in the HID stack. The app asks for it explicitly, so a build here always has
