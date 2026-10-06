@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { bitwardenJsonToEntries, JsonImportError } from "./bitwardenJson";
+import {
+  attachZipFiles,
+  bitwardenFolderName,
+  bitwardenJsonToEntries,
+  JsonImportError,
+  type ZipFile,
+} from "./bitwardenJson";
 
 const sample = JSON.stringify({
   encrypted: false,
@@ -96,7 +102,10 @@ describe("bitwardenJsonToEntries", () => {
             username: "alex",
             password: "pw",
             totp: "steam://ABCDEFGHIJ",
-            uris: [{ uri: "https://store.steampowered.com" }, { uri: "https://steamcommunity.com" }],
+            uris: [
+              { uri: "https://store.steampowered.com" },
+              { uri: "https://steamcommunity.com" },
+            ],
             fido2Credentials: [{ credentialId: "x" }],
           },
         },
@@ -115,16 +124,81 @@ describe("bitwardenJsonToEntries", () => {
       ].join("\n"),
     );
     expect(login.fields).toEqual([{ name: "PIN", value: "4321", hidden: true }]);
-    expect(extras).toEqual({ extraUris: 1, unsupportedOtp: 1, passkeys: 1 });
+    expect(extras).toEqual({ extraUris: 1, unsupportedOtp: 1, passkeys: 1, unmatchedFiles: 0 });
   });
 
   it("refuses a password-protected export with advice, not a parse error", () => {
     expect(() => bitwardenJsonToEntries(JSON.stringify({ encrypted: true, items: [] }))).toThrow(
-      JsonImportError
+      JsonImportError,
     );
   });
 
   it("rejects JSON that is not a Bitwarden export", () => {
     expect(() => bitwardenJsonToEntries(JSON.stringify({ hello: 1 }))).toThrow(JsonImportError);
+  });
+});
+
+describe("Bitwarden zip with attachments", () => {
+  const items = (names: string[]) =>
+    bitwardenJsonToEntries(
+      JSON.stringify({ items: names.map((name) => ({ type: 2, name, notes: "" })) }),
+    ).entries;
+  const file = (folder: string, name: string): ZipFile => ({
+    folder,
+    attachment: { blob_id: `${folder}/${name}`, name, size_bytes: 1, blob_key: "k" },
+  });
+
+  it("names folders the way Bitwarden's exporter does", () => {
+    expect(bitwardenFolderName('Bank: "main" / old')).toBe("Bank_ _main_ _ old");
+    expect(bitwardenFolderName("a<>b")).toBe("a_b");
+    expect(bitwardenFolderName("Plain")).toBe("Plain");
+  });
+
+  it("puts each file on the one item its folder names", () => {
+    const { entries, unmatched } = attachZipFiles(items(["Bank", "Mail: home"]), [
+      file("Bank", "codes.txt"),
+      file("Bank", "scan.pdf"),
+      file("Mail_ home", "key.asc"),
+    ]);
+    expect(unmatched).toBe(0);
+    expect(entries).toHaveLength(2);
+    expect(entries[0]!.attachments?.map((a) => a.name)).toEqual(["codes.txt", "scan.pdf"]);
+    expect(entries[1]!.attachments?.map((a) => a.name)).toEqual(["key.asc"]);
+  });
+
+  it("keeps files no single item could have made on one note", () => {
+    const { entries, unmatched } = attachZipFiles(
+      items(["Bank", "Bank", "Mail"]),
+      [
+        file("Bank", "a.txt"),
+        file("Bank_1", "b.txt"),
+        file("Gone", "c.txt"),
+        file("Mail", "d.txt"),
+      ],
+      () => 7,
+    );
+    expect(unmatched).toBe(3);
+    expect(entries[0]!.attachments).toBeUndefined();
+    expect(entries[1]!.attachments).toBeUndefined();
+    expect(entries[2]!.attachments?.map((a) => a.name)).toEqual(["d.txt"]);
+    const note = entries[3]!;
+    expect(note).toMatchObject({ type: "note", service: "Files from Bitwarden", created_at: 7 });
+    expect(note.attachments?.map((a) => a.name)).toEqual(["a.txt", "b.txt", "c.txt"]);
+    expect(note.notes).toContain("Bank_1/b.txt");
+  });
+
+  it("does not take a second item's folder for one named like it", () => {
+    // "Bank_1" is the folder of the second "Bank" as much as of "Bank_1".
+    const { unmatched } = attachZipFiles(items(["Bank", "Bank", "Bank_1"]), [
+      file("Bank_1", "x.txt"),
+    ]);
+    expect(unmatched).toBe(1);
+    const alone = attachZipFiles(items(["Bank", "Bank_1"]), [file("Bank_1", "x.txt")]);
+    expect(alone.unmatched).toBe(0);
+    expect(alone.entries[1]!.attachments?.[0]?.name).toBe("x.txt");
+  });
+
+  it("adds no note when there are no files", () => {
+    expect(attachZipFiles(items(["Bank"]), []).entries).toHaveLength(1);
   });
 });

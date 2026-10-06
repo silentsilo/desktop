@@ -13,7 +13,12 @@ import type {
   PasswordEntry,
 } from "../../lib/types";
 import { csvToEntries, entriesToCsv, formatLabel } from "../../lib/passwordCsv";
-import { bitwardenJsonToEntries, looksLikeBitwardenJson } from "../../lib/bitwardenJson";
+import {
+  attachZipFiles,
+  bitwardenJsonToEntries,
+  looksLikeBitwardenJson,
+  type ZipFile,
+} from "../../lib/bitwardenJson";
 import {
   applyImportCategory,
   describeExtras,
@@ -514,14 +519,46 @@ export function PasswordsPanel({
     setSelectedId(null);
   }, [onDeleteEntry, pendingDelete]);
 
+  /// Bitwarden's ".zip (With Attachments)": its JSON, as any Bitwarden
+  /// import, with the files already encrypted into the silo.
+  const importBitwardenZip = useCallback(async (path: string) => {
+    setTransferBusy(true);
+    let blobs: string[] = [];
+    try {
+      const read = await invoke<{ json: string; files: ZipFile[] }>(
+        "passwords_read_bitwarden_zip",
+        { path },
+      );
+      blobs = read.files.map((f) => f.attachment.blob_id);
+      const parsed = bitwardenJsonToEntries(read.json);
+      const { entries: imported, unmatched } = attachZipFiles(parsed.entries, read.files);
+      setPendingImport({
+        imported,
+        skipped: parsed.skipped,
+        source: "Bitwarden",
+        unit: ["item", "items"],
+        skippedUnit: ["unsupported item", "unsupported items"],
+        extras: { ...parsed.extras, unmatchedFiles: unmatched },
+        blobs,
+      });
+    } catch (e) {
+      for (const blobId of blobs) {
+        void invoke("password_delete_attachment", { blobId }).catch(() => {});
+      }
+      setTransferError(formatAppError(e));
+    } finally {
+      setTransferBusy(false);
+    }
+  }, []);
+
   const handleImport = useCallback(async () => {
     setTransferError(null);
     const picked = await openFileDialog({
       multiple: false,
       filters: [
         {
-          name: "Password export (KeePass, CSV or Bitwarden JSON)",
-          extensions: ["kdbx", "csv", "json"],
+          name: "Password export (KeePass, CSV, Bitwarden JSON or zip)",
+          extensions: ["kdbx", "csv", "json", "zip"],
         },
       ],
     });
@@ -530,6 +567,11 @@ export function PasswordsPanel({
     if (path.toLowerCase().endsWith(".kdbx")) {
       setKdbxError(null);
       setKdbx({ mode: "open", path });
+      return;
+    }
+
+    if (path.toLowerCase().endsWith(".zip")) {
+      await importBitwardenZip(path);
       return;
     }
 
@@ -566,7 +608,7 @@ export function PasswordsPanel({
     } finally {
       setTransferBusy(false);
     }
-  }, []);
+  }, [importBitwardenZip]);
 
   /// Content a KeePass import encrypted for entries that will not be stored.
   const dropBlobs = useCallback((blobIds: string[]) => {
@@ -774,7 +816,7 @@ export function PasswordsPanel({
           className="pw-transfer-btn"
           disabled={busy || transferBusy}
           onClick={() => void handleImport()}
-          title="Import from another password manager or browser: a KeePass database (.kdbx), CSV from Bitwarden, LastPass, 1Password, Proton Pass, Dashlane, NordPass, KeePass, RoboForm, Chrome, Edge, Firefox or Apple Passwords, plus Bitwarden JSON"
+          title="Import from another password manager or browser: a KeePass database (.kdbx), CSV from Bitwarden, LastPass, 1Password, Proton Pass, Dashlane, NordPass, KeePass, RoboForm, Chrome, Edge, Firefox or Apple Passwords, plus Bitwarden JSON or zip with attachments"
         >
           <Upload size={15} />
           <span>Import</span>

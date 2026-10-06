@@ -255,6 +255,7 @@ pub fn run() {
             commands::silo::app_set_auto_lock_default,
             commands::cloud::cloud_discard_sign_in,
             commands::kdbx::passwords_read_kdbx,
+            commands::bitwarden_zip::passwords_read_bitwarden_zip,
             commands::kdbx::passwords_write_kdbx,
             commands::silo::silo_touch,
             commands::silo::silo_blur,

@@ -1931,6 +1931,12 @@ pub struct PasswordAttachment {
     blob_key: String,
 }
 
+impl PasswordAttachment {
+    pub(crate) fn blob_id(&self) -> &str {
+        &self.blob_id
+    }
+}
+
 /// Encrypts a picked file into the blob store for a password entry:
 /// everything an import does except the index row, so the attachment
 /// appears exactly where the password does and nowhere else. The cache

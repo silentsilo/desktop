@@ -189,6 +189,7 @@ describe("csvToEntries", () => {
       extraUris: 1,
       unsupportedOtp: 1,
       passkeys: 0,
+      unmatchedFiles: 0,
     });
   });
 

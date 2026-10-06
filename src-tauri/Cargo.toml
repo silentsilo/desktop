@@ -34,6 +34,9 @@ uuid = { workspace = true }
 hex = "0.4"
 # Reads the tab origins the browser extension sends. Already in the tree.
 url = "2"
+# Bitwarden's export with attachments. Already in the tree through the
+# updater; deflate only, for an export zipped again by hand.
+zip = { version = "4.6", default-features = false, features = ["deflate-flate2"] }
 zeroize = { workspace = true }
 tempfile = { workspace = true }
 rand = { workspace = true }

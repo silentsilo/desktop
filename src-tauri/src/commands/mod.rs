@@ -1,3 +1,4 @@
+pub mod bitwarden_zip;
 pub mod cloud;
 pub mod fido;
 pub mod kdbx;

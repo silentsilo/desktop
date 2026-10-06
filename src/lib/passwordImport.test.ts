@@ -148,9 +148,17 @@ describe("describeExtras", () => {
   });
 
   it("names what went into notes and what was left out", () => {
-    expect(describeExtras({ extraUris: 1, unsupportedOtp: 2, passkeys: 1 })).toBe(
+    expect(
+      describeExtras({ extraUris: 1, unsupportedOtp: 2, passkeys: 1, unmatchedFiles: 0 }),
+    ).toBe(
       "Moved into notes: 1 extra web address and 2 two-factor secrets" +
         " SilentSilo cannot show codes for. Left out: 1 passkey, which SilentSilo does not store.",
+    );
+  });
+
+  it("says where files from a zip went that no item could be named for", () => {
+    expect(describeExtras({ ...noExtras(), unmatchedFiles: 2 })).toBe(
+      '2 attached files could not be matched to one item by name, so they are on the note "Files from Bitwarden".',
     );
   });
 });

@@ -1,6 +1,6 @@
-import type { CustomField, PasswordEntry } from "./types";
+import type { CustomField, PasswordAttachment, PasswordEntry } from "./types";
 import { parseTotpInput } from "./totp";
-import { appendNotes, noExtras, type ImportExtras } from "./passwordImport";
+import { appendNotes, noExtras, UNMATCHED_NOTE, type ImportExtras } from "./passwordImport";
 
 /**
  * Bitwarden's unencrypted JSON export, the one format their apps write that
@@ -201,4 +201,70 @@ export function bitwardenJsonToEntries(
   }
 
   return { entries, skipped, extras };
+}
+
+/** One file from a ".zip (With Attachments)" export, already encrypted into
+ * the silo, with the folder Bitwarden filed it under. */
+export type ZipFile = { folder: string; attachment: PasswordAttachment };
+
+/** The folder Bitwarden's exporter names after an item: the characters
+ * Windows forbids in a name become "_", and runs of "_" one. */
+export function bitwardenFolderName(name: string): string {
+  return name.replace(/[/\\><:"|?*]/g, "_").replace(/__+/g, "_");
+}
+
+/**
+ * Puts each file of the zip on the entry its folder names. Bitwarden names
+ * the folder after the item, and a second item of the same name gets "_1",
+ * "_2" in an order the JSON does not give. So a folder is matched only when
+ * exactly one item could have made it; the rest go on one note, named by
+ * folder, rather than onto the wrong login or nowhere.
+ */
+export function attachZipFiles(
+  entries: PasswordEntry[],
+  files: ZipFile[],
+  now: () => number = Date.now,
+): { entries: PasswordEntry[]; unmatched: number } {
+  const byFolder = new Map<string, number[]>();
+  entries.forEach((entry, i) => {
+    const folder = bitwardenFolderName(entry.service);
+    byFolder.set(folder, [...(byFolder.get(folder) ?? []), i]);
+  });
+  const owner = (folder: string): number | undefined => {
+    const named = byFolder.get(folder) ?? [];
+    // "Bank_1" may be the second "Bank" as well as an item called that.
+    const suffixed = /^(.*)_\d+$/.exec(folder);
+    const twins = suffixed ? (byFolder.get(suffixed[1]!) ?? []).length : 0;
+    return named.length === 1 && twins < 2 ? named[0] : undefined;
+  };
+
+  const out = entries.map((entry) => ({ ...entry }));
+  const unmatched: ZipFile[] = [];
+  for (const file of files) {
+    const i = owner(file.folder);
+    if (i === undefined) {
+      unmatched.push(file);
+      continue;
+    }
+    out[i] = { ...out[i]!, attachments: [...(out[i]!.attachments ?? []), file.attachment] };
+  }
+  if (unmatched.length > 0) {
+    out.push({
+      id: crypto.randomUUID(),
+      type: "note",
+      service: UNMATCHED_NOTE,
+      username: "",
+      password: "",
+      url: "",
+      notes: [
+        "Files from the Bitwarden export that could not be matched to one item by name, with the folder each was in:",
+        ...unmatched.map((f) => `${f.folder}/${f.attachment.name}`),
+      ].join("\n"),
+      category: "General",
+      created_at: now(),
+      updated_at: now(),
+      attachments: unmatched.map((f) => f.attachment),
+    });
+  }
+  return { entries: out, unmatched: unmatched.length };
 }

@@ -17,6 +17,10 @@ silo from opening needs a major version rather than a note.
   or as many as fit (Settings, General). Restore puts an old version back and
   keeps the current one; Clear history removes old passwords for good.
 - Health points out an entry back on a password it had before.
+- Bitwarden's ".zip (With Attachments)" export imports with its files:
+  each one lands on its item, encrypted, and a file whose item cannot be
+  told apart by name (two items with one name) goes on a note "Files from
+  Bitwarden" instead of being dropped.
 - KeePass import and export. Import opens a `.kdbx` with its password and
   key file: groups become categories ("Work / Servers"), extra fields become
   custom fields, attached files come along encrypted, and each entry's

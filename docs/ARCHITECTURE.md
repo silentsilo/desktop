@@ -712,7 +712,16 @@ crates are in core's map.
   duplicate deletes the blobs it made (`PasswordsPanel`, `dropBlobs`). What
   an entry becomes is decided in `lib/kdbx.ts`, with the CSV importers'
   rules. The export decrypts each attachment through the scratch directory
-  and removes it as soon as it is read.
+  and removes it as soon as it is read. Bitwarden's ".zip (With
+  Attachments)" goes the same way: `passwords_read_bitwarden_zip`
+  (`commands/bitwarden_zip.rs`) hands over `data.json` as text and encrypts
+  each file under `attachments/<item name>/` as it reads it, counting the
+  bytes it unpacks rather than trusting the zip. The folder is the item's
+  name with the characters Windows forbids replaced, and a second item of
+  the same name gets `_1` in an order the JSON does not give, so
+  `attachZipFiles` (`lib/bitwardenJson.ts`) puts a file on an item only when
+  exactly one item could have made its folder. The rest go on one note,
+  "Files from Bitwarden", named by folder, never onto a guess.
 - **An entry's history is written in `savePasswordEntry`, not by the
   editor.** Every save from the window passes there, a star or a restore as
   much as an edit, and `withHistory` (`lib/entryHistory.ts`) decides from the

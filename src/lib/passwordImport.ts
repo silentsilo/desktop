@@ -93,16 +93,21 @@ export type ImportExtras = {
   /** Two-factor secrets with no codes shown: Steam, HOTP, or unreadable. */
   unsupportedOtp: number;
   passkeys: number;
+  /** Attached files no single item could be named for, kept on one note. */
+  unmatchedFiles: number;
 };
 
 export function noExtras(): ImportExtras {
-  return { extraUris: 0, unsupportedOtp: 0, passkeys: 0 };
+  return { extraUris: 0, unsupportedOtp: 0, passkeys: 0, unmatchedFiles: 0 };
 }
 
 /** Notes with lines added after what was already there. */
 export function appendNotes(notes: string, lines: string[]): string {
   return [notes, ...lines].filter(Boolean).join("\n");
 }
+
+/** The note a Bitwarden zip's unmatched files go on. */
+export const UNMATCHED_NOTE = "Files from Bitwarden";
 
 /** The import summary's account of the above, or "" when there was none. */
 export function describeExtras(extras: ImportExtras): string {
@@ -128,6 +133,11 @@ export function describeExtras(extras: ImportExtras): string {
   if (extras.passkeys > 0) {
     sentences.push(
       `Left out: ${count(extras.passkeys, "passkey", "passkeys")}, which SilentSilo does not store.`,
+    );
+  }
+  if (extras.unmatchedFiles > 0) {
+    sentences.push(
+      `${count(extras.unmatchedFiles, "attached file", "attached files")} could not be matched to one item by name, so ${extras.unmatchedFiles === 1 ? "it is" : "they are"} on the note "${UNMATCHED_NOTE}".`,
     );
   }
   return sentences.join(" ");

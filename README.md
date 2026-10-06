@@ -104,7 +104,7 @@ one can be put back. Health points out reused, weak and old passwords, and
 an entry back on one it had before.
 
 Import reads a KeePass database (`.kdbx`, with its key file if it has one),
-Bitwarden's JSON, and CSV from Bitwarden, LastPass, 1Password, Proton Pass,
+Bitwarden's JSON or its zip with attachments, and CSV from Bitwarden, LastPass, 1Password, Proton Pass,
 Dashlane, NordPass, KeePass, RoboForm and the browsers. Export writes every
 entry to a KeePass file under a password you choose, which KeePassXC and
 KeePassDX open, or the logins alone to CSV. The browser extension fills
