@@ -11,7 +11,6 @@
 
 use std::collections::HashMap;
 
-use silentsilo_app::audit_read::LogEntry;
 use silentsilo_audit::Event;
 pub use silentsilo_audit::codes;
 use tauri::{AppHandle, Emitter, Manager};
@@ -256,8 +255,8 @@ pub async fn audit_export(
     let log = crate::commands::sync::read_audit_log(&app, reader).await?;
     let names = device_names(&app)?;
     let body = match format {
-        ExportFormat::Csv => export_csv(&log.entries, &names),
-        ExportFormat::Jsonl => export_jsonl(&log.entries, &names),
+        ExportFormat::Csv => silentsilo_audit::reading::to_csv(&log.entries, &names),
+        ExportFormat::Jsonl => silentsilo_audit::reading::to_jsonl(&log.entries, &names),
     };
     let count = log.entries.len();
     crate::commands::fido::run_blocking(move || {
@@ -278,83 +277,6 @@ fn device_names(app: &AppHandle) -> Result<HashMap<Uuid, String>, String> {
             (d.id, name)
         })
         .collect())
-}
-
-/// UTC, to the millisecond, the way spreadsheets and log tools read it.
-fn utc(ms: i64) -> String {
-    use chrono::{Datelike, Timelike};
-    match chrono::DateTime::from_timestamp_millis(ms) {
-        Some(at) => format!(
-            "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
-            at.year(),
-            at.month(),
-            at.day(),
-            at.hour(),
-            at.minute(),
-            at.second(),
-            at.timestamp_subsec_millis()
-        ),
-        None => String::new(),
-    }
-}
-
-/// One CSV cell. A label is whatever someone typed, so one starting like a
-/// formula is kept as text rather than run by the spreadsheet.
-fn cell(value: &str) -> String {
-    let value = if value.starts_with(['=', '+', '-', '@', '\t', '\r']) {
-        format!("'{value}")
-    } else {
-        value.to_string()
-    };
-    if value.contains([',', '"', '\n', '\r']) {
-        format!("\"{}\"", value.replace('"', "\"\""))
-    } else {
-        value
-    }
-}
-
-fn export_csv(entries: &[LogEntry], names: &HashMap<Uuid, String>) -> String {
-    let mut out =
-        String::from("time_utc,device,device_name,event,code,count,object,label,details,number\n");
-    for entry in entries {
-        let e = &entry.event;
-        let details = if e.x.is_empty() {
-            String::new()
-        } else {
-            serde_json::to_string(&e.x).unwrap_or_default()
-        };
-        let row = [
-            utc(e.t),
-            entry.device.to_string(),
-            names.get(&entry.device).cloned().unwrap_or_default(),
-            entry.what.clone(),
-            e.c.to_string(),
-            e.n.to_string(),
-            e.o.clone().unwrap_or_default(),
-            e.l.clone().unwrap_or_default(),
-            details,
-            e.i.to_string(),
-        ];
-        out.push_str(&row.iter().map(|v| cell(v)).collect::<Vec<_>>().join(","));
-        out.push('\n');
-    }
-    out
-}
-
-fn export_jsonl(entries: &[LogEntry], names: &HashMap<Uuid, String>) -> String {
-    let mut out = String::new();
-    for entry in entries {
-        let line = serde_json::json!({
-            "time_utc": utc(entry.event.t),
-            "device": entry.device,
-            "device_name": names.get(&entry.device),
-            "event": entry.what,
-            "record": entry.event,
-        });
-        out.push_str(&line.to_string());
-        out.push('\n');
-    }
-    out
 }
 
 /// What a copied secret was, for the log. Sent with the copy, so the event
@@ -401,36 +323,6 @@ mod tests {
         assert_eq!(password.o.as_deref(), Some("e1"));
         assert_eq!(password.l.as_deref(), Some("Bank"));
         assert_eq!(password.x["field"], "password");
-    }
-
-    #[test]
-    fn an_export_keeps_a_typed_formula_as_text() {
-        assert_eq!(cell("Bank"), "Bank");
-        assert_eq!(cell("=HYPERLINK(1)"), "'=HYPERLINK(1)");
-        assert_eq!(cell("a, \"b\""), "\"a, \"\"b\"\"\"");
-        assert_eq!(utc(0), "1970-01-01T00:00:00.000Z");
-        assert_eq!(utc(1_789_000_000_123), "2026-09-10T00:26:40.123Z");
-    }
-
-    #[test]
-    fn an_export_has_a_row_per_event_with_its_device() {
-        let device = Uuid::new_v4();
-        let entry = LogEntry {
-            device,
-            what: "Secret copied".into(),
-            event: event(codes::SECRET_COPIED)
-                .on("e1", "Bank")
-                .with("field", "password"),
-        };
-        let names = HashMap::from([(device, "Laptop".to_string())]);
-        let csv = export_csv(std::slice::from_ref(&entry), &names);
-        let row = csv.lines().nth(1).unwrap();
-        assert!(row.contains(",Laptop,Secret copied,11,1,e1,Bank,"));
-        assert!(row.contains("\"{\"\"field\"\":\"\"password\"\"}\""));
-        let line = export_jsonl(&[entry], &names);
-        let parsed: serde_json::Value = serde_json::from_str(line.trim()).unwrap();
-        assert_eq!(parsed["device_name"], "Laptop");
-        assert_eq!(parsed["record"]["l"], "Bank");
     }
 
     #[test]
