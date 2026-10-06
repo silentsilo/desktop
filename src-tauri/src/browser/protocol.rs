@@ -10,6 +10,7 @@ use serde::Serialize;
 use silentsilo_shell::browser_pipe::MAX_FRAME;
 use url::{Host, Url};
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 use super::logins::Login;
 
@@ -19,6 +20,9 @@ pub const SEARCH_LIMIT: usize = 20;
 /// A shorter `search` finds nothing: one letter would list most of a silo
 /// in a few requests.
 pub const SEARCH_MIN_CHARS: usize = 2;
+
+/// The longest username or password a `save` may carry, in characters.
+pub const SAVE_MAX_CHARS: usize = 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Code {
@@ -55,7 +59,7 @@ impl Code {
             Code::UnknownRef => "That login is out of date. Open the list again.",
             Code::Cancelled => "The fill was not confirmed.",
             Code::BadRequest => "SilentSilo could not read the request.",
-            Code::Busy => "Another fill is waiting for confirmation in SilentSilo.",
+            Code::Busy => "Another request is waiting for confirmation in SilentSilo.",
             Code::NoAuthenticator => {
                 "This silo has no security key or Windows Hello set up, so no fill can be confirmed."
             }
@@ -109,6 +113,12 @@ pub enum Request {
     },
     /// Bring the window forward. Carries nothing and answers nothing.
     Show,
+    /// One login the person typed on a page, for them to save here.
+    Save {
+        origin: String,
+        username: Zeroizing<String>,
+        password: Zeroizing<String>,
+    },
 }
 
 /// Parses one request. On failure the id is whatever could be read, empty
@@ -128,6 +138,24 @@ pub fn parse_request(bytes: &[u8]) -> Result<(String, Request), (String, Failure
         Some("search") => text("query").map(|query| Request::Search { query }),
         Some("fill") => match (text("origin"), text("ref")) {
             (Some(origin), Some(reference)) => Some(Request::Fill { origin, reference }),
+            _ => None,
+        },
+        Some("save") => match (
+            text("origin"),
+            text("username").map(Zeroizing::new),
+            text("password").map(Zeroizing::new),
+        ) {
+            (Some(origin), Some(username), Some(password))
+                if !password.is_empty()
+                    && username.chars().count() <= SAVE_MAX_CHARS
+                    && password.chars().count() <= SAVE_MAX_CHARS =>
+            {
+                Some(Request::Save {
+                    origin,
+                    username,
+                    password,
+                })
+            }
             _ => None,
         },
         _ => None,
@@ -296,6 +324,24 @@ pub fn logins_for<'a>(logins: &'a [Login], tab: &Site) -> Vec<&'a Login> {
     found
 }
 
+/// The login a `save` would update: saved for this site, with the same
+/// username, ignoring case and surrounding spaces. The first by label when
+/// there are several.
+pub fn same_login<'a>(logins: &'a [Login], tab: &Site, username: &str) -> Option<&'a Login> {
+    let username = username.trim().to_lowercase();
+    logins_for(logins, tab)
+        .into_iter()
+        .find(|login| login.username.trim().to_lowercase() == username)
+}
+
+/// The label a saved login starts with: the site, without `www.`.
+pub fn suggested_label(tab: &Site) -> String {
+    tab.shown
+        .strip_prefix("www.")
+        .unwrap_or(&tab.shown)
+        .to_string()
+}
+
 /// Logins whose label or username contains the query, ignoring case. A
 /// query under [`SEARCH_MIN_CHARS`] finds nothing.
 pub fn search<'a>(logins: &'a [Login], query: &str) -> Vec<&'a Login> {
@@ -401,6 +447,25 @@ struct ShowAnswer<'a> {
 /// The answer to `show`: its id and type, nothing about the app's state.
 pub fn show_answer(id: &str) -> Vec<u8> {
     serde_json::to_vec(&ShowAnswer { id, kind: "show" }).unwrap_or_default()
+}
+
+#[derive(Serialize)]
+struct SaveAnswer<'a> {
+    id: &'a str,
+    #[serde(rename = "type")]
+    kind: &'static str,
+    outcome: &'static str,
+}
+
+/// The answer to a `save` the person kept: a new login, or the password of
+/// one already there changed.
+pub fn save_answer(id: &str, updated: bool) -> Vec<u8> {
+    serde_json::to_vec(&SaveAnswer {
+        id,
+        kind: "save",
+        outcome: if updated { "updated" } else { "saved" },
+    })
+    .unwrap_or_default()
 }
 
 #[derive(Serialize)]
@@ -665,6 +730,73 @@ mod tests {
     }
 
     #[test]
+    fn a_save_carries_a_password_and_nothing_too_long() {
+        assert_eq!(
+            parse_request(
+                br#"{"id":"6","type":"save","origin":"https://a.example","username":"","password":"pw"}"#
+            ),
+            Ok((
+                "6".into(),
+                Request::Save {
+                    origin: "https://a.example".into(),
+                    username: Zeroizing::new(String::new()),
+                    password: Zeroizing::new("pw".into()),
+                }
+            ))
+        );
+        let long = "x".repeat(SAVE_MAX_CHARS + 1);
+        for body in [
+            r#"{"id":"6","type":"save","origin":"https://a.example","username":"u","password":""}"#
+                .to_string(),
+            r#"{"id":"6","type":"save","origin":"https://a.example","username":"u"}"#.to_string(),
+            format!(
+                r#"{{"id":"6","type":"save","origin":"https://a.example","username":"u","password":"{long}"}}"#
+            ),
+            format!(
+                r#"{{"id":"6","type":"save","origin":"https://a.example","username":"{long}","password":"p"}}"#
+            ),
+        ] {
+            let (id, failure) = parse_request(body.as_bytes()).unwrap_err();
+            assert_eq!(
+                (id.as_str(), failure.code),
+                ("6", Code::BadRequest),
+                "{body}"
+            );
+        }
+        // Counted in characters, not bytes.
+        let wide = "é".repeat(SAVE_MAX_CHARS);
+        let body = format!(
+            r#"{{"id":"6","type":"save","origin":"https://a.example","username":"u","password":"{wide}"}}"#
+        );
+        assert!(parse_request(body.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn a_save_updates_the_login_for_this_site_and_username() {
+        let login = |label: &str, username: &str, url: &str| Login {
+            id: Uuid::new_v4(),
+            label: label.into(),
+            username: username.into(),
+            url: url.into(),
+        };
+        let logins = [
+            login("GitHub work", "alex@work.example", "github.com"),
+            login("GitHub", "Alex@Example.com", "https://github.com/login"),
+            login("Elsewhere", "alex@example.com", "gitlab.com"),
+        ];
+        let site = tab("https://www.github.com");
+        let found = same_login(&logins, &site, " alex@example.com ").unwrap();
+        assert_eq!(found.label, "GitHub");
+        assert!(same_login(&logins, &site, "someone@example.com").is_none());
+        assert!(same_login(&logins, &tab("https://bitbucket.org"), "alex@example.com").is_none());
+        assert_eq!(suggested_label(&site), "github.com");
+        assert_eq!(
+            suggested_label(&tab("http://localhost:3000")),
+            "localhost:3000"
+        );
+    }
+
+    #[test]
     fn a_bad_request_keeps_the_id_it_could_read() {
         let (id, failure) = parse_request(br#"{"id":"9","type":"delete"}"#).unwrap_err();
         assert_eq!((id.as_str(), failure.code), ("9", Code::BadRequest));
@@ -759,6 +891,14 @@ mod tests {
             v,
             serde_json::json!({"id":"4","type":"fill","username":"alex","password":"p\"w\u{1}"})
         );
+
+        let v: serde_json::Value = serde_json::from_slice(&save_answer("6", false)).unwrap();
+        assert_eq!(
+            v,
+            serde_json::json!({"id":"6","type":"save","outcome":"saved"})
+        );
+        let v: serde_json::Value = serde_json::from_slice(&save_answer("6", true)).unwrap();
+        assert_eq!(v["outcome"], "updated");
 
         let v: serde_json::Value =
             serde_json::from_slice(&error_answer("4", &Failure::new(Code::Cancelled))).unwrap();

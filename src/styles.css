@@ -3176,6 +3176,13 @@ ol.key-add-steps {
   color: var(--danger-on-dark);
 }
 
+/* Update the login already saved, or keep a new one beside it. */
+.browser-save-choice {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.25rem 0;
+}
+
 /* A checkbox with a label and a sub-line, wherever one is offered. */
 .confirm-option,
 .key-choice {

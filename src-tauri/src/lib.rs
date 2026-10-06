@@ -377,6 +377,9 @@ pub fn run() {
             browser::browser_fill_pending,
             browser::browser_fill_confirm,
             browser::browser_fill_cancel,
+            browser::browser_save_pending,
+            browser::browser_save_done,
+            browser::browser_save_cancel,
         ])
         .build(context)
         .expect("error while running SilentSilo")

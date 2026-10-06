@@ -5,7 +5,8 @@
 //! answered from the focused silo's login entries only (see `logins.rs`,
 //! the one module that reads the vault), and a fill waits for the user to
 //! confirm in this window and pass the same key check as revealing a
-//! protected entry. Only the host installed beside the app may connect
+//! protected entry. A save waits for the person too; the window writes the
+//! entry, through the same path as an edit. Only the host installed beside the app may connect
 //! (`ClientCheck`), and what it may ask is rationed (`limits.rs`). The
 //! contract is `docs/PROTOCOL.md` in silentsilo/browser.
 
@@ -23,6 +24,7 @@ use silentsilo_shell::browser_pipe::Frame;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{oneshot, watch};
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 use crate::commands::fido::run_blocking;
 use crate::state::AppState;
@@ -32,6 +34,9 @@ use protocol::{Code, Failure, Item, Request};
 
 /// How long a fill waits for the person, key check included.
 const FILL_TIMEOUT: Duration = Duration::from_secs(90);
+
+/// How long a save waits: the person may fix the label or the username.
+const SAVE_TIMEOUT: Duration = Duration::from_secs(120);
 
 const GONE: &str = "This browser request is no longer waiting.";
 const TOO_MANY: &str = "Too many requests from the browser. Wait a moment.";
@@ -43,6 +48,9 @@ pub struct BrowserBridge {
     refs: Mutex<protocol::RefTable>,
     /// The one fill waiting for confirmation. A second one is `busy`.
     pending: Mutex<Option<Pending>>,
+    /// The one save waiting for the person. A fill and a save do not wait
+    /// together: either makes the other `busy`.
+    saving: Mutex<Option<PendingSave>>,
     /// `logins` and `search` across every connection.
     lookups: Mutex<Bucket>,
     /// `search` alone, across every connection.
@@ -66,6 +74,7 @@ impl Default for BrowserBridge {
             server: Mutex::default(),
             refs: Mutex::default(),
             pending: Mutex::default(),
+            saving: Mutex::default(),
             lookups: Mutex::new(limits::lookups_overall()),
             searches: Mutex::new(limits::searches_overall()),
             recent: Mutex::default(),
@@ -91,7 +100,7 @@ struct Server {
 
 struct Pending {
     prompt: FillPrompt,
-    reply: Option<oneshot::Sender<bool>>,
+    reply: Option<oneshot::Sender<Option<()>>>,
     /// A key check is under way for it, so a second click does not start
     /// another.
     verifying: bool,
@@ -108,6 +117,41 @@ pub struct FillPrompt {
     username: String,
     /// Set when the login was not saved for this site, in words.
     mismatch: Option<String>,
+}
+
+struct PendingSave {
+    prompt: SavePrompt,
+    /// `Some(updated)` once the window wrote the entry.
+    reply: Option<oneshot::Sender<Option<bool>>>,
+}
+
+/// What the save dialog shows and writes. It carries the password, which
+/// the window needs to write the entry, as it does for any edit.
+#[derive(Clone, Serialize)]
+pub struct SavePrompt {
+    request_id: String,
+    /// The tab's host, with its port when it has one.
+    site: String,
+    /// The tab's origin, for the new entry's address.
+    url: String,
+    /// What a new login is called unless the person changes it.
+    label: String,
+    #[serde(serialize_with = "plain")]
+    username: Zeroizing<String>,
+    #[serde(serialize_with = "plain")]
+    password: Zeroizing<String>,
+    /// The login saved for this site with this username, offered for update.
+    existing: Option<SaveExisting>,
+}
+
+#[derive(Clone, Serialize)]
+pub struct SaveExisting {
+    id: String,
+    label: String,
+}
+
+fn plain<S: serde::Serializer>(value: &Zeroizing<String>, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_str(value)
 }
 
 /// A fill that sent a password: where, which login, when (Unix seconds).
@@ -371,7 +415,7 @@ pub async fn browser_fill_confirm(app: AppHandle, request_id: String) -> Result<
     pending.verifying = false;
     verified?;
     match pending.reply.take() {
-        Some(reply) => reply.send(true).map_err(|_| GONE.to_string()),
+        Some(reply) => reply.send(Some(())).map_err(|_| GONE.to_string()),
         None => Err(GONE.into()),
     }
 }
@@ -383,7 +427,45 @@ pub fn browser_fill_cancel(app: AppHandle, request_id: String) -> Result<(), Str
     if let Some(pending) = slot.as_mut().filter(|p| p.prompt.request_id == request_id)
         && let Some(reply) = pending.reply.take()
     {
-        let _ = reply.send(false);
+        let _ = reply.send(None);
+    }
+    Ok(())
+}
+
+/// The save waiting for the person, for a window that mounted after the
+/// request arrived.
+#[tauri::command(async)]
+pub fn browser_save_pending(app: AppHandle) -> Result<Option<SavePrompt>, String> {
+    let bridge = app.state::<BrowserBridge>();
+    let saving = lock(&bridge.saving);
+    Ok(saving.as_ref().map(|p| p.prompt.clone()))
+}
+
+/// The window wrote the entry: a new one, or the password of `existing`.
+#[tauri::command(async)]
+pub fn browser_save_done(app: AppHandle, request_id: String, updated: bool) -> Result<(), String> {
+    let bridge = app.state::<BrowserBridge>();
+    let mut slot = lock(&bridge.saving);
+    match slot
+        .as_mut()
+        .filter(|p| p.prompt.request_id == request_id)
+        .and_then(|p| p.reply.take())
+    {
+        Some(reply) => reply.send(Some(updated)).map_err(|_| GONE.to_string()),
+        None => Err(GONE.into()),
+    }
+}
+
+#[tauri::command(async)]
+pub fn browser_save_cancel(app: AppHandle, request_id: String) -> Result<(), String> {
+    let bridge = app.state::<BrowserBridge>();
+    let mut slot = lock(&bridge.saving);
+    if let Some(reply) = slot
+        .as_mut()
+        .filter(|p| p.prompt.request_id == request_id)
+        .and_then(|p| p.reply.take())
+    {
+        let _ = reply.send(None);
     }
     Ok(())
 }
@@ -419,6 +501,11 @@ async fn answer(app: &AppHandle, connection: &Connection, frame: Frame) -> Vec<u
             fill(app, connection, &id, &origin, &reference).await
         }
         Request::Show => show(app, connection, &id),
+        Request::Save {
+            origin,
+            username,
+            password,
+        } => save(app, connection, &id, &origin, username, password).await,
     };
     result.unwrap_or_else(|failure| protocol::error_answer(&id, &failure))
 }
@@ -619,8 +706,8 @@ async fn search(app: &AppHandle, id: &str, query: &str) -> Result<Vec<u8>, Failu
     Ok(items_answer(app, id, "search", None, scope, &found))
 }
 
-/// Takes the pending slot back and closes the dialog, however the fill
-/// ended: answered, declined, timed out, or its connection gone.
+/// Takes the pending slot back and closes the dialog, however the fill or
+/// save ended: answered, declined, timed out, or its connection gone.
 ///
 /// Any end that was not a confirmation starts the cooldown, including a
 /// connection that went away. Started only on an explicit cancel, a client
@@ -629,14 +716,21 @@ async fn search(app: &AppHandle, id: &str, query: &str) -> Result<Vec<u8>, Failu
 ///
 /// After a confirmation the window goes back to hidden or minimised if that
 /// is how the dialog found it, and the window that was in front when the
-/// fill came in (the browser) gets the focus back, so the person is left on
-/// the page that was filled.
+/// request came in (the browser) gets the focus back, so the person is left
+/// on the page.
 struct PendingGuard {
     app: AppHandle,
+    kind: Question,
     request_id: String,
     confirmed: bool,
     before: WindowBefore,
     browser: Option<silentsilo_shell::ForegroundWindow>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Question {
+    Fill,
+    Save,
 }
 
 /// The main window as a fill's dialog found it.
@@ -664,15 +758,27 @@ fn window_before(app: &AppHandle) -> WindowBefore {
 impl Drop for PendingGuard {
     fn drop(&mut self) {
         let bridge = self.app.state::<BrowserBridge>();
-        let ours = {
-            let mut slot = lock(&bridge.pending);
-            let ours = slot
-                .as_ref()
-                .is_some_and(|p| p.prompt.request_id == self.request_id);
-            if ours {
-                *slot = None;
+        let ours = match self.kind {
+            Question::Fill => {
+                let mut slot = lock(&bridge.pending);
+                let ours = slot
+                    .as_ref()
+                    .is_some_and(|p| p.prompt.request_id == self.request_id);
+                if ours {
+                    *slot = None;
+                }
+                ours
             }
-            ours
+            Question::Save => {
+                let mut slot = lock(&bridge.saving);
+                let ours = slot
+                    .as_ref()
+                    .is_some_and(|p| p.prompt.request_id == self.request_id);
+                if ours {
+                    *slot = None;
+                }
+                ours
+            }
         };
         if !self.confirmed {
             lock(&bridge.cooldown).start(Instant::now());
@@ -699,7 +805,11 @@ impl Drop for PendingGuard {
                 }
             }
         }
-        let _ = self.app.emit("browser-fill-ended", &self.request_id);
+        let ended = match self.kind {
+            Question::Fill => "browser-fill-ended",
+            Question::Save => "browser-save-ended",
+        };
+        let _ = self.app.emit(ended, &self.request_id);
     }
 }
 
@@ -727,7 +837,7 @@ async fn authenticator_enrolled(app: &AppHandle) -> bool {
 /// (`limits::admit_fill`).
 fn fill_allowed(app: &AppHandle, connection: &Connection) -> Result<(), Failure> {
     let bridge = app.state::<BrowserBridge>();
-    let busy = lock(&bridge.pending).is_some();
+    let busy = waiting(&bridge);
     let cooldown = lock(&bridge.cooldown);
     let mut mine = lock(&connection.limits);
     let mut overall = lock(&bridge.fills);
@@ -743,6 +853,106 @@ fn fill_allowed(app: &AppHandle, connection: &Connection) -> Result<(), Failure>
         Err(FillRefused::Busy) => Err(Code::Busy.into()),
         Err(FillRefused::TooMany) => Err(Failure::with(Code::Busy, TOO_MANY)),
     }
+}
+
+/// Whether a fill or a save is waiting for the person.
+fn waiting(bridge: &BrowserBridge) -> bool {
+    lock(&bridge.pending).is_some() || lock(&bridge.saving).is_some()
+}
+
+/// Whether a save may raise its dialog: as a fill, but on the rations of
+/// `logins`, since it reads nothing out.
+fn save_allowed(app: &AppHandle, connection: &Connection) -> Result<(), Failure> {
+    let bridge = app.state::<BrowserBridge>();
+    let busy = waiting(&bridge);
+    let cooldown = lock(&bridge.cooldown);
+    let mut mine = lock(&connection.limits);
+    let mut overall = lock(&bridge.lookups);
+    match limits::admit_fill(
+        &cooldown,
+        busy,
+        &mut mine.lookups,
+        &mut overall,
+        Instant::now(),
+    ) {
+        Ok(()) => Ok(()),
+        Err(FillRefused::CoolingDown) => Err(Failure::with(Code::Busy, COOLING_DOWN)),
+        Err(FillRefused::Busy) => Err(Code::Busy.into()),
+        Err(FillRefused::TooMany) => Err(Failure::with(Code::Busy, TOO_MANY)),
+    }
+}
+
+/// A login typed on a page, offered by the extension. The dialog shows it
+/// and the window writes it; nothing is written unless the person presses
+/// Save. No key check: saving reveals nothing.
+async fn save(
+    app: &AppHandle,
+    connection: &Connection,
+    id: &str,
+    origin: &str,
+    username: Zeroizing<String>,
+    password: Zeroizing<String>,
+) -> Result<Vec<u8>, Failure> {
+    let Ok(Some(site)) = protocol::parse_origin(origin) else {
+        return Err(Failure::with(
+            Code::BadRequest,
+            "SilentSilo does not save logins for this page.",
+        ));
+    };
+    let (silo, epoch) = open(app).await?;
+    save_allowed(app, connection)?;
+    let logins = read_logins(app, silo).await?;
+    let existing = protocol::same_login(&logins, &site, &username).map(|login| SaveExisting {
+        id: login.id.to_string(),
+        label: login.label.clone(),
+    });
+    let prompt = SavePrompt {
+        request_id: Uuid::new_v4().to_string(),
+        site: site.shown.clone(),
+        url: origin.to_string(),
+        label: protocol::suggested_label(&site),
+        username: Zeroizing::new(username.trim().to_string()),
+        password,
+        existing,
+    };
+
+    let (reply, decided) = oneshot::channel();
+    {
+        let bridge = app.state::<BrowserBridge>();
+        if lock(&bridge.pending).is_some() {
+            return Err(Code::Busy.into());
+        }
+        let mut slot = lock(&bridge.saving);
+        if slot.is_some() {
+            return Err(Code::Busy.into());
+        }
+        *slot = Some(PendingSave {
+            prompt: prompt.clone(),
+            reply: Some(reply),
+        });
+    }
+    let mut guard = PendingGuard {
+        app: app.clone(),
+        kind: Question::Save,
+        request_id: prompt.request_id.clone(),
+        confirmed: false,
+        before: window_before(app),
+        browser: silentsilo_shell::foreground_window(),
+    };
+    let _ = app.emit("browser-save-request", &prompt);
+    drop(prompt);
+    bring_to_front(app);
+
+    let updated = wait_for(
+        app,
+        decided,
+        epoch,
+        SAVE_TIMEOUT,
+        Failure::with(Code::Cancelled, "The login was not saved."),
+    )
+    .await?;
+    guard.confirmed = true;
+    Ok(protocol::save_answer(id, updated))
 }
 
 async fn fill(
@@ -792,6 +1002,9 @@ async fn fill(
     let (reply, decided) = oneshot::channel();
     {
         let bridge = app.state::<BrowserBridge>();
+        if lock(&bridge.saving).is_some() {
+            return Err(Code::Busy.into());
+        }
         let mut slot = lock(&bridge.pending);
         if slot.is_some() {
             return Err(Code::Busy.into());
@@ -804,6 +1017,7 @@ async fn fill(
     }
     let mut guard = PendingGuard {
         app: app.clone(),
+        kind: Question::Fill,
         request_id: prompt.request_id.clone(),
         confirmed: false,
         before: window_before(app),
@@ -812,7 +1026,14 @@ async fn fill(
     let _ = app.emit("browser-fill-request", &prompt);
     bring_to_front(app);
 
-    wait_for_decision(app, decided, epoch).await?;
+    wait_for(
+        app,
+        decided,
+        epoch,
+        FILL_TIMEOUT,
+        Failure::new(Code::Cancelled),
+    )
+    .await?;
     guard.confirmed = true;
 
     // Confirmed. The silo must still be the one the ref was issued in, and
@@ -853,23 +1074,27 @@ async fn fill(
     ))
 }
 
-async fn wait_for_decision(
+/// Waits for the person's answer: `Some` goes on, `None` or a dropped
+/// sender is `declined`. A silo that locks or changes ends the wait.
+async fn wait_for<T>(
     app: &AppHandle,
-    mut decided: oneshot::Receiver<bool>,
+    mut decided: oneshot::Receiver<Option<T>>,
     epoch: u64,
-) -> Result<(), Failure> {
-    let deadline = tokio::time::Instant::now() + FILL_TIMEOUT;
+    timeout: Duration,
+    declined: Failure,
+) -> Result<T, Failure> {
+    let deadline = tokio::time::Instant::now() + timeout;
     loop {
         tokio::select! {
             answer = &mut decided => {
                 return match answer {
-                    Ok(true) => Ok(()),
-                    _ => Err(Code::Cancelled.into()),
+                    Ok(Some(value)) => Ok(value),
+                    _ => Err(declined),
                 };
             }
             _ = tokio::time::sleep(Duration::from_millis(250)) => {
                 if tokio::time::Instant::now() >= deadline {
-                    return Err(Failure::with(Code::Cancelled, "The fill was not confirmed in time."));
+                    return Err(Failure::with(Code::Cancelled, "Nothing was decided in time."));
                 }
                 if app.state::<AppState>().epoch() != epoch {
                     return Err(match access_now(app).await {

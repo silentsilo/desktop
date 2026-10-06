@@ -42,6 +42,11 @@ silo from opening needs a major version rather than a note.
   `docs/ORGANISATIONS.md` says what it records and what it cannot. On an organisation's silo the log stays on,
   and an event that cannot be written locks the silo instead of letting the
   action go on unrecorded.
+- The browser extension can save a login. Type it on the page, click "Save
+  this login" in the extension before signing in, and the app asks: save it
+  as a new login, or update the one already saved for that site and
+  username, with the old password kept in its history. Nothing is written
+  until you press Save here. Needs extension 0.2.
 
 ### Fixed
 

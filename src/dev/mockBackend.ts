@@ -127,6 +127,23 @@ let seedCancelled = false;
 /// Answered once, it stays answered, as the real one does.
 let fillAnswered = false;
 
+/// `?save` offers a login from the browser, `?save=update` one already saved.
+let saveAnswered = false;
+function mockSavePrompt() {
+  const which = new URLSearchParams(location.search).get("save");
+  if (which === null || saveAnswered) return null;
+  return {
+    request_id: "save-1",
+    site: "github.com",
+    url: "https://github.com",
+    label: "github.com",
+    username: "alex@example.com",
+    password: "typed-on-the-page",
+    existing:
+      which === "update" ? { id: "aaaaaaaa-0000-0000-0000-000000000001", label: "GitHub" } : null,
+  };
+}
+
 function mockFillPrompt() {
   const which = new URLSearchParams(location.search).get("fill");
   if (which === null || fillAnswered) return null;
@@ -1043,6 +1060,17 @@ const handlers: Record<string, Handler> = {
   browser_fill_cancel: (args) => {
     fillAnswered = true;
     emit("browser-fill-ended", args.requestId);
+    return null;
+  },
+  browser_save_pending: () => mockSavePrompt(),
+  browser_save_done: (args) => {
+    saveAnswered = true;
+    emit("browser-save-ended", args.requestId);
+    return null;
+  },
+  browser_save_cancel: (args) => {
+    saveAnswered = true;
+    emit("browser-save-ended", args.requestId);
     return null;
   },
   browser_extension_status: () => browserExtension,

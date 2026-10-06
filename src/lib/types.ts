@@ -479,6 +479,23 @@ export type BrowserFillPrompt = {
   mismatch: string | null;
 };
 
+/** A login the browser extension read from a page on the person's click,
+ * waiting to be saved here. Carries the password: the window writes the
+ * entry, as for any edit. */
+export type BrowserSavePrompt = {
+  request_id: string;
+  /** The tab's host, with its port when it has one. */
+  site: string;
+  /** The tab's origin, the new entry's address. */
+  url: string;
+  /** The name a new login starts with. */
+  label: string;
+  username: string;
+  password: string;
+  /** The login saved for this site with this username, offered for update. */
+  existing: { id: string; label: string } | null;
+};
+
 /** Settings > Browser extension. */
 export type BrowserExtensionStatus = {
   /** Windows and Linux for now. */

@@ -371,7 +371,7 @@ Drive out.
 ## Browser extension
 
 The extension (silentsilo/browser) fills a username and a password into a
-page, and nothing else. Its contract with this app is `docs/PROTOCOL.md` in
+page, and offers one typed on a page for saving here, and nothing else. Its contract with this app is `docs/PROTOCOL.md` in
 that repository; message shapes change there first. The path:
 
 ```mermaid
@@ -582,6 +582,24 @@ flowchart LR
   On macOS nothing is remembered yet. A silo that is unlocked but whose logins cannot
   be read is answered `read-failed`, never `locked`: an extension that
   predates the code shows its generic line for it.
+- **A save is decided here too** (since 1.4.0). `save` carries the origin,
+  the username and the password the extension read from the page on the
+  person's click; the parser refuses an empty password and either value
+  over 1024 characters. It spends the `logins` rations, not the fill ones,
+  and is refused like a fill during the 10 second pause and while a fill or
+  another save waits: one question at a time. `protocol::same_login` finds
+  the login saved for this site with the same username (ignoring case and
+  spaces), and `BrowserSaveDialog` offers to update it or to save a new one,
+  named after the site; the person can change the name and the username.
+  No key check: saving reveals nothing, and the dialog is the confirmation.
+  The prompt carries the password to the window, because the window writes
+  the entry through `savePasswordEntry`, the same path as an edit: an update
+  keeps the old password in the history, and the activity log records the
+  change. When the login is already there with this password, the dialog
+  says so and offers only Close. The window then calls `browser_save_done`,
+  and the extension hears `saved` or `updated`; Cancel, 120 seconds, or a
+  lock or focus change is `cancelled`. The window goes back and the browser
+  gets the focus as after a fill.
 - **Installed as an externalBin**, merged in by `build-release-local.ps1`
   through `src-tauri/tauri.browser-host.json` rather than kept in
   `tauri.conf.json`: tauri-build requires an externalBin to exist on every

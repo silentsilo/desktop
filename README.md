@@ -108,7 +108,8 @@ Bitwarden's JSON, and CSV from Bitwarden, LastPass, 1Password, Proton Pass,
 Dashlane, NordPass, KeePass, RoboForm and the browsers. Export writes every
 entry to a KeePass file under a password you choose, which KeePassXC and
 KeePassDX open, or the logins alone to CSV. The browser extension fills
-logins, confirmed in the app; it holds nothing itself.
+logins, confirmed in the app, and offers a login typed on a page for saving,
+which the app asks about first; it holds nothing itself.
 
 ## Unlocking
 
