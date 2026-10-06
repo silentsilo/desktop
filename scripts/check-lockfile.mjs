@@ -22,6 +22,8 @@ const CORE = [
   "silentsilo-fido",
   "silentsilo-s3",
   "silentsilo-app",
+  "silentsilo-audit",
+  "silentsilo-cloud",
 ];
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
