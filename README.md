@@ -50,8 +50,9 @@ Everything below the application lives in
 [silentsilo/core](https://github.com/silentsilo/core): the cryptography, the
 persisted formats, the operation log, sync, the storage backends, the
 security-key backends and the standalone extraction tool. `Cargo.toml` pins a
-tag from there, and the lockfile pins the commit. Mobile clients will pin the
-same crates.
+tag from there, and the lockfile pins the commit. The Android app
+([silentsilo/mobile](https://github.com/silentsilo/mobile)) pins the same
+crates.
 
 | Crate | Where | Role |
 |-------|-------|------|
@@ -84,6 +85,22 @@ That last case works as a backup for **one** computer. It cannot serve two:
 the encrypted snapshot is a single file rewritten on every change, so two
 machines editing it produce a conflict copy rather than a merge. Sharing a
 silo between computers is what the operation log in a bucket is for.
+
+## Passwords
+
+Logins, cards, identities, SSH keys and secure notes, each entry with its
+one-time code if it has one, custom fields (a hidden one is masked and copied
+like a password) and its earlier versions: when a password, a field or a note
+changes, the entry keeps the version before it, the last 10 by default, and
+one can be put back. Health points out reused, weak and old passwords, and
+an entry back on one it had before.
+
+Import reads a KeePass database (`.kdbx`, with its key file if it has one),
+Bitwarden's JSON, and CSV from Bitwarden, LastPass, 1Password, Proton Pass,
+Dashlane, NordPass, KeePass, RoboForm and the browsers. Export writes every
+entry to a KeePass file under a password you choose, which KeePassXC and
+KeePassDX open, or the logins alone to CSV. The browser extension fills
+logins, confirmed in the app; it holds nothing itself.
 
 ## Unlocking
 
@@ -194,6 +211,9 @@ local checkout instead, create `.cargo/config.toml` (gitignored):
 
 ```toml
 [patch."https://github.com/silentsilo/core"]
+silentsilo-app = { path = "../silentsilo.core/crates/silentsilo-app" }
+silentsilo-audit = { path = "../silentsilo.core/crates/silentsilo-audit" }
+silentsilo-cloud = { path = "../silentsilo.core/crates/silentsilo-cloud" }
 silentsilo-core = { path = "../silentsilo.core/crates/silentsilo-core" }
 silentsilo-crypto = { path = "../silentsilo.core/crates/silentsilo-crypto" }
 silentsilo-vault = { path = "../silentsilo.core/crates/silentsilo-vault" }
