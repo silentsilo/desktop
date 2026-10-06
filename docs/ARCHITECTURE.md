@@ -697,6 +697,79 @@ as if they did.
   cannot stand in for it without the host noticing (owner, server user and
   server image). An administrator can do anything.
 
+## SSH agent (designed for 1.4, not built yet)
+
+The SSH keys kept in a silo sign for `ssh`, `git` and VS Code without the
+private key leaving the app, as 1Password's and Bitwarden's agents do.
+Researched on 6 October 2026 against 1Password's documentation, the source
+of Bitwarden's agent (v2, its own protocol code over `ssh-key`), KeeAgent,
+KeePassXC, RFC 9987 and OpenSSH's `PROTOCOL.agent`.
+
+- **Off by default**, a toggle under Settings like the browser extension.
+  Nothing listens until it is on.
+- **Where it listens.** On Windows, `\.\pipe\openssh-ssh-agent`, the pipe
+  Windows' own `ssh.exe` uses, created as the first instance with a DACL for
+  this user's SID only (Bitwarden takes tokio's defaults). When Windows'
+  OpenSSH Authentication Agent service holds the name, the pipe cannot be
+  created: Settings says so and shows how to stop and disable the service,
+  which needs an administrator; the app never does it itself. Git for
+  Windows' bundled ssh does not use the pipe; Settings gives the
+  `core.sshCommand` line that points Git at Windows' `ssh.exe`, as
+  1Password does. On Linux, `$XDG_RUNTIME_DIR/silentsilo/ssh-agent.sock`
+  in the 0700 directory the browser socket uses, and Settings shows the
+  `SSH_AUTH_SOCK` export and the `IdentityAgent` line for `~/.ssh/config`.
+  The app writes neither file. No Pageant and no Cygwin sockets: neither
+  competitor serves them, and KeeAgent's own documentation says its Cygwin
+  socket has no authentication.
+- **Which keys.** Only SSH-key entries of the focused silo with "Use with
+  the SSH agent" turned on, the same silo the window and the extension
+  see. Offering every key runs into the server's `MaxAuthTries` after a few
+  (1Password needs an `agent.toml` for this). The setting is a new optional
+  field in the entry, `ssh_agent: true`; an older client keeps it when it
+  saves the entry, as it keeps `fields` and `history` (FORMATS.md, with a
+  test on 1.0.0's code).
+- **Key types.** Ed25519, RSA with `rsa-sha2-256` and `rsa-sha2-512`
+  (SHA-1 `ssh-rsa` signatures are refused), ECDSA P-256 and P-384. The key
+  is read from the entry as OpenSSH, PKCS#8 or PKCS#1 PEM. A key with a
+  passphrase is asked for it once, when the agent is turned on for that
+  entry, and stored without it, the old version kept in the history: the
+  silo is its protection, and the agent cannot ask for a passphrase in the
+  middle of a connection.
+- **Every signature is confirmed here**, in a dialog like the browser
+  fill's: the key, the program that asked (its executable path and its
+  parent, from `GetNamedPipeClientProcessId` or `SO_PEERCRED`; shown, never
+  trusted), the server's host key fingerprint when the client bound the
+  session, and "Sign a git commit" when the data is an SSHSIG for git. The
+  dialog can allow that key for as long as the silo stays unlocked, as
+  1Password does by default and Bitwarden's "remember until lock": for one
+  server's host key, or for git signatures. A request whose client did not
+  name the server is asked every time, since allowing it would let any
+  program sign with that key for any server. A lock (the idle timeout
+  included), a focus change or turning the agent off forgets every
+  allowance. An entry with
+  "Require a touch to reveal" also runs the Windows Hello or security key
+  check, as a fill does.
+- **Forwarding.** The agent verifies `session-bind@openssh.com` (the host
+  key's signature over the session id) and refuses a request on a forwarded
+  connection: a server you connected to could otherwise sign as you
+  elsewhere. A client that does not bind the session is treated as local,
+  and the dialog says the server is unknown.
+- **Locked or no silo.** The agent lists nothing and signs nothing. A
+  request while locked brings the window to its unlock screen and waits up
+  to 60 seconds; after an unlock it answers, otherwise it answers with no
+  keys. Nothing of a key stays in memory while the silo is locked: the key
+  is read from the entry for each signature and wiped after it.
+- **What it refuses.** Adding or removing keys, locking the agent,
+  smartcard and PKCS#11 requests, constraints it does not know (RFC 9987
+  says to refuse), and any other extension. A frame over 256 KB closes the
+  connection. Requests are rationed per connection as the browser's are.
+- **The activity log** records each signature: the key, the program and
+  the host when known.
+- **Built on** `ssh-key` (already in the tree, MIT/Apache-2.0) for keys and
+  signatures, with the agent's few messages written here rather than
+  through `ssh-agent-lib`, which pins another `ssh-key` major version.
+  macOS follows with its release, on `SSH_AUTH_SOCK` like Linux.
+
 ## Looks wrong, is deliberate
 
 Read this before "fixing" any of it. The gotchas that live in the domain
