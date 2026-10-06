@@ -128,7 +128,7 @@ the organisation keys last, and the silo becomes an ordinary personal one.
 
 An organisation's silo keeps an activity log: unlocking, secrets shown or
 copied, files opened or saved outside the silo, logins filled in the
-browser, and changes to entries, files, keys and the recovery code. Each
+browser, signatures made with an SSH key through the agent, and changes to entries, files, keys and the recovery code. Each
 device encrypts its records to a key only the organisation's keys open, so
 the employee's devices write the log and cannot read it.
 

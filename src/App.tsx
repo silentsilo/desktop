@@ -77,6 +77,7 @@ import { ShellUploadDialog } from "./views/ShellUploadDialog";
 import { SecurityKeyPinDialog } from "./views/SecurityKeyPinDialog";
 import { BrowserFillDialog } from "./views/BrowserFillDialog";
 import { BrowserSaveDialog } from "./views/BrowserSaveDialog";
+import { SshSignDialog } from "./views/SshSignDialog";
 import { ShellDownloadDialog } from "./views/ShellDownloadDialog";
 import { TrashPanel } from "./views/TrashPanel";
 import { UnlockView } from "./views/UnlockView";
@@ -3729,6 +3730,7 @@ export default function App() {
       {/* Last, so a fill the browser asks for sits above anything else open. */}
       <BrowserFillDialog os={osOf(bootstrap)} />
       <BrowserSaveDialog entries={passwordEntries} onSave={savePasswordEntry} />
+      <SshSignDialog os={osOf(bootstrap)} />
       <AppShell
         view={view}
         onView={(next) => {

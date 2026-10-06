@@ -22,6 +22,7 @@ import {
   typeOf,
   type PasswordGenOptions,
 } from "./util";
+import { SshAgentOption } from "./SshAgentOption";
 import {
   IconClose,
   IconCopy,
@@ -336,6 +337,10 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
               />
             </label>
             {field("Fingerprint", "ssh_fingerprint", "SHA256:…", true)}
+            <SshAgentOption
+              draft={draft}
+              onChange={(changes) => setDraft((d) => ({ ...d, ...changes }))}
+            />
           </>
         )}
 

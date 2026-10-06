@@ -181,16 +181,11 @@ mod imp {
     use std::sync::{Arc, OnceLock};
     use std::time::Duration;
 
-    use ::windows::Win32::Foundation::{HLOCAL, LocalFree};
-    use ::windows::Win32::Security::Authorization::{
-        ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
-    };
-    use ::windows::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
-    use ::windows::core::HSTRING;
-    use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
+    use tokio::net::windows::named_pipe::NamedPipeServer;
     use tokio::sync::watch;
 
     use super::Frame;
+    use crate::win_pipe::UserOnly;
     use crate::win_process;
 
     pub use crate::win_process::current_user_sid;
@@ -198,11 +193,6 @@ mod imp {
     /// At most this many connections at once. The browser starts one host
     /// per port, and an extension needs one or two.
     const MAX_INSTANCES: usize = 16;
-
-    /// How long the server waits before trying again to create an instance
-    /// (all of them taken, say), doubling up to the second value.
-    const RETRY_FIRST: Duration = Duration::from_millis(100);
-    const RETRY_MAX: Duration = Duration::from_secs(5);
 
     /// The host's file name, installed beside the app.
     pub const HOST_EXE: &str = "silentsilo-browser-host.exe";
@@ -277,78 +267,6 @@ mod imp {
         .map_err(Clone::clone)
     }
 
-    /// A security descriptor granting the current user, and nobody else,
-    /// full access. `P` protects the DACL from inheriting anything.
-    struct UserOnly {
-        sd: PSECURITY_DESCRIPTOR,
-        sid: String,
-    }
-
-    // SAFETY: the descriptor is immutable once built and only read by
-    // CreateNamedPipe; LocalFree on drop is the only other use.
-    unsafe impl Send for UserOnly {}
-    unsafe impl Sync for UserOnly {}
-
-    impl UserOnly {
-        fn new(sid: &str) -> io::Result<Self> {
-            let sddl = HSTRING::from(format!("O:{sid}D:P(A;;GA;;;{sid})"));
-            let mut sd = PSECURITY_DESCRIPTOR::default();
-            // SAFETY: the SDDL string outlives the call; the descriptor is
-            // allocated by the system and freed in Drop.
-            unsafe {
-                ConvertStringSecurityDescriptorToSecurityDescriptorW(
-                    &sddl,
-                    SDDL_REVISION_1,
-                    &mut sd,
-                    None,
-                )?;
-            }
-            Ok(Self {
-                sd,
-                sid: sid.to_string(),
-            })
-        }
-
-        fn create(&self, name: &str, first: bool) -> io::Result<NamedPipeServer> {
-            let mut attributes = SECURITY_ATTRIBUTES {
-                nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
-                lpSecurityDescriptor: self.sd.0,
-                bInheritHandle: false.into(),
-            };
-            // SAFETY: `attributes` is a valid SECURITY_ATTRIBUTES whose
-            // descriptor lives as long as `self`.
-            let pipe = unsafe {
-                ServerOptions::new()
-                    .first_pipe_instance(first)
-                    .reject_remote_clients(true)
-                    .max_instances(MAX_INSTANCES)
-                    .create_with_security_attributes_raw(
-                        name,
-                        (&mut attributes as *mut SECURITY_ATTRIBUTES).cast(),
-                    )?
-            };
-            // A later instance joins whatever pipe holds the name. Had every
-            // instance of ours closed and another user created the name
-            // meanwhile, this one would be theirs.
-            if !first && win_process::owner_sid(pipe.as_raw_handle())? != self.sid {
-                return Err(io::Error::new(
-                    io::ErrorKind::PermissionDenied,
-                    "the pipe name is held by another user",
-                ));
-            }
-            Ok(pipe)
-        }
-    }
-
-    impl Drop for UserOnly {
-        fn drop(&mut self) {
-            // SAFETY: allocated by ConvertStringSecurityDescriptorToSecurityDescriptorW.
-            unsafe {
-                let _ = LocalFree(Some(HLOCAL(self.sd.0)));
-            }
-        }
-    }
-
     /// The pipe, bound and waiting for its first client.
     pub struct PipeServer {
         name: String,
@@ -373,7 +291,7 @@ mod imp {
             stop: watch::Receiver<bool>,
             check: ClientCheck,
         ) -> io::Result<Self> {
-            let descriptor = UserOnly::new(&current_user_sid()?)?;
+            let descriptor = UserOnly::new(MAX_INSTANCES)?;
             let mut last = None;
             for _ in 0..10 {
                 match descriptor.create(&name, true) {
@@ -420,7 +338,7 @@ mod imp {
             loop {
                 let pipe = match waiting.take() {
                     Some(pipe) => pipe,
-                    None => match next_instance(&descriptor, &name, &mut stop, &warn).await? {
+                    None => match descriptor.next_instance(&name, &mut stop, &warn).await? {
                         Some(pipe) => pipe,
                         None => return Ok(()),
                     },
@@ -440,37 +358,6 @@ mod imp {
                     stop.clone(),
                 ));
             }
-        }
-    }
-
-    /// The next instance to wait on. Creating one fails while every
-    /// instance is taken; the server tries again, more slowly each time,
-    /// rather than giving the name up. `None` when stopped, an error when
-    /// the name turned out to be another user's.
-    async fn next_instance<W: Fn(String)>(
-        descriptor: &UserOnly,
-        name: &str,
-        stop: &mut watch::Receiver<bool>,
-        warn: &W,
-    ) -> io::Result<Option<NamedPipeServer>> {
-        let mut delay = RETRY_FIRST;
-        let mut warned = false;
-        loop {
-            match descriptor.create(name, false) {
-                Ok(pipe) => return Ok(Some(pipe)),
-                Err(e) if e.kind() == io::ErrorKind::PermissionDenied => return Err(e),
-                Err(e) => {
-                    if !warned {
-                        warn(format!("waiting to open another connection: {e}"));
-                        warned = true;
-                    }
-                }
-            }
-            tokio::select! {
-                _ = tokio::time::sleep(delay) => {}
-                _ = stop.changed() => return Ok(None),
-            }
-            delay = (delay * 2).min(RETRY_MAX);
         }
     }
 

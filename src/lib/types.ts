@@ -368,6 +368,8 @@ export type PasswordEntry = {
   ssh_private_key?: string;
   ssh_public_key?: string;
   ssh_fingerprint?: string;
+  /** Offered by the desktop's SSH agent, which signs with it after asking. */
+  ssh_agent?: boolean;
   attachments?: PasswordAttachment[];
   /** Starred, like a file. Absent means no, which is what every entry
    * written before Favourites existed says. */
@@ -494,6 +496,35 @@ export type BrowserSavePrompt = {
   password: string;
   /** The login saved for this site with this username, offered for update. */
   existing: { id: string; label: string } | null;
+};
+
+/** Settings > SSH agent. */
+export type SshAgentStatus = {
+  /** Windows and Linux for now. */
+  supported: boolean;
+  enabled: boolean;
+  running: boolean;
+  /** Why it is not listening, when it should be. */
+  problem: string | null;
+  /** The pipe, or the socket's path, that ssh is pointed at. */
+  address: string | null;
+};
+
+/** A signature an SSH client asked for, waiting for the person. */
+export type SshSignPrompt = {
+  request_id: string;
+  /** The entry's name. */
+  key: string;
+  program: string | null;
+  parent: string | null;
+  /** The server's host key fingerprint, when the client named the server. */
+  host: string | null;
+  /** The user name a login is for. */
+  user: string | null;
+  /** "git" for a commit or tag signature. */
+  namespace: string | null;
+  can_remember: boolean;
+  require_reauth: boolean;
 };
 
 /** Settings > Browser extension. */

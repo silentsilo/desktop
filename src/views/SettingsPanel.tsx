@@ -15,6 +15,7 @@ import {
   LifeBuoy,
   SearchCheck,
   SlidersHorizontal,
+  SquareTerminal,
   Timer,
   Wrench,
 } from "lucide-react";
@@ -124,6 +125,7 @@ const SECTIONS = [
   { id: "advanced", group: "silo", label: "Advanced", icon: Wrench },
   { id: "general", group: "app", label: "General", icon: SlidersHorizontal },
   { id: "browser", group: "app", label: "Browser extension", icon: Globe },
+  { id: "ssh", group: "app", label: "SSH agent", icon: SquareTerminal },
   { id: "updates", group: "app", label: "Updates and about", icon: DownloadCloud },
 ] as const;
 
@@ -734,7 +736,10 @@ export function SettingsPanel(props: Props) {
           </>
         )}
 
-        {(section === "general" || section === "browser" || section === "updates") && (
+        {(section === "general" ||
+          section === "browser" ||
+          section === "ssh" ||
+          section === "updates") && (
           <AppSettingsSection
             section={section}
             os={props.os}

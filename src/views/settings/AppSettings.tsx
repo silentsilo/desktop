@@ -17,10 +17,11 @@ import { useTheme, type ThemeChoice } from "../../lib/theme";
 import { AUTO_LOCK_OPTIONS_MINUTES, type BrowserExtensionStatus } from "../../lib/types";
 import { ExtensionStoreLinks } from "../ExtensionStoreLinks";
 import { HISTORY_POLICIES, type HistoryPolicy } from "../../lib/entryHistory";
+import { SshAgentSettings } from "./SshAgentSettings";
 import { loadHistoryPolicy, saveHistoryPolicy } from "../../lib/historySetting";
 
 /** The sections that belong to the app rather than to one silo. */
-export type AppSectionId = "general" | "browser" | "updates";
+export type AppSectionId = "general" | "browser" | "ssh" | "updates";
 
 export function formatMinutes(minutes: number): string {
   if (minutes < 60) return `${minutes} min`;
@@ -197,6 +198,8 @@ export function AppSettingsSection({
   };
 
   const updateState = updater.state;
+
+  if (section === "ssh") return <SshAgentSettings os={os} busy={busy} />;
 
   if (section === "general") {
     return (

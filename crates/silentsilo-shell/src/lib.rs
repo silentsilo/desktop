@@ -13,7 +13,10 @@ mod macos;
 mod os_integration;
 mod secret_clipboard;
 mod session_watch;
+pub mod ssh_agent_channel;
 mod tray;
+#[cfg(windows)]
+mod win_pipe;
 #[cfg(windows)]
 pub mod win_process;
 #[cfg(windows)]

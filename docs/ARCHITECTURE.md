@@ -307,7 +307,7 @@ log was never started starts it there.
 
 - What leaves the silo is recorded before it happens: a secret shown or
   copied, a file or attachment opened or saved outside, a login filled in the
-  browser, passwords exported. A change inside the silo is recorded before
+  browser, a signature made with an SSH key, passwords exported. A change inside the silo is recorded before
   it is stored too, so nothing happens unrecorded; one that then fails
   leaves an event for something attempted. Imports are the exception: one
   event with the count, after the fact, never refused.
@@ -697,7 +697,7 @@ as if they did.
   cannot stand in for it without the host noticing (owner, server user and
   server image). An administrator can do anything.
 
-## SSH agent (designed for 1.4, not built yet)
+## SSH agent
 
 The SSH keys kept in a silo sign for `ssh`, `git` and VS Code without the
 private key leaving the app, as 1Password's and Bitwarden's agents do.
@@ -730,7 +730,10 @@ KeePassXC, RFC 9987 and OpenSSH's `PROTOCOL.agent`.
   test on 1.0.0's code).
 - **Key types.** Ed25519, RSA with `rsa-sha2-256` and `rsa-sha2-512`
   (SHA-1 `ssh-rsa` signatures are refused), ECDSA P-256 and P-384. The key
-  is read from the entry as OpenSSH, PKCS#8 or PKCS#1 PEM. A key with a
+  is read from the entry in OpenSSH's format, or as an RSA key in PKCS#1 or
+  PKCS#8 PEM; `ssh-keygen -p -f <file>` turns any other into OpenSSH's, and
+  the editor says so. The editor's "Use with the SSH agent" checks the key
+  (`ssh_key_check`) before it turns on. A key with a
   passphrase is asked for it once, when the agent is turned on for that
   entry, and stored without it, the old version kept in the history: the
   silo is its protection, and the agent cannot ask for a passphrase in the
@@ -766,9 +769,16 @@ KeePassXC, RFC 9987 and OpenSSH's `PROTOCOL.agent`.
 - **The activity log** records each signature: the key, the program and
   the host when known.
 - **Built on** `ssh-key` (already in the tree, MIT/Apache-2.0) for keys and
-  signatures, with the agent's few messages written here rather than
-  through `ssh-agent-lib`, which pins another `ssh-key` major version.
-  macOS follows with its release, on `SSH_AUTH_SOCK` like Linux.
+  signatures, with the agent's few messages written here (`ssh_agent/proto.rs`)
+  rather than through `ssh-agent-lib`, which pins another `ssh-key` major
+  version. `silentsilo_shell::ssh_agent_channel` listens and names the
+  client; `ssh_agent/keys.rs` is the one module that reads the vault, through
+  `list_passwords` like the browser's `logins.rs`; `ssh_agent/mod.rs` holds
+  the dialog (`SshSignDialog`), the allowances and the rations (30 requests
+  per connection, one back every half second; after a declined signature
+  no dialog for 5 seconds). The window raising and handing back is
+  `front.rs`, shared with the browser's questions. macOS follows with its
+  release, on `SSH_AUTH_SOCK` like Linux.
 
 ## Looks wrong, is deliberate
 

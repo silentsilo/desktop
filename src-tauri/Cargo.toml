@@ -51,8 +51,14 @@ silentsilo-fido = { workspace = true, features = ["hardware"] }
 silentsilo-app = { workspace = true }
 silentsilo-audit = { workspace = true }
 # The same version russh already pulls in for SFTP, so generating SSH keys
-# for credential entries costs no new crate in the tree.
-ssh-key = { version = "0.7.0-rc.11", default-features = false, features = ["ed25519", "std"] }
+# for credential entries, and the SSH agent's key types, cost no new crate
+# in the tree: russh enables these features already.
+ssh-key = { version = "0.7.0-rc.11", default-features = false, features = ["ed25519", "rsa", "p256", "p384", "encryption", "std"] }
+# RSA keys kept as PKCS#1 or PKCS#8 PEM, for the SSH agent. The version
+# ssh-key uses.
+rsa = { version = "0.10.0-rc.18", default-features = false, features = ["encoding", "std"] }
+# The Signer and Verifier traits ssh-key implements, at its version.
+signature = "3.0.0"
 # KeePass databases, for import and export (MIT). KDBX 4 writing is behind
 # its own feature.
 keepass = { version = "0.15", features = ["save_kdbx4"] }

@@ -723,36 +723,13 @@ struct PendingGuard {
     kind: Question,
     request_id: String,
     confirmed: bool,
-    before: WindowBefore,
-    browser: Option<silentsilo_shell::ForegroundWindow>,
+    front: crate::front::Front,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Question {
     Fill,
     Save,
-}
-
-/// The main window as a fill's dialog found it.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum WindowBefore {
-    Hidden,
-    Minimised,
-    /// On screen, in front or not. Left where the person puts it next.
-    Shown,
-}
-
-fn window_before(app: &AppHandle) -> WindowBefore {
-    let Some(window) = app.get_webview_window("main") else {
-        return WindowBefore::Shown;
-    };
-    if !window.is_visible().unwrap_or(true) {
-        WindowBefore::Hidden
-    } else if window.is_minimized().unwrap_or(false) {
-        WindowBefore::Minimised
-    } else {
-        WindowBefore::Shown
-    }
 }
 
 impl Drop for PendingGuard {
@@ -784,42 +761,14 @@ impl Drop for PendingGuard {
             lock(&bridge.cooldown).start(Instant::now());
         }
         // Only for its own dialog: a newer one may already be on top.
-        if ours && let Some(window) = self.app.get_webview_window("main") {
-            let _ = window.set_always_on_top(false);
-            if self.confirmed {
-                match self.before {
-                    WindowBefore::Hidden => {
-                        let _ = window.hide();
-                    }
-                    WindowBefore::Minimised => {
-                        let _ = window.minimize();
-                    }
-                    WindowBefore::Shown => {}
-                }
-                if let Some(browser) = self.browser {
-                    #[cfg(windows)]
-                    let ours = window.hwnd().ok().map(|h| h.0 as isize);
-                    #[cfg(not(windows))]
-                    let ours = None;
-                    browser.take_back_from(ours);
-                }
-            }
+        if ours {
+            self.front.settle(&self.app, self.confirmed);
         }
         let ended = match self.kind {
             Question::Fill => "browser-fill-ended",
             Question::Save => "browser-save-ended",
         };
         let _ = self.app.emit(ended, &self.request_id);
-    }
-}
-
-/// Puts the window in front of the browser, above other windows while the
-/// question is open.
-fn bring_to_front(app: &AppHandle) {
-    crate::commands::shell::show_main_window(app);
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.set_always_on_top(true);
-        let _ = window.set_focus();
     }
 }
 
@@ -936,12 +885,11 @@ async fn save(
         kind: Question::Save,
         request_id: prompt.request_id.clone(),
         confirmed: false,
-        before: window_before(app),
-        browser: silentsilo_shell::foreground_window(),
+        front: crate::front::Front::capture(app),
     };
     let _ = app.emit("browser-save-request", &prompt);
     drop(prompt);
-    bring_to_front(app);
+    crate::front::Front::raise(app);
 
     let updated = wait_for(
         app,
@@ -1020,11 +968,10 @@ async fn fill(
         kind: Question::Fill,
         request_id: prompt.request_id.clone(),
         confirmed: false,
-        before: window_before(app),
-        browser: silentsilo_shell::foreground_window(),
+        front: crate::front::Front::capture(app),
     };
     let _ = app.emit("browser-fill-request", &prompt);
-    bring_to_front(app);
+    crate::front::Front::raise(app);
 
     wait_for(
         app,

@@ -127,6 +127,35 @@ let seedCancelled = false;
 /// Answered once, it stays answered, as the real one does.
 let fillAnswered = false;
 
+/// `?mock=unlocked&sign` asks for an SSH signature for a known server,
+/// `&sign=git` for a Git commit, `&sign=unknown` from a client that named
+/// no server.
+let signAnswered = false;
+function mockSignPrompt() {
+  const which = new URLSearchParams(location.search).get("sign");
+  if (which === null || signAnswered) return null;
+  return {
+    request_id: "sign-1",
+    key: "GitHub deploy",
+    program: "C:\\Windows\\System32\\OpenSSH\\ssh.exe",
+    parent: "C:\\Program Files\\Git\\cmd\\git.exe",
+    host: which === "git" || which === "unknown" ? null : "SHA256:uNiVztksCsDhcc0u9e8BujQXVUpKZIDTMczCvj3tD2s",
+    user: which === "git" ? null : "git",
+    namespace: which === "git" ? "git" : null,
+    can_remember: which !== "unknown",
+    require_reauth: false,
+  };
+}
+
+/// Settings > SSH agent; `?sshtaken` as when Windows' own agent holds the pipe.
+let sshAgent = {
+  supported: true,
+  enabled: false,
+  running: false,
+  problem: null as string | null,
+  address: "\\\\.\\pipe\\openssh-ssh-agent",
+};
+
 /// `?save` offers a login from the browser, `?save=update` one already saved.
 let saveAnswered = false;
 function mockSavePrompt() {
@@ -1060,6 +1089,35 @@ const handlers: Record<string, Handler> = {
   browser_fill_cancel: (args) => {
     fillAnswered = true;
     emit("browser-fill-ended", args.requestId);
+    return null;
+  },
+  ssh_agent_status: () => sshAgent,
+  ssh_agent_set: (args) => {
+    const on = Boolean(args.enabled);
+    const taken = flag("sshtaken");
+    sshAgent = {
+      ...sshAgent,
+      enabled: on,
+      running: on && !taken,
+      problem:
+        on && taken
+          ? "Windows' own OpenSSH Authentication Agent is running and holds the agent's pipe. Stop it and set it to Disabled in Services (as an administrator), then turn this on again."
+          : null,
+    };
+    return sshAgent;
+  },
+  ssh_key_check: (args) =>
+    String(args.key).includes("ENCRYPTED-DEMO") ? "encrypted" : "ok",
+  ssh_key_remove_passphrase: (args) => String(args.key).replace("ENCRYPTED-DEMO", ""),
+  ssh_sign_pending: () => mockSignPrompt(),
+  ssh_sign_confirm: (args) => {
+    signAnswered = true;
+    emit("ssh-sign-ended", args.requestId);
+    return null;
+  },
+  ssh_sign_cancel: (args) => {
+    signAnswered = true;
+    emit("ssh-sign-ended", args.requestId);
     return null;
   },
   browser_save_pending: () => mockSavePrompt(),

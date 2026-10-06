@@ -17,6 +17,13 @@ silo from opening needs a major version rather than a note.
   or as many as fit (Settings, General). Restore puts an old version back and
   keeps the current one; Clear history removes old passwords for good.
 - Health points out an entry back on a password it had before.
+- An SSH agent. ssh, Git and your editor sign in with the SSH keys kept in
+  the silo, which never leave the app: turn it on under Settings, SSH agent,
+  and mark each key "Use with the SSH agent". Every use is confirmed in the
+  window, or allowed for one server (or for Git signatures) until the silo
+  locks. Requests forwarded from a server are refused, a locked silo offers
+  nothing, and each signature goes into the activity log. Windows (the pipe
+  Windows' own ssh uses) and Linux (`SSH_AUTH_SOCK`).
 - Bitwarden's ".zip (With Attachments)" export imports with its files:
   each one lands on its item, encrypted, and a file whose item cannot be
   told apart by name (two items with one name) goes on a note "Files from

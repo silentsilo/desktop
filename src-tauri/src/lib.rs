@@ -4,7 +4,9 @@ mod commands;
 mod diagnostics;
 #[cfg(feature = "e2e")]
 mod e2e;
+mod front;
 mod pin;
+mod ssh_agent;
 mod state;
 
 /// The fixture builder's escape hatch must not be in a shipped binary.
@@ -179,6 +181,7 @@ pub fn run() {
             ),
         })
         .manage(browser::BrowserBridge::default())
+        .manage(ssh_agent::SshAgent::default())
         .manage(commands::cloud::SignInSlot::default())
         .setup(move |app| {
             // Nothing is unlocked yet, so any decrypted scratch on disk is
@@ -211,6 +214,7 @@ pub fn run() {
             // Only when Settings > Browser extension is on; off, the pipe
             // does not exist.
             browser::start_if_enabled(app.handle());
+            ssh_agent::start_if_enabled(app.handle());
 
             // Locking the workstation and walking away is the common way a
             // silo is left unattended, and the idle timer only notices
@@ -381,6 +385,13 @@ pub fn run() {
             browser::browser_save_pending,
             browser::browser_save_done,
             browser::browser_save_cancel,
+            ssh_agent::ssh_agent_status,
+            ssh_agent::ssh_agent_set,
+            ssh_agent::ssh_key_check,
+            ssh_agent::ssh_key_remove_passphrase,
+            ssh_agent::ssh_sign_pending,
+            ssh_agent::ssh_sign_confirm,
+            ssh_agent::ssh_sign_cancel,
         ])
         .build(context)
         .expect("error while running SilentSilo")
@@ -393,6 +404,7 @@ pub fn run() {
                 // password would otherwise outlive the app.
                 let _ = silentsilo_shell::clear_secret_clipboard_now();
                 browser::stop(app_handle);
+                ssh_agent::stop(app_handle);
                 let state = app_handle.state::<AppState>();
                 // Every silo that is open, not just the one on screen: each
                 // has keys in memory and may have opened files on disk, and

@@ -8,6 +8,7 @@ import { AppSettingsSection, useUpdater, type AppSectionId } from "./AppSettings
 const TABS: { id: AppSectionId; label: string }[] = [
   { id: "general", label: "General" },
   { id: "browser", label: "Browser extension" },
+  { id: "ssh", label: "SSH agent" },
   { id: "updates", label: "Updates and about" },
 ];
 

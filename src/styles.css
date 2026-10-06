@@ -3176,6 +3176,30 @@ ol.key-add-steps {
   color: var(--danger-on-dark);
 }
 
+/* The SSH agent's setup lines, and a key's passphrase asked once. */
+.code-line {
+  margin: 0.25rem 0 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.ssh-passphrase {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.ssh-passphrase button {
+  justify-self: start;
+}
+
 /* Update the login already saved, or keep a new one beside it. */
 .browser-save-choice {
   display: grid;
