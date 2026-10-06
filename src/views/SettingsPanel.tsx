@@ -23,6 +23,7 @@ import { RotateKeyPanel } from "./RotateKeyPanel";
 import { EmergencyKitPanel } from "./EmergencyKitPanel";
 import { ViewHeader } from "../components/ViewHeader";
 import type {
+  AuditStatus,
   Authenticator,
   DeviceInfo,
   RecoveryStatus,
@@ -41,6 +42,9 @@ import { AppSettingsSection, formatMinutes, useUpdater } from "./settings/AppSet
 import { OverviewPanel } from "./settings/OverviewPanel";
 
 type Props = {
+  /** Whether the open silo keeps an activity log, for the overview. */
+  auditLog: AuditStatus | null;
+  onAuditChanged: (status: AuditStatus) => void;
   /** Which platform's words to use for the built-in authenticator and the shell. */
   os: Os;
   busy: boolean;
@@ -129,6 +133,8 @@ export function SettingsPanel(props: Props) {
   const platform = platformStrings(props.os);
   const {
     busy,
+    auditLog,
+    onAuditChanged,
     autoUpdateEnabled,
     onAutoUpdateEnabled,
     backgroundUpdate,
@@ -243,6 +249,7 @@ export function SettingsPanel(props: Props) {
             recovery={recovery}
             hasPortableKey={hasPortableKey}
             fullCopy={fullCopy}
+            auditLog={auditLog}
             onGo={(target) => onSection(target)}
             onRenameSilo={onRenameSilo}
             onSwitchSilo={onSwitchSilo}
@@ -665,6 +672,7 @@ export function SettingsPanel(props: Props) {
           </div>
           <AuditLogPanel
             busy={busy}
+            onChanged={onAuditChanged}
             devices={devices}
             fallback={<ActivityList devices={devices} />}
           />

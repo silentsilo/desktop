@@ -1994,6 +1994,32 @@ textarea:focus {
 }
 
 /* ── Local storage meter ── */
+.sidebar-audit {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  margin: 0 0 0.35rem;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.sidebar-audit.is-collapsed {
+  justify-content: center;
+  padding: 0.4rem 0;
+}
+
+.sidebar-audit:hover {
+  border-color: var(--border);
+  color: var(--text);
+}
+
 .sidebar-storage {
   display: flex;
   flex-direction: column;

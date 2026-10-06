@@ -31,7 +31,9 @@ silo from opening needs a major version rather than a note.
   Activity (was Devices and activity), works with no copies at all, and
   reaches every copy and device at the next sync. The same page reads it,
   from this computer and every copy, says which records are missing from a
-  device or do not open, and exports it as CSV or JSON lines. On an organisation's silo the log stays on,
+  device or do not open, and exports it as CSV or JSON lines. While a silo
+  keeps a log, the sidebar says so on every device, and Overview has a line
+  for it. On an organisation's silo the log stays on,
   and an event that cannot be written locks the silo instead of letting the
   action go on unrecorded.
 

@@ -7,6 +7,8 @@ import { AuditLogList } from "./AuditLogList";
 
 type Props = {
   busy: boolean;
+  /** Told whenever the switch moves, so the notice elsewhere follows. */
+  onChanged: (status: AuditStatus) => void;
   devices: { id: string; label: string | null; system_name: string | null }[];
   /** Shown instead of the log when this silo keeps none: its list of changes. */
   fallback: ReactNode;
@@ -17,7 +19,7 @@ type Props = {
  * silo, and the log itself. An organisation's log is shown as on, with no
  * switch. A silo that keeps none shows its list of changes instead.
  */
-export function AuditLogPanel({ busy, devices, fallback }: Props) {
+export function AuditLogPanel({ busy, onChanged, devices, fallback }: Props) {
   const [status, setStatus] = useState<AuditStatus | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +38,9 @@ export function AuditLogPanel({ busy, devices, fallback }: Props) {
     setSaving(true);
     setError(null);
     try {
-      setStatus(await invoke<AuditStatus>("audit_set_enabled", { enabled }));
+      const next = await invoke<AuditStatus>("audit_set_enabled", { enabled });
+      setStatus(next);
+      onChanged(next);
       // The copies hear of it at the next sync; asked for now. A silo with
       // no copies has nothing to sync, and that is not an error here.
       void invoke("sync_now").catch(() => undefined);
@@ -45,7 +49,7 @@ export function AuditLogPanel({ busy, devices, fallback }: Props) {
     } finally {
       setSaving(false);
     }
-  }, []);
+  }, [onChanged]);
 
   return (
     <>

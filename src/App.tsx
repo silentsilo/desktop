@@ -16,6 +16,7 @@ import type {
   Authenticator,
   BlobStatus,
   Bootstrap,
+  AuditStatus,
   DeviceInfo,
   EntryChange,
   RecoveryStatus,
@@ -259,6 +260,9 @@ export default function App() {
   /// plus what that occupies. Null until the first read, which is what tells
   /// the explorer to show no badges rather than wrong ones.
   const [blobStatus, setBlobStatus] = useState<BlobStatus | null>(null);
+  /// Whether the open silo keeps an activity log, for the notice in the
+  /// sidebar. Read when a silo opens and whenever the switch moves.
+  const [auditLog, setAuditLog] = useState<AuditStatus | null>(null);
   /// A download-everything pass in flight, counted in blobs. Null when none
   /// is running.
   const [contentFetch, setContentFetch] = useState<{ done: number; total: number } | null>(null);
@@ -777,6 +781,22 @@ export default function App() {
     // declaration and throw.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bootstrap, meta]);
+
+  const auditSiloOpen =
+    bootstrap?.provisioned && !bootstrap.locked && meta !== null ? bootstrap?.silo?.id : null;
+  useEffect(() => {
+    if (!auditSiloOpen) {
+      setAuditLog(null);
+      return;
+    }
+    let live = true;
+    invoke<AuditStatus>("audit_status")
+      .then((status) => live && setAuditLog(status))
+      .catch(() => live && setAuditLog(null));
+    return () => {
+      live = false;
+    };
+  }, [auditSiloOpen]);
 
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
@@ -3726,6 +3746,13 @@ export default function App() {
           setSettingsSection("backup");
           setView("settings");
         }}
+        activityLog={
+          auditLog?.organisation ? "organisation" : auditLog?.enabled ? "on" : null
+        }
+        onOpenActivity={() => {
+          setSettingsSection("devices");
+          setView("settings");
+        }}
         statusSummary={statusSummary}
         siloName={bootstrap.silo.name}
         onSwitchSilo={() => void closeSilo()}
@@ -3906,6 +3933,8 @@ export default function App() {
         {view === "settings" && (
           <SettingsPanel
             os={osOf(bootstrap)}
+            auditLog={auditLog}
+            onAuditChanged={setAuditLog}
             section={settingsSection}
             onSection={setSettingsSection}
             backupPanel={

@@ -7,9 +7,10 @@ import {
   KeyRound,
   LifeBuoy,
   Printer,
+  ScrollText,
   SearchCheck,
 } from "lucide-react";
-import type { RecoveryStatus, Silo } from "../../lib/types";
+import type { AuditStatus, RecoveryStatus, Silo } from "../../lib/types";
 import { currentCopies, type BackupTargetView } from "../../lib/copies";
 import { formatAge, formatDay } from "../../lib/format";
 import { isDue, lastDone } from "../../lib/siloMemory";
@@ -17,7 +18,7 @@ import { platformStrings, type Os } from "../../lib/platformStrings";
 import type { SyncIndicator } from "../../layout/AppShell";
 
 /** Where a row's action leads. */
-export type OverviewTarget = "backup" | "verify" | "recovery" | "keys";
+export type OverviewTarget = "backup" | "verify" | "recovery" | "keys" | "devices";
 
 /** How long a test or a printed kit counts as recent. */
 const REMIND_AFTER_DAYS = 90;
@@ -77,6 +78,7 @@ type Props = {
   hasPortableKey: boolean;
   /** Whether this computer holds every file, so it counts as a copy. */
   fullCopy: boolean;
+  auditLog: AuditStatus | null;
   onGo: (target: OverviewTarget) => void;
   onRenameSilo: (name: string) => void;
   onSwitchSilo: () => void;
@@ -94,6 +96,7 @@ export function OverviewPanel({
   recovery,
   hasPortableKey,
   fullCopy,
+  auditLog,
   onGo,
   onRenameSilo,
   onSwitchSilo,
@@ -243,6 +246,20 @@ export function OverviewPanel({
               : "Never tested from this computer."}
           </Row>
         )}
+        <Row
+          icon={<ScrollText size={16} />}
+          title="Activity log"
+          tone="neutral"
+          action="Open Activity"
+          onAction={() => onGo("devices")}
+          busy={busy}
+        >
+          {auditLog?.organisation
+            ? "Kept for the organisation. Every device records what is done with this silo."
+            : auditLog?.enabled
+              ? "On. Every device that opens this silo records what is done with it."
+              : "Off. Turn it on to keep a record of what is done with this silo."}
+        </Row>
       </ul>
 
       <p className="hint">{silo.path}</p>

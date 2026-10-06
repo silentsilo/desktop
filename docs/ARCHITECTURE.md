@@ -280,7 +280,11 @@ and asks for a sync, which carries the policy to the copies; core's pass
 does that part. Reading (`audit_read`) and export (`audit_export`, CSV with
 formula-like cells kept as text, or JSON lines) go through core's
 `read_audit_log` with the silo's content key; where the silo keeps no log,
-the page shows the oplog's list of changes instead.
+the page shows the oplog's list of changes instead. A silo that keeps a log
+says so in the sidebar for as long as it is open (`AppShell`'s
+`activityLog`, read from `audit_status` when a silo opens and whenever the
+switch moves): whoever uses the silo is told, which an organisation's log
+in particular owes the people it records.
 
 - What leaves the silo is recorded before it happens: a secret shown or
   copied, a file or attachment opened or saved outside, a login filled in the
