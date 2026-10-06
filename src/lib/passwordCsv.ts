@@ -230,9 +230,10 @@ export function csvToEntries(text: string, now: () => number = Date.now): Import
     let url = field("url");
     const noteLines: string[] = [];
     let customFields: CustomField[] = [];
-    if (format === "bitwarden") {
-      // Bitwarden writes every address of a login into one cell, comma
-      // separated, and custom fields one per line in `fields`.
+    if (format === "bitwarden" || format === "protonpass") {
+      // Bitwarden and Proton Pass write every address of a login into one
+      // cell, comma separated. The first is the entry's; the rest go to
+      // notes rather than being lost.
       const [first = "", ...more] = url
         .split(",")
         .map((u) => u.trim())
@@ -240,7 +241,9 @@ export function csvToEntries(text: string, now: () => number = Date.now): Import
       url = first;
       noteLines.push(...more.map((u) => `Web address: ${u}`));
       extras.extraUris += more.length;
-      // One "name: value" per line. The CSV does not say which were hidden
+    }
+    if (format === "bitwarden") {
+      // Custom fields, one "name: value" per line in `fields`. The CSV does not say which were hidden
       // in Bitwarden, so every one comes in masked.
       const at = index.get("fields");
       customFields = (at === undefined ? "" : (row[at] ?? ""))

@@ -757,7 +757,8 @@ KeePassXC, RFC 9987 and OpenSSH's `PROTOCOL.agent`.
   program sign with that key for any server. A lock (the idle timeout
   included), a focus change or turning the agent off forgets every
   allowance. An entry with
-  "Require a touch to reveal" also runs the Windows Hello or security key
+  "Ask for my security key or Windows Hello before showing this entry"
+  also runs the Windows Hello or security key
   check, as a fill does.
 - **Forwarding.** The agent verifies `session-bind@openssh.com` (the host
   key's signature over the session id) and refuses a request on a forwarded

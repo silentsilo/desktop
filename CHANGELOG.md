@@ -66,6 +66,9 @@ silo from opening needs a major version rather than a note.
 
 ### Fixed
 
+- A Proton Pass login with several addresses imports with the first as its
+  address and the others in its notes. All of them used to land in the
+  address field as one string.
 - A OneDrive, Dropbox or Google Drive sign-in you cancel, or replace by
   signing in again, is let go at once, and every unsaved one goes when the
   last silo locks; a Dropbox one is ended at Dropbox. They used to wait in

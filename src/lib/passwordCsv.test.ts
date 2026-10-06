@@ -282,6 +282,17 @@ describe("csvToEntries", () => {
     expect(result.skipped).toBe(1);
   });
 
+  it("keeps the first of Proton Pass's addresses and the rest in notes", () => {
+    const csv = [
+      "type,name,url,email,username,password,note,totp,vault",
+      'login,Gitlab,"https://gitlab.com, https://gitlab.example",,alex,pw1,mine,,Work',
+    ].join("\n");
+    const result = csvToEntries(csv, clock);
+    expect(result.entries[0].url).toBe("https://gitlab.com");
+    expect(result.entries[0].notes).toBe("mine\nWeb address: https://gitlab.example");
+    expect(result.extras.extraUris).toBe(1);
+  });
+
   it("imports a Dashlane export, otpSecret included", () => {
     const csv = [
       "username,username2,username3,title,password,note,url,category,otpSecret",
