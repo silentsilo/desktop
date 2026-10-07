@@ -3,6 +3,7 @@ import type { Os } from "../lib/platformStrings";
 import { AlertTriangle, KeyRound, RefreshCw } from "lucide-react";
 import { securityKeyDisplayName, usableHere } from "../lib/keyName";
 import type { SecurityKeyInfo } from "../lib/types";
+import { t, useLocale } from "../i18n";
 
 type Props = {
   os: Os;
@@ -41,6 +42,7 @@ export function RotateKeyPanel({
   onResume,
   archiveTargets,
 }: Props) {
+  useLocale();
   // `fido_list_keys` returns the ones that still work, so there is nothing
   // to filter here.
   const active = keys;
@@ -76,17 +78,13 @@ export function RotateKeyPanel({
       <div className="panel-section">
         <h3>
           <RefreshCw size={16} />
-          Finish replacing the encryption key
+          {t("rotate.finish_title")}
         </h3>
         <p className="hint is-error" role="status">
           <AlertTriangle size={14} />
-          Replacing the encryption key stopped before it finished. Syncing fails until you finish
-          it, and it cannot be undone.
+          {t("rotate.stopped")}
         </p>
-        <p>
-          Choose any enrolled key to finish with. Every other key stops opening the silo, so add
-          them again afterwards.
-        </p>
+        <p>{t("rotate.finish_body")}</p>
         <div className="actions">
           {active.filter(usableHere).map((k) => (
             <button
@@ -96,7 +94,7 @@ export function RotateKeyPanel({
               onClick={() => onResume(k.credential_id)}
             >
               <KeyRound size={15} />
-              Finish with {named(k)}
+              {t("rotate.finish_with", { name: named(k) })}
             </button>
           ))}
         </div>
@@ -113,26 +111,13 @@ export function RotateKeyPanel({
     <div className="panel-section">
       <h3>
         <RefreshCw size={16} />
-        Replace the encryption key
+        {t("rotate.title")}
       </h3>
-      <p>
-        Removing a key is usually enough. On backup storage with versioning or object lock, a
-        removed key can still open the silo. After you replace the encryption key, it cannot
-        open anything added from then on.
-      </p>
-      <p className="hint">
-        Your files are not re-encrypted or uploaded again, however large the silo. Only the file
-        list and the keys are rewritten in each backup storage.
-      </p>
-      {archiveTargets > 0 && (
-        <p className="hint is-error">
-          A never-delete copy keeps the old key and stops receiving backups after the change.
-          When it is done, remove that copy under Backup (what is stored there stays) and add a
-          new never-delete copy.
-        </p>
-      )}
+      <p>{t("rotate.intro")}</p>
+      <p className="hint">{t("rotate.no_reupload")}</p>
+      {archiveTargets > 0 && <p className="hint is-error">{t("rotate.archive")}</p>}
 
-      <p>Tick the keys that should still open this silo. You will be asked to confirm with each one.</p>
+      <p>{t("rotate.tick")}</p>
 
       <ul className="key-list">
         {active.map((k) => (
@@ -148,10 +133,10 @@ export function RotateKeyPanel({
                 {named(k)}
                 <span className="hint">
                   {!usableHere(k)
-                    ? "From another device, so it cannot be kept from here. Add it again from that device afterwards."
+                    ? t("rotate.other_device")
                     : k.platform
-                      ? "Built into this computer"
-                      : "Removable key, needs to be plugged in"}
+                      ? t("rotate.built_in")
+                      : t("rotate.removable")}
                 </span>
               </span>
             </label>
@@ -163,25 +148,23 @@ export function RotateKeyPanel({
         <p className="hint is-error" role="status">
           <AlertTriangle size={14} />
           {dropping.length === 1
-            ? `“${named(dropping[0]!)}” will stop opening this silo.`
-            : `${dropping.length} keys will stop opening this silo: ${dropping
-                .map(named)
-                .join(", ")}.`}{" "}
-          To use a key again, you would have to enrol it again.
+            ? t("rotate.drop_one", { name: named(dropping[0]!) })
+            : t("rotate.drop_many", {
+                count: dropping.length,
+                names: dropping.map(named).join(", "),
+              })}{" "}
+          {t("rotate.reenrol")}
         </p>
       )}
 
       {keep.length === 0 && (
         <p className="hint is-error" role="status">
           <AlertTriangle size={14} />
-          Keep at least one key, or nothing would open this silo.
+          {t("rotate.keep_one")}
         </p>
       )}
 
-      <p className="hint">
-        Your recovery code changes too. The new one is shown once when this finishes, so write it
-        down before closing the message.
-      </p>
+      <p className="hint">{t("rotate.code_changes")}</p>
 
       {progress && (
         <p className="fido-live" role="status">
@@ -197,7 +180,7 @@ export function RotateKeyPanel({
           onClick={() => onRotate(keep)}
         >
           <KeyRound size={15} />
-          {busy ? "Working…" : "Replace the encryption key"}
+          {busy ? t("rotate.working") : t("rotate.title")}
         </button>
       </div>
     </div>

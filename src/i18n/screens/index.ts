@@ -5,6 +5,7 @@ import { recovery } from "./recovery";
 import { recoveryCodeDialog } from "./recovery-code-dialog";
 import { settingsGeneral } from "./settings-general";
 import { settingsRail } from "./settings-rail";
+import { rotateKey } from "./rotate-key";
 import { sidebar } from "./sidebar";
 import { trash } from "./trash";
 import { unlock } from "./unlock";
@@ -25,4 +26,5 @@ export const SCREENS = [
   trash,
   settingsRail,
   recovery,
+  rotateKey,
 ] as const;

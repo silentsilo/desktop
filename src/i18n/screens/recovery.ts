@@ -237,7 +237,7 @@ export const recovery = {
     note: "Message after turning the code off, when never-delete copies keep it. {names} is a list of copy names. 'Replace the encryption key': the key change under Settings, Unlocking.",
     en: "Recovery code turned off. {names} is a never-delete copy, so the old code still opens the silo for anyone who can read that storage. To stop that, replace the encryption key.",
     ro: "Codul de recuperare a fost dezactivat. {names} e o copie fără ștergere, așa că vechiul cod încă deschide silozul pentru oricine poate citi acea stocare. Ca să oprești asta, înlocuiește cheia de criptare.",
-    de: "Wiederherstellungscode deaktiviert. {names} ist eine Kopie ohne Löschen, also öffnet der alte Code das Silo weiterhin für alle, die diesen Speicher lesen können. Um das zu beenden, ersetze den Schlüssel.",
+    de: "Wiederherstellungscode deaktiviert. {names} ist eine Kopie ohne Löschen, also öffnet der alte Code das Silo weiterhin für alle, die diesen Speicher lesen können. Um das zu beenden, ersetze den Verschlüsselungsschlüssel.",
     fr: "Code de récupération désactivé. {names} est une copie sans suppression : l’ancien code ouvre encore le silo pour quiconque peut lire ce stockage. Pour l’empêcher, remplacez la clé de chiffrement.",
     es: "Código de recuperación desactivado. {names} es una copia sin borrado, así que el código antiguo sigue abriendo el silo para cualquiera que pueda leer ese almacenamiento. Para evitarlo, reemplaza la clave de cifrado.",
     it: "Codice di recupero disattivato. {names} è una copia senza eliminazione, quindi il vecchio codice apre ancora il silo per chiunque possa leggere quello spazio. Per impedirlo, sostituisci la chiave di cifratura.",

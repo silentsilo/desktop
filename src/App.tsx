@@ -2950,13 +2950,9 @@ export default function App() {
       // looking at.
       setMintedCode({ code: outcome.recovery_code, siloName: bootstrap?.silo?.name ?? null });
 
-      const parts = [
-        "Encryption key replaced. Unlock again with the key you just used.",
-      ];
+      const parts = [t("rotate.done_resume")];
       if (outcome.unchanged_targets.length > 0) {
-        parts.push(
-          `${outcome.unchanged_targets.join(", ")} still has the old recovery code, so that code keeps opening what is already there.`,
-        );
+        parts.push(t("rotate.old_code_kept", { names: outcome.unchanged_targets.join(", ") }));
       }
       toasts.success(parts.join(" "));
     } catch (e) {
@@ -2973,9 +2969,9 @@ export default function App() {
   /// open session holds the key that just stopped being current.
   const rotateVaultKey = async (keep: string[]) => {
     const ok = await askConfirm(
-      "Replace the encryption key?",
-      "Every key you did not tick stops opening this silo, and your recovery code is replaced. You confirm with each key you keep, then the silo locks and you unlock it again.",
-      { confirmLabel: "Replace the encryption key", danger: true },
+      t("rotate.confirm_title"),
+      t("rotate.confirm"),
+      { confirmLabel: t("rotate.title"), danger: true },
     );
     if (!ok) return;
 
@@ -2995,17 +2991,15 @@ export default function App() {
       setMintedCode({ code: outcome.recovery_code, siloName: bootstrap?.silo?.name ?? null });
       setRotationPending(false);
 
-      const parts = ["Encryption key replaced. Unlock again with a key you kept."];
+      const parts = [t("rotate.done")];
       if (outcome.retired.length > 0) {
-        parts.push(`${outcome.retired.join(", ")} no longer opens this silo.`);
+        parts.push(t("rotate.retired", { names: outcome.retired.join(", ") }));
       }
       if (outcome.unchanged_targets.length > 0) {
         // The one case where rotation does not finish the job, and it has to
         // be said: an append-only copy cannot be overwritten, so what is
         // already there stays readable with the old key.
-        parts.push(
-          `${outcome.unchanged_targets.join(", ")} is a never-delete copy: what is already there still opens with the old key, and it gets no new backups. Remove it under Backup and add a new never-delete copy.`,
-        );
+        parts.push(t("rotate.archive_done", { names: outcome.unchanged_targets.join(", ") }));
       }
       toasts.success(parts.join(" "));
     } catch (e) {

@@ -21,7 +21,7 @@ ideas, the note on each text says which.
 |---|---|---|---|---|---|---|---|---|
 | silo | the user's encrypted vault; the product's own word, kept | siloz | Silo | silo | silo | silo | silo | silos |
 | security key | the hardware key (YubiKey) | cheie de securitate | Sicherheitsschlüssel | clé de sécurité | llave de seguridad | chiave di sicurezza | chave de segurança | klucz bezpieczeństwa |
-| key (encryption) | the secret that encrypts | cheie de criptare | Schlüssel | clé de chiffrement | clave de cifrado | chiave di cifratura | chave de criptografia | klucz szyfrowania |
+| key (encryption) | the secret that encrypts | cheie de criptare | Verschlüsselungsschlüssel | clé de chiffrement | clave de cifrado | chiave di cifratura | chave de criptografia | klucz szyfrowania |
 | recovery code | the code on paper | cod de recuperare | Wiederherstellungscode | code de récupération | código de recuperación | codice di recupero | código de recuperação | kod odzyskiwania |
 | copy (backup) | a place the silo is backed up to | copie | Kopie | copie | copia | copia | cópia | kopia |
 | copy (verb) | put on the clipboard | copiază | kopieren | copier | copiar | copia | copiar | kopiuj |
