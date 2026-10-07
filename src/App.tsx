@@ -58,6 +58,7 @@ import { AppShell, type SyncIndicator } from "./layout/AppShell";
 import { SiloPickerView } from "./views/SiloPickerView";
 import { AuthShell } from "./layout/AuthShell";
 import { ToastHost } from "./ui/ToastHost";
+import { OpenProgress, type Opening } from "./views/OpenProgress";
 import { JoinView } from "./views/JoinView";
 import { EnrollView } from "./views/EnrollView";
 import { FilesExplorer } from "./views/FilesExplorer";
@@ -173,6 +174,9 @@ function neverDeleteKeyNote(archiveTargets: number, what: string): string {
   return ` A never-delete copy keeps the old ${what}, and it still opens what is stored there.`;
 }
 
+/** What `vault_open_file` answers when the person cancelled it. */
+const OPEN_CANCELLED = "Cancelled.";
+
 export default function App() {
   const { api: toasts, list: toastList } = useToasts();
   const [confirmDialog, setConfirmDialog] = useState<ConfirmState | null>(null);
@@ -279,6 +283,8 @@ export default function App() {
   // Whether the post-unlock recovery step is on screen. Only ever shown when
   // the silo has no code and the user hasn't already declined.
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  /// The file being made ready to open, from the click until it is handed on.
+  const [opening, setOpening] = useState<Opening | null>(null);
   const [uploadCancelable, setUploadCancelable] = useState(false);
   const [uploadCancelling, setUploadCancelling] = useState(false);
   const uploadCancelRef = useRef(false);
@@ -434,6 +440,21 @@ export default function App() {
       listen<string>("fido-progress", (event) => {
         setFidoProgress(event.payload);
       }),
+    [],
+  );
+
+  // Each step of a file being made ready to open, for the card that shows it.
+  useEventSubscription(
+    () =>
+      listen<{ file_id: string; phase: Opening["phase"]; done: number; total: number }>(
+        "open-progress",
+        (event) => {
+          const { file_id, phase, done, total } = event.payload;
+          setOpening((now) =>
+            now && now.fileId === file_id ? { ...now, phase, done, total } : now,
+          );
+        },
+      ),
     [],
   );
 
@@ -2614,11 +2635,15 @@ export default function App() {
   const openFile = async (file: Extract<VaultEntry, { kind: "file" }>) => {
     if (runsOnOpen(file.name) && !(await confirmRun(file.name))) return;
     begin("transfer");
+    // On screen from the click: fetching and decrypting a large file takes
+    // seconds, which with nothing shown reads as a click that did nothing.
+    setOpening({ fileId: file.id, name: file.name, phase: "preparing", done: 0, total: 0 });
     try {
       await invoke("vault_open_file", { fileId: file.id });
     } catch (e) {
-      toasts.error(e);
+      if (String(e) !== OPEN_CANCELLED) toasts.error(e);
     } finally {
+      setOpening(null);
       end("transfer");
     }
   };
@@ -3529,7 +3554,16 @@ export default function App() {
   // asked at unlock, at enrolment and anywhere a key is touched.
   const toastHost = (
     <>
-      <ToastHost toasts={toastList} onDismiss={toasts.dismiss} />
+      <ToastHost toasts={toastList} onDismiss={toasts.dismiss}>
+        {opening && (
+          <OpenProgress
+            opening={opening}
+            onCancel={() =>
+              void invoke("vault_open_cancel", { fileId: opening.fileId }).catch(() => {})
+            }
+          />
+        )}
+      </ToastHost>
       <SecurityKeyPinDialog />
     </>
   );

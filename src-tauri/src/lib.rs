@@ -181,6 +181,8 @@ pub fn run() {
             ),
             audit_page: Mutex::new(None),
             audit_closes: std::sync::atomic::AtomicU64::new(0),
+            opened_copies: Mutex::new(std::collections::HashMap::new()),
+            open_cancelled: Mutex::new(std::collections::HashSet::new()),
         })
         .manage(browser::BrowserBridge::default())
         .manage(ssh_agent::SshAgent::default())
@@ -352,6 +354,7 @@ pub fn run() {
             commands::storage::s3_disconnect,
             commands::storage::backup_targets_list,
             commands::storage::file_copies,
+            commands::vault::vault_open_cancel,
             commands::storage::backup_target_add,
             commands::storage::backup_target_remove,
             commands::storage::backup_target_protection,

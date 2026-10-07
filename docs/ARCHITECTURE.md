@@ -229,6 +229,16 @@ they pin the silo id they started on rather than re-reading focus. A decrypt
 that finishes after its silo locked deletes what it wrote
 (`state::discard_if_locked`) instead of opening it.
 
+Opening a file (`vault_open_file`) reports each step to the window as
+`open-progress` (preparing, downloading, decrypting, opening), measured by
+the size of the `.part` file the download and the decrypt write, so neither
+needs a callback in core. Cancel (`vault_open_cancel`) gives up a download
+at once; a decrypt cannot stop half way, so what it wrote is deleted when it
+ends and nothing opens. A copy decrypted in this unlock and left as it was
+written (same content, size and modified time, `AppState::opened_copies`)
+is opened again without decrypting it again; the epoch moving forgets them
+all, and the lock sweep deletes the files as before.
+
 The silo evicted to make room is taken out of the map under the mutexes and
 snapshotted after they are released, and its eviction does what a lock
 does: its copied password is taken back and `scratch-still-open` is sent

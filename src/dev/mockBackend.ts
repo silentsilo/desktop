@@ -47,6 +47,9 @@ const MOCK_ALREADY_ON_DISK = new Set(["Passport scan.pdf", "Archive 2019.zip"]);
 /// something here rather than looking broken.
 const starred = new Set<string>(["33333333-3333-3333-3333-333333333333"]);
 
+/// Files whose opening was cancelled, as the app keeps them.
+const openCancelled = new Set<string>();
+
 function folder(id: string, name: string, path: string, parentId: string | null = null) {
   return {
     kind: "folder",
@@ -799,6 +802,37 @@ const handlers: Record<string, Handler> = {
     if (!local.includes(blob)) return ids.map((id) => ({ id, held: null }));
     const waiting = blob === "44444444-4444-4444-4444-444444444444";
     return ids.map((id, i) => ({ id, held: waiting ? i === 0 : true }));
+  },
+  // Opening a large file: a few seconds of download and decrypt, reported
+  // as the app reports them, and cancelled the same way.
+  vault_open_file: (args) => {
+    const fileId = String(args.fileId);
+    openCancelled.delete(fileId);
+    const total = 1_200_000_000;
+    const steps: [string, number][] = [
+      ["downloading", 0.2],
+      ["downloading", 0.6],
+      ["downloading", 1],
+      ["decrypting", 0.3],
+      ["decrypting", 0.7],
+      ["decrypting", 1],
+      ["opening", 1],
+    ];
+    return new Promise((resolve, reject) => {
+      let i = 0;
+      const tick = () => {
+        if (openCancelled.has(fileId)) return reject("Cancelled.");
+        if (i === steps.length) return resolve(null);
+        const [phase, part] = steps[i++];
+        emit("open-progress", { file_id: fileId, phase, done: Math.round(total * part), total });
+        setTimeout(tick, 700);
+      };
+      setTimeout(tick, 400);
+    });
+  },
+  vault_open_cancel: (args) => {
+    openCancelled.add(String(args.fileId));
+    return null;
   },
   backup_target_add: () => null,
   // A fill that reports as it goes, including a stretch in the middle where

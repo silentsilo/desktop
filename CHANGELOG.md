@@ -28,6 +28,9 @@ silo from opening needs a major version rather than a note.
   or as many as fit (Settings, General). Restore puts an old version back and
   keeps the current one; Clear history removes old passwords for good.
 - Health points out an entry back on a password it had before.
+- Opening a large file shows what is happening: downloading, with how much
+  of it, then decrypting, with a bar, and Cancel. A file opened again while
+  the silo stays unlocked opens at once, without decrypting it again.
 - Details beside the file list: one selected file or folder shows its type,
   size, place, dates and backup state, and which copies hold the file, with
   Open and the rest of its menu. It replaces the Info dialog; the button by

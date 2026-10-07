@@ -1558,14 +1558,22 @@ pub fn wipe_open_scratch(vault_root: &Path) {
 /// a scratch file that gets wiped at lock, and the user would lose the work
 /// with nothing on screen to warn them — an application complaining that it
 /// cannot save is a far better outcome than silence.
+///
+/// Each step reports to the window (`open-progress`), since a large file
+/// takes seconds to fetch and decrypt, and can be cancelled. A copy left as
+/// it was written is opened again without decrypting it again.
 #[tauri::command]
 pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
 
     let file_id = Uuid::parse_str(&file_id).map_err(|e| e.to_string())?;
+    let state = app.state::<AppState>();
+    crate::state::lock_recovering(&state.open_cancelled).remove(&file_id);
+    let cancelled = || {
+        crate::state::lock_recovering(&app.state::<AppState>().open_cancelled).contains(&file_id)
+    };
 
-    let (blob_id, name, wrapped_key) = {
-        let state = app.state::<AppState>();
+    let (blob_id, name, size, wrapped_key) = {
         let session_guard = state.focused_session()?;
         let session = session_guard
             .as_ref()
@@ -1575,46 +1583,194 @@ pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), Stri
         // Read here, while the session is in hand, because the decrypt below
         // runs on the blocking pool with only what it was given.
         let wrapped = vfs.blob_key(file_id).map_err(|e| e.to_string())?;
-        (file.blob_id, file.name, wrapped)
+        (
+            file.blob_id,
+            file.name,
+            file.size_bytes.max(0) as u64,
+            wrapped,
+        )
     };
-    ensure_blobs_local(&app, &[blob_id]).await?;
+    let root = vault_dir(&app)?;
+    open_progress(&app, file_id, "preparing", 0, 0);
 
-    let app2 = app.clone();
-    let path = run_blocking(move || {
-        // The keys under a lock held for the copy; the decrypt of an
-        // arbitrarily large file holds nothing, so the rest of the app keeps
-        // answering while it runs.
-        let snapshot = crate::state::snapshot_focused_session(&app2.state::<AppState>())?;
+    // Fetched first when only backup storage has it, watched by the size of
+    // the file it streams into, and given up on when the person cancels.
+    if !root.join("blobs").join(format!("{blob_id}.sslo")).is_file() {
+        let watch = ProgressWatch::start(
+            &app,
+            file_id,
+            "downloading",
+            root.join("blobs").join(format!("{blob_id}.sslo.part")),
+            size,
+        );
+        let wanted = [blob_id];
+        let fetch = ensure_blobs_local(&app, &wanted);
+        tokio::pin!(fetch);
+        let fetched = loop {
+            tokio::select! {
+                done = &mut fetch => break done,
+                _ = tokio::time::sleep(std::time::Duration::from_millis(150)) => {
+                    if cancelled() {
+                        break Err(OPEN_CANCELLED.to_string());
+                    }
+                }
+            }
+        };
+        watch.stop();
+        fetched?;
+    }
 
-        let dir = open_scratch_dir(&snapshot.root);
-        silentsilo_vault::create_private_dir(&dir).map_err(|e| e.to_string())?;
-        // The original name, so the OS picks the right application and the
-        // title bar says something the user recognises.
-        let dest = safe_join(&dir, &name)?;
-        let _ = std::fs::remove_file(&dest);
-        crate::audit::record_in(
-            &app2,
-            snapshot.id,
-            crate::audit::event(crate::audit::codes::FILE_OPENED).on(file_id.to_string(), &name),
-        )?;
-
-        let key =
-            silentsilo_crypto::unwrap_content_key(&wrapped_key, &snapshot.kek).map_err(|_| {
-                "This file's key could not be read, so it cannot be opened.".to_string()
-            })?;
-        let blob_path = silentsilo_vault::VaultPaths::new(snapshot.root.clone()).blob_path(blob_id);
-        decrypt_blob(&blob_path, &dest, &key, blob_id).map_err(|e| e.to_string())?;
-        crate::state::discard_if_locked(&app2.state::<AppState>(), snapshot.id, &dest)?;
-
-        silentsilo_vault::seal_readonly(&dest);
-        let _ = touch_blob_access(&snapshot.root, blob_id);
-        Ok(dest)
-    })
+    // The original name, so the OS picks the right application and the
+    // title bar says something the user recognises.
+    let dir = open_scratch_dir(&root);
+    silentsilo_vault::create_private_dir(&dir).map_err(|e| e.to_string())?;
+    let dest = safe_join(&dir, &name)?;
+    crate::audit::record_off_thread(
+        &app,
+        crate::state::focused_id(&state)?,
+        crate::audit::event(crate::audit::codes::FILE_OPENED).on(file_id.to_string(), &name),
+    )
     .await?;
 
+    // Decrypted already in this unlock and left as it was written: opened
+    // again as it is. Anything else, changed or gone, is decrypted afresh.
+    let kept = crate::state::lock_recovering(&state.opened_copies)
+        .get(&dest)
+        .cloned();
+    let reusable = kept.is_some_and(|kept| {
+        kept.blob == blob_id && copy_of(&dest, blob_id).as_ref() == Some(&kept)
+    });
+    if !reusable {
+        let watch = ProgressWatch::start(&app, file_id, "decrypting", part_path(&dest), size);
+        let app2 = app.clone();
+        let target = dest.clone();
+        let written = run_blocking(move || {
+            // The keys under a lock held for the copy; the decrypt of an
+            // arbitrarily large file holds nothing, so the rest of the app
+            // keeps answering while it runs.
+            let snapshot = crate::state::snapshot_focused_session(&app2.state::<AppState>())?;
+            remove_opened(&target);
+            let key = silentsilo_crypto::unwrap_content_key(&wrapped_key, &snapshot.kek).map_err(
+                |_| "This file's key could not be read, so it cannot be opened.".to_string(),
+            )?;
+            let blob_path =
+                silentsilo_vault::VaultPaths::new(snapshot.root.clone()).blob_path(blob_id);
+            decrypt_blob(&blob_path, &target, &key, blob_id).map_err(|e| e.to_string())?;
+            crate::state::discard_if_locked(&app2.state::<AppState>(), snapshot.id, &target)?;
+            silentsilo_vault::seal_readonly(&target);
+            let _ = touch_blob_access(&snapshot.root, blob_id);
+            Ok(())
+        })
+        .await;
+        watch.stop();
+        written?;
+        // Cancelled while it decrypted: the decrypt cannot be stopped half
+        // way, so what it wrote goes now, and nothing opens.
+        if cancelled() {
+            remove_opened(&dest);
+            return Err(OPEN_CANCELLED.into());
+        }
+        if let Some(copy) = copy_of(&dest, blob_id) {
+            crate::state::lock_recovering(&state.opened_copies).insert(dest.clone(), copy);
+        }
+    }
+
+    open_progress(&app, file_id, "opening", size, size);
     app.opener()
-        .open_path(path.to_string_lossy().to_string(), None::<&str>)
+        .open_path(dest.to_string_lossy().to_string(), None::<&str>)
         .map_err(|e| e.to_string())
+}
+
+/// What a cancelled opening answers with; the window shows nothing for it.
+const OPEN_CANCELLED: &str = "Cancelled.";
+
+/// Stops a file being made ready to open: a download is given up at once, a
+/// decrypt is thrown away when it ends.
+#[tauri::command(async)]
+pub fn vault_open_cancel(app: AppHandle, file_id: String) {
+    if let Ok(id) = Uuid::parse_str(&file_id) {
+        crate::state::lock_recovering(&app.state::<AppState>().open_cancelled).insert(id);
+    }
+}
+
+#[derive(Clone, serde::Serialize)]
+struct OpenProgress {
+    file_id: String,
+    phase: &'static str,
+    done: u64,
+    total: u64,
+}
+
+fn open_progress(app: &AppHandle, file_id: Uuid, phase: &'static str, done: u64, total: u64) {
+    let _ = app.emit(
+        "open-progress",
+        OpenProgress {
+            file_id: file_id.to_string(),
+            phase,
+            done,
+            total,
+        },
+    );
+}
+
+/// Reports a step by the size of the file it is writing, a few times a
+/// second, until stopped. A download and a decrypt both write to a `.part`
+/// beside their result, so neither needs to report on its own.
+struct ProgressWatch(std::sync::Arc<std::sync::atomic::AtomicBool>);
+
+impl ProgressWatch {
+    fn start(
+        app: &AppHandle,
+        file_id: Uuid,
+        phase: &'static str,
+        path: PathBuf,
+        total: u64,
+    ) -> Self {
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let watching = stop.clone();
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            while !watching.load(Ordering::Relaxed) {
+                let done = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                open_progress(&app, file_id, phase, done.min(total), total);
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            }
+        });
+        Self(stop)
+    }
+
+    fn stop(&self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
+}
+
+/// `path.part`, where `decrypt_blob` writes before it renames.
+fn part_path(path: &Path) -> PathBuf {
+    let mut name = path.as_os_str().to_os_string();
+    name.push(".part");
+    PathBuf::from(name)
+}
+
+/// The copy at `path` as it is now, to compare with how it was left.
+fn copy_of(path: &Path, blob: Uuid) -> Option<crate::state::OpenedCopy> {
+    let meta = std::fs::metadata(path).ok()?;
+    Some(crate::state::OpenedCopy {
+        blob,
+        len: meta.len(),
+        modified: meta.modified().ok(),
+    })
+}
+
+/// Removes a decrypted copy, read-only as it is left: Windows will not
+/// delete a read-only file, so the bit comes off first.
+fn remove_opened(path: &Path) {
+    if let Ok(meta) = std::fs::metadata(path) {
+        let mut perms = meta.permissions();
+        #[allow(clippy::permissions_set_readonly_false)]
+        perms.set_readonly(false);
+        let _ = std::fs::set_permissions(path, perms);
+    }
+    let _ = std::fs::remove_file(path);
 }
 
 /// Every password entry, as a JSON array.
@@ -2870,6 +3026,27 @@ pub(crate) fn write_owner_only(path: &std::path::Path, bytes: &[u8]) -> Result<(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_decrypted_copy_is_known_as_long_as_it_is_left_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("film.mkv");
+        let blob = Uuid::new_v4();
+        std::fs::write(&path, b"plain").unwrap();
+        silentsilo_vault::seal_readonly(&path);
+        let left = copy_of(&path, blob).unwrap();
+        assert!(copy_of(&path, blob).as_ref() == Some(&left));
+        assert!(
+            copy_of(&path, Uuid::new_v4()).as_ref() != Some(&left),
+            "another file's content"
+        );
+
+        // Read-only, and still removed: Windows refuses that otherwise.
+        remove_opened(&path);
+        assert!(!path.exists());
+        assert!(copy_of(&path, blob).is_none());
+        assert_eq!(part_path(&path), dir.path().join("film.mkv.part"));
+    }
+
     use super::*;
 
     #[test]

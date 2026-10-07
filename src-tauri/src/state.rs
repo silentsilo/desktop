@@ -49,6 +49,19 @@ pub struct AppState {
     /// Counts the Activity page's closes, so a read still running when the
     /// page closed keeps nothing.
     pub audit_closes: AtomicU64,
+    /// Files decrypted to open, by path, as they were left: one still like
+    /// that is opened again without decrypting it again. For one unlock.
+    pub opened_copies: Mutex<std::collections::HashMap<std::path::PathBuf, OpenedCopy>>,
+    /// Files whose opening the person cancelled while it was made ready.
+    pub open_cancelled: Mutex<std::collections::HashSet<uuid::Uuid>>,
+}
+
+/// A decrypted copy as this app wrote it, to tell it from one changed since.
+#[derive(Clone, PartialEq, Eq)]
+pub struct OpenedCopy {
+    pub blob: uuid::Uuid,
+    pub len: u64,
+    pub modified: Option<std::time::SystemTime>,
 }
 
 /// What the window starts with until the user picks another.
@@ -366,6 +379,7 @@ impl AppState {
         self.session_epoch.fetch_add(1, Ordering::SeqCst);
         // Held for one unlock of one silo: whatever moved the epoch ended it.
         *lock_recovering(&self.audit_page) = None;
+        lock_recovering(&self.opened_copies).clear();
     }
 
     /// Locks `active_silo` before `sessions`, and never the other way
