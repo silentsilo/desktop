@@ -550,7 +550,13 @@ export function FilesExplorer(props: Props) {
         disabled: busy || renamingId !== null,
       },
       {
-        label: "Trash",
+        label: entry.favorite ? "Remove from favourites" : "Add to favourites",
+        icon: <Star size={15} />,
+        onClick: () => onToggleFavorite(entry),
+        disabled: busy,
+      },
+      {
+        label: "Move to trash",
         icon: <IconTrash size={15} />,
         onClick: () => onTrashEntry(entry),
         disabled: busy,
@@ -576,14 +582,18 @@ export function FilesExplorer(props: Props) {
       });
     }
     actions.push({
-      label: "Trash",
+      label: `Move ${chosen.length} items to trash`,
       icon: <IconTrash size={15} />,
       onClick: onTrash,
       disabled: busy,
       danger: true,
     });
     if (onClearSelection) {
-      actions.push({ label: "Clear", icon: <IconClose size={15} />, onClick: onClearSelection });
+      actions.push({
+        label: "Clear selection",
+        icon: <IconClose size={15} />,
+        onClick: onClearSelection,
+      });
     }
     return actions;
   };
@@ -1249,7 +1259,6 @@ export function FilesExplorer(props: Props) {
           syncState={syncStateOf(detailsEntry)}
           syncConfigured={syncConfigured}
           actions={entryActions(detailsEntry)}
-          onMenu={(e) => openEntryMenu(e, detailsEntry)}
           onClose={() => setDetailsShown(false)}
         />
       )}
@@ -1257,7 +1266,6 @@ export function FilesExplorer(props: Props) {
         <SelectionDetails
           entries={selectedEntries}
           actions={selectionActions(selectedEntries)}
-          onMenu={(e) => openEntryMenu(e, selectedEntries[0]!)}
           onClose={() => setDetailsShown(false)}
         />
       )}
@@ -1277,7 +1285,6 @@ export function FilesExplorer(props: Props) {
           syncState={null}
           syncConfigured={syncConfigured}
           actions={folderActions}
-          onMenu={openBackgroundMenu}
           onClose={() => setDetailsShown(false)}
         />
       )}

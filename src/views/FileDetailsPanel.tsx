@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import type { MouseEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Calendar, Clock, Copy as CopyIcon, Files, FolderOpen, MoreHorizontal } from "lucide-react";
+import { Calendar, Clock, Copy as CopyIcon, Files, FolderOpen } from "lucide-react";
 import type { BackupTargetView } from "../lib/copies";
 import {
   copyLines,
@@ -31,11 +30,9 @@ type Props = {
   syncState: FileSyncState | null;
   /** Backup storage is set up: the copies are worth naming. */
   syncConfigured: boolean;
-  /** What can be done with it: the first marked primary stands out, the
-   * rest sit under it. The menu holds everything else. */
+  /** What can be done with it: the one marked primary under the name, the
+   * rest listed with their names after the details. */
   actions: PanelAction[];
-  /** The same menu a right-click gives, at the button. */
-  onMenu: (e: MouseEvent) => void;
   onClose: () => void;
 };
 
@@ -70,7 +67,6 @@ export function FileDetailsPanel({
   syncState,
   syncConfigured,
   actions,
-  onMenu,
   onClose,
 }: Props) {
   const isFile = entry.kind === "file";
@@ -137,6 +133,8 @@ export function FileDetailsPanel({
         </p>
       </div>
 
+      <PrimaryAction actions={actions} />
+
       <dl className="details-rows">
         {location !== null && (
           <Row icon={<FolderOpen size={15} />} label="Location">
@@ -195,7 +193,7 @@ export function FileDetailsPanel({
         </section>
       )}
 
-      <PanelActions actions={actions} onMenu={onMenu} />
+      <ActionList actions={actions} />
     </aside>
   );
 }
@@ -218,12 +216,10 @@ function Row({ icon, label, children }: { icon: ReactNode; label: string; childr
 export function SelectionDetails({
   entries,
   actions,
-  onMenu,
   onClose,
 }: {
   entries: VaultEntry[];
   actions: PanelAction[];
-  onMenu: (e: MouseEvent) => void;
   onClose: () => void;
 }) {
   const files = entries.filter((e) => e.kind === "file");
@@ -254,63 +250,48 @@ export function SelectionDetails({
           {files.length > 0 && ` · ${formatBytes(bytes)}`}
         </p>
       </div>
-      <PanelActions actions={actions} onMenu={onMenu} />
+      <PrimaryAction actions={actions} />
+      <ActionList actions={actions} />
     </aside>
   );
 }
 
-/** The panel's footer, kept at the bottom while the rest scrolls. */
-function PanelActions({
-  actions,
-  onMenu,
-}: {
-  actions: PanelAction[];
-  onMenu: (e: MouseEvent) => void;
-}) {
+/** The main action, full width under the name. */
+function PrimaryAction({ actions }: { actions: PanelAction[] }) {
   const primary = actions.find((a) => a.primary);
-  const others = actions.filter((a) => a !== primary);
+  if (!primary) return null;
   return (
-    <div className="details-actions">
-      <div className="details-actions-main">
-        {primary ? (
+    <button
+      type="button"
+      className="details-open"
+      disabled={primary.disabled}
+      onClick={primary.onClick}
+    >
+      {primary.icon}
+      {primary.label}
+    </button>
+  );
+}
+
+/** Every other action, named: the panel has the room a menu would save. */
+function ActionList({ actions }: { actions: PanelAction[] }) {
+  const others = actions.filter((a) => !a.primary);
+  if (others.length === 0) return null;
+  return (
+    <ul className="details-list" aria-label="Actions">
+      {others.map((action) => (
+        <li key={action.label}>
           <button
             type="button"
-            className="details-open"
-            disabled={primary.disabled}
-            onClick={primary.onClick}
+            className={`details-list-item${action.danger ? " danger" : ""}`}
+            disabled={action.disabled}
+            onClick={action.onClick}
           >
-            {primary.icon}
-            {primary.label}
+            {action.icon}
+            <span>{action.label}</span>
           </button>
-        ) : (
-          <span className="details-open-spacer" />
-        )}
-        <button
-          type="button"
-          className="secondary details-more"
-          onClick={onMenu}
-          title="More actions"
-          aria-label="More actions"
-        >
-          <MoreHorizontal size={17} />
-        </button>
-      </div>
-      {others.length > 0 && (
-        <div className="details-actions-more">
-          {others.map((action) => (
-            <button
-              key={action.label}
-              type="button"
-              className={`secondary details-action${action.danger ? " danger" : ""}`}
-              disabled={action.disabled}
-              onClick={action.onClick}
-            >
-              {action.icon}
-              <span>{action.label}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+        </li>
+      ))}
+    </ul>
   );
 }
