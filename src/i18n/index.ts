@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { Fragment, createElement, useSyncExternalStore, type ReactNode } from "react";
 import { en, type Key, type Plural } from "./en";
 import { LOCALES, resolveLocale, type Locale } from "./locales";
 import { TRANSLATIONS } from "./translations";
@@ -49,7 +49,7 @@ export function setLanguage(preference: string) {
     // Kept for this session only.
   }
   current = resolveLocale(preference, systemLanguages());
-  document.documentElement.lang = current;
+  if (typeof document !== "undefined") document.documentElement.lang = current;
   for (const listener of listeners) listener();
 }
 
@@ -99,5 +99,28 @@ export function translate(lang: Locale, key: Key, params: Params = {}): string {
   }
   return text.replace(/\{(\w+)\}/g, (whole, name: string) =>
     name in params ? String(params[name]) : whole,
+  );
+}
+
+/**
+ * [`t`] for a text with markup inside: each `{name}` whose value is a React
+ * node is placed where the language puts it, so a bold silo name does not
+ * force English word order on every translation.
+ */
+export function tx(key: Key, params: Record<string, ReactNode>): ReactNode {
+  const plain: Params = {};
+  for (const [name, value] of Object.entries(params)) {
+    if (typeof value === "string" || typeof value === "number") plain[name] = value;
+  }
+  const text = translate(current, key, plain);
+  const parts = text.split(/\{(\w+)\}/);
+  return createElement(
+    Fragment,
+    null,
+    ...parts.map((part, i) =>
+      i % 2 === 1 && part in params
+        ? createElement(Fragment, { key: i }, params[part])
+        : part,
+    ),
   );
 }

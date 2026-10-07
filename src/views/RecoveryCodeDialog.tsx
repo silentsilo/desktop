@@ -1,5 +1,6 @@
 import { AlertTriangle, LifeBuoy } from "lucide-react";
 import { useModal } from "../hooks/useModal";
+import { t, tx, useLocale } from "../i18n";
 
 type Props = {
   code: string;
@@ -18,6 +19,7 @@ type Props = {
  * backdrop click.
  */
 export function RecoveryCodeDialog({ code, siloName, onDone }: Props) {
+  useLocale();
   const cardRef = useModal(undefined);
   return (
     <div className="modal-overlay">
@@ -26,26 +28,26 @@ export function RecoveryCodeDialog({ code, siloName, onDone }: Props) {
         className="modal-card"
         role="alertdialog"
         aria-modal="true"
-        aria-label="Your new recovery code"
+        aria-label={t("recovery_new.title")}
       >
         <h3 className="modal-title">
-          <LifeBuoy size={16} /> Your new recovery code
+          <LifeBuoy size={16} /> {t("recovery_new.title")}
         </h3>
         <div className="modal-body recovery-reveal">
           <p>
-            {siloName ? <strong>{siloName}</strong> : "This silo"} has a new recovery code. The
-            old one stops working, except on a never-delete copy. Write this one down now: it is
-            shown once.
+            {siloName
+              ? tx("recovery_new.body_named", { name: <strong>{siloName}</strong> })
+              : t("recovery_new.body")}
           </p>
           <code className="recovery-code">{code}</code>
           <p className="hint is-error">
             <AlertTriangle size={14} />
-            If you lose this code and all your keys, the silo cannot be opened again.
+            {t("recovery_new.warning")}
           </p>
         </div>
         <div className="modal-actions">
           <button type="button" onClick={onDone}>
-            I&apos;ve written it down
+            {t("recovery_new.done")}
           </button>
         </div>
       </div>

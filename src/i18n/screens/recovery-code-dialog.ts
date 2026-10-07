@@ -1,0 +1,61 @@
+import type { Screen } from "../types";
+
+/** The dialog that shows a recovery code made by a key change. Critical:
+ * read by a native speaker before a language loses "beta". */
+export const recoveryCodeDialog = {
+  "recovery_new.title": {
+    note: "Dialog title after a key change made a new recovery code. The recovery code is the code on paper that opens the silo when every key is lost.",
+    en: "Your new recovery code",
+    ro: "Noul tău cod de recuperare",
+    de: "Dein neuer Wiederherstellungscode",
+    fr: "Votre nouveau code de récupération",
+    es: "Tu nuevo código de recuperación",
+    it: "Il tuo nuovo codice di recupero",
+    "pt-BR": "Seu novo código de recuperação",
+    pl: "Twój nowy kod odzyskiwania",
+  },
+  "recovery_new.body_named": {
+    note: "Dialog text. {name} is the silo's name, shown bold. 'Never-delete copy': a backup copy nothing is ever removed from, which keeps the old code. 'Shown once': it cannot be displayed again.",
+    en: "{name} has a new recovery code. The old one stops working, except on a never-delete copy. Write this one down now: it is shown once.",
+    ro: "{name} are un cod de recuperare nou. Cel vechi nu mai funcționează, în afară de pe o copie fără ștergere. Notează-l acum pe acesta: e afișat o singură dată.",
+    de: "{name} hat einen neuen Wiederherstellungscode. Der alte funktioniert nicht mehr, außer auf einer Kopie ohne Löschen. Notiere diesen jetzt: Er wird nur einmal angezeigt.",
+    fr: "{name} a un nouveau code de récupération. L’ancien ne fonctionne plus, sauf sur une copie sans suppression. Notez celui-ci maintenant : il n’est affiché qu’une fois.",
+    es: "{name} tiene un nuevo código de recuperación. El anterior deja de funcionar, salvo en una copia sin borrado. Anota este ahora: solo se muestra una vez.",
+    it: "{name} ha un nuovo codice di recupero. Quello vecchio smette di funzionare, tranne su una copia senza eliminazione. Annota questo adesso: viene mostrato una sola volta.",
+    "pt-BR": "{name} tem um novo código de recuperação. O antigo deixa de funcionar, exceto em uma cópia sem exclusão. Anote este agora: ele é mostrado uma única vez.",
+    pl: "{name} ma nowy kod odzyskiwania. Stary przestaje działać, z wyjątkiem kopii bez usuwania. Zapisz ten kod teraz: jest wyświetlany tylko raz.",
+  },
+  "recovery_new.body": {
+    note: "The same text when the silo has no name.",
+    en: "This silo has a new recovery code. The old one stops working, except on a never-delete copy. Write this one down now: it is shown once.",
+    ro: "Silozul are un cod de recuperare nou. Cel vechi nu mai funcționează, în afară de pe o copie fără ștergere. Notează-l acum pe acesta: e afișat o singură dată.",
+    de: "Dieses Silo hat einen neuen Wiederherstellungscode. Der alte funktioniert nicht mehr, außer auf einer Kopie ohne Löschen. Notiere diesen jetzt: Er wird nur einmal angezeigt.",
+    fr: "Ce silo a un nouveau code de récupération. L’ancien ne fonctionne plus, sauf sur une copie sans suppression. Notez celui-ci maintenant : il n’est affiché qu’une fois.",
+    es: "Este silo tiene un nuevo código de recuperación. El anterior deja de funcionar, salvo en una copia sin borrado. Anota este ahora: solo se muestra una vez.",
+    it: "Questo silo ha un nuovo codice di recupero. Quello vecchio smette di funzionare, tranne su una copia senza eliminazione. Annota questo adesso: viene mostrato una sola volta.",
+    "pt-BR": "Este silo tem um novo código de recuperação. O antigo deixa de funcionar, exceto em uma cópia sem exclusão. Anote este agora: ele é mostrado uma única vez.",
+    pl: "Ten silos ma nowy kod odzyskiwania. Stary przestaje działać, z wyjątkiem kopii bez usuwania. Zapisz ten kod teraz: jest wyświetlany tylko raz.",
+  },
+  "recovery_new.warning": {
+    note: "Warning in red. 'Keys': every way of unlocking (security keys, Windows Hello, Touch ID). 'Cannot be opened again': ever, by anyone.",
+    en: "If you lose this code and all your keys, the silo cannot be opened again.",
+    ro: "Dacă pierzi acest cod și toate cheile, silozul nu mai poate fi deschis niciodată.",
+    de: "Wenn du diesen Code und alle Schlüssel verlierst, lässt sich das Silo nie wieder öffnen.",
+    fr: "Si vous perdez ce code et toutes vos clés, le silo ne pourra plus jamais être ouvert.",
+    es: "Si pierdes este código y todas tus llaves, el silo no podrá volver a abrirse.",
+    it: "Se perdi questo codice e tutte le chiavi, il silo non potrà più essere aperto.",
+    "pt-BR": "Se você perder este código e todas as suas chaves, o silo não poderá mais ser aberto.",
+    pl: "Jeśli zgubisz ten kod i wszystkie klucze, silosu nie będzie już można otworzyć.",
+  },
+  "recovery_new.done": {
+    note: "The only button: the user confirms the code is written down. First person, and in Polish without a gendered verb.",
+    en: "I've written it down",
+    ro: "L-am notat",
+    de: "Ich habe ihn notiert",
+    fr: "Je l’ai noté",
+    es: "Ya lo he anotado",
+    it: "L’ho annotato",
+    "pt-BR": "Já anotei",
+    pl: "Kod zapisany",
+  },
+} satisfies Screen;

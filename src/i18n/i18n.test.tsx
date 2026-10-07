@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { en, type Key, type Plural } from "./en";
 import { resolveLocale, LOCALES } from "./locales";
 import { TRANSLATIONS } from "./translations";
-import { translate } from "./index";
+import { renderToStaticMarkup } from "react-dom/server";
+import { setLanguage, translate, tx } from "./index";
 
 const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
 
@@ -59,5 +60,16 @@ describe("translate", () => {
       "SilentSilo 1.5.0 e disponibil",
     );
     expect(translate("en", "nav.files")).toBe("Files");
+  });
+});
+
+describe("tx", () => {
+  it("puts markup where the language puts the value", () => {
+    setLanguage("ro");
+    const html = renderToStaticMarkup(
+      <p>{tx("recovery_new.body_named", { name: <strong>Personal</strong> })}</p>,
+    );
+    setLanguage("en");
+    expect(html.startsWith("<p><strong>Personal</strong> are un cod de recuperare nou.")).toBe(true);
   });
 });
