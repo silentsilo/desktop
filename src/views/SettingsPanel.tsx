@@ -34,7 +34,6 @@ import type {
 import { formatDate, formatDay } from "../lib/format";
 import { securityKeyDisplayName, usableHere } from "../lib/keyName";
 import { AUTO_LOCK_OPTIONS_MINUTES } from "../lib/types";
-import { ActivityList } from "./ActivityList";
 import { AuditLogPanel } from "./AuditLogPanel";
 import { ProtectedFoldersPanel } from "./ProtectedFolders";
 import type { Update } from "@tauri-apps/plugin-updater";
@@ -46,6 +45,8 @@ type Props = {
   /** Whether the open silo keeps an activity log, for the overview. */
   auditLog: AuditStatus | null;
   onAuditChanged: (status: AuditStatus) => void;
+  /** The Activity page, outside Settings. */
+  onOpenActivity: () => void;
   /** Which platform's words to use for the built-in authenticator and the shell. */
   os: Os;
   busy: boolean;
@@ -120,7 +121,7 @@ const SECTIONS = [
   { id: "verify", group: "silo", label: "Test backup", icon: SearchCheck },
   { id: "recovery", group: "silo", label: "Recovery code", icon: LifeBuoy },
   { id: "keys", group: "silo", label: "Unlocking", icon: KeyRound },
-  { id: "devices", group: "silo", label: "Activity", icon: Laptop },
+  { id: "devices", group: "silo", label: "Devices", icon: Laptop },
   { id: "protected", group: "silo", label: "Auto-import folders", icon: FolderHeart },
   { id: "advanced", group: "silo", label: "Advanced", icon: Wrench },
   { id: "general", group: "app", label: "General", icon: SlidersHorizontal },
@@ -252,7 +253,9 @@ export function SettingsPanel(props: Props) {
             hasPortableKey={hasPortableKey}
             fullCopy={fullCopy}
             auditLog={auditLog}
-            onGo={(target) => onSection(target)}
+            onGo={(target) =>
+              target === "activity" ? props.onOpenActivity() : onSection(target)
+            }
             onRenameSilo={onRenameSilo}
             onSwitchSilo={onSwitchSilo}
           />
@@ -672,12 +675,7 @@ export function SettingsPanel(props: Props) {
               in this list with the changes it made.
             </p>
           </div>
-          <AuditLogPanel
-            busy={busy}
-            onChanged={onAuditChanged}
-            devices={devices}
-            fallback={<ActivityList devices={devices} />}
-          />
+          <AuditLogPanel busy={busy} onChanged={onAuditChanged} />
           </>
         )}
 

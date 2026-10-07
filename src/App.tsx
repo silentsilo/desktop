@@ -75,6 +75,7 @@ import { RecoveryCodeDialog } from "./views/RecoveryCodeDialog";
 import { explorerKeysBlocked } from "./lib/explorerKeys";
 import { ShellUploadDialog } from "./views/ShellUploadDialog";
 import { SecurityKeyPinDialog } from "./views/SecurityKeyPinDialog";
+import { ActivityView } from "./views/ActivityView";
 import { BrowserFillDialog } from "./views/BrowserFillDialog";
 import { BrowserSaveDialog } from "./views/BrowserSaveDialog";
 import { SshSignDialog } from "./views/SshSignDialog";
@@ -263,8 +264,8 @@ export default function App() {
   /// plus what that occupies. Null until the first read, which is what tells
   /// the explorer to show no badges rather than wrong ones.
   const [blobStatus, setBlobStatus] = useState<BlobStatus | null>(null);
-  /// Whether the open silo keeps an activity log, for the notice in the
-  /// sidebar. Read when a silo opens and whenever the switch moves.
+  /// Whether the open silo keeps an activity log, for the Activity page and
+  /// the overview. Read when a silo opens and whenever the switch moves.
   const [auditLog, setAuditLog] = useState<AuditStatus | null>(null);
   /// A download-everything pass in flight, counted in blobs. Null when none
   /// is running.
@@ -656,6 +657,11 @@ export default function App() {
           setNeedsRebuild((prev) => new Set(prev).add(rebuildId));
         }
         if (!onScreen) return;
+        // A pass may have started the log (on by default) or brought a
+        // change to it from another device.
+        void invoke<AuditStatus>("audit_status")
+          .then(setAuditLog)
+          .catch(() => {});
         // Ahead of the clear, or a frame still holding the last step would
         // land after the pass ended and put the progress line back.
         syncTicker.stop();
@@ -3239,6 +3245,10 @@ export default function App() {
   }, [meta, refreshSync]);
 
   useEffect(() => {
+    if (view === "activity" && meta) {
+      void refreshDevices();
+      return;
+    }
     if (view !== "settings" || !meta) return;
     void invoke<SecurityKeyInfo[]>("fido_list_keys")
       .then(setSecurityKeys)
@@ -3758,13 +3768,6 @@ export default function App() {
           setSettingsSection("backup");
           setView("settings");
         }}
-        activityLog={
-          auditLog?.organisation ? "organisation" : auditLog?.enabled ? "on" : null
-        }
-        onOpenActivity={() => {
-          setSettingsSection("devices");
-          setView("settings");
-        }}
         statusSummary={statusSummary}
         siloName={bootstrap.silo.name}
         onSwitchSilo={() => void closeSilo()}
@@ -3931,6 +3934,17 @@ export default function App() {
           />
         )}
 
+        {view === "activity" && meta && (
+          <ActivityView
+            status={auditLog}
+            devices={devices}
+            onOpenSettings={() => {
+              setSettingsSection("devices");
+              setView("settings");
+            }}
+          />
+        )}
+
         {view === "trash" && meta && (
           <TrashPanel
             entries={trashEntries}
@@ -3947,6 +3961,7 @@ export default function App() {
             os={osOf(bootstrap)}
             auditLog={auditLog}
             onAuditChanged={setAuditLog}
+            onOpenActivity={() => setView("activity")}
             section={settingsSection}
             onSection={setSettingsSection}
             backupPanel={

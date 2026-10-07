@@ -517,6 +517,7 @@ pub fn open_focused_session(app: &AppHandle, session: VaultSession) -> Result<()
         let _ = app.emit("silo-auto-locked", serde_json::json!({ "name": name }));
     }
     announce_this_device(&state);
+    crate::commands::sync::start_audit_by_default(app, id);
     Ok(())
 }
 

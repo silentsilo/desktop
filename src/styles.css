@@ -1994,32 +1994,6 @@ textarea:focus {
 }
 
 /* ── Local storage meter ── */
-.sidebar-audit {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  width: 100%;
-  margin: 0 0 0.35rem;
-  padding: 0.4rem 0.65rem;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: transparent;
-  text-align: left;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.sidebar-audit.is-collapsed {
-  justify-content: center;
-  padding: 0.4rem 0;
-}
-
-.sidebar-audit:hover {
-  border-color: var(--border);
-  color: var(--text);
-}
-
 .sidebar-storage {
   display: flex;
   flex-direction: column;
@@ -6094,6 +6068,21 @@ button.link.pw-history-clear {
 }
 
 /* ---- Favourites ------------------------------------------------------ */
+
+.activity-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.activity-pane {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.1rem;
+}
 
 .favorites-view {
   display: flex;

@@ -134,7 +134,7 @@ the employee's devices write the log and cannot read it.
 
 - A silo created as organisation-administered from 1.4 on starts its log
   when the first key is enrolled, keeping records for a year. A silo created
-  before 1.4 starts it under Settings, Activity, with an organisation key
+  before 1.4 starts it under Settings, Devices, with an organisation key
   touched and the retention chosen there (90 days, 1 year, 3 years, or
   everything).
 - Adding a second organisation key, which asks for the first, lets it read
@@ -144,8 +144,8 @@ the employee's devices write the log and cannot read it.
 - Reading the log, exporting it, changing the retention and removing records
   past it each ask for an organisation key. Removing deletes from copies
   that allow deleting; a never-delete copy keeps everything.
-- Everyone using the silo sees "Activity log, for the organisation" in the
-  sidebar.
+- Everyone using the silo sees Activity in the sidebar, marked "Kept by your
+  organisation".
 
 What it does not do: a device offline records locally and sends later, so
 the log shows what reached storage. A modified build can stop writing or

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Download, History } from "lucide-react";
+import { Download } from "lucide-react";
 import { save as saveFileDialog } from "../lib/dialog";
 import { formatDate } from "../lib/format";
 import { formatAppError } from "../lib/errors";
@@ -166,14 +166,6 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
 
   return (
     <div className="panel-section">
-      <h3>
-        <History size={16} />
-        Activity
-      </h3>
-      <p>
-        What the activity log holds, from all the devices that keep it. Times come from each
-        device&apos;s own clock, so they can be slightly off.
-      </p>
 
       <div className="search-input-wrapper">
         <span className="search-icon">

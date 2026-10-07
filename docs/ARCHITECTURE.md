@@ -284,25 +284,27 @@ differently on two platforms would open neither's silo on the other.
 
 Core owns the format, the queue on this computer and its delivery (core's
 ARCHITECTURE.md and `FORMATS.md`). This app decides what is an event and
-when it is written (`src-tauri/src/audit.rs`). Nothing is written until a
-log is turned on for the silo; until then every call returns at once. The
-switch (`audit_set_enabled`, `AuditLogPanel`) acts on this computer at once
+when it is written (`src-tauri/src/audit.rs`). Nothing is written while the
+log is off; every call then returns at once. It is on by default: core
+starts it at the first pass, and `open_focused_session` asks core to start
+it for a silo with no copies (`start_audit_by_default`). The switch, under
+Settings > Devices (`audit_set_enabled`, `AuditLogPanel`), acts on this computer at once
 and asks for a sync, which carries the policy to the copies; core's pass
 does that part. Reading (`audit_read`) and export (`audit_export`, CSV with
 formula-like cells kept as text, or JSON lines) go through core's
-`read_audit_log` with the silo's content key; where the silo keeps no log,
-the page shows the oplog's list of changes instead. The page asks for 100
+`read_audit_log` with the silo's content key, on the Activity page
+(`ActivityView`, in the sidebar before Settings); a silo whose log is off
+says so there. The page asks for 100
 entries at a time: `audit_read` with `refresh` reads every copy (core opens
 only segments it has not opened since the silo was unlocked) and keeps the
 result in `AppState::audit_page`; "Show older" and the search, which runs
 here over the whole log, page through that without reading the copies
 again. What is held is the log in clear, for one silo and one unlock: the
 page closing (`audit_read_close`), a lock or a switch drops it, and every
-close path also calls core's `forget_audit_read`. A silo that keeps a log
-says so in the sidebar for as long as it is open (`AppShell`'s
-`activityLog`, read from `audit_status` when a silo opens and whenever the
-switch moves): whoever uses the silo is told, which an organisation's log
-in particular owes the people it records.
+close path also calls core's `forget_audit_read`. Activity sits in the
+sidebar for every silo, an organisation's included, so whoever uses the
+silo sees that it is recorded; the window reads `audit_status` when a silo
+opens, after every pass and whenever the switch moves.
 
 An organisation's log asks for an organisation key at every step
 (`fido::touch_organisation_key`, which is `prove_organisation_key` keeping

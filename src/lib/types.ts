@@ -414,7 +414,14 @@ export type NavMode = "push" | "replace" | "index";
 
 export type BreadcrumbSeg = { label: string; path: string };
 
-export type View = "files" | "passwords" | "favorites" | "health" | "settings" | "trash";
+export type View =
+  | "files"
+  | "passwords"
+  | "favorites"
+  | "health"
+  | "settings"
+  | "trash"
+  | "activity";
 
 export type ToastKind = "error" | "success" | "info";
 

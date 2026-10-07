@@ -76,10 +76,6 @@ type Props = {
   onView: (v: View) => void;
   onLock: () => void;
   storage: StorageUsage | null;
-  /** The silo keeps an activity log: said where it is always in sight, so
-   * nobody using the silo can miss it. */
-  activityLog?: "on" | "organisation" | null;
-  onOpenActivity?: () => void;
   trashCount?: number;
   /** Findings worth acting on, badged on the Health tab. Excludes the
    * informational ones, which would make the number permanent. */
@@ -111,6 +107,7 @@ const PANE_VIEWS = new Set<View>([
   "favorites",
   "health",
   "trash",
+  "activity",
   "settings",
 ]);
 
@@ -123,6 +120,7 @@ const NAV: { id: View; label: string; title: string; icon: typeof FolderClosed }
   { id: "passwords", label: "Passwords", title: "Passwords", icon: KeyRound },
   { id: "health", label: "Health", title: "Health", icon: HeartPulse },
   { id: "trash", label: "Trash", title: "Trash", icon: Trash2 },
+  { id: "activity", label: "Activity", title: "Activity", icon: ScrollText },
   { id: "settings", label: "Settings", title: "Settings", icon: Settings2 },
 ];
 
@@ -131,8 +129,6 @@ export function AppShell({
   onView,
   onLock,
   storage,
-  activityLog,
-  onOpenActivity,
   trashCount = 0,
   healthCount = 0,
   healthUrgent = false,
@@ -244,26 +240,6 @@ export function AppShell({
         </nav>
 
         <div className="sidebar-spacer" />
-
-        {activityLog && (
-          <button
-            type="button"
-            className={`sidebar-audit${collapsed ? " is-collapsed" : ""}`}
-            onClick={onOpenActivity}
-            title={
-              activityLog === "organisation"
-                ? "This silo keeps an activity log for its organisation. Click to see what it records."
-                : "This silo keeps an activity log. Click to open it."
-            }
-          >
-            <ScrollText size={14} aria-hidden />
-            {!collapsed && (
-              <span>
-                {activityLog === "organisation" ? "Activity log, for the organisation" : "Activity log on"}
-              </span>
-            )}
-          </button>
-        )}
 
         {/* What this silo occupies here. Content arrives only when a file is
             opened, so this grows with use rather than with the silo, and the

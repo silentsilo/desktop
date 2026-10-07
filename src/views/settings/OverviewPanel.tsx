@@ -18,7 +18,7 @@ import { platformStrings, type Os } from "../../lib/platformStrings";
 import type { SyncIndicator } from "../../layout/AppShell";
 
 /** Where a row's action leads. */
-export type OverviewTarget = "backup" | "verify" | "recovery" | "keys" | "devices";
+export type OverviewTarget = "backup" | "verify" | "recovery" | "keys" | "devices" | "activity";
 
 /** How long a test or a printed kit counts as recent. */
 const REMIND_AFTER_DAYS = 90;
@@ -248,17 +248,17 @@ export function OverviewPanel({
         )}
         <Row
           icon={<ScrollText size={16} />}
-          title="Activity log"
+          title="Activity"
           tone="neutral"
-          action="Open Activity"
-          onAction={() => onGo("devices")}
+          action={auditLog?.enabled || auditLog?.organisation ? "Open" : "Turn on"}
+          onAction={() => onGo(auditLog?.enabled || auditLog?.organisation ? "activity" : "devices")}
           busy={busy}
         >
           {auditLog?.organisation
-            ? "Kept for the organisation. Every device records what is done with this silo."
+            ? "Kept by your organisation."
             : auditLog?.enabled
-              ? "On. Every device that opens this silo records what is done with it."
-              : "Off. Turn it on to keep a record of what is done with this silo."}
+              ? "On."
+              : "Off."}
         </Row>
       </ul>
 

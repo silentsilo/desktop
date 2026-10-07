@@ -45,6 +45,16 @@ impl silentsilo_app::Host for DesktopHost<'_> {
     }
 }
 
+/// Activity is on by default: a silo with no copies starts its log when it
+/// opens; one with copies, at its first pass (core decides which). Best
+/// effort: a silo that opened is open.
+pub(crate) fn start_audit_by_default(app: &AppHandle, silo_id: Uuid) {
+    let state = app.state::<AppState>();
+    if let Err(e) = state.start_audit_by_default(&DesktopHost { app }, silo_id) {
+        crate::diagnostics::warn("audit", e);
+    }
+}
+
 /// What a purge leaves of the content it was the last reference to: core's
 /// rule, with this app's copies.
 pub(crate) fn release_purged_blobs(

@@ -3,15 +3,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { ScrollText } from "lucide-react";
 import { formatAppError } from "../lib/errors";
 import type { AuditStatus } from "../lib/types";
-import { AuditLogList } from "./AuditLogList";
 
 type Props = {
   busy: boolean;
   /** Told whenever the log changes, so the notice elsewhere follows. */
   onChanged: (status: AuditStatus) => void;
-  devices: { id: string; label: string | null; system_name: string | null }[];
-  /** Shown instead of the log when this silo keeps none: its list of changes. */
-  fallback: ReactNode;
 };
 
 /** How long an organisation's log keeps its records; `null` keeps them. */
@@ -31,11 +27,11 @@ function retentionDays(value: string): number | null {
 }
 
 /**
- * The silo's activity log: whether it is kept, the switch for a personal
- * silo, what an organisation's silo offers whoever holds its keys, and the
- * log itself. A silo that keeps none shows its list of changes instead.
+ * Settings for the silo's activity: the switch for a personal silo, and
+ * what an organisation's silo offers whoever holds its keys. The log itself
+ * is its own page, Activity.
  */
-export function AuditLogPanel({ busy, onChanged, devices, fallback }: Props) {
+export function AuditLogPanel({ busy, onChanged }: Props) {
   const [status, setStatus] = useState<AuditStatus | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,11 +94,7 @@ export function AuditLogPanel({ busy, onChanged, devices, fallback }: Props) {
   if (status?.organisation) {
     body = (
       <>
-        <p>
-          This silo keeps an activity log for its organisation, and it stays on. Every device
-          records what is done with the silo; only an organisation key reads the log. Reading it,
-          changing how long it is kept and removing old records each ask for one.
-        </p>
+        <p>Kept by your organisation, always on. Changes here ask for an organisation key.</p>
         <div className="settings-row">
           <label className="settings-row-label" htmlFor="audit-retention">
             Keep records for
@@ -135,20 +127,13 @@ export function AuditLogPanel({ busy, onChanged, devices, fallback }: Props) {
             </button>
           </div>
         )}
-        <p className="hint">
-          Records are removed only from copies that allow deleting. A copy kept as never-delete
-          keeps them.
-        </p>
+        <p className="hint">A copy kept as never-delete keeps every record.</p>
       </>
     );
   } else if (status?.org_controlled) {
     body = (
       <>
-        <p>
-          This silo is administered by an organisation. Its activity log records what is done with
-          the silo on every device, and only the organisation's keys read it. Once started it stays
-          on, and everyone using the silo is told so.
-        </p>
+        <p>Start the organisation&apos;s record of activity. Once started it stays on.</p>
         <div className="settings-row">
           <label className="settings-row-label" htmlFor="audit-start-retention">
             Keep records for
@@ -175,7 +160,7 @@ export function AuditLogPanel({ busy, onChanged, devices, fallback }: Props) {
               void change("audit_org_start", { retentionDays: retentionDays(startRetention) })
             }
           >
-            Start the organisation's activity log
+            Start
           </button>
         </div>
         <p className="hint">Asks for one of the organisation's security keys.</p>
@@ -184,12 +169,6 @@ export function AuditLogPanel({ busy, onChanged, devices, fallback }: Props) {
   } else {
     body = (
       <>
-        <p>
-          A record of what is done with this silo: unlocking, showing or copying a secret, opening
-          or saving a file outside the silo, and changes to entries, files, keys and the recovery
-          code. Each record is encrypted on the device that made it before it is stored with the
-          silo's copies. Anyone who can open this silo can read the log.
-        </p>
         <label className="s3-checkbox">
           <input
             type="checkbox"
@@ -198,10 +177,10 @@ export function AuditLogPanel({ busy, onChanged, devices, fallback }: Props) {
             onChange={(e) => void change("audit_set_enabled", { enabled: e.target.checked })}
           />
           <span>
-            Keep an activity log for this silo
+            Record activity
             <span className="hint">
-              This computer records from now on, other devices once they sync. Turning it off stops
-              new records; the ones already kept stay.
+              Unlocks, secrets shown or copied, files opened, and changes. Encrypted, and read by
+              anyone who can open this silo.
             </span>
           </span>
         </label>
@@ -214,7 +193,7 @@ export function AuditLogPanel({ busy, onChanged, devices, fallback }: Props) {
       <div className="panel-section">
         <h3>
           <ScrollText size={16} />
-          Activity log
+          Activity
         </h3>
         {body}
         {status && status.waiting > 0 && (
@@ -227,16 +206,6 @@ export function AuditLogPanel({ busy, onChanged, devices, fallback }: Props) {
         {notice && <p className="hint">{notice}</p>}
         {error && <p className="hint is-error">{error}</p>}
       </div>
-      {status?.kept ? (
-        // Read again when the log changes, so its own event shows.
-        <AuditLogList
-          key={`${status.enabled}-${status.organisation}`}
-          devices={devices}
-          needsKey={status.organisation}
-        />
-      ) : (
-        fallback
-      )}
     </>
   );
 }

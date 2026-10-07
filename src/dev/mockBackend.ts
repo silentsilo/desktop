@@ -222,9 +222,10 @@ function emit(event: string, payload: unknown) {
   }
 }
 
+/// On by default, as a silo is; `?auditoff` as one turned off before.
 let mockAudit = {
-  enabled: false,
-  kept: false,
+  enabled: !flag("auditoff"),
+  kept: !flag("auditoff"),
   organisation: false,
   org_controlled: flag("org"),
   retention_days: null as number | null,

@@ -43,16 +43,14 @@ silo from opening needs a major version rather than a note.
 - The activity log is written: unlocking and locking, showing or copying a
   secret, opening or saving a file outside the silo, filling a login in the
   browser, changes to entries and files, imports and exports, and changes
-  to keys and the recovery code. It is turned on per silo under Settings,
-  Activity (was Devices and activity), works with no copies at all, and
-  reaches every copy and device at the next sync. The same page reads it,
-  from this computer and every copy, says which records are missing from a
-  device or do not open, and exports it as CSV or JSON lines. While a silo
-  keeps a log, the sidebar says so on every device, and Overview has a line
-  for it.
+  to keys and the recovery code. It is on by default, and turned off per
+  silo under Settings, Devices. It works with no copies at all and reaches
+  every copy and device at the next sync. Activity, in the sidebar, reads
+  it from this computer and every copy, says which records are missing from
+  a device or do not open, and exports it as CSV or JSON lines.
 - An organisation's silo keeps its own activity log, read only with an
   organisation key: started when the first key is enrolled (one year), or
-  under Settings, Activity for a silo created earlier. A second organisation
+  under Settings, Devices for a silo created earlier. A second organisation
   key reads it too. Reading, exporting, changing the retention (90 days to
   everything) and removing old records each ask for an organisation key.
   `docs/ORGANISATIONS.md` says what it records and what it cannot. On an organisation's silo the log stays on,
