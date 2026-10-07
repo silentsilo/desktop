@@ -6,6 +6,7 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import { type Os, platformStrings } from "../../lib/platformStrings";
 import { formatBytes } from "../../lib/format";
 import { formatAppError } from "../../lib/errors";
+import { SettingGroupTitle, SettingList, SettingRow, Toggle } from "../../components/Setting";
 import {
   checkForUpdate,
   installUpdateAndRelaunch,
@@ -209,90 +210,98 @@ export function AppSettingsSection({
           <SlidersHorizontal size={16} />
           {t("settings.general")}
         </h3>
-        <p>
+        <p className="lead">
           {t("set.gen_tray", { tray: platform.trayArea, fileManager: platform.fileManager })}
         </p>
-        <label className="s3-checkbox">
-          <input
-            type="checkbox"
-            checked={autostart?.enabled ?? false}
-            disabled={busy || !autostart?.supported}
-            onChange={(e) => void toggleAutostart(e.target.checked)}
-          />
-          <span>
-            {t("set.gen_autostart", { signIn: platform.signIn })}
-            <span className="hint">{t("set.gen_autostart_hint", { tray: platform.trayArea })}</span>
-          </span>
-        </label>
-        {autostart && !autostart.supported && <p className="hint">{t("set.not_available")}</p>}
-        {autostartError && <p className="hint is-error">{autostartError}</p>}
-        <p className="hint">{platform.autostartHint}</p>
-
-        <LanguagePicker />
-
-        <div className="settings-row">
-          <label className="settings-row-label" htmlFor="auto-lock-default">
-            {t("set.gen_auto_lock")}
-          </label>
-          <select
-            id="auto-lock-default"
-            className="auto-lock-select"
-            value={defaultAutoLockMinutes}
-            disabled={busy}
-            onChange={(e) => onDefaultAutoLockMinutes(Number.parseInt(e.target.value, 10))}
+        <SettingList>
+          <SettingGroupTitle>{t("set.group_startup")}</SettingGroupTitle>
+          <SettingRow
+            label={t("set.gen_autostart", { signIn: platform.signIn })}
+            htmlFor="autostart"
+            hint={
+              <>
+                {t("set.gen_autostart_hint", { tray: platform.trayArea })} {platform.autostartHint}
+              </>
+            }
+            extra={
+              <>
+                {autostart && !autostart.supported && (
+                  <p className="hint">{t("set.not_available")}</p>
+                )}
+                {autostartError && <p className="hint is-error">{autostartError}</p>}
+              </>
+            }
           >
-            {AUTO_LOCK_OPTIONS_MINUTES.map((minutes) => (
-              <option key={minutes} value={minutes}>
-                {formatMinutes(minutes)}
-              </option>
-            ))}
-          </select>
-        </div>
-        <p className="hint">{t("set.gen_auto_lock_hint")}</p>
+            <Toggle
+              id="autostart"
+              checked={autostart?.enabled ?? false}
+              disabled={busy || !autostart?.supported}
+              onChange={(on) => void toggleAutostart(on)}
+            />
+          </SettingRow>
 
-        <div className="settings-row">
-          <label className="settings-row-label" htmlFor="password-history">
-            {t("set.gen_history")}
-          </label>
-          <select
-            id="password-history"
-            className="auto-lock-select"
-            value={String(historyPolicy)}
-            onChange={(e) => {
-              const policy: HistoryPolicy =
-                e.target.value === "fit" ? "fit" : Number.parseInt(e.target.value, 10);
-              setHistoryPolicy(policy);
-              saveHistoryPolicy(policy);
-            }}
+          <SettingGroupTitle>{t("set.group_look")}</SettingGroupTitle>
+          <LanguagePicker />
+
+          {themeControl && (
+            <SettingRow label={t("set.gen_theme")} htmlFor="theme-choice">
+              <select
+                id="theme-choice"
+                value={themeControl.choice}
+                onChange={(e) => themeControl.choose(e.target.value as ThemeChoice)}
+              >
+                <option value="system">{t("set.theme_system")}</option>
+                <option value="light">{t("set.theme_light")}</option>
+                <option value="dark">{t("set.theme_dark")}</option>
+              </select>
+            </SettingRow>
+          )}
+
+          <SettingGroupTitle>{t("set.group_security")}</SettingGroupTitle>
+          <SettingRow
+            label={t("set.gen_auto_lock")}
+            htmlFor="auto-lock-default"
+            hint={t("set.gen_auto_lock_hint")}
           >
-            {HISTORY_POLICIES.map((policy) => (
-              <option key={String(policy)} value={String(policy)}>
-                {policy === "fit"
-                  ? t("set.gen_history_fit")
-                  : t("set.gen_history_last", { count: policy })}
-              </option>
-            ))}
-          </select>
-        </div>
-        <p className="hint">{t("set.gen_history_hint")}</p>
-
-        {themeControl && (
-          <div className="settings-row">
-            <label className="settings-row-label" htmlFor="theme-choice">
-              {t("set.gen_theme")}
-            </label>
             <select
-              id="theme-choice"
-              className="auto-lock-select"
-              value={themeControl.choice}
-              onChange={(e) => themeControl.choose(e.target.value as ThemeChoice)}
+              id="auto-lock-default"
+              value={defaultAutoLockMinutes}
+              disabled={busy}
+              onChange={(e) => onDefaultAutoLockMinutes(Number.parseInt(e.target.value, 10))}
             >
-              <option value="system">{t("set.theme_system")}</option>
-              <option value="light">{t("set.theme_light")}</option>
-              <option value="dark">{t("set.theme_dark")}</option>
+              {AUTO_LOCK_OPTIONS_MINUTES.map((minutes) => (
+                <option key={minutes} value={minutes}>
+                  {formatMinutes(minutes)}
+                </option>
+              ))}
             </select>
-          </div>
-        )}
+          </SettingRow>
+
+          <SettingRow
+            label={t("set.gen_history")}
+            htmlFor="password-history"
+            hint={t("set.gen_history_hint")}
+          >
+            <select
+              id="password-history"
+              value={String(historyPolicy)}
+              onChange={(e) => {
+                const policy: HistoryPolicy =
+                  e.target.value === "fit" ? "fit" : Number.parseInt(e.target.value, 10);
+                setHistoryPolicy(policy);
+                saveHistoryPolicy(policy);
+              }}
+            >
+              {HISTORY_POLICIES.map((policy) => (
+                <option key={String(policy)} value={String(policy)}>
+                  {policy === "fit"
+                    ? t("set.gen_history_fit")
+                    : t("set.gen_history_last", { count: policy })}
+                </option>
+              ))}
+            </select>
+          </SettingRow>
+        </SettingList>
       </div>
     );
   }
@@ -304,41 +313,51 @@ export function AppSettingsSection({
           <Globe size={16} />
           {t("settings.browser")}
         </h3>
-        <p>{t("set.br_intro")}</p>
+        <p className="lead">{t("set.br_intro")}</p>
         {browserExtension?.supported && !browserExtension.bundled ? (
           <p className="hint">{t("set.br_not_bundled")}</p>
         ) : (
           <>
-            <label className="s3-checkbox">
-              <input
-                type="checkbox"
-                checked={browserExtension?.enabled ?? false}
-                disabled={busy || browserExtensionBusy || !browserExtension?.supported}
-                onChange={(e) => void toggleBrowserExtension(e.target.checked)}
-              />
-              <span>
-                {t("set.br_allow")}
-                <span className="hint">
-                  {platform.hasBuiltIn
+            <SettingList>
+              <SettingRow
+                label={t("set.br_allow")}
+                htmlFor="browser-extension"
+                hint={
+                  platform.hasBuiltIn
                     ? t("set.br_allow_hint_builtin", { builtin: platform.builtIn })
-                    : t("set.br_allow_hint")}
-                </span>
-              </span>
-            </label>
-            {browserExtension?.supported && siloHasKeys === false && (
-              <p className="hint is-error">
-                {platform.hasBuiltIn
-                  ? t("set.br_no_keys_builtin", { builtin: platform.builtIn })
-                  : t("set.br_no_keys")}
-              </p>
-            )}
-            {browserExtension && !browserExtension.supported && (
-              <p className="hint">{t("set.not_available_yet")}</p>
-            )}
-            {browserExtension?.enabled && !browserExtension.running && !browserExtensionError && (
-              <p className="hint is-error">{t("set.br_not_running")}</p>
-            )}
-            {browserExtensionError && <p className="hint is-error">{browserExtensionError}</p>}
+                    : t("set.br_allow_hint")
+                }
+                extra={
+                  <>
+                    {browserExtension?.supported && siloHasKeys === false && (
+                      <p className="hint is-error">
+                        {platform.hasBuiltIn
+                          ? t("set.br_no_keys_builtin", { builtin: platform.builtIn })
+                          : t("set.br_no_keys")}
+                      </p>
+                    )}
+                    {browserExtension && !browserExtension.supported && (
+                      <p className="hint">{t("set.not_available_yet")}</p>
+                    )}
+                    {browserExtension?.enabled &&
+                      !browserExtension.running &&
+                      !browserExtensionError && (
+                        <p className="hint is-error">{t("set.br_not_running")}</p>
+                      )}
+                    {browserExtensionError && (
+                      <p className="hint is-error">{browserExtensionError}</p>
+                    )}
+                  </>
+                }
+              >
+                <Toggle
+                  id="browser-extension"
+                  checked={browserExtension?.enabled ?? false}
+                  disabled={busy || browserExtensionBusy || !browserExtension?.supported}
+                  onChange={(on) => void toggleBrowserExtension(on)}
+                />
+              </SettingRow>
+            </SettingList>
             {browserExtension?.enabled && (browserExtension.recent?.length ?? 0) > 0 && (
               <div className="browser-recent">
                 <p className="hint">{t("set.br_recent")}</p>
@@ -384,7 +403,7 @@ export function AppSettingsSection({
           <DownloadCloud size={16} />
           {t("set.up_title")}
         </h3>
-        <p>{t("set.up_current", { version: __APP_VERSION__ })}</p>
+        <p className="lead">{t("set.up_current", { version: __APP_VERSION__ })}</p>
         {updateState.phase === "available" && (
           <div className="update-available" role="status">
             <DownloadCloud size={16} aria-hidden />
@@ -448,17 +467,11 @@ export function AppSettingsSection({
             </button>
           )}
         </div>
-        <label className="s3-checkbox update-auto-toggle">
-          <input
-            type="checkbox"
-            checked={autoUpdateEnabled}
-            onChange={(e) => onAutoUpdateEnabled(e.target.checked)}
-          />
-          <span>
-            {t("set.up_auto")}
-            <span className="hint">{t("set.up_auto_hint")}</span>
-          </span>
-        </label>
+        <SettingList separated>
+          <SettingRow label={t("set.up_auto")} htmlFor="auto-update" hint={t("set.up_auto_hint")}>
+            <Toggle id="auto-update" checked={autoUpdateEnabled} onChange={onAutoUpdateEnabled} />
+          </SettingRow>
+        </SettingList>
       </div>
 
       <div className="panel-section">
@@ -466,7 +479,7 @@ export function AppSettingsSection({
           <Info size={16} />
           {t("set.about_title")}
         </h3>
-        <p>
+        <p className="lead">
           {platform.hasBuiltIn
             ? t("set.about_body_builtin", { version: __APP_VERSION__, builtin: platform.builtIn })
             : t("set.about_body", { version: __APP_VERSION__ })}
@@ -511,29 +524,22 @@ function LanguagePicker() {
   const [preference, setPreference] = useState(languagePreference);
   const systemName = LOCALES.find((l) => l.id === systemLocale())?.name ?? "English";
   return (
-    <>
-      <div className="settings-row">
-        <label className="settings-row-label" htmlFor="language">
-          {t("settings.language")}
-        </label>
-        <select
-          id="language"
-          className="auto-lock-select"
-          value={preference}
-          onChange={(e) => {
-            setPreference(e.target.value);
-            setLanguage(e.target.value);
-          }}
-        >
-          <option value="system">{t("settings.language_system", { name: systemName })}</option>
-          {LOCALES.map((l) => (
-            <option key={l.id} value={l.id} lang={l.id}>
-              {l.reviewed ? l.name : t("settings.language_beta", { name: l.name })}
-            </option>
-          ))}
-        </select>
-      </div>
-      <p className="hint">{t("settings.language_hint")}</p>
-    </>
+    <SettingRow label={t("settings.language")} htmlFor="language" hint={t("settings.language_hint")}>
+      <select
+        id="language"
+        value={preference}
+        onChange={(e) => {
+          setPreference(e.target.value);
+          setLanguage(e.target.value);
+        }}
+      >
+        <option value="system">{t("settings.language_system", { name: systemName })}</option>
+        {LOCALES.map((l) => (
+          <option key={l.id} value={l.id} lang={l.id}>
+            {l.reviewed ? l.name : t("settings.language_beta", { name: l.name })}
+          </option>
+        ))}
+      </select>
+    </SettingRow>
   );
 }

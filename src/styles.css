@@ -248,6 +248,21 @@ textarea {
  * Opaque colours here, and on the options themselves, put it back. */
 select {
   background-color: var(--surface-muted);
+  /* Its own chevron rather than the platform's arrow, which sat flush
+     against the border and looked like an unstyled form. */
+  appearance: none;
+  padding-right: 2.3rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+select:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+
+select:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 option {
@@ -1180,6 +1195,189 @@ textarea:focus {
   font-weight: 650;
 }
 
+/* ── Setting rows ──
+ * Label and explanation on the left, the control on the right, one
+ * hairline between settings. The explanation belongs to its setting, so it
+ * sits under the label instead of floating between two controls. */
+.setting-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4rem 2rem;
+  padding: 0.95rem 0;
+}
+
+.setting-row + .setting-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.settings-pane .panel-section > .setting-list-separated {
+  margin-top: 1.4rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.setting-list > .setting-row:first-child {
+  padding-top: 0.35rem;
+}
+
+.setting-list > .setting-row:last-child {
+  padding-bottom: 0.1rem;
+}
+
+.setting-text {
+  min-width: 0;
+}
+
+.setting-label {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.setting-hint {
+  margin: 0.25rem 0 0;
+  max-width: 62ch;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.setting-text .hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.82rem;
+}
+
+.setting-control {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.setting-control select {
+  width: 13.5rem;
+  max-width: 100%;
+}
+
+/* A small heading over a few related rows. */
+.setting-group-title {
+  margin: 1.4rem 0 0.1rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.setting-list > .setting-group-title:first-child {
+  margin-top: 0.2rem;
+}
+
+.setting-group-title + .setting-row {
+  border-top: none;
+}
+
+@media (max-width: 640px) {
+  .setting-row {
+    grid-template-columns: 1fr;
+  }
+
+  .setting-control {
+    justify-content: flex-start;
+  }
+}
+
+/* The card's opening sentence explains the page; quieter than a setting. */
+.settings-pane .panel-section > h3 + p,
+.settings-pane .panel-section > h3 + p.lead {
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 64ch;
+}
+
+/* Running text in a settings card: one size, so a plain paragraph does not
+   read louder than the setting it sits beside. */
+.settings-pane .panel-section > p:not(.hint):not(.lead) {
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+/* ── Toggle ── */
+.toggle {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 40px;
+  height: 22px;
+}
+
+.toggle input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.toggle input:disabled {
+  cursor: default;
+}
+
+.toggle-track {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-dim) 45%, transparent);
+  transition: background 0.18s ease;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  box-sizing: border-box;
+}
+
+.toggle-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.18s ease;
+}
+
+.toggle input:checked + .toggle-track {
+  background: var(--accent-solid);
+}
+
+.toggle input:checked + .toggle-track .toggle-thumb {
+  transform: translateX(18px);
+}
+
+.toggle input:focus-visible + .toggle-track {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, white);
+  outline-offset: 2px;
+}
+
+.toggle input:disabled + .toggle-track {
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toggle-track,
+  .toggle-thumb {
+    transition: none;
+  }
+}
+
 .upload-progress {
   display: flex;
   align-items: center;
@@ -2003,8 +2201,11 @@ textarea:focus {
   cursor: pointer;
 }
 
-.s3-checkbox input {
-  width: auto;
+.s3-checkbox input,
+.confirm-option input[type="checkbox"] {
+  accent-color: var(--accent-solid);
+  width: 16px;
+  height: 16px;
   margin-top: 0.2rem;
   flex-shrink: 0;
 }
@@ -7577,4 +7778,14 @@ button.storage-option:hover:where(:not(:disabled)) {
   padding-left: 18px;
   font-size: 13px;
   color: var(--text-muted);
+}
+
+/* The select's chevron. Last in the file and scoped to :root so the light
+   theme's `background` shorthand on form fields cannot wipe it. */
+:root select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238b93a8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+  background-size: 16px;
+  padding-right: 2.3rem;
 }

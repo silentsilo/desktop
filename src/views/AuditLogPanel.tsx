@@ -4,6 +4,7 @@ import { ScrollText } from "lucide-react";
 import { formatAppError } from "../lib/errors";
 import type { AuditStatus } from "../lib/types";
 import { t, useLocale, type Key } from "../i18n";
+import { SettingList, SettingRow, Toggle } from "../components/Setting";
 
 type Props = {
   busy: boolean;
@@ -93,13 +94,10 @@ export function AuditLogPanel({ busy, onChanged }: Props) {
     body = (
       <>
         <p>{t("set.audit_org_intro")}</p>
-        <div className="settings-row">
-          <label className="settings-row-label" htmlFor="audit-retention">
-            {t("set.audit_keep_for")}
-          </label>
+        <SettingList>
+          <SettingRow label={t("set.audit_keep_for")} htmlFor="audit-retention">
           <select
             id="audit-retention"
-            className="auto-lock-select"
             value={retentionValue(status.retention_days)}
             disabled={disabled}
             onChange={(e) =>
@@ -114,7 +112,8 @@ export function AuditLogPanel({ busy, onChanged }: Props) {
               </option>
             ))}
           </select>
-        </div>
+          </SettingRow>
+        </SettingList>
         {status.retention_days !== null && (
           <div className="actions">
             <button
@@ -134,13 +133,10 @@ export function AuditLogPanel({ busy, onChanged }: Props) {
     body = (
       <>
         <p>{t("set.audit_org_start_intro")}</p>
-        <div className="settings-row">
-          <label className="settings-row-label" htmlFor="audit-start-retention">
-            {t("set.audit_keep_for")}
-          </label>
+        <SettingList>
+          <SettingRow label={t("set.audit_keep_for")} htmlFor="audit-start-retention">
           <select
             id="audit-start-retention"
-            className="auto-lock-select"
             value={startRetention}
             disabled={disabled}
             onChange={(e) => setStartRetention(e.target.value)}
@@ -151,7 +147,8 @@ export function AuditLogPanel({ busy, onChanged }: Props) {
               </option>
             ))}
           </select>
-        </div>
+          </SettingRow>
+        </SettingList>
         <div className="actions">
           <button
             type="button"
@@ -171,18 +168,20 @@ export function AuditLogPanel({ busy, onChanged }: Props) {
   } else {
     body = (
       <>
-        <label className="s3-checkbox">
-          <input
-            type="checkbox"
-            checked={status?.enabled ?? false}
-            disabled={disabled}
-            onChange={(e) => void change("audit_set_enabled", { enabled: e.target.checked })}
-          />
-          <span>
-            {t("set.audit_record")}
-            <span className="hint">{t("set.audit_record_hint")}</span>
-          </span>
-        </label>
+        <SettingList>
+          <SettingRow
+            label={t("set.audit_record")}
+            htmlFor="audit-enabled"
+            hint={t("set.audit_record_hint")}
+          >
+            <Toggle
+              id="audit-enabled"
+              checked={status?.enabled ?? false}
+              disabled={disabled}
+              onChange={(on) => void change("audit_set_enabled", { enabled: on })}
+            />
+          </SettingRow>
+        </SettingList>
       </>
     );
   }

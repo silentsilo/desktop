@@ -40,6 +40,7 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import type { SyncIndicator } from "../layout/AppShell";
 import { AppSettingsSection, formatMinutes, useUpdater } from "./settings/AppSettings";
 import { OverviewPanel } from "./settings/OverviewPanel";
+import { SettingList, SettingRow } from "../components/Setting";
 import { t, tx, useLocale } from "../i18n";
 
 type Props = {
@@ -555,13 +556,14 @@ export function SettingsPanel(props: Props) {
               <Timer size={16} />
               {t("set.auto_lock_title")}
             </h3>
-            <div className="settings-row">
-              <label className="settings-row-label" htmlFor="auto-lock-silo">
-                {tx("set.auto_lock_silo", { name: <strong>{silo.name}</strong> })}
-              </label>
+            <SettingList>
+            <SettingRow
+              label={tx("set.auto_lock_silo", { name: <strong>{silo.name}</strong> })}
+              htmlFor="auto-lock-silo"
+              hint={t("set.auto_lock_silo_hint")}
+            >
               <select
                 id="auto-lock-silo"
-                className="auto-lock-select"
                 value={siloAutoLockMinutes ?? "default"}
                 disabled={busy}
                 onChange={(e) =>
@@ -579,10 +581,8 @@ export function SettingsPanel(props: Props) {
                   </option>
                 ))}
               </select>
-            </div>
-            <p className="hint">
-              {t("set.auto_lock_silo_hint")}
-            </p>
+            </SettingRow>
+            </SettingList>
           </div>
           </>
         )}

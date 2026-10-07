@@ -4,6 +4,7 @@ import { SquareTerminal } from "lucide-react";
 import type { Os, SshAgentStatus } from "../../lib/types";
 import { formatAppError } from "../../lib/errors";
 import { t, useLocale } from "../../i18n";
+import { SettingList, SettingRow, Toggle } from "../../components/Setting";
 
 /** Settings > SSH agent: the toggle, why it may not be listening, and the
  * line or two that point ssh and Git at it. */
@@ -49,27 +50,33 @@ export function SshAgentSettings({ os, busy }: { os: Os; busy: boolean }) {
         <SquareTerminal size={16} />
         {t("settings.ssh")}
       </h3>
-      <p>{t("set.ssh_intro")}</p>
+      <p className="lead">{t("set.ssh_intro")}</p>
       {status && !status.supported ? (
         <p className="hint">{t("set.not_available_yet")}</p>
       ) : (
         <>
-          <label className="s3-checkbox">
-            <input
-              type="checkbox"
-              checked={status?.enabled ?? false}
-              disabled={busy || working || !status}
-              onChange={(e) => void toggle(e.target.checked)}
-            />
-            <span>
-              {t("set.ssh_turn_on")}
-              <span className="hint">{t("set.ssh_turn_on_hint")}</span>
-            </span>
-          </label>
-          {status?.enabled && status.problem && (
-            <p className="hint is-error">{status.problem}</p>
-          )}
-          {error && <p className="hint is-error">{error}</p>}
+          <SettingList>
+            <SettingRow
+              label={t("set.ssh_turn_on")}
+              htmlFor="ssh-agent"
+              hint={t("set.ssh_turn_on_hint")}
+              extra={
+                <>
+                  {status?.enabled && status.problem && (
+                    <p className="hint is-error">{status.problem}</p>
+                  )}
+                  {error && <p className="hint is-error">{error}</p>}
+                </>
+              }
+            >
+              <Toggle
+                id="ssh-agent"
+                checked={status?.enabled ?? false}
+                disabled={busy || working || !status}
+                onChange={(on) => void toggle(on)}
+              />
+            </SettingRow>
+          </SettingList>
           {status?.enabled && status.running && status.address && (
             <div className="ssh-agent-setup">
               {windows ? (
