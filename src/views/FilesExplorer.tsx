@@ -14,8 +14,10 @@ import { fileIconFor, fileKindOf } from "../lib/fileKinds";
 import { computeMarqueeBox, rectIntersectsBox } from "../lib/marquee";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { SyncBadge } from "./SyncBadge";
-import { ArrowUpDown, Check, ChevronDown, Star } from "lucide-react";
+import { ArrowUpDown, Check, ChevronDown, ClipboardPaste, FolderInput, Scissors, Star } from "lucide-react";
 import { FileDetailsPanel, SelectionDetails, type PanelAction } from "./FileDetailsPanel";
+import { MoveToDialog } from "./MoveToDialog";
+import { canMoveTo, type MoveDestination } from "../lib/moves";
 import { useModal } from "../hooks/useModal";
 import {
   IconBack,
@@ -107,6 +109,9 @@ type Props = {
   onRenameEntry: (entry: VaultEntry) => void;
   onTrashEntry: (entry: VaultEntry) => void;
   onToggleFavorite: (entry: VaultEntry) => void;
+  /** Moves entries into another folder of this silo: by dragging, Cut and
+   * Paste, or "Move to…". Absent, none of the three is offered. */
+  onMoveEntries?: (entries: VaultEntry[], destination: MoveDestination) => void;
   /** Without backup storage every file is simply here, so no badge is shown. */
   syncConfigured: boolean;
   localBlobIds: Set<string>;
@@ -116,6 +121,10 @@ type Props = {
   /** The step a running sync pass is on, to mark the file it moves. */
   syncProgress?: SyncProgress | null;
 };
+
+/** A folder a drag can end on: in the listing (by id) or in the address
+ * bar (by path), with what the drag's label calls it. */
+type DropTarget = { key: string; id?: string; path: string; label: string };
 
 /** The folder `path` sits in, or null for the silo's root. */
 function parentPath(path: string): string | null {
@@ -169,6 +178,7 @@ export function FilesExplorer(props: Props) {
     onRenameEntry,
     onTrashEntry,
     onToggleFavorite,
+    onMoveEntries,
     syncConfigured,
     localBlobIds,
     absentBlobIds,
@@ -315,6 +325,15 @@ export function FilesExplorer(props: Props) {
         disabled: busy,
       });
     }
+    if (cut && onMoveEntries) {
+      items.push({
+        kind: "action",
+        label: cut.entries.length === 1 ? "Paste 1 item here" : `Paste ${cut.entries.length} items here`,
+        icon: <ClipboardPaste size={14} />,
+        onClick: pasteHere,
+        disabled: busy || !canPasteHere,
+      });
+    }
     items.push(
       { kind: "divider" },
       {
@@ -373,6 +392,28 @@ export function FilesExplorer(props: Props) {
     disabled: busy,
   });
 
+  /// Cut and "Move to…" for these entries, when moving is offered.
+  const moveMenuItems = (list: VaultEntry[]): ContextMenuItem[] => {
+    if (!onMoveEntries) return [];
+    const many = list.length > 1;
+    return [
+      {
+        kind: "action",
+        label: many ? `Cut ${list.length} items` : "Cut",
+        icon: <Scissors size={14} />,
+        onClick: () => cutEntries(list),
+        disabled: busy,
+      },
+      {
+        kind: "action",
+        label: many ? `Move ${list.length} items to…` : "Move to…",
+        icon: <FolderInput size={14} />,
+        onClick: () => setMoveDialog(list),
+        disabled: busy,
+      },
+    ];
+  };
+
   const openEntryMenu = (e: MouseEvent, entry: VaultEntry) => {
     e.preventDefault();
     e.stopPropagation();
@@ -405,6 +446,7 @@ export function FilesExplorer(props: Props) {
           { kind: "divider" },
         );
       }
+      items.push(...moveMenuItems(movingWith(entry)));
       items.push({
         kind: "action",
         label: `Move ${selectedIds.size} items to trash`,
@@ -418,6 +460,7 @@ export function FilesExplorer(props: Props) {
         { kind: "action", label: "Open", icon: <IconFolder size={14} />, onClick: () => onOpenFolder(entry), disabled: busy },
         { kind: "action", label: "Rename", icon: <IconEdit size={14} />, onClick: () => onRenameEntry(entry), disabled: busy },
         favoriteItem(entry),
+        ...moveMenuItems([entry]),
         { kind: "divider" },
       );
       if (onSaveFolder) {
@@ -447,6 +490,7 @@ export function FilesExplorer(props: Props) {
         { kind: "action", label: "Save a copy…", icon: <IconDownload size={14} />, onClick: () => onSaveCopy(entry), disabled: busy },
         { kind: "action", label: "Rename", icon: <IconEdit size={14} />, onClick: () => onRenameEntry(entry), disabled: busy },
         favoriteItem(entry),
+        ...moveMenuItems([entry]),
         { kind: "divider" },
         { kind: "action", label: "Info", icon: <IconInfo size={14} />, onClick: () => showDetails(entry) },
         { kind: "divider" },
@@ -516,6 +560,157 @@ export function FilesExplorer(props: Props) {
   const folderOnScreen =
     detailsShown && !searchActive && selectedIds.size === 0 ? props.currentFolder : null;
 
+  // ── Moving: dragging onto a folder, Cut and Paste, "Move to…" ──
+  const currentPath = props.currentFolder?.path ?? "/";
+  const currentLabel =
+    currentPath === "/" ? crumbs[0]?.label || "Silo root" : (props.currentFolder?.name ?? "");
+  /// Cut entries wait here, with the folder they were cut from, until a
+  /// paste somewhere else. Nothing moves before the paste.
+  const [cut, setCut] = useState<{ entries: VaultEntry[]; from: string } | null>(null);
+  const [moveDialog, setMoveDialog] = useState<VaultEntry[] | null>(null);
+  const [drag, setDrag] = useState<{
+    moving: VaultEntry[];
+    x: number;
+    y: number;
+    target: DropTarget | null;
+  } | null>(null);
+  /// The click a drag ends with selects nothing.
+  const suppressClick = useRef(false);
+  const itemDragCleanup = useRef<(() => void) | null>(null);
+  useEffect(() => () => itemDragCleanup.current?.(), []);
+  const cutIds = useMemo(() => new Set((cut?.entries ?? []).map((e) => e.id)), [cut]);
+  const draggedIds = useMemo(() => new Set((drag?.moving ?? []).map((e) => e.id)), [drag]);
+  const canPasteHere =
+    cut !== null &&
+    props.currentFolder !== null &&
+    canMoveTo(cut.entries, { id: props.currentFolder.id, path: currentPath }, cut.from);
+
+  /// The selection when the entry is part of one, else the entry alone.
+  const movingWith = (entry: VaultEntry): VaultEntry[] =>
+    selectedIds.has(entry.id) && selectedIds.size > 1
+      ? sortedEntries.filter((e) => selectedIds.has(e.id))
+      : [entry];
+
+  const cutEntries = (list: VaultEntry[]) => {
+    if (list.length > 0) setCut({ entries: list, from: currentPath });
+  };
+
+  const pasteHere = () => {
+    if (!cut || !canPasteHere || !onMoveEntries || !props.currentFolder) return;
+    onMoveEntries(cut.entries, {
+      id: props.currentFolder.id,
+      path: currentPath,
+      label: currentLabel,
+    });
+    setCut(null);
+  };
+
+  /// The folder under the pointer that `moving` may go into: a folder in the
+  /// listing or a segment of the address bar.
+  const dropTargetAt = (x: number, y: number, moving: VaultEntry[]): DropTarget | null => {
+    const el = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-drop-path]");
+    if (!el) return null;
+    const target: DropTarget = {
+      key: el.dataset.dropKey ?? "",
+      id: el.dataset.dropId || undefined,
+      path: el.dataset.dropPath ?? "",
+      label: el.dataset.dropLabel ?? "",
+    };
+    return canMoveTo(moving, target, currentPath) ? target : null;
+  };
+
+  /// Pressing on an item and moving a few pixels starts a drag of it, or of
+  /// the selection it is part of. Mouse events rather than HTML5 drag and
+  /// drop: on Windows the webview hands drags to the app for files dropped
+  /// from outside, and in-page drags never arrive.
+  const startItemDrag = (e: MouseEvent, entry: VaultEntry) => {
+    if (e.button !== 0 || !onMoveEntries || searchActive || renamingId !== null || busy) return;
+    if ((e.target as HTMLElement).closest("input, button, a")) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let moving: VaultEntry[] | null = null;
+    const end = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("keydown", onKey, true);
+      itemDragCleanup.current = null;
+    };
+    const finish = () => {
+      end();
+      setDrag(null);
+      if (moving) {
+        suppressClick.current = true;
+        window.setTimeout(() => (suppressClick.current = false), 0);
+      }
+    };
+    const onMove = (ev: globalThis.MouseEvent) => {
+      if (!moving) {
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 6) return;
+        moving = movingWith(entry);
+      }
+      setDrag({
+        moving,
+        x: ev.clientX,
+        y: ev.clientY,
+        target: dropTargetAt(ev.clientX, ev.clientY, moving),
+      });
+    };
+    const onUp = (ev: globalThis.MouseEvent) => {
+      const target = moving ? dropTargetAt(ev.clientX, ev.clientY, moving) : null;
+      const dropped = moving;
+      finish();
+      if (dropped && target) {
+        onMoveEntries(dropped, { id: target.id, path: target.path, label: target.label });
+      }
+    };
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape") return;
+      ev.stopPropagation();
+      finish();
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("keydown", onKey, true);
+    itemDragCleanup.current = end;
+  };
+
+  /// Where a folder in the listing can be dropped on.
+  const dropProps = (entry: VaultEntry) =>
+    entry.kind === "folder" && onMoveEntries
+      ? {
+          "data-drop-path": entry.path,
+          "data-drop-id": entry.id,
+          "data-drop-key": entry.id,
+          "data-drop-label": entry.name,
+        }
+      : {};
+  const moveClass = (entry: VaultEntry) =>
+    `${drag?.target?.key === entry.id ? " is-drop-target" : ""}${
+      draggedIds.has(entry.id) || cutIds.has(entry.id) ? " is-moving" : ""
+    }`;
+
+  // Ctrl+X cuts the selection, Ctrl+V pastes it into the folder on screen,
+  // Escape forgets a cut. Not while typing, nor behind a dialog.
+  useEffect(() => {
+    if (!onMoveEntries) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (explorerKeysBlocked(e) || searchActive || renamingId !== null) return;
+      const ctrl = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+      if (ctrl && key === "x" && selectedIds.size > 0) {
+        e.preventDefault();
+        cutEntries(sortedEntries.filter((entry) => selectedIds.has(entry.id)));
+      } else if (ctrl && key === "v" && cut) {
+        e.preventDefault();
+        pasteHere();
+      } else if (key === "escape" && cut) {
+        setCut(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
   // What the details offer, the same as the toolbar they stand in for.
   const entryActions = (entry: VaultEntry): PanelAction[] => {
     const actions: PanelAction[] = [
@@ -555,6 +750,16 @@ export function FilesExplorer(props: Props) {
         onClick: () => onToggleFavorite(entry),
         disabled: busy,
       },
+      ...(onMoveEntries
+        ? [
+            {
+              label: "Move to…",
+              icon: <FolderInput size={15} />,
+              onClick: () => setMoveDialog([entry]),
+              disabled: busy,
+            },
+          ]
+        : []),
       {
         label: "Move to trash",
         icon: <IconTrash size={15} />,
@@ -579,6 +784,14 @@ export function FilesExplorer(props: Props) {
         onClick: () => onSaveCopies(files),
         disabled: busy,
         primary: true,
+      });
+    }
+    if (onMoveEntries) {
+      actions.push({
+        label: `Move ${chosen.length} items to…`,
+        icon: <FolderInput size={15} />,
+        onClick: () => setMoveDialog(chosen),
+        disabled: busy,
       });
     }
     actions.push({
@@ -611,6 +824,16 @@ export function FilesExplorer(props: Props) {
     },
     ...(onAddFolder
       ? [{ label: "Add a folder", icon: <IconFolder size={15} />, onClick: onAddFolder, disabled: busy }]
+      : []),
+    ...(cut && onMoveEntries
+      ? [
+          {
+            label: cut.entries.length === 1 ? "Paste 1 item here" : `Paste ${cut.entries.length} items here`,
+            icon: <ClipboardPaste size={15} />,
+            onClick: pasteHere,
+            disabled: busy || !canPasteHere,
+          },
+        ]
       : []),
   ];
 
@@ -748,9 +971,16 @@ export function FilesExplorer(props: Props) {
                   ) : (
                     <button
                       type="button"
-                      className="explorer-crumb-btn"
+                      className={`explorer-crumb-btn${drag?.target?.key === `crumb:${seg.path}` ? " is-drop-target" : ""}`}
                       disabled={busy}
                       onClick={() => onJumpPath(seg.path)}
+                      {...(onMoveEntries
+                        ? {
+                            "data-drop-path": seg.path,
+                            "data-drop-key": `crumb:${seg.path}`,
+                            "data-drop-label": seg.label,
+                          }
+                        : {})}
                     >
                       {seg.label}
                     </button>
@@ -965,6 +1195,12 @@ export function FilesExplorer(props: Props) {
         className={`file-list${selectedIds.size > 0 ? " has-selection" : ""}`}
         onContextMenu={searchActive ? undefined : openBackgroundMenu}
         onMouseDown={searchActive ? undefined : handleBackgroundMouseDown}
+        onClickCapture={(e) => {
+          if (!suppressClick.current) return;
+          suppressClick.current = false;
+          e.stopPropagation();
+          e.preventDefault();
+        }}
       >
         {searchActive ? (
           // Searching replaces the folder view entirely rather than filtering
@@ -1064,7 +1300,9 @@ export function FilesExplorer(props: Props) {
                 <div
                   key={entry.id}
                   ref={(el) => registerItemRef(entry.id, el)}
-                  className={`grid-card${selected ? " is-selected" : ""}`}
+                  className={`grid-card${selected ? " is-selected" : ""}${moveClass(entry)}`}
+                  {...dropProps(entry)}
+                  onMouseDown={(e) => startItemDrag(e, entry)}
                   onClick={(e) => {
                     e.stopPropagation();
                     onSelectClick(entry, e, sortedEntries);
@@ -1165,7 +1403,9 @@ export function FilesExplorer(props: Props) {
                   <tr
                     key={entry.id}
                     ref={(el) => registerItemRef(entry.id, el)}
-                    className={`${entry.kind === "folder" ? "row-folder" : "row-file"}${selected ? " is-selected" : ""}`}
+                    className={`${entry.kind === "folder" ? "row-folder" : "row-file"}${selected ? " is-selected" : ""}${moveClass(entry)}`}
+                    {...dropProps(entry)}
+                    onMouseDown={(e) => startItemDrag(e, entry)}
                     onClick={(e) => {
                       e.stopPropagation();
                       onSelectClick(entry, e, sortedEntries);
@@ -1289,6 +1529,33 @@ export function FilesExplorer(props: Props) {
         />
       )}
       </div>
+
+      {drag && (
+        <div className="move-ghost" style={{ left: drag.x + 14, top: drag.y + 14 }} aria-hidden>
+          <FolderInput size={14} />
+          <span>
+            {drag.target
+              ? `Move ${drag.moving.length === 1 ? `"${drag.moving[0]!.name}"` : `${drag.moving.length} items`} to ${drag.target.label}`
+              : drag.moving.length === 1
+                ? drag.moving[0]!.name
+                : `${drag.moving.length} items`}
+          </span>
+        </div>
+      )}
+
+      {moveDialog && onMoveEntries && (
+        <MoveToDialog
+          moving={moveDialog}
+          currentPath={currentPath}
+          rootLabel={crumbs[0]?.label || "Silo root"}
+          onCancel={() => setMoveDialog(null)}
+          onPick={(destination) => {
+            const moving = moveDialog;
+            setMoveDialog(null);
+            onMoveEntries(moving, destination);
+          }}
+        />
+      )}
 
       {marquee && (
         <div

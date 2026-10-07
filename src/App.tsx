@@ -37,6 +37,7 @@ import type {
   SyncProgress,
 } from "./lib/types";
 import { AUTO_LOCK_OPTIONS_MINUTES } from "./lib/types";
+import { moveItems, moveSummary, type MoveDestination, type MoveReport } from "./lib/moves";
 import { withBaseFields, withHistory } from "./lib/entryHistory";
 import { loadHistoryPolicy } from "./lib/historySetting";
 import { silosToLock } from "./lib/autoLock";
@@ -2417,6 +2418,56 @@ export default function App() {
     }
   };
 
+  /// Moves entries into another folder of this silo. A name the destination
+  /// has already is asked about once for all of them: kept beside (core
+  /// shows it as "name (2)") unless the box says to leave those where they
+  /// are. Nothing is ever replaced.
+  const moveEntries = async (moving: VaultEntry[], destination: MoveDestination) => {
+    if (moving.length === 0) return;
+    begin("entry");
+    try {
+      const folderId =
+        destination.id ??
+        (await invoke<FolderEntry>("vault_folder_by_path", { path: destination.path })).id;
+      const items = moveItems(moving);
+      const clashes = await invoke<string[]>("vault_move_clashes", { items, folderId });
+      let skipClashes = false;
+      if (clashes.length > 0) {
+        const { ok, option } = await askConfirmWith(
+          clashes.length === 1
+            ? `${destination.label} has "${clashes[0]}" already`
+            : `${destination.label} has ${clashes.length} of these names already`,
+          clashes.length === 1
+            ? "Both are kept: the one you move is shown with a number after its name. Nothing is replaced."
+            : `Both of each are kept: the ones you move are shown with a number after their names. Nothing is replaced. (${clashes.slice(0, 3).join(", ")}${clashes.length > 3 ? ", …" : ""})`,
+          {
+            confirmLabel: "Move",
+            option: {
+              label: clashes.length === 1 ? "Leave that one where it is" : "Leave those where they are",
+              hint: moving.length > clashes.length ? "The others still move." : undefined,
+            },
+          },
+        );
+        if (!ok) return;
+        skipClashes = option;
+      }
+      const report = await invoke<MoveReport>("vault_move_entries", {
+        items,
+        folderId,
+        skipClashes,
+      });
+      const summary = moveSummary(report, destination.label);
+      if (summary.error) toasts.errorText(summary.text);
+      else toasts.info(summary.text);
+      setSelectedIds(new Set());
+      await refreshCurrentFolder();
+    } catch (e) {
+      toasts.error(e);
+    } finally {
+      end("entry");
+    }
+  };
+
   // Writing a decrypted copy out to the computer. Never called a download:
   // the file has been on this machine all along, and the only thing that
   // changes here is that a plaintext copy leaves the silo.
@@ -3957,6 +4008,7 @@ export default function App() {
             onRenameEntry={startRenameEntry}
             onTrashEntry={(entry) => void handleTrashEntry(entry)}
             onToggleFavorite={(entry) => void toggleFavorite(entry)}
+            onMoveEntries={(moving, destination) => void moveEntries(moving, destination)}
             onStartRename={startRename}
             onCommitRename={() => void commitRename()}
             onCancelRename={cancelRename}

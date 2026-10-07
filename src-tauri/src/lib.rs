@@ -311,6 +311,8 @@ pub fn run() {
             commands::vault::vault_create_folder,
             commands::vault::vault_rename_file,
             commands::vault::vault_rename_folder,
+            commands::moves::vault_move_clashes,
+            commands::moves::vault_move_entries,
             commands::vault::vault_trash_file,
             commands::vault::vault_trash_folder,
             commands::vault::vault_list_trash,

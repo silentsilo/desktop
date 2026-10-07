@@ -9,6 +9,12 @@ silo from opening needs a major version rather than a note.
 
 ### Added
 
+- Moving files and folders to another folder: drag them onto a folder, or
+  onto a part of the path at the top; Cut and Paste (Ctrl+X, Ctrl+V, also in
+  the menu and the details); or "Move to…", which lists every folder. A name
+  the destination has already is kept beside it, shown with a number, or
+  left where it was if you tick that; nothing is ever replaced. A moved
+  file keeps its content and its backup copies.
 - Each release carries a software bill of materials (CycloneDX, every crate
   and npm package it is built from), signed like the other files. The files
   the release workflow builds (extractors, macOS and Linux apps, the SBOM)

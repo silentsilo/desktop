@@ -2,6 +2,7 @@ pub mod bitwarden_zip;
 pub mod cloud;
 pub mod fido;
 pub mod kdbx;
+pub mod moves;
 pub mod pwned;
 pub mod recovery;
 pub mod shell;

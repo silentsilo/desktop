@@ -549,8 +549,23 @@ const handlers: Record<string, Handler> = {
         ]
       : [],
   vault_list_all_folders: () => [
+    folder(ROOT_ID, "", "/", null),
     folder("11111111-1111-1111-1111-111111111111", "Invoices", "/Invoices", ROOT_ID),
+    folder("22222222-2222-2222-2222-222222222222", "Photos", "/Photos", ROOT_ID),
+    folder("88888888-8888-8888-8888-888888888888", "2025", "/Invoices/2025", "11111111-1111-1111-1111-111111111111"),
   ],
+  vault_folder_by_path: (args) =>
+    String(args.path) === "/" ? folder(ROOT_ID, "", "/", null) : folder("11111111-1111-1111-1111-111111111111", "Invoices", String(args.path), ROOT_ID),
+  // `&clash` says the destination has the first name already, for the
+  // keep-both-or-skip question.
+  vault_move_clashes: (args) =>
+    flag("clash") ? [String((args.items as { id: string }[])[0] ? "Passport scan.pdf" : "")] : [],
+  vault_move_entries: (args) => {
+    const items = args.items as { id: string }[];
+    return args.skipClashes
+      ? { moved: items.length - 1, skipped: ["Passport scan.pdf"], failed: [] }
+      : { moved: items.length, skipped: [], failed: [] };
+  },
   vault_list_trash: () => [
     { ...file("55555555-5555-5555-5555-555555555555", "Old contract.pdf", 120_000), original_path: "/Invoices" },
     { ...folder("66666666-6666-6666-6666-666666666666", "Scratch", "/Scratch"), original_path: "/" },
