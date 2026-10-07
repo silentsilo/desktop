@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AlertTriangle, CloudUpload, Copy, LifeBuoy } from "lucide-react";
 import { AuthShell } from "../layout/AuthShell";
 import { EmergencyKitPanel } from "./EmergencyKitPanel";
+import { t, useLocale } from "../i18n";
 
 type Props = {
   siloId: string;
@@ -20,44 +21,42 @@ type Props = {
  * screen says what waiting means.
  */
 export function FirstRunView({ siloId, siloName, busy, onCreateCode, onCopyCode, onFinish }: Props) {
+  useLocale();
   const [step, setStep] = useState<"code" | "backup">("code");
   const [code, setCode] = useState<string | null>(null);
   const [skippedCode, setSkippedCode] = useState(false);
 
   if (step === "code") {
     return (
-      <AuthShell subtitle={`Step 1 of 2: a way back into ${siloName}`}>
+      <AuthShell subtitle={t("first.subtitle_code", { name: siloName })}>
         <section className="card auth-card">
           <h2>
-            <LifeBuoy size={18} /> Recovery code
+            <LifeBuoy size={18} /> {t("first.code_title")}
           </h2>
-          <p className="hint">Step 1 of 2</p>
+          <p className="hint">{t("first.step1")}</p>
           {code ? (
             <>
               <p className="hint is-error">
                 <AlertTriangle size={14} />
-                Shown once. Write it down or print the kit before you go on.
+                {t("first.shown_once")}
               </p>
               <code className="recovery-code">{code}</code>
               <div className="actions">
                 <button type="button" className="secondary" onClick={() => onCopyCode(code)}>
                   <Copy size={15} />
-                  Copy
+                  {t("first.copy")}
                 </button>
               </div>
               <EmergencyKitPanel busy={busy} siloId={siloId} siloName={siloName} freshCode={code} />
               <div className="auth-primary">
                 <button type="button" onClick={() => setStep("backup")}>
-                  I&apos;ve written it down
+                  {t("first.written")}
                 </button>
               </div>
             </>
           ) : (
             <>
-              <p>
-                One long code that opens this silo when every key is lost, on any computer. Keep
-                it on paper, somewhere safe.
-              </p>
+              <p>{t("first.code_intro")}</p>
               <div className="auth-primary">
                 <button
                   type="button"
@@ -69,7 +68,7 @@ export function FirstRunView({ siloId, siloName, busy, onCreateCode, onCopyCode,
                   }
                 >
                   {busy ? <span className="spinner" aria-hidden /> : <LifeBuoy size={17} />}
-                  Create a recovery code
+                  {t("first.create_code")}
                 </button>
               </div>
               <div className="auth-alt">
@@ -82,13 +81,10 @@ export function FirstRunView({ siloId, siloName, busy, onCreateCode, onCopyCode,
                     setStep("backup");
                   }}
                 >
-                  Not now
+                  {t("first.not_now")}
                 </button>
               </div>
-              <p className="hint">
-                Without one, losing every key means losing the silo. You can make it later under
-                Settings, Recovery code.
-              </p>
+              <p className="hint">{t("first.without_code")}</p>
             </>
           )}
         </section>
@@ -97,35 +93,28 @@ export function FirstRunView({ siloId, siloName, busy, onCreateCode, onCopyCode,
   }
 
   return (
-    <AuthShell subtitle={`Step 2 of 2: a copy of ${siloName} somewhere else`}>
+    <AuthShell subtitle={t("first.subtitle_backup", { name: siloName })}>
       <section className="card auth-card">
         <h2>
-          <CloudUpload size={18} /> Backup storage
+          <CloudUpload size={18} /> {t("first.backup_title")}
         </h2>
-        <p className="hint">Step 2 of 2</p>
-        <p>
-          This silo is only on this computer. Backup storage keeps an encrypted copy in your
-          OneDrive, Dropbox or Google Drive, or on a drive, NAS, cloud bucket or server you
-          control, and lets another computer set it up too.
-        </p>
+        <p className="hint">{t("first.step2")}</p>
+        <p>{t("first.backup_intro")}</p>
         {skippedCode && (
-          <p className="hint">You skipped the recovery code. Settings, Overview reminds you until you make one.</p>
+          <p className="hint">{t("first.skipped_code")}</p>
         )}
         <div className="auth-primary">
           <button type="button" onClick={() => onFinish("backup")}>
             <CloudUpload size={17} />
-            Set up backup storage
+            {t("first.setup_backup")}
           </button>
         </div>
         <div className="auth-alt">
           <button type="button" className="link" onClick={() => onFinish(null)}>
-            Set up later
+            {t("first.later")}
           </button>
         </div>
-        <p className="hint">
-          Until then, if this computer fails, the silo is lost with it. You can set it up any time
-          under Settings, Backup.
-        </p>
+        <p className="hint">{t("first.until_then")}</p>
       </section>
     </AuthShell>
   );

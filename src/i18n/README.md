@@ -32,6 +32,16 @@ ideas, the note on each text says which.
 | entry | one item under Passwords | intrare | Eintrag | entrée | entrada | voce | item | wpis |
 | trash | deleted files, still restorable | coș | Papierkorb | corbeille | papelera | cestino | lixeira | kosz |
 
+Settings sections, written the same wherever a text points to them
+("Settings, Backup"):
+
+| English | ro | de | fr | es | it | pt-BR | pl |
+|---|---|---|---|---|---|---|---|
+| Settings | Setări | Einstellungen | Paramètres | Ajustes | Impostazioni | Configurações | Ustawienia |
+| Overview | Privire de ansamblu | Übersicht | Vue d’ensemble | Resumen | Panoramica | Visão geral | Przegląd |
+| Backup | Backup | Sicherung | Sauvegarde | Copia de seguridad | Backup | Backup | Kopia zapasowa |
+| Recovery code | Cod de recuperare | Wiederherstellungscode | Code de récupération | Código de recuperación | Codice di recupero | Código de recuperação | Kod odzyskiwania |
+
 The app's name, SilentSilo, is never translated.
 
 ## Before a language loses "beta"
