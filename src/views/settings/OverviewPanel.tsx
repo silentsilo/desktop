@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   CloudUpload,
   Copy,
+  FolderOpen,
   HardDrive,
   KeyRound,
   LifeBuoy,
@@ -17,6 +18,7 @@ import { isDue, lastDone } from "../../lib/siloMemory";
 import { platformStrings, type Os } from "../../lib/platformStrings";
 import type { SyncIndicator } from "../../layout/AppShell";
 import { t, useLocale } from "../../i18n";
+import { SettingList, SettingRow } from "../../components/Setting";
 
 /** Where a row's action leads. */
 export type OverviewTarget = "backup" | "verify" | "recovery" | "keys" | "devices" | "activity";
@@ -133,6 +135,7 @@ export function OverviewPanel({
   const current = targets ? currentCopies(targets, now) + (fullCopy ? 1 : 0) : 0;
 
   return (
+    <>
     <div className="panel-section">
       <h3>
         <HardDrive size={16} />
@@ -269,28 +272,56 @@ export function OverviewPanel({
               : t("set.ov_activity_off")}
         </Row>
       </ul>
-
-      <p className="hint">{silo.path}</p>
-      <div className="inline-form explorer-new-folder">
-        <input
-          type="text"
-          value={siloName}
-          disabled={busy}
-          onChange={(e) => setSiloName(e.target.value)}
-          aria-label={t("set.ov_silo_name")}
-        />
-        <button
-          type="button"
-          disabled={busy || siloName.trim() === silo.name || !siloName.trim()}
-          onClick={() => onRenameSilo(siloName.trim())}
-        >
-          {t("set.rename")}
-        </button>
-        <button type="button" className="secondary" disabled={busy} onClick={onSwitchSilo}>
-          {t("set.ov_switch")}
-        </button>
-      </div>
-      <p className="hint">{t("set.ov_rename_hint")}</p>
     </div>
+
+    <div className="panel-section">
+      <h3>
+        <FolderOpen size={16} />
+        {t("set.ov_card_silo")}
+      </h3>
+      <SettingList>
+        <SettingRow
+          label={t("set.ov_name_label")}
+          htmlFor="silo-name"
+          hint={t("set.ov_rename_hint")}
+        >
+          <form
+            className="setting-inline"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (siloName.trim() && siloName.trim() !== silo.name) onRenameSilo(siloName.trim());
+            }}
+          >
+            <input
+              id="silo-name"
+              type="text"
+              value={siloName}
+              disabled={busy}
+              onChange={(e) => setSiloName(e.target.value)}
+              aria-label={t("set.ov_silo_name")}
+            />
+            <button
+              type="submit"
+              className="secondary"
+              disabled={busy || siloName.trim() === silo.name || !siloName.trim()}
+            >
+              {t("set.rename")}
+            </button>
+          </form>
+        </SettingRow>
+        <SettingRow
+          label={t("set.ov_folder_label")}
+          hint={<code className="setting-path">{silo.path}</code>}
+        >
+          {null}
+        </SettingRow>
+        <SettingRow label={t("set.ov_other_label")} hint={t("set.ov_other_hint")}>
+          <button type="button" className="secondary" disabled={busy} onClick={onSwitchSilo}>
+            {t("set.ov_switch")}
+          </button>
+        </SettingRow>
+      </SettingList>
+    </div>
+    </>
   );
 }

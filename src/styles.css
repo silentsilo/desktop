@@ -2010,7 +2010,7 @@ textarea:focus {
  * stopped being one when it moved in here beside a rail. */
 .settings-pane .panel-section,
 .settings-pane .backup-panel {
-  max-width: 720px;
+  max-width: 780px;
 }
 
 /* Two cards in one pane used to touch exactly, sharing an edge, so the key
@@ -2020,7 +2020,7 @@ textarea:focus {
  * the 1rem step inside a card, because this gap separates whole objects
  * rather than lines within one. */
 .settings-pane .panel-section + .panel-section {
-  margin-top: 1.25rem;
+  margin-top: 1.5rem;
 }
 
 .settings-pane .backup-panel {
@@ -2536,14 +2536,18 @@ textarea:focus {
 
 .sidebar-storage-line {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   align-items: baseline;
-  gap: 0.3rem;
+  gap: 0 0.3rem;
   font-variant-numeric: tabular-nums;
 }
 
 .sidebar-storage-line>span:first-child {
   color: var(--text);
   font-weight: 600;
+  /* "2,3 MB" stays one word when the label beside it wraps. */
+  white-space: nowrap;
 }
 
 .sidebar-storage-limit {
@@ -7794,4 +7798,82 @@ button.storage-option:hover:where(:not(:disabled)) {
   background-position: right 0.65rem center;
   background-size: 16px;
   padding-right: 2.3rem;
+}
+
+/* ── Settings cards ──
+ * The card's icon in a soft tile, the way the page header carries its own,
+ * so a card reads as one object with a name rather than a line of text. */
+.settings-pane .panel-section > h3 {
+  gap: 0.7rem;
+  font-size: 1.08rem;
+  margin-bottom: 0.15rem;
+}
+
+.settings-pane .panel-section > h3 > svg {
+  box-sizing: content-box;
+  padding: 7px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+
+.settings-pane .panel-section > h3 + p,
+.settings-pane .panel-section > h3 + p.lead {
+  margin-top: 0.55rem;
+}
+
+/* Buttons inside a row or a list are the row's own action: smaller than a
+   card's main button, all the same height. */
+.setting-control button,
+.setting-inline button,
+.settings-pane .key-list button:not(.link) {
+  min-height: 32px;
+  padding: 0.3rem 0.85rem;
+  font-size: 0.85rem;
+}
+
+.setting-inline {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.setting-inline input {
+  width: 13.5rem;
+}
+
+.setting-path {
+  font-size: 0.8rem;
+  word-break: break-all;
+  background: none;
+  padding: 0;
+  color: var(--text-muted);
+}
+
+/* In Settings the kit is a card of its own: no rule above it, and its
+   heading looks like every other card's. */
+.settings-pane .panel-section > .kit-block {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.settings-pane .kit-block > h4 {
+  gap: 0.7rem;
+  font-family: var(--font-display);
+  font-size: 1.08rem;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.15rem;
+}
+
+.settings-pane .kit-block > h4 > svg {
+  box-sizing: content-box;
+  padding: 7px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+
+.settings-pane .kit-block > p:not(.hint) {
+  font-size: 0.9rem;
 }

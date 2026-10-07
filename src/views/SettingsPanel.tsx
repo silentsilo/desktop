@@ -332,7 +332,10 @@ export function SettingsPanel(props: Props) {
                 )}
               </>
             )}
-
+          </div>
+        )}
+        {section === "recovery" && (
+          <div className="panel-section">
             <EmergencyKitPanel
               busy={busy}
               siloId={silo.id}
