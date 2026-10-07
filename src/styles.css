@@ -2888,6 +2888,70 @@ ol.key-add-steps {
   line-height: 1.4;
 }
 
+/* An update waiting, on the screens before a silo opens: under the mark,
+   as wide as the card below it. */
+.update-card {
+  position: relative;
+  z-index: 1;
+  width: min(440px, calc(100vw - 2rem));
+  margin: 0 auto 1rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--accent-soft);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.update-card-icon {
+  flex: none;
+  color: var(--accent);
+  margin-top: 0.1rem;
+}
+
+.update-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.update-card-body p {
+  margin: 0;
+}
+
+.update-card-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.update-card-text {
+  margin-top: 0.15rem !important;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.update-card-body button.link {
+  margin-top: 0.3rem;
+  font-size: 0.82rem;
+}
+
+.update-card-actions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.update-card-actions button {
+  width: auto;
+  min-height: 0;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
 /* A file being made ready to open: its step, a bar, and Cancel. */
 .open-progress {
   width: min(340px, calc(100vw - 2rem));

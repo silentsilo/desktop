@@ -88,7 +88,8 @@ import { AppSettingsView } from "./views/settings/AppSettingsView";
 import { FirstRunView } from "./views/FirstRunView";
 import { lastDone } from "./lib/siloMemory";
 import { formatAppError } from "./lib/errors";
-import { AppSettingsContext } from "./lib/appSettings";
+import { AppSettingsContext, UpdateCardContext } from "./lib/appSettings";
+import { UpdateCard } from "./views/UpdateCard";
 
 const AUTO_LOCK_KEY = "silentsilo.autoLockMinutes";
 const DEFAULT_AUTO_LOCK_MINUTES = 30;
@@ -96,6 +97,8 @@ const DEFAULT_AUTO_LOCK_MINUTES = 30;
 const AUTO_UPDATE_KEY = "silentsilo.update.auto";
 const UPDATE_LAST_CHECK_KEY = "silentsilo.update.lastCheckAt";
 const UPDATE_NOTIFIED_KEY = "silentsilo.update.lastNotifiedVersion";
+/** The version the last check found, until a check finds none. */
+const UPDATE_PENDING_KEY = "silentsilo.update.pendingVersion";
 
 /// A silo's id is its vault id, so the key can be removed with the silo.
 function contentOfferKeyFor(siloId: string): string {
@@ -315,6 +318,9 @@ export default function App() {
   /// who turned them off asked not to be told, and a manual check shows its
   /// answer inside Settings.
   const pendingUpdate = autoUpdateEnabled ? (backgroundUpdate?.version ?? null) : null;
+  /// "Later" on the first screen's card: until the next start, not for the
+  /// whole version.
+  const [updateCardLater, setUpdateCardLater] = useState(false);
 
   /// The fallback a silo without its own timeout follows. Set under
   /// General, which belongs to the app rather than to one silo.
@@ -1119,6 +1125,7 @@ export default function App() {
    * keeps any restart from sending another.
    */
   const updateCheckInFlight = useRef(false);
+  const updateInHand = useRef(false);
   useEffect(() => {
     if (!autoUpdateEnabled) return;
     let cancelled = false;
@@ -1127,13 +1134,23 @@ export default function App() {
       if (updateCheckInFlight.current) return;
       const raw = localStorage.getItem(UPDATE_LAST_CHECK_KEY);
       const last = raw === null ? null : Number.parseInt(raw, 10);
-      if (!shouldCheckForUpdate(last, Date.now())) return;
+      const pendingNotInHand =
+        localStorage.getItem(UPDATE_PENDING_KEY) !== null && !updateInHand.current;
+      if (!shouldCheckForUpdate(last, Date.now(), pendingNotInHand)) return;
       updateCheckInFlight.current = true;
       try {
         const result = await checkForUpdate();
         localStorage.setItem(UPDATE_LAST_CHECK_KEY, String(Date.now()));
-        if (cancelled || !result.available) return;
+        if (!result.available) {
+          localStorage.removeItem(UPDATE_PENDING_KEY);
+          return;
+        }
+        localStorage.setItem(UPDATE_PENDING_KEY, result.version);
+        // Kept even when this run of the effect was cancelled meanwhile: the
+        // run that replaced it found the request in flight and sent none.
+        updateInHand.current = true;
         setBackgroundUpdate({ version: result.version, update: result.update });
+        if (cancelled) return;
         // Said once per version, not once per day: the same toast every
         // morning trains people to dismiss it unread.
         if (localStorage.getItem(UPDATE_NOTIFIED_KEY) !== result.version) {
@@ -3632,26 +3649,37 @@ export default function App() {
 
   /// The screens before a silo is unlocked offer the app's settings, and
   /// show them in place of themselves while they are open.
+  const updateCard =
+    pendingUpdate && backgroundUpdate && !updateCardLater ? (
+      <UpdateCard
+        version={backgroundUpdate.version}
+        update={backgroundUpdate.update}
+        onLater={() => setUpdateCardLater(true)}
+        onFailedAfterLock={updateFailedAfterLock}
+      />
+    ) : null;
   const beforeUnlock = (screen: ReactNode) => (
     <AppSettingsContext.Provider value={openAppSettings}>
-      {appSettingsOpen ? (
-        <>
-          {toastHost}
-          <AppSettingsView
-            os={osOf(bootstrap)}
-            initial={pendingUpdate ? "updates" : "general"}
-            backgroundUpdate={backgroundUpdate}
-            autoUpdateEnabled={autoUpdateEnabled}
-            onAutoUpdateEnabled={setAutoUpdateEnabled}
-            defaultAutoLockMinutes={autoLockMinutes}
-            onDefaultAutoLockMinutes={setAutoLockMinutes}
-            onClose={() => setAppSettingsOpen(false)}
-            onUpdateFailedAfterLock={updateFailedAfterLock}
-          />
-        </>
-      ) : (
-        screen
-      )}
+      <UpdateCardContext.Provider value={updateCard}>
+        {appSettingsOpen ? (
+          <>
+            {toastHost}
+            <AppSettingsView
+              os={osOf(bootstrap)}
+              initial={pendingUpdate ? "updates" : "general"}
+              backgroundUpdate={backgroundUpdate}
+              autoUpdateEnabled={autoUpdateEnabled}
+              onAutoUpdateEnabled={setAutoUpdateEnabled}
+              defaultAutoLockMinutes={autoLockMinutes}
+              onDefaultAutoLockMinutes={setAutoLockMinutes}
+              onClose={() => setAppSettingsOpen(false)}
+              onUpdateFailedAfterLock={updateFailedAfterLock}
+            />
+          </>
+        ) : (
+          screen
+        )}
+      </UpdateCardContext.Provider>
     </AppSettingsContext.Provider>
   );
 

@@ -1395,10 +1395,18 @@ const handlers: Record<string, Handler> = {
   vault_export_file: () => null,
   vault_export_folder: (args) => (args.skipExisting ? 3 : 7),
   "plugin:path|join": (args) => ((args.paths as string[]) ?? []).join("\\"),
-  // `?mock=unlocked&update` offers a newer version, for the update badge.
+  // `?mock=unlocked&update` offers the next minor version, for the update
+  // badge and the card on the screens before a silo opens.
   "plugin:updater|check": () =>
     flag("update")
-      ? { rid: 1, currentVersion: "1.0.0", version: "1.1.0", date: null, body: "", rawJson: {} }
+      ? {
+          rid: 1,
+          currentVersion: __APP_VERSION__,
+          version: nextMinor(__APP_VERSION__),
+          date: null,
+          body: "",
+          rawJson: {},
+        }
       : null,
 
   // Event subscriptions: the app registers several at mount, and a
@@ -1427,6 +1435,12 @@ const handlers: Record<string, Handler> = {
 };
 
 let nextListenerId = 1;
+
+/** "1.4.0" to "1.5.0", for the offered update. */
+function nextMinor(version: string): string {
+  const [major, minor] = version.split(".").map(Number);
+  return `${major}.${(minor ?? 0) + 1}.0`;
+}
 
 export function installMockBackend() {
   const w = window as unknown as { __TAURI_INTERNALS__?: unknown };

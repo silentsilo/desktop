@@ -7,6 +7,14 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+### Changed
+
+- An available update is shown on the screens before a silo opens, with
+  Install and restart and Later, until it is installed. Later hides it until
+  the next start. It used to be one notice per version, which most people
+  closed unread. The Settings badge no longer disappears after a restart on
+  the same day.
+
 ## [1.4.0] - Linux, Activity, the SSH agent and KeePass
 
 The first release for Linux. Custom fields and earlier versions of an entry

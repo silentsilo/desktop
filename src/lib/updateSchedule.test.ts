@@ -25,4 +25,9 @@ describe("shouldCheckForUpdate", () => {
   it("treats a future timestamp as stale, so a clock rollback cannot silence checks", () => {
     expect(shouldCheckForUpdate(NOW + 60_000, NOW)).toBe(true);
   });
+
+  it("checks at once when an earlier run found an update this run does not hold", () => {
+    expect(shouldCheckForUpdate(NOW - 1, NOW, true)).toBe(true);
+    expect(shouldCheckForUpdate(NOW - 1, NOW, false)).toBe(false);
+  });
 });

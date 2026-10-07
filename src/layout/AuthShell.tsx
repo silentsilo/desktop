@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Settings2 } from "lucide-react";
 import { BrandLogo } from "../components/BrandLogo";
 import { ThemeToggle } from "../components/ThemeToggle";
-import { useOpenAppSettings } from "../lib/appSettings";
+import { useOpenAppSettings, useUpdateCard } from "../lib/appSettings";
 
 type AuthShellProps = {
   /**
@@ -19,6 +19,7 @@ type AuthShellProps = {
 
 export function AuthShell({ title, subtitle, children }: AuthShellProps) {
   const openSettings = useOpenAppSettings();
+  const updateCard = useUpdateCard();
   return (
     <main className="app auth-screen">
       <div className="auth-atmosphere" aria-hidden />
@@ -48,6 +49,7 @@ export function AuthShell({ title, subtitle, children }: AuthShellProps) {
         {title && <h1 className="brand-title">{title}</h1>}
         <p className="brand-sub">{subtitle}</p>
       </div>
+      {updateCard}
       {children}
       {/* Only on the screens before a silo opens: these are the product's
           front door, where a publisher line belongs. Inside the app it

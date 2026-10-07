@@ -16,7 +16,18 @@ export const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 /** How often the gate is re-evaluated while the app is running. */
 export const UPDATE_POLL_INTERVAL_MS = 60 * 60 * 1000;
 
-export function shouldCheckForUpdate(lastCheckAt: number | null, now: number): boolean {
+/**
+ * `pendingNotInHand`: an earlier check found an update, and this run has
+ * not fetched it yet. The day's window does not hold it back, or a restart
+ * within the day would forget the update until tomorrow, and with it the
+ * Settings badge and the card on the first screen.
+ */
+export function shouldCheckForUpdate(
+  lastCheckAt: number | null,
+  now: number,
+  pendingNotInHand = false,
+): boolean {
+  if (pendingNotInHand) return true;
   if (lastCheckAt === null || !Number.isFinite(lastCheckAt)) return true;
   // A timestamp in the future means the clock moved backwards since the
   // last check. Treating it as valid would silence checks for however far
