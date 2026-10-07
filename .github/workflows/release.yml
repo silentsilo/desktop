@@ -604,7 +604,7 @@ jobs:
 
       # What goes on the draft, and nothing else. Extractors always; macOS
       # only when its job proved the build signed and notarised; Linux only
-      # once SHIP_LINUX is "true", since the platforms debut together.
+      # while the repository variable SHIP_LINUX is "true" (from 1.4.0).
       - name: Choose what ships
         shell: bash
         env:

@@ -7,6 +7,12 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+## [1.4.0] - Linux, Activity, the SSH agent and KeePass
+
+The first release for Linux. Custom fields and earlier versions of an entry
+need desktop 1.4 or Android 1.3 to be seen; an older version keeps them when
+it saves the entry, but shows neither. Update every device that uses a silo.
+
 ### Added
 
 - Linux, as a .deb and an AppImage, the first release there. A silo opens
