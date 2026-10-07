@@ -1,8 +1,10 @@
+import { common } from "./common";
 import { emergencyKit } from "./emergency-kit";
 import { firstRun } from "./first-run";
 import { recoveryCodeDialog } from "./recovery-code-dialog";
 import { settingsGeneral } from "./settings-general";
 import { sidebar } from "./sidebar";
+import { trash } from "./trash";
 import { unlock } from "./unlock";
 import { welcome } from "./welcome";
 import { updateCard } from "./update-card";
@@ -17,4 +19,6 @@ export const SCREENS = [
   firstRun,
   welcome,
   emergencyKit,
+  common,
+  trash,
 ] as const;

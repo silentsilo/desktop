@@ -4,6 +4,7 @@ import { ViewHeader } from "../components/ViewHeader";
 import type { TrashItem } from "../lib/types";
 import { formatBytes, formatDate } from "../lib/format";
 import { IconSearch } from "../ui/Icons";
+import { t, useLocale } from "../i18n";
 
 type Props = {
   entries: TrashItem[];
@@ -39,6 +40,7 @@ export function TrashPanel({
   onDeleteForever,
   onEmptyTrash,
 }: Props) {
+  useLocale();
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -89,17 +91,15 @@ export function TrashPanel({
       return next;
     });
 
-  const countLabel = (n: number) => `${n} item${n === 1 ? "" : "s"}`;
-
   return (
     <div className="trash-view">
       <ViewHeader
         icon={Trash2}
-        title="Trash"
+        title={t("nav.trash")}
         subtitle={
           entries.length === 0
-            ? "Deleted files and folders wait here until you delete them for good"
-            : `${countLabel(entries.length)}, restorable until deleted for good`
+            ? t("trash.subtitle_empty")
+            : t("trash.subtitle_count", { count: entries.length })
         }
       />
       <div className="view-toolbar">
@@ -109,8 +109,8 @@ export function TrashPanel({
           </span>
           <input
             type="text"
-            placeholder="Search trash…"
-            aria-label="Search trash"
+            placeholder={t("trash.search")}
+            aria-label={t("trash.search_label")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -120,10 +120,10 @@ export function TrashPanel({
           className="danger"
           disabled={busy || entries.length === 0}
           onClick={onEmptyTrash}
-          title="Delete everything in the trash for good"
+          title={t("trash.empty_tooltip")}
         >
           <Trash2 size={15} />
-          Empty trash
+          {t("trash.empty")}
         </button>
       </div>
 
@@ -131,7 +131,9 @@ export function TrashPanel({
           disabled bulk actions above an untouched list is noise. */}
       {selected.length > 0 && (
         <div className="trash-selection-bar" role="status">
-          <span className="trash-selection-count">{countLabel(selected.length)} selected</span>
+          <span className="trash-selection-count">
+            {t("trash.selected", { count: selected.length })}
+          </span>
           <div className="trash-selection-actions">
             <button
               type="button"
@@ -140,7 +142,7 @@ export function TrashPanel({
               onClick={() => onRestoreMany(selected)}
             >
               <RotateCcw size={14} />
-              Restore
+              {t("trash.restore")}
             </button>
             <button
               type="button"
@@ -149,10 +151,10 @@ export function TrashPanel({
               onClick={() => onDeleteForever(selected)}
             >
               <Trash2 size={14} />
-              Delete for good
+              {t("trash.delete_for_good")}
             </button>
             <button type="button" className="link" onClick={() => setSelectedIds(new Set())}>
-              Clear
+              {t("trash.clear")}
             </button>
           </div>
         </div>
@@ -169,7 +171,7 @@ export function TrashPanel({
             }}
             onChange={toggleAllVisible}
           />
-          <span>{search.trim() ? "Select all matching" : "Select all"}</span>
+          <span>{search.trim() ? t("trash.select_all_matching") : t("trash.select_all")}</span>
         </label>
       )}
 
@@ -178,7 +180,7 @@ export function TrashPanel({
           <div className="trash-empty-state">
             {entries.length === 0 ? <Trash2 size={28} /> : <IconSearch size={28} />}
             <p className="hint">
-              {entries.length === 0 ? "Trash is empty." : "Nothing here matches that."}
+              {entries.length === 0 ? t("trash.is_empty") : t("trash.no_match")}
             </p>
           </div>
         ) : (
@@ -192,7 +194,7 @@ export function TrashPanel({
                   type="checkbox"
                   className="trash-row-check"
                   checked={selectedIds.has(entry.id)}
-                  aria-label={`Select ${entry.name}`}
+                  aria-label={t("trash.select_one", { name: entry.name })}
                   onChange={() => toggle(entry.id)}
                 />
                 <span className="trash-row-icon">
@@ -202,7 +204,7 @@ export function TrashPanel({
                   <span className="trash-row-name">{entry.name}</span>
                   <span className="trash-row-path">
                     <MapPin size={11} />
-                    {entry.original_path === "/" ? "Silo root" : entry.original_path}
+                    {entry.original_path === "/" ? t("trash.silo_root") : entry.original_path}
                   </span>
                 </div>
                 <span className="trash-row-size">
@@ -217,14 +219,14 @@ export function TrashPanel({
                     onClick={() => onRestore(entry)}
                   >
                     <RotateCcw size={14} />
-                    Restore
+                    {t("trash.restore")}
                   </button>
                   <button
                     type="button"
                     className="danger"
                     disabled={busy}
-                    title="Delete for good"
-                    aria-label={`Delete ${entry.name} for good`}
+                    title={t("trash.delete_for_good")}
+                    aria-label={t("trash.delete_one_label", { name: entry.name })}
                     onClick={() => onDeleteForever([entry])}
                   >
                     <Trash2 size={14} />

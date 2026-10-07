@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useModal } from "../hooks/useModal";
+import { t, useLocale } from "../i18n";
 
 type Props = {
   /** Names the decision, e.g. "Move to trash?" — not the product. */
@@ -24,16 +25,20 @@ type Props = {
 };
 
 export function ConfirmDialog({
-  title = "Are you sure?",
+  title,
   message,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  confirmLabel,
+  cancelLabel,
   danger = false,
   busy = false,
   option,
   onConfirm,
   onCancel,
 }: Props) {
+  useLocale();
+  title ??= t("common.are_you_sure");
+  confirmLabel ??= t("common.confirm");
+  cancelLabel ??= t("common.cancel");
   const cardRef = useModal(busy ? undefined : onCancel);
   const [optionChecked, setOptionChecked] = useState(false);
 

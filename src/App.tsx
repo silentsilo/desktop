@@ -84,6 +84,7 @@ import { BrowserSaveDialog } from "./views/BrowserSaveDialog";
 import { SshSignDialog } from "./views/SshSignDialog";
 import { ShellDownloadDialog } from "./views/ShellDownloadDialog";
 import { TrashPanel } from "./views/TrashPanel";
+import { t } from "./i18n";
 import { UnlockView } from "./views/UnlockView";
 import { AppSettingsView } from "./views/settings/AppSettingsView";
 import { FirstRunView } from "./views/FirstRunView";
@@ -144,10 +145,7 @@ type ConfirmResult = { ok: boolean; option: boolean };
 /// And a purge keeps an edit its author could not have seen: a change made
 /// on another device before the purge reached it comes back as a file of
 /// its own, a copy of the one that was deleted.
-const RETENTION_NOTE =
-  " Backup storage keeps the content for 30 days before it is cleared," +
-  " including earlier versions of replaced files. An edit made on another" +
-  " device at the same time comes back as a copy.";
+const retentionNote = () => " " + t("trash.retention_note");
 
 /// Added when the silo has a copy the app never deletes from, where
 /// "permanently" is false in the one place it has to be true: the entry
@@ -158,16 +156,12 @@ const RETENTION_NOTE =
 /// that the bytes stay is the app contradicting itself in one box, so the
 /// button says "for good" whether or not a never-delete copy exists.
 function deleteForGoodLabel(): string {
-  return "Delete for good";
+  return t("trash.delete_for_good");
 }
 
 function archiveNote(archiveTargets: number): string {
   if (archiveTargets === 0) return "";
-  return archiveTargets === 1
-    ? " One of your copies is a never-delete copy, so the content stays there" +
-        " until that storage's own rules remove it."
-    : ` ${archiveTargets} of your copies are never-delete copies, so the content` +
-        " stays there until that storage's own rules remove it.";
+  return " " + t("trash.archive_note", { count: archiveTargets });
 }
 
 /// Added to anything that retires a way in (a recovery code, a key): a
@@ -2327,15 +2321,14 @@ export default function App() {
   const handleDeleteForever = async (items: TrashItem[]) => {
     if (items.length === 0) return;
     const what =
-      items.length === 1 ? `“${items[0]!.name}”` : `${items.length} items`;
+      items.length === 1
+        ? t("trash.confirm_one", { name: items[0]!.name })
+        : t("trash.confirm_count", { count: items.length });
     const folders = items.filter((e) => e.kind === "folder").length;
-    const foldersNote =
-      folders > 0
-        ? ` Everything inside ${folders === 1 ? "the folder" : "the folders"} goes too.`
-        : "";
+    const foldersNote = folders > 0 ? " " + t("trash.folders_note", { count: folders }) : "";
     const confirmed = await askConfirm(
-      "Delete for good?",
-      `This deletes ${what} for good. It cannot be undone.${foldersNote}${sync.configured ? RETENTION_NOTE : ""}${archiveNote(archiveTargets)}`,
+      t("trash.confirm_title"),
+      `${what}${foldersNote}${sync.configured ? retentionNote() : ""}${archiveNote(archiveTargets)}`,
       { confirmLabel: deleteForGoodLabel(), danger: true },
     );
     if (!confirmed) return;
@@ -2345,11 +2338,7 @@ export default function App() {
       await invoke<number>("vault_purge_items", { ids: items.map((e) => e.id) });
       await refreshTrash();
       await refreshBlobStatus();
-      toasts.success(
-        items.length === 1
-          ? "Deleted 1 item for good."
-          : `Deleted ${items.length} items for good.`,
-      );
+      toasts.success(t("trash.deleted", { count: items.length }));
     } catch (e) {
       toasts.error(e);
     } finally {
@@ -2360,8 +2349,8 @@ export default function App() {
   const handleEmptyTrash = async () => {
     if (trashEntries.length === 0) return;
     const confirmed = await askConfirm(
-      "Empty trash?",
-      `This deletes ${trashEntries.length} ${trashEntries.length === 1 ? "item" : "items"} for good. It cannot be undone.${sync.configured ? RETENTION_NOTE : ""}${archiveNote(archiveTargets)}`,
+      t("trash.empty_confirm_title"),
+      `${t("trash.confirm_count", { count: trashEntries.length })}${sync.configured ? retentionNote() : ""}${archiveNote(archiveTargets)}`,
       { confirmLabel: deleteForGoodLabel(), danger: true },
     );
     if (!confirmed) return;
@@ -2372,9 +2361,7 @@ export default function App() {
       // The badges in the sidebar count what is on this disk, and emptying
       // the trash is the largest single change to that figure there is.
       await refreshBlobStatus();
-      toasts.success(
-        removed === 1 ? "Deleted 1 item for good." : `Deleted ${removed} items for good.`,
-      );
+      toasts.success(t("trash.deleted", { count: removed }));
     } catch (e) {
       toasts.error(e);
     } finally {
