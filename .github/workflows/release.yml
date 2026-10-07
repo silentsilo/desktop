@@ -314,6 +314,33 @@ jobs:
             exit 1
           fi
 
+      # The browser extension's host, as on Windows and Linux: shipped once a
+      # store lists the extension, checked with `--check-release`, built for
+      # both architectures and joined into one binary for the universal app.
+      # The bundler puts it in Contents/MacOS beside the app and signs it with
+      # the app; the app copies it out at runtime (browser_pipe.rs says why).
+      - name: The browser host, when a store lists the extension
+        id: host
+        shell: bash
+        run: |
+          set -euo pipefail
+          listed=$(jq '[.chrome_web_store, .edge_add_ons, .firefox_add_ons] | map(. // []) | add | length' \
+                   crates/silentsilo-browser-host/allowed-origins.json)
+          if [ "$listed" -eq 0 ]; then
+            echo "no store lists the extension: built without the host"
+            echo "config=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          for arch in aarch64-apple-darwin x86_64-apple-darwin; do
+            cargo build -p silentsilo-browser-host --release --locked --target "$arch"
+          done
+          mkdir -p src-tauri/binaries
+          lipo -create -output src-tauri/binaries/silentsilo-browser-host-universal-apple-darwin \
+            target/aarch64-apple-darwin/release/silentsilo-browser-host \
+            target/x86_64-apple-darwin/release/silentsilo-browser-host
+          src-tauri/binaries/silentsilo-browser-host-universal-apple-darwin --check-release
+          echo "config=--config src-tauri/tauri.browser-host.json" >> "$GITHUB_OUTPUT"
+
       # Two build steps rather than one with empty variables: the bundler
       # treats a set-but-empty APPLE_CERTIFICATE as a certificate to import,
       # and fails on it.
@@ -331,7 +358,7 @@ jobs:
         if: steps.apple.outputs.signed == 'false'
         env:
           SILENTSILO_GOOGLE_CLIENT_SECRET: ${{ secrets.SILENTSILO_GOOGLE_CLIENT_SECRET }}
-        run: npx tauri build --ci --target universal-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":false}}' -- --locked
+        run: npx tauri build --ci --target universal-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":false}}' ${{ steps.host.outputs.config }} -- --locked
 
       - name: Build, sign and notarise
         if: steps.apple.outputs.signed == 'true'
@@ -343,7 +370,7 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           SILENTSILO_GOOGLE_CLIENT_SECRET: ${{ secrets.SILENTSILO_GOOGLE_CLIENT_SECRET }}
-        run: npx tauri build --ci --target universal-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":false}}' -- --locked
+        run: npx tauri build --ci --target universal-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":false}}' ${{ steps.host.outputs.config }} -- --locked
 
       # The archive the macOS updater downloads, which the bundler would
       # otherwise have made: a gzipped tar of the .app, taken from the

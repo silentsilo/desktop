@@ -691,6 +691,33 @@ The checks are weaker than on Windows in one way: a program running as this
 user can replace the AppImage's copy of the host, as it can replace the
 AppImage itself. That is the same user the next section already rules out.
 
+### On macOS
+
+The Linux code, with three places that differ (not yet run on a Mac; the
+first session is in `planuri/lansare-1.5.md`):
+
+- **The socket** is `~/Library/Application Support/SilentSilo/browser.sock`
+  (`unix_place::socket_dir`), the folder made `0700`. macOS has no runtime
+  directory; this one is the user's own and keeps the same path from one
+  start to the next, which the SSH agent's socket beside it needs. A path
+  past 104 bytes (a very long user name) is refused rather than bound.
+- **The host is always copied out** of the `.app`, to
+  `~/Library/Application Support/SilentSilo/browser-host/`, at every start
+  of the channel. An app can be dragged elsewhere, or run from a temporary
+  read-only copy of itself (App Translocation) when opened where it was
+  downloaded; a manifest naming the bundle would then name a path that is
+  gone. The release job builds the host for both architectures, joins them
+  with `lipo` and runs `--check-release`; the bundler signs it with the app.
+  The app checks a client by its path (`proc_pidpath`) against that copy, so
+  the check is as strong as the user's own folder, as with the AppImage. The
+  code signature is not read yet.
+- **The manifests** go under `~/Library/Application Support`:
+  `Google/Chrome`, `Chromium`, `Microsoft Edge` and
+  `BraveSoftware/Brave-Browser`, each in `NativeMessagingHosts`, for the ones
+  whose folder exists, and `Mozilla/NativeMessagingHosts` when `Firefox` or
+  `Mozilla` is there (`macos_manifest_places`). Safari is not served: it
+  needs a Safari Web Extension built inside the app.
+
 ### What these checks do not stop
 
 They make a forged request cost more than opening a pipe. They do not keep
@@ -737,9 +764,12 @@ KeePassXC, RFC 9987 and OpenSSH's `PROTOCOL.agent`.
   which needs an administrator; the app never does it itself. Git for
   Windows' bundled ssh does not use the pipe; Settings gives the
   `core.sshCommand` line that points Git at Windows' `ssh.exe`, as
-  1Password does. On Linux, `$XDG_RUNTIME_DIR/silentsilo/ssh-agent.sock`
-  in the 0700 directory the browser socket uses, and Settings shows the
-  `SSH_AUTH_SOCK` export and the `IdentityAgent` line for `~/.ssh/config`.
+  1Password does. On Linux, `$XDG_RUNTIME_DIR/silentsilo/ssh-agent.sock`,
+  on macOS `~/Library/Application Support/SilentSilo/ssh-agent.sock`, in
+  the 0700 directory the browser socket uses, and Settings shows the
+  `SSH_AUTH_SOCK` export and the `IdentityAgent` line for `~/.ssh/config`,
+  quoted when the path has a space. The client is named from
+  `/proc/<pid>/exe` on Linux and `proc_pidpath` on macOS.
   The app writes neither file. No Pageant and no Cygwin sockets: neither
   competitor serves them, and KeeAgent's own documentation says its Cygwin
   socket has no authentication.
@@ -811,8 +841,7 @@ KeePassXC, RFC 9987 and OpenSSH's `PROTOCOL.agent`.
   the dialog (`SshSignDialog`), the allowances and the rations (30 requests
   per connection and 60 for all of them, one back every half second; after
   a declined signature no dialog for 5 seconds). The window raising and handing back is
-  `front.rs`, shared with the browser's questions. macOS follows with its
-  release, on `SSH_AUTH_SOCK` like Linux.
+  `front.rs`, shared with the browser's questions.
 
 ## Looks wrong, is deliberate
 

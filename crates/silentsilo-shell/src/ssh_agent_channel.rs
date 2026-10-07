@@ -4,6 +4,7 @@
 //! On Windows the pipe Windows' own `ssh.exe` opens,
 //! `\\.\pipe\openssh-ssh-agent`, created as its first instance and open to
 //! this user only. On Linux `$XDG_RUNTIME_DIR/silentsilo/ssh-agent.sock`,
+//! on macOS `~/Library/Application Support/SilentSilo/ssh-agent.sock`,
 //! beside the browser's socket in the same private directory. Messages are
 //! the agent protocol's (RFC 9987): a 32-bit big-endian length, then the
 //! message. One request at a time per connection, as clients send them.
@@ -320,15 +321,10 @@ mod unix {
         unsafe { libc::getuid() }
     }
 
-    /// `$XDG_RUNTIME_DIR/silentsilo/ssh-agent.sock`. No fallback to a
-    /// directory other users share.
+    /// `ssh-agent.sock` beside the browser's, in this user's private
+    /// directory ([`crate::unix_place::socket_dir`]).
     pub fn socket_path() -> io::Result<PathBuf> {
-        let runtime = std::env::var_os("XDG_RUNTIME_DIR")
-            .filter(|dir| !dir.is_empty())
-            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no XDG_RUNTIME_DIR"))?;
-        Ok(PathBuf::from(runtime)
-            .join("silentsilo")
-            .join("ssh-agent.sock"))
+        crate::unix_place::socket_in("ssh-agent.sock")
     }
 
     pub struct AgentServer {
@@ -453,20 +449,36 @@ mod unix {
             return Err("the client runs as another user".into());
         }
         let pid = cred.pid().unwrap_or(0).max(0) as u32;
+        Ok(peer_with_pid(pid))
+    }
+
+    #[cfg(target_os = "macos")]
+    fn peer_with_pid(pid: u32) -> Peer {
+        use crate::unix_place::{image_path, parent_pid};
+        Peer {
+            pid,
+            exe: image_path(pid).ok(),
+            parent: parent_pid(pid).and_then(|ppid| image_path(ppid).ok()),
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn peer_with_pid(pid: u32) -> Peer {
         let exe = |pid: u32| std::fs::read_link(format!("/proc/{pid}/exe")).ok();
         let parent = std::fs::read_to_string(format!("/proc/{pid}/stat"))
             .ok()
             .and_then(|stat| parent_from_stat(&stat))
             .and_then(exe);
-        Ok(Peer {
+        Peer {
             pid,
             exe: exe(pid),
             parent,
-        })
+        }
     }
 
     /// The fourth field of `/proc/<pid>/stat`, after the name in parentheses
     /// (which may itself hold spaces and parentheses).
+    #[cfg(target_os = "linux")]
     fn parent_from_stat(stat: &str) -> Option<u32> {
         let rest = &stat[stat.rfind(')')? + 1..];
         rest.split_whitespace().nth(1)?.parse().ok()
@@ -474,6 +486,7 @@ mod unix {
 
     #[cfg(test)]
     mod tests {
+        #[cfg(target_os = "linux")]
         #[test]
         fn the_parent_is_read_past_a_name_with_spaces() {
             assert_eq!(

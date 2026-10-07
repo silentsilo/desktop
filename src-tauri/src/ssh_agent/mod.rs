@@ -8,7 +8,7 @@
 //! design and its reasons are in docs/ARCHITECTURE.md, "SSH agent".
 
 mod keys;
-#[cfg(all(test, any(windows, target_os = "linux")))]
+#[cfg(all(test, any(windows, target_os = "linux", target_os = "macos")))]
 mod openssh_tests;
 mod proto;
 #[cfg(test)]
@@ -206,7 +206,7 @@ impl Ration {
 
 #[derive(Serialize)]
 pub struct AgentStatus {
-    /// Windows and Linux for now.
+    /// Windows, Linux and macOS.
     supported: bool,
     enabled: bool,
     running: bool,
@@ -216,13 +216,13 @@ pub struct AgentStatus {
     address: Option<String>,
 }
 
-const SUPPORTED: bool = cfg!(any(windows, target_os = "linux"));
-const NOT_SUPPORTED: &str = "The SSH agent is available on Windows and Linux for now.";
+const SUPPORTED: bool = cfg!(any(windows, target_os = "linux", target_os = "macos"));
+const NOT_SUPPORTED: &str = "The SSH agent is not available on this system.";
 
 fn address() -> Option<String> {
     #[cfg(windows)]
     return Some(ssh_agent_channel::PIPE_NAME.to_string());
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     return ssh_agent_channel::socket_path()
         .ok()
         .map(|p| p.display().to_string());
@@ -262,7 +262,7 @@ pub fn start_if_enabled(app: &AppHandle) {
     });
 }
 
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 async fn start(app: &AppHandle) -> Result<(), String> {
     use ssh_agent_channel::AgentServer;
 
@@ -300,7 +300,7 @@ async fn start(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 async fn start(_app: &AppHandle) -> Result<(), String> {
     Err(NOT_SUPPORTED.into())
 }

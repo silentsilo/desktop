@@ -296,7 +296,7 @@ pub fn registers_for(
     }
 }
 
-/// Where browsers on Linux read one user's native messaging manifests, with
+/// Where browsers read one user's native messaging manifests, with
 /// the list ([`registers`]) that decides each: Chromium and Brave install
 /// from the Chrome Web Store, so they follow Chrome's. Only browsers with a
 /// configuration directory under `home` are named, so nothing is made for a
@@ -305,9 +305,48 @@ pub fn registers_for(
 /// portal, and from 147 on even when its profiles are in `~/.config/mozilla`
 /// (reading the XDG place too is Mozilla bug 2005167, still open), so the
 /// manifest goes there for any sign of Firefox, and into
-/// `~/.config/mozilla/native-messaging-hosts` as well when that exists.
+/// `~/.config/mozilla/native-messaging-hosts` as well when that exists. On
+/// macOS, [`macos_manifest_places`].
 #[cfg(unix)]
 pub fn user_manifest_places(home: &Path) -> Vec<(&'static str, PathBuf)> {
+    if cfg!(target_os = "macos") {
+        macos_manifest_places(home)
+    } else {
+        linux_manifest_places(home)
+    }
+}
+
+/// Where browsers on macOS read one user's manifests: each under its own
+/// folder in `~/Library/Application Support`, named only when that folder
+/// exists. Firefox reads `Mozilla/NativeMessagingHosts`; its profiles in
+/// `Firefox` are what say it is installed.
+pub fn macos_manifest_places(home: &Path) -> Vec<(&'static str, PathBuf)> {
+    let support = home.join("Library").join("Application Support");
+    let chromium = [
+        ("chrome", support.join("Google").join("Chrome")),
+        ("chrome", support.join("Chromium")),
+        ("edge", support.join("Microsoft Edge")),
+        (
+            "chrome",
+            support.join("BraveSoftware").join("Brave-Browser"),
+        ),
+    ];
+    let mut places: Vec<(&'static str, PathBuf)> = chromium
+        .into_iter()
+        .filter(|(_, dir)| dir.is_dir())
+        .map(|(key, dir)| (key, dir.join("NativeMessagingHosts")))
+        .collect();
+    if support.join("Firefox").is_dir() || support.join("Mozilla").is_dir() {
+        places.push((
+            "firefox",
+            support.join("Mozilla").join("NativeMessagingHosts"),
+        ));
+    }
+    places
+}
+
+/// [`user_manifest_places`] on Linux.
+pub fn linux_manifest_places(home: &Path) -> Vec<(&'static str, PathBuf)> {
     let config = home.join(".config");
     let chromium = [
         ("chrome", config.join("google-chrome")),
@@ -1118,5 +1157,75 @@ mod tests {
             assert_eq!(v["code"], "bad-request");
             assert_eq!(v["id"], "");
         }
+    }
+
+    /// A fresh home with these folders in it.
+    fn home_with(name: &str, dirs: &[&str]) -> PathBuf {
+        let home = std::env::temp_dir().join(format!("ss-host-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        for dir in dirs {
+            std::fs::create_dir_all(home.join(dir)).unwrap();
+        }
+        home
+    }
+
+    #[test]
+    fn macos_names_only_the_browsers_that_are_there() {
+        let support = "Library/Application Support";
+        let home = home_with(
+            "mac",
+            &[
+                &format!("{support}/Google/Chrome"),
+                &format!("{support}/BraveSoftware/Brave-Browser"),
+                &format!("{support}/Firefox"),
+            ],
+        );
+        let places = macos_manifest_places(&home);
+        let s = home.join("Library").join("Application Support");
+        assert_eq!(
+            places,
+            vec![
+                (
+                    "chrome",
+                    s.join("Google").join("Chrome").join("NativeMessagingHosts")
+                ),
+                (
+                    "chrome",
+                    s.join("BraveSoftware")
+                        .join("Brave-Browser")
+                        .join("NativeMessagingHosts")
+                ),
+                ("firefox", s.join("Mozilla").join("NativeMessagingHosts")),
+            ]
+        );
+        let _ = std::fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn macos_with_no_browser_gets_nothing() {
+        let home = home_with("mac-empty", &["Library/Application Support"]);
+        assert!(macos_manifest_places(&home).is_empty());
+        let _ = std::fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn linux_firefox_as_a_snap_still_reads_the_home_folder() {
+        let home = home_with("linux", &[".config/microsoft-edge", "snap/firefox"]);
+        assert_eq!(
+            linux_manifest_places(&home),
+            vec![
+                (
+                    "edge",
+                    home.join(".config")
+                        .join("microsoft-edge")
+                        .join("NativeMessagingHosts")
+                ),
+                (
+                    "firefox",
+                    home.join(".mozilla").join("native-messaging-hosts")
+                ),
+            ]
+        );
+        let _ = std::fs::remove_dir_all(home);
     }
 }

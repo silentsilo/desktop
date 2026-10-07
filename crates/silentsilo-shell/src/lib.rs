@@ -15,6 +15,8 @@ mod secret_clipboard;
 mod session_watch;
 pub mod ssh_agent_channel;
 mod tray;
+#[cfg(unix)]
+mod unix_place;
 #[cfg(windows)]
 mod win_pipe;
 #[cfg(windows)]

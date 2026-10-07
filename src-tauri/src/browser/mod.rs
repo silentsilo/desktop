@@ -198,7 +198,7 @@ const NOT_BUNDLED: &str = "The browser extension is not part of this build.";
 
 /// Whether the host sits beside this executable. Without it nothing could
 /// reach the channel, so it is never opened.
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 fn host_bundled() -> bool {
     std::env::current_exe()
         .map(|exe| {
@@ -208,20 +208,20 @@ fn host_bundled() -> bool {
         .unwrap_or(false)
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 fn host_bundled() -> bool {
     false
 }
 
-/// Where the extension's channel exists. macOS comes with its release.
-const SUPPORTED: bool = cfg!(any(windows, target_os = "linux"));
-const NOT_SUPPORTED: &str = "The browser extension is available on Windows and Linux for now.";
+/// Where the extension's channel exists.
+const SUPPORTED: bool = cfg!(any(windows, target_os = "linux", target_os = "macos"));
+const NOT_SUPPORTED: &str = "The browser extension is not available on this system.";
 
-/// On Linux the browsers find the host through manifests in this user's
-/// home, written by the host itself so its lists stay in one place. From an
-/// AppImage the host is copied out first: the image's files go when it
-/// exits.
-#[cfg(target_os = "linux")]
+/// On Linux and macOS the browsers find the host through manifests in this
+/// user's home, written by the host itself so its lists stay in one place.
+/// From an AppImage, and always on macOS, the host is copied out first
+/// (`install_host_copy` says why), at every start, so an update brings it.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn install_manifests() -> Result<(), String> {
     use silentsilo_shell::browser_pipe::{install_host_copy, installed_host_path};
     install_host_copy().map_err(|e| format!("the browser host could not be set up: {e}"))?;
@@ -238,7 +238,7 @@ fn install_manifests() -> Result<(), String> {
 
 /// Takes the manifests away again, so turning the extension off undoes
 /// everything turning it on did.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn remove_manifests() {
     if let Ok(host) = silentsilo_shell::browser_pipe::installed_host_path() {
         let _ = std::process::Command::new(host)
@@ -260,14 +260,14 @@ pub fn start_if_enabled(app: &AppHandle) {
     });
 }
 
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 async fn start(app: &AppHandle) -> Result<(), String> {
     use silentsilo_shell::browser_pipe::{ClientCheck, PipeServer};
 
     if !host_bundled() {
         return Err(NOT_BUNDLED.into());
     }
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     install_manifests()?;
     let bridge = app.state::<BrowserBridge>();
     if bridge.running() {
@@ -308,7 +308,7 @@ async fn start(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 async fn start(_app: &AppHandle) -> Result<(), String> {
     Err(NOT_SUPPORTED.into())
 }
@@ -365,7 +365,7 @@ pub async fn browser_extension_set(
         start(&app).await?;
     } else {
         stop(&app);
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         remove_manifests();
     }
     Ok(status_of(&app))

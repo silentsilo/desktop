@@ -31,8 +31,8 @@ pub fn clipboard_file_paths() -> Vec<String> {
 
 #[derive(Serialize)]
 pub struct AutostartStatus {
-    /// False where the app cannot register itself with the OS at all, which
-    /// is everywhere except Windows for now. The Settings toggle greys out
+    /// False where the app cannot register itself with the OS at all
+    /// (Windows, macOS and Linux all can). The Settings toggle greys out
     /// rather than disappearing, so the setting stays where people look.
     supported: bool,
     enabled: bool,

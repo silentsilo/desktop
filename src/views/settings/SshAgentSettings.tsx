@@ -36,6 +36,11 @@ export function SshAgentSettings({ os, busy }: { os: Os; busy: boolean }) {
   };
 
   const windows = os === "windows";
+  // macOS puts the socket under "Application Support": a path with a space
+  // is quoted wherever it is pasted.
+  const address =
+    status?.address && /\s/.test(status.address) ? `"${status.address}"` : status?.address;
+  const profile = os === "macos" ? "~/.zshrc" : "your shell's profile";
   return (
     <div className="panel-section">
       <h3>
@@ -83,10 +88,10 @@ export function SshAgentSettings({ os, busy }: { os: Os; busy: boolean }) {
                 </>
               ) : (
                 <>
-                  <p className="hint">Point ssh at the agent in your shell's profile:</p>
-                  <pre className="code-line">export SSH_AUTH_SOCK={status.address}</pre>
+                  <p className="hint">Point ssh at the agent in {profile}:</p>
+                  <pre className="code-line">export SSH_AUTH_SOCK={address}</pre>
                   <p className="hint">or for ssh alone, in ~/.ssh/config:</p>
-                  <pre className="code-line">{`Host *\n  IdentityAgent ${status.address}`}</pre>
+                  <pre className="code-line">{`Host *\n  IdentityAgent ${address}`}</pre>
                 </>
               )}
               <p className="hint">

@@ -520,7 +520,7 @@ export type BrowserSavePrompt = {
 
 /** Settings > SSH agent. */
 export type SshAgentStatus = {
-  /** Windows and Linux for now. */
+  /** Windows, Linux and macOS. */
   supported: boolean;
   enabled: boolean;
   running: boolean;
@@ -549,7 +549,7 @@ export type SshSignPrompt = {
 
 /** Settings > Browser extension. */
 export type BrowserExtensionStatus = {
-  /** Windows and Linux for now. */
+  /** Windows, Linux and macOS. */
   supported: boolean;
   /** Whether the native host shipped with this build. */
   bundled: boolean;

@@ -4,7 +4,8 @@
 //! messaging frames to a channel this module serves, reachable by the
 //! current user only: on Windows the named pipe
 //! `\\.\pipe\silentsilo-browser-<user SID>`, on Linux the Unix socket
-//! `$XDG_RUNTIME_DIR/silentsilo/browser.sock`. Both sides frame the same way the browser does (a 32-bit
+//! `$XDG_RUNTIME_DIR/silentsilo/browser.sock`, on macOS
+//! `~/Library/Application Support/SilentSilo/browser.sock`. Both sides frame the same way the browser does (a 32-bit
 //! little-endian length, then UTF-8 JSON), so the host copies frames without
 //! reading them. The protocol itself is the app's business; this module only
 //! moves frames. The contract is `docs/PROTOCOL.md` in silentsilo/browser.
@@ -412,21 +413,10 @@ mod unix {
         unsafe { libc::getuid() }
     }
 
-    /// `$XDG_RUNTIME_DIR/silentsilo/browser.sock`. The runtime directory is
-    /// this user's alone; without one there is nowhere private, and no
-    /// fallback to a directory every user shares.
+    /// `browser.sock` in this user's private directory
+    /// ([`crate::unix_place::socket_dir`]).
     pub fn socket_path() -> io::Result<PathBuf> {
-        let runtime = std::env::var_os("XDG_RUNTIME_DIR")
-            .filter(|dir| !dir.is_empty())
-            .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "XDG_RUNTIME_DIR is not set, so there is no private place for the connection",
-                )
-            })?;
-        Ok(PathBuf::from(runtime)
-            .join("silentsilo")
-            .join("browser.sock"))
+        crate::unix_place::socket_in("browser.sock")
     }
 
     /// The socket's path, as the host names it.
@@ -434,30 +424,37 @@ mod unix {
         socket_path().map(|path| path.to_string_lossy().into_owned())
     }
 
-    /// Where the browsers find the host. An AppImage's own files exist only
-    /// while it runs, so from one the host is copied out
-    /// ([`install_host_copy`]) and named there.
+    /// Where the browsers find the host. Where the app's own files can move
+    /// or vanish, the host is copied out ([`install_host_copy`]) and named
+    /// there: an AppImage's files exist only while it runs, and a macOS app
+    /// can be dragged elsewhere, or run from a temporary read-only copy of
+    /// itself (App Translocation) when started where it was downloaded.
     pub fn installed_host_path() -> io::Result<PathBuf> {
-        if std::env::var_os("APPIMAGE").is_some() {
-            return appimage_copy();
+        if host_copied() {
+            return host_copy();
         }
         Ok(std::env::current_exe()?.with_file_name(HOST_EXE))
     }
 
-    fn appimage_copy() -> io::Result<PathBuf> {
+    fn host_copied() -> bool {
+        cfg!(target_os = "macos") || std::env::var_os("APPIMAGE").is_some()
+    }
+
+    fn host_copy() -> io::Result<PathBuf> {
         let data = dirs::data_local_dir()
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no local data directory"))?;
         Ok(data.join("SilentSilo").join("browser-host").join(HOST_EXE))
     }
 
-    /// Copies the host out of the AppImage this runs from, whole or not at
-    /// all. Outside an AppImage there is nothing to copy.
+    /// Copies the host out of the app, whole or not at all, where
+    /// [`installed_host_path`] names a copy. Run at every start of the
+    /// channel, so an update brings its host along.
     pub fn install_host_copy() -> io::Result<()> {
-        if std::env::var_os("APPIMAGE").is_none() {
+        if !host_copied() {
             return Ok(());
         }
         let source = std::env::current_exe()?.with_file_name(HOST_EXE);
-        let dest = appimage_copy()?;
+        let dest = host_copy()?;
         let dir = dest.parent().expect("the copy has a directory");
         std::fs::create_dir_all(dir)?;
         let partial = dest.with_extension("partial");
@@ -480,22 +477,16 @@ mod unix {
         Ok(PathBuf::from(format!("/proc/{pid}/exe")))
     }
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
     fn image_of(pid: u32) -> io::Result<PathBuf> {
-        let mut buf = vec![0u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];
-        // SAFETY: the buffer is as large as the call is told.
-        let len =
-            unsafe { libc::proc_pidpath(pid as i32, buf.as_mut_ptr().cast(), buf.len() as u32) };
-        if len <= 0 {
-            return Err(io::Error::last_os_error());
-        }
-        buf.truncate(len as usize);
-        Ok(PathBuf::from(String::from_utf8_lossy(&buf).into_owned()))
+        crate::unix_place::image_path(pid)
     }
 
     /// Which process may talk to the app: this user's, running the host the
     /// manifests name. Linux has no signature to check; the host's place
-    /// stands in for it (root's `/usr/bin` from the package).
+    /// stands in for it (root's `/usr/bin` from the package). On macOS the
+    /// place is the copy in this user's Application Support, so the check
+    /// is only as strong as that folder; the code signature is not read yet.
     #[derive(Clone, Debug)]
     pub struct ClientCheck {
         pub image: PathBuf,
