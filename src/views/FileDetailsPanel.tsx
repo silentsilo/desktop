@@ -13,11 +13,13 @@ import {
 import { fileIconFor, fileKindOf } from "../lib/fileKinds";
 import { formatBytes, formatDate } from "../lib/format";
 import type { FileSyncState, VaultEntry } from "../lib/types";
-import { IconClose, IconExternalLink, IconFolder } from "../ui/Icons";
+import { IconClose, IconFolder } from "../ui/Icons";
 
 type Props = {
   entry: VaultEntry;
-  /** The folder it sits in; none for the silo's root. */
+  /** The folder it sits in; none for the silo's root, whose row each
+   * device makes when it builds its index, so its dates say nothing about
+   * the silo and only what is inside it is dated. */
   location: string | null;
   /** What to call it instead of its own name: the silo's, for its root. */
   title?: string;
@@ -29,12 +31,21 @@ type Props = {
   syncState: FileSyncState | null;
   /** Backup storage is set up: the copies are worth naming. */
   syncConfigured: boolean;
-  busy: boolean;
-  /** Absent for the folder on screen, which is already open. */
-  onOpen?: () => void;
+  /** What can be done with it: the first marked primary stands out, the
+   * rest sit under it. The menu holds everything else. */
+  actions: PanelAction[];
   /** The same menu a right-click gives, at the button. */
   onMenu: (e: MouseEvent) => void;
   onClose: () => void;
+};
+
+export type PanelAction = {
+  label: string;
+  icon: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+  primary?: boolean;
 };
 
 const COPY_STATE: Record<"holds" | "owed" | "unknown", string> = {
@@ -58,8 +69,7 @@ export function FileDetailsPanel({
   lastChange,
   syncState,
   syncConfigured,
-  busy,
-  onOpen,
+  actions,
   onMenu,
   onClose,
 }: Props) {
@@ -133,9 +143,11 @@ export function FileDetailsPanel({
             {location === "/" ? "Silo root" : location}
           </Row>
         )}
-        <Row icon={<Calendar size={15} />} label="Created">
-          {formatDate(entry.created_at)}
-        </Row>
+        {location !== null && (
+          <Row icon={<Calendar size={15} />} label="Created">
+            {formatDate(entry.created_at)}
+          </Row>
+        )}
         {isFile ? (
           <Row icon={<Clock size={15} />} label="Modified">
             {formatDate(entry.updated_at)}
@@ -183,25 +195,7 @@ export function FileDetailsPanel({
         </section>
       )}
 
-      <div className="details-actions">
-        {onOpen ? (
-          <button type="button" className="details-open" disabled={busy} onClick={onOpen}>
-            {isFile ? <IconExternalLink size={15} /> : <IconFolder size={15} />}
-            Open
-          </button>
-        ) : (
-          <span className="details-open-spacer" />
-        )}
-        <button
-          type="button"
-          className="secondary details-more"
-          onClick={onMenu}
-          title="More actions"
-          aria-label="More actions"
-        >
-          <MoreHorizontal size={17} />
-        </button>
-      </div>
+      <PanelActions actions={actions} onMenu={onMenu} />
     </aside>
   );
 }
@@ -223,10 +217,12 @@ function Row({ icon, label, children }: { icon: ReactNode; label: string; childr
 /** Several items selected: how many, of what, how large, and their menu. */
 export function SelectionDetails({
   entries,
+  actions,
   onMenu,
   onClose,
 }: {
   entries: VaultEntry[];
+  actions: PanelAction[];
   onMenu: (e: MouseEvent) => void;
   onClose: () => void;
 }) {
@@ -258,18 +254,63 @@ export function SelectionDetails({
           {files.length > 0 && ` · ${formatBytes(bytes)}`}
         </p>
       </div>
-      <div className="details-actions">
-        <span className="details-open-spacer" />
+      <PanelActions actions={actions} onMenu={onMenu} />
+    </aside>
+  );
+}
+
+/** The panel's footer, kept at the bottom while the rest scrolls. */
+function PanelActions({
+  actions,
+  onMenu,
+}: {
+  actions: PanelAction[];
+  onMenu: (e: MouseEvent) => void;
+}) {
+  const primary = actions.find((a) => a.primary);
+  const others = actions.filter((a) => a !== primary);
+  return (
+    <div className="details-actions">
+      <div className="details-actions-main">
+        {primary ? (
+          <button
+            type="button"
+            className="details-open"
+            disabled={primary.disabled}
+            onClick={primary.onClick}
+          >
+            {primary.icon}
+            {primary.label}
+          </button>
+        ) : (
+          <span className="details-open-spacer" />
+        )}
         <button
           type="button"
           className="secondary details-more"
           onClick={onMenu}
-          title="Actions for these items"
-          aria-label="Actions for these items"
+          title="More actions"
+          aria-label="More actions"
         >
           <MoreHorizontal size={17} />
         </button>
       </div>
-    </aside>
+      {others.length > 0 && (
+        <div className="details-actions-more">
+          {others.map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              className={`secondary details-action${action.danger ? " danger" : ""}`}
+              disabled={action.disabled}
+              onClick={action.onClick}
+            >
+              {action.icon}
+              <span>{action.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

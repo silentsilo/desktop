@@ -15,7 +15,7 @@ import { computeMarqueeBox, rectIntersectsBox } from "../lib/marquee";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { SyncBadge } from "./SyncBadge";
 import { ArrowUpDown, Check, ChevronDown, Star } from "lucide-react";
-import { FileDetailsPanel, SelectionDetails } from "./FileDetailsPanel";
+import { FileDetailsPanel, SelectionDetails, type PanelAction } from "./FileDetailsPanel";
 import { useModal } from "../hooks/useModal";
 import {
   IconBack,
@@ -515,6 +515,94 @@ export function FilesExplorer(props: Props) {
       : [];
   const folderOnScreen =
     detailsShown && !searchActive && selectedIds.size === 0 ? props.currentFolder : null;
+
+  // What the details offer, the same as the toolbar they stand in for.
+  const entryActions = (entry: VaultEntry): PanelAction[] => {
+    const actions: PanelAction[] = [
+      {
+        label: "Open",
+        icon: entry.kind === "file" ? <IconExternalLink size={15} /> : <IconFolder size={15} />,
+        onClick: () => (entry.kind === "folder" ? onOpenFolder(entry) : onOpenFile(entry)),
+        disabled: busy,
+        primary: true,
+      },
+    ];
+    if (entry.kind === "file") {
+      actions.push({
+        label: "Save a copy",
+        icon: <IconDownload size={15} />,
+        onClick: () => onSaveCopy(entry),
+        disabled: busy,
+      });
+    } else if (onSaveFolder) {
+      actions.push({
+        label: "Save a copy",
+        icon: <IconFolderDown size={15} />,
+        onClick: () => onSaveFolder(entry),
+        disabled: busy,
+      });
+    }
+    actions.push(
+      {
+        label: "Rename",
+        icon: <IconEdit size={15} />,
+        onClick: onStartRename,
+        disabled: busy || renamingId !== null,
+      },
+      {
+        label: "Trash",
+        icon: <IconTrash size={15} />,
+        onClick: () => onTrashEntry(entry),
+        disabled: busy,
+        danger: true,
+      },
+    );
+    return actions;
+  };
+
+  const selectionActions = (chosen: VaultEntry[]): PanelAction[] => {
+    const files = chosen.filter(
+      (e): e is Extract<VaultEntry, { kind: "file" }> => e.kind === "file",
+    );
+    const actions: PanelAction[] = [];
+    // Only when every one is a file: a folder needs its own recursive copy.
+    if (files.length === chosen.length) {
+      actions.push({
+        label: `Save ${files.length} copies`,
+        icon: <IconDownload size={15} />,
+        onClick: () => onSaveCopies(files),
+        disabled: busy,
+        primary: true,
+      });
+    }
+    actions.push({
+      label: "Trash",
+      icon: <IconTrash size={15} />,
+      onClick: onTrash,
+      disabled: busy,
+      danger: true,
+    });
+    if (onClearSelection) {
+      actions.push({ label: "Clear", icon: <IconClose size={15} />, onClick: onClearSelection });
+    }
+    return actions;
+  };
+
+  const folderActions: PanelAction[] = [
+    { label: "Add files", icon: <IconFilePlus size={15} />, onClick: onAddFiles, disabled: busy, primary: true },
+    {
+      label: "New folder",
+      icon: <IconFolderPlus size={15} />,
+      onClick: () => {
+        onNewFolderName("");
+        setIsModalOpen(true);
+      },
+      disabled: busy,
+    },
+    ...(onAddFolder
+      ? [{ label: "Add a folder", icon: <IconFolder size={15} />, onClick: onAddFolder, disabled: busy }]
+      : []),
+  ];
 
   // Arrow keys move the selection, the way every file manager's do. In the
   // list, up and down step one row; in the grid, left and right step one
@@ -1160,11 +1248,7 @@ export function FilesExplorer(props: Props) {
           location={props.currentFolder?.path ?? "/"}
           syncState={syncStateOf(detailsEntry)}
           syncConfigured={syncConfigured}
-          busy={busy}
-          onOpen={() => {
-            if (detailsEntry.kind === "folder") onOpenFolder(detailsEntry);
-            else onOpenFile(detailsEntry);
-          }}
+          actions={entryActions(detailsEntry)}
           onMenu={(e) => openEntryMenu(e, detailsEntry)}
           onClose={() => setDetailsShown(false)}
         />
@@ -1172,6 +1256,7 @@ export function FilesExplorer(props: Props) {
       {selectedEntries.length > 1 && (
         <SelectionDetails
           entries={selectedEntries}
+          actions={selectionActions(selectedEntries)}
           onMenu={(e) => openEntryMenu(e, selectedEntries[0]!)}
           onClose={() => setDetailsShown(false)}
         />
@@ -1191,7 +1276,7 @@ export function FilesExplorer(props: Props) {
           }
           syncState={null}
           syncConfigured={syncConfigured}
-          busy={busy}
+          actions={folderActions}
           onMenu={openBackgroundMenu}
           onClose={() => setDetailsShown(false)}
         />
@@ -1210,8 +1295,10 @@ export function FilesExplorer(props: Props) {
         />
       )}
 
-      {/* Contextual Floating Selection Toolbar */}
-      {selectedIds.size > 0 && (
+      {/* Contextual Floating Selection Toolbar. Not while the details are
+          beside the list: they carry the same actions, and one place for
+          them is enough. */}
+      {selectedIds.size > 0 && !(detailsShown && !searchActive) && (
         <div className="selection-toolbar">
           <span className="selection-toolbar-count">
             {selectedIds.size} {selectedIds.size === 1 ? "item" : "items"} selected

@@ -1480,6 +1480,7 @@ textarea:focus {
   margin: auto -1.1rem -1.1rem;
   padding: 0.75rem 1.1rem 1.1rem;
   display: flex;
+  flex-direction: column;
   gap: 0.5rem;
   background: var(--surface);
   border-top: 1px solid var(--border-subtle);
@@ -1496,6 +1497,41 @@ textarea:focus {
 
 .details-open-spacer {
   flex: 1;
+}
+
+.details-actions-main {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.details-actions-more {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.details-action {
+  width: auto;
+  min-height: 0;
+  height: auto;
+  padding: 0.5rem 0.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.74rem;
+  line-height: 1.2;
+}
+
+.details-action > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.details-action.danger {
+  color: var(--danger);
 }
 
 .details-more {

@@ -35,7 +35,8 @@ silo from opening needs a major version rather than a note.
   size, place, dates and backup state, and which copies hold the file, with
   Open and the rest of its menu. With nothing selected it shows the folder
   on screen, the silo itself at the top; with several, how many and how
-  large. It replaces the Info dialog; the button by
+  large. Its actions (Open, Save a copy, Rename, Trash, or Add files and New
+  folder) take the place of the bar under the list while it is shown. It replaces the Info dialog; the button by
   the view switch hides it, and Info in the menu brings it back. A file only
   in backup storage says so, without guessing which copies hold it.
 - Health findings that are not critical can be ignored. They move to an
