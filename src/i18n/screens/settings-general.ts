@@ -1,0 +1,48 @@
+import type { Screen } from "../types";
+
+export const settingsGeneral = {
+  "settings.language": {
+    note: "Label of the language picker in Settings > General.",
+    en: "Language",
+    ro: "Limbă",
+    de: "Sprache",
+    fr: "Langue",
+    es: "Idioma",
+    it: "Lingua",
+    "pt-BR": "Idioma",
+    pl: "Język",
+  },
+  "settings.language_system": {
+    note: "First choice in the language picker: follow the operating system. {name} is the language that gives.",
+    en: "Same as the system ({name})",
+    ro: "Ca sistemul ({name})",
+    de: "Wie das System ({name})",
+    fr: "Comme le système ({name})",
+    es: "Igual que el sistema ({name})",
+    it: "Come il sistema ({name})",
+    "pt-BR": "Igual ao sistema ({name})",
+    pl: "Jak w systemie ({name})",
+  },
+  "settings.language_beta": {
+    note: "A language in the picker whose translation a native speaker has not read yet.",
+    en: "{name} (beta)",
+    ro: "{name} (beta)",
+    de: "{name} (Beta)",
+    fr: "{name} (bêta)",
+    es: "{name} (beta)",
+    it: "{name} (beta)",
+    "pt-BR": "{name} (beta)",
+    pl: "{name} (beta)",
+  },
+  "settings.language_hint": {
+    note: "Hint under the language picker.",
+    en: "Languages marked beta have not been read by a native speaker yet. Recovery codes and keys work the same in every language.",
+    ro: "Limbile marcate beta n-au fost încă citite de un vorbitor nativ. Codurile de recuperare și cheile de securitate funcționează la fel în orice limbă.",
+    de: "Als Beta markierte Sprachen hat noch niemand mit dieser Muttersprache gelesen. Wiederherstellungscodes und Sicherheitsschlüssel funktionieren in jeder Sprache gleich.",
+    fr: "Les langues marquées bêta n’ont pas encore été relues par une personne dont c’est la langue maternelle. Les codes de récupération et les clés de sécurité fonctionnent de la même façon dans toutes les langues.",
+    es: "Los idiomas marcados como beta aún no los ha revisado un hablante nativo. Los códigos de recuperación y las llaves de seguridad funcionan igual en todos los idiomas.",
+    it: "Le lingue segnate come beta non sono ancora state rilette da un madrelingua. I codici di recupero e le chiavi di sicurezza funzionano allo stesso modo in ogni lingua.",
+    "pt-BR": "Os idiomas marcados como beta ainda não foram revisados por um falante nativo. Os códigos de recuperação e as chaves de segurança funcionam da mesma forma em qualquer idioma.",
+    pl: "Języki oznaczone jako beta nie zostały jeszcze przeczytane przez rodzimego użytkownika. Kody odzyskiwania i klucze bezpieczeństwa działają tak samo w każdym języku.",
+  },
+} satisfies Screen;

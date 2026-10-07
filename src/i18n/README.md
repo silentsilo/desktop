@@ -1,10 +1,12 @@
 # Translations
 
-`en.ts` is the source: every text with a note on where it appears and what
-it means. `translations.ts` holds the other seven languages. A key missing
-there falls back to English; `i18n.test.ts` fails on a key English does not
-have, on a `{placeholder}` that differs from English, and on plural forms a
-language needs but lacks.
+`screens/` holds one file per screen. Each text sits there once, with a
+note on where it appears and what it means, the English source and every
+translation under it, so a reviewer reads a whole screen with the languages
+side by side. A new screen file is listed in `screens/index.ts`. A language
+missing on a text falls back to English; `i18n.test.ts` fails on a
+`{placeholder}` that differs from English and on plural forms a language
+needs but lacks.
 
 Translate by meaning, with the screen in view, never word for word. The
 mock (`npm run dev`, `?mock=unlocked`) shows every screen; the language is
