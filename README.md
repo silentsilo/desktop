@@ -102,7 +102,7 @@ one-time code if it has one, custom fields (a hidden one is masked and copied
 like a password) and its earlier versions: when a password, a field or a note
 changes, the entry keeps the version before it, the last 10 by default, and
 one can be put back. Health points out reused, weak and old passwords, and
-an entry back on one it had before.
+an entry back on one it had before; what is not critical can be ignored.
 
 Import reads a KeePass database (`.kdbx`, with its key file if it has one),
 Bitwarden's JSON or its zip with attachments, and CSV from Bitwarden, LastPass, 1Password, Proton Pass,

@@ -63,7 +63,8 @@ import { EnrollView } from "./views/EnrollView";
 import { FilesExplorer } from "./views/FilesExplorer";
 import { PasswordsPanel } from "./views/passwords/PasswordsPanel";
 import { HealthPanel } from "./views/health/HealthPanel";
-import { analyseHealth } from "./views/health/analysis";
+import { analyseHealth, type HealthFinding } from "./views/health/analysis";
+import { fingerprint, loadIgnored, saveIgnored, splitIgnored } from "./views/health/ignored";
 import { FavoritesPanel } from "./views/FavoritesPanel";
 import { CATEGORIES_ROW_ID, isCategoriesRow } from "./views/passwords/util";
 import { SettingsPanel, type SettingsSectionId } from "./views/SettingsPanel";
@@ -3080,12 +3081,41 @@ export default function App() {
     ],
   );
 
+  /// Findings set aside with Ignore, per silo and on this computer only.
+  const healthSiloId = bootstrap?.silo?.id ?? "";
+  const [healthIgnored, setHealthIgnored] = useState<{ silo: string; set: Set<string> }>({
+    silo: "",
+    set: new Set(),
+  });
+  useEffect(() => {
+    setHealthIgnored({ silo: healthSiloId, set: healthSiloId ? loadIgnored(healthSiloId) : new Set() });
+  }, [healthSiloId]);
+  const health = useMemo(
+    () =>
+      splitIgnored(
+        healthFindings,
+        healthIgnored.silo === healthSiloId ? healthIgnored.set : new Set<string>(),
+      ),
+    [healthFindings, healthIgnored, healthSiloId],
+  );
+  const setIgnored = (finding: HealthFinding, ignore: boolean) => {
+    if (!healthSiloId) return;
+    const next = new Set(healthIgnored.silo === healthSiloId ? healthIgnored.set : []);
+    if (ignore) next.add(fingerprint(finding));
+    else next.delete(fingerprint(finding));
+    // Drop what no longer matches a finding, so the list does not grow forever.
+    const live = new Set(healthFindings.map(fingerprint));
+    for (const key of next) if (!live.has(key)) next.delete(key);
+    saveIgnored(healthSiloId, next);
+    setHealthIgnored({ silo: healthSiloId, set: next });
+  };
+
   /// Only what asks to be acted on. The informational findings (duplicates,
   /// a login without a second factor) are worth a line on the page and not
-  /// worth a number that never goes away.
+  /// worth a number that never goes away; nor is what was ignored.
   const healthCount = useMemo(
-    () => healthFindings.filter((f) => f.severity !== "info").length,
-    [healthFindings],
+    () => health.active.filter((f) => f.severity !== "info").length,
+    [health],
   );
 
   /// The right-hand end of the status bar. Names what the current view is
@@ -3761,7 +3791,7 @@ export default function App() {
         }
         trashCount={trashEntries.length}
         healthCount={healthCount}
-        healthUrgent={healthFindings.some((f) => f.severity === "high")}
+        healthUrgent={health.active.some((f) => f.severity === "high")}
         sync={syncProgress ? { ...sync, progress: syncProgress } : sync}
         onSyncNow={() => void syncNow()}
         onOpenBackup={() => {
@@ -3921,7 +3951,10 @@ export default function App() {
 
         {view === "health" && meta && (
           <HealthPanel
-            findings={healthFindings}
+            findings={health.active}
+            ignored={health.ignored}
+            onIgnore={(finding) => setIgnored(finding, true)}
+            onShowAgain={(finding) => setIgnored(finding, false)}
             entries={passwordEntries}
             onOpenEntry={(id) => {
               setFocusEntryId(id);

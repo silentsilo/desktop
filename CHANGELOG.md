@@ -17,6 +17,9 @@ silo from opening needs a major version rather than a note.
   or as many as fit (Settings, General). Restore puts an old version back and
   keeps the current one; Clear history removes old passwords for good.
 - Health points out an entry back on a password it had before.
+- Health findings that are not critical can be ignored. They move to an
+  "Ignored" list on this computer and leave the count on the Health tab; one
+  that changes, a new entry joining it, shows again.
 - The activity log opens quickly when it is large: records are opened on
   every core and only once while the silo is open, and the Activity page
   loads 100 at a time and searches the whole log on the app's side. A log
@@ -64,6 +67,7 @@ silo from opening needs a major version rather than a note.
 
 ### Fixed
 
+- The amber number on the Health tab is readable in the light theme.
 - A Proton Pass login with several addresses imports with the first as its
   address and the others in its notes. All of them used to land in the
   address field as one string.

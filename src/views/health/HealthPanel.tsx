@@ -6,11 +6,17 @@ import type { PasswordEntry } from "../../lib/types";
 import { checkPasswords, type PwnedReport } from "../../lib/pwned";
 import { subtitleFor, typeOf, TYPE_LABELS } from "../passwords/util";
 import { summarise, type HealthFinding, type HealthFix } from "./analysis";
+import { canIgnore, fingerprint } from "./ignored";
 
 type Props = {
   /** Computed by the shell, which also badges the count on the tab: one
    * analysis, so the number on the tab and the list here cannot disagree. */
   findings: HealthFinding[];
+  /** Findings set aside on this computer: listed apart and left out of
+   * every count. */
+  ignored: HealthFinding[];
+  onIgnore: (finding: HealthFinding) => void;
+  onShowAgain: (finding: HealthFinding) => void;
   /** The credentials themselves, for the on-demand breach check. */
   entries: PasswordEntry[];
   /** Opens Credentials on that entry, filters cleared. */
@@ -47,9 +53,18 @@ type BreachState =
  * whether to look; the list of entries is the part you act on, one at a
  * time, and expanded lists would bury the next finding under the first.
  */
-export function HealthPanel({ findings, entries, onOpenEntry, onOpenFix }: Props) {
+export function HealthPanel({
+  findings,
+  ignored,
+  onIgnore,
+  onShowAgain,
+  entries,
+  onOpenEntry,
+  onOpenFix,
+}: Props) {
   const counts = useMemo(() => summarise(findings), [findings]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [showIgnored, setShowIgnored] = useState(false);
   const [breaches, setBreaches] = useState<BreachState>({ kind: "idle" });
   const entryCount = entries.length;
 
@@ -106,8 +121,9 @@ export function HealthPanel({ findings, entries, onOpenEntry, onOpenFix }: Props
           <div className="health-empty-state">
             <ShieldCheck size={28} />
             <p className="hint">
-              No reused or weak passwords, and this silo has a recovery code, a spare key and a
-              backup.
+              {ignored.length > 0
+                ? "Nothing else to look at."
+                : "No reused or weak passwords, and this silo has a recovery code, a spare key and a backup."}
             </p>
           </div>
         ) : (
@@ -120,9 +136,39 @@ export function HealthPanel({ findings, entries, onOpenEntry, onOpenFix }: Props
                 onToggle={() => toggle(finding.id)}
                 onOpenEntry={onOpenEntry}
                 onOpenFix={onOpenFix}
+                onIgnore={canIgnore(finding) ? () => onIgnore(finding) : undefined}
               />
             ))}
           </ul>
+        )}
+
+        {ignored.length > 0 && (
+          <div className="health-ignored">
+            <button
+              type="button"
+              className="health-ignored-toggle"
+              onClick={() => setShowIgnored((v) => !v)}
+              aria-expanded={showIgnored}
+            >
+              {showIgnored ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              Ignored ({ignored.length})
+            </button>
+            {showIgnored && (
+              <ul className="health-list">
+                {ignored.map((finding) => (
+                  <FindingRow
+                    key={fingerprint(finding)}
+                    finding={finding}
+                    open={expanded.has(finding.id)}
+                    onToggle={() => toggle(finding.id)}
+                    onOpenEntry={onOpenEntry}
+                    onOpenFix={onOpenFix}
+                    onShowAgain={() => onShowAgain(finding)}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
         )}
 
         <div className="health-breach">
@@ -214,17 +260,25 @@ function FindingRow({
   onToggle,
   onOpenEntry,
   onOpenFix,
+  onIgnore,
+  onShowAgain,
 }: {
   finding: HealthFinding;
   open: boolean;
   onToggle: () => void;
   onOpenEntry: (id: string) => void;
   onOpenFix: (fix: HealthFix) => void;
+  /** Only for what is not critical. */
+  onIgnore?: () => void;
+  /** Only on an ignored finding. */
+  onShowAgain?: () => void;
 }) {
   const expandable = finding.entries.length > 0;
 
   return (
-    <li className={`health-finding health-${finding.severity}`}>
+    <li
+      className={`health-finding health-${finding.severity}${onShowAgain ? " is-ignored" : ""}`}
+    >
       <div className="health-finding-head">
         {expandable ? (
           <button
@@ -240,15 +294,32 @@ function FindingRow({
           <span className="health-finding-title health-finding-title-static">{finding.title}</span>
         )}
 
-        {finding.fix && (
-          <button
-            type="button"
-            className="secondary health-finding-fix"
-            onClick={() => onOpenFix(finding.fix!)}
-          >
-            {FIX_LABELS[finding.fix]}
-          </button>
-        )}
+        <span className="health-finding-actions">
+          {finding.fix && !onShowAgain && (
+            <button
+              type="button"
+              className="secondary health-finding-fix"
+              onClick={() => onOpenFix(finding.fix!)}
+            >
+              {FIX_LABELS[finding.fix]}
+            </button>
+          )}
+          {onIgnore && (
+            <button
+              type="button"
+              className="secondary health-finding-fix"
+              onClick={onIgnore}
+              title="Stop counting this on this computer. It comes back if it changes."
+            >
+              Ignore
+            </button>
+          )}
+          {onShowAgain && (
+            <button type="button" className="secondary health-finding-fix" onClick={onShowAgain}>
+              Show again
+            </button>
+          )}
+        </span>
       </div>
 
       <p className="health-finding-detail">{finding.detail}</p>

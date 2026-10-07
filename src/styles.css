@@ -636,6 +636,11 @@ textarea:focus {
   color: #1f1300;
 }
 
+/* The light theme's amber is dark enough to carry white text. */
+.light-theme .tab-badge-warn {
+  color: #fff;
+}
+
 .rail-update-badge {
   margin-left: auto;
 }
@@ -5922,6 +5927,40 @@ button.link.pw-history-clear {
   border-left-color: var(--text-dim);
 }
 
+.health-finding.is-ignored {
+  border-left-color: var(--border-subtle);
+}
+
+.health-finding.is-ignored .health-finding-title {
+  color: var(--text-muted);
+}
+
+.health-ignored {
+  margin-top: 1rem;
+}
+
+.health-ignored-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.health-ignored-toggle:hover,
+.health-ignored-toggle:focus-visible {
+  color: var(--text);
+}
+
+.health-ignored .health-list {
+  margin-top: 0.6rem;
+}
+
 .health-finding-head {
   display: flex;
   align-items: center;
@@ -5962,6 +6001,16 @@ button.link.pw-history-clear {
   width: auto;
   padding: 0.35rem 0.8rem;
   font-size: 0.8rem;
+}
+
+.health-finding-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.health-finding-actions .health-finding-fix {
+  margin-left: 0;
 }
 
 .health-finding-detail {
