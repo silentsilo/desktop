@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 /** Connection details as the Settings form holds them. */
 export type S3Form = {
   endpoint: string;
@@ -25,6 +27,7 @@ export type S3Preset = {
  * anything speaking S3 works, these just spare the user a docs lookup for
  * the two settings that are easy to get wrong (endpoint shape and whether
  * path-style addressing is required). */
+// Getters for the texts, so they follow the language in use.
 export const S3_PRESETS: S3Preset[] = [
   {
     id: "backblaze",
@@ -32,7 +35,9 @@ export const S3_PRESETS: S3Preset[] = [
     endpoint: "https://s3.us-west-004.backblazeb2.com",
     region: "us-west-004",
     pathStyle: true,
-    hint: "Endpoint and region both carry your bucket's region code. Copy them from the bucket's details page.",
+    get hint() {
+      return t("backup.preset_backblaze_hint");
+    },
   },
   {
     id: "r2",
@@ -40,7 +45,9 @@ export const S3_PRESETS: S3Preset[] = [
     endpoint: "https://<account-id>.r2.cloudflarestorage.com",
     region: "auto",
     pathStyle: false,
-    hint: "Replace <account-id> with yours. R2 ignores region, so leave it as auto.",
+    get hint() {
+      return t("backup.preset_r2_hint");
+    },
   },
   {
     id: "wasabi",
@@ -48,15 +55,21 @@ export const S3_PRESETS: S3Preset[] = [
     endpoint: "https://s3.eu-central-1.wasabisys.com",
     region: "eu-central-1",
     pathStyle: false,
-    hint: "Both the endpoint and region must match the region your bucket lives in.",
+    get hint() {
+      return t("backup.preset_wasabi_hint");
+    },
   },
   {
     id: "minio",
-    label: "MinIO (self-hosted)",
+    get label() {
+      return t("backup.preset_minio");
+    },
     endpoint: "http://localhost:9000",
     region: "us-east-1",
     pathStyle: true,
-    hint: "MinIO needs path-style addressing. Region is not used, so any value works.",
+    get hint() {
+      return t("backup.preset_minio_hint");
+    },
   },
   {
     id: "aws",
@@ -64,18 +77,24 @@ export const S3_PRESETS: S3Preset[] = [
     endpoint: "https://s3.eu-central-1.amazonaws.com",
     region: "eu-central-1",
     pathStyle: false,
-    hint: "Use the regional endpoint for the bucket, not the global one.",
+    get hint() {
+      return t("backup.preset_aws_hint");
+    },
   },
   {
     id: "custom",
-    label: "Other S3-compatible",
+    get label() {
+      return t("backup.preset_custom");
+    },
     endpoint: "",
     region: "us-east-1",
     pathStyle: true,
     // The path-style advice lives on the checkbox itself, which is where
     // someone acts on it; saying it here as well printed it twice on one
     // screen.
-    hint: "Any provider speaking the S3 API works.",
+    get hint() {
+      return t("backup.preset_custom_hint");
+    },
   },
 ];
 
@@ -111,9 +130,9 @@ export function detectPreset(endpoint: string): S3Preset {
  * one", which is valid when editing an existing connection. */
 export function missingFields(form: S3Form, hasStoredSecret: boolean): string[] {
   const missing: string[] = [];
-  if (!form.endpoint.trim()) missing.push("Endpoint");
-  if (!form.bucket.trim()) missing.push("Bucket");
-  if (!form.accessKeyId.trim()) missing.push("Access key ID");
-  if (!form.secretAccessKey.trim() && !hasStoredSecret) missing.push("Secret access key");
+  if (!form.endpoint.trim()) missing.push(t("backup.s3_endpoint"));
+  if (!form.bucket.trim()) missing.push(t("backup.s3_bucket"));
+  if (!form.accessKeyId.trim()) missing.push(t("backup.s3_access_key_id"));
+  if (!form.secretAccessKey.trim() && !hasStoredSecret) missing.push(t("backup.s3_secret_key"));
   return missing;
 }

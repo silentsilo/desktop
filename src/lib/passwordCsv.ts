@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { CustomField, PasswordEntry } from "./types";
 import { parseTotpInput } from "./totp";
 import { appendNotes, noExtras, type ImportExtras } from "./passwordImport";
@@ -197,16 +198,14 @@ export function applyTotp(entry: PasswordEntry, raw: string): boolean {
  */
 export function csvToEntries(text: string, now: () => number = Date.now): ImportResult {
   const rows = parseCsv(text);
-  if (rows.length === 0) throw new CsvImportError("The file is empty.");
+  if (rows.length === 0) throw new CsvImportError(t("pw.csv_empty"));
 
   const [headers, ...dataRows] = rows;
   const format = detectFormat(headers);
   const index = buildIndex(headers);
 
   if (!FIELD_ALIASES.password.some((alias) => index.has(alias))) {
-    throw new CsvImportError(
-      "No password column found. This does not look like a password export.",
-    );
+    throw new CsvImportError(t("pw.csv_no_password_column"));
   }
 
   const entries: PasswordEntry[] = [];
@@ -286,7 +285,7 @@ export function csvToEntries(text: string, now: () => number = Date.now): Import
   }
 
   if (entries.length === 0) {
-    throw new CsvImportError("No importable logins found in that file.");
+    throw new CsvImportError(t("pw.csv_no_logins"));
   }
 
   return { format, entries, skipped, extras };
@@ -367,6 +366,8 @@ export function entriesToCsv(entries: PasswordEntry[]): string {
   return `${lines.join("\n")}\n`;
 }
 
+/** The format's name for the activity log, in English. The screen shows
+ * `formatDisplayName`. */
 export function formatLabel(format: CsvFormat): string {
   switch (format) {
     case "bitwarden":
@@ -396,4 +397,9 @@ export function formatLabel(format: CsvFormat): string {
     case "generic":
       return "generic CSV";
   }
+}
+
+/** The format's name as the import notice shows it. */
+export function formatDisplayName(format: CsvFormat): string {
+  return format === "generic" ? t("pw.source_generic_csv") : formatLabel(format);
 }

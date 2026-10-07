@@ -84,7 +84,7 @@ import { BrowserSaveDialog } from "./views/BrowserSaveDialog";
 import { SshSignDialog } from "./views/SshSignDialog";
 import { ShellDownloadDialog } from "./views/ShellDownloadDialog";
 import { TrashPanel } from "./views/TrashPanel";
-import { t } from "./i18n";
+import { t, translate, useLocale, type Key } from "./i18n";
 import { UnlockView } from "./views/UnlockView";
 import { AppSettingsView } from "./views/settings/AppSettingsView";
 import { FirstRunView } from "./views/FirstRunView";
@@ -176,6 +176,8 @@ function neverDeleteKeyNote(archiveTargets: number, what: "code" | "key"): strin
 const OPEN_CANCELLED = "Cancelled.";
 
 export default function App() {
+  // Re-renders on a language change, and keys the memos that hold text.
+  const lang = useLocale();
   const { api: toasts, list: toastList } = useToasts();
   const [confirmDialog, setConfirmDialog] = useState<ConfirmState | null>(null);
   /// Copies the app never deletes from, so the delete-for-good dialogs can
@@ -229,13 +231,14 @@ export default function App() {
   ): Promise<{ replace: boolean } | null> => {
     if (clashes.length === 0) return { replace: false };
     const { ok, option } = await askConfirmWith(
-      clashes.length === 1 ? "That file is already there" : "Some files are already there",
+      clashes.length === 1 ? t("app.overwrite_title_one") : t("app.overwrite_title_many"),
       overwriteMessage(clashes, total),
       {
         confirmLabel: overwriteConfirmLabel(clashes.length, total),
         option: {
-          label: clashes.length === 1 ? "Replace it instead" : "Replace them instead",
-          hint: "The files on this computer are overwritten. This cannot be undone.",
+          label:
+            clashes.length === 1 ? t("app.overwrite_replace_one") : t("app.overwrite_replace_many"),
+          hint: t("app.overwrite_replace_hint"),
         },
       },
     );
@@ -515,10 +518,7 @@ export default function App() {
   useEventSubscription(
     () =>
       listen<string>("silo-audit-locked", (event) => {
-        toasts.errorText(
-          "The activity log could not be written on this computer, so the silo was locked. " +
-            "Your organisation requires the log. Check that the disk has space, then unlock again.",
-        );
+        toasts.errorText(t("app.audit_locked"));
         if (event.payload === focusedSiloRef.current) {
           resetExplorer();
           void refreshBootstrap();
@@ -535,9 +535,7 @@ export default function App() {
       listen<{ name: string }>("silo-auto-locked", (event) => {
         const name = event.payload.name;
         toasts.info(
-          name
-            ? `“${name}” was locked to make room. SilentSilo keeps only a few silos open at once.`
-            : "Another silo was locked to make room. SilentSilo keeps only a few silos open at once.",
+          name ? t("app.auto_locked_named", { name }) : t("app.auto_locked_other"),
         );
         void refreshSilos();
       }),
@@ -552,10 +550,11 @@ export default function App() {
         const failed = event.payload;
         if (failed.length === 0) return;
         const first = failed.slice(0, 3).join("; ");
-        const more = failed.length > 3 ? ` And ${failed.length - 3} more.` : "";
-        toasts.error(
-          `${failed.length === 1 ? "1 item" : `${failed.length} items`} from Explorer could not be added and will be tried again: ${first}.${more}`,
-        );
+        const more =
+          failed.length > 3
+            ? " " + t("app.shell_upload_failed_more", { count: failed.length - 3 })
+            : "";
+        toasts.error(t("app.shell_upload_failed", { count: failed.length, list: first }) + more);
       }),
     [toasts],
   );
@@ -569,9 +568,7 @@ export default function App() {
   useEventSubscription(
     () =>
       listen("scratch-still-open", () => {
-        toasts.errorText(
-          "A file from the silo is still open in another app, so its temporary copy could not be deleted. Close that app and SilentSilo deletes it at the next lock or start.",
-        );
+        toasts.errorText(t("app.scratch_still_open"));
       }),
     [toasts],
   );
@@ -634,7 +631,7 @@ export default function App() {
         // the text jumped between them, and whichever finished first tore
         // down the other's progress bar.
         if (transferInFlightRef.current) {
-          toasts.info("Something is already being added. Wait for it to finish, then drop these.");
+          toasts.info(t("app.drop_busy"));
           return;
         }
         void importPathsRef.current?.(event.payload.paths, "Added");
@@ -713,10 +710,10 @@ export default function App() {
         // twenty clashes is one event to report, not twenty.
         const renamed = report.renamed;
         if (renamed.length === 1) {
-          toasts.info(`Renamed to avoid a clash on another device: ${renamed[0]}`);
+          toasts.info(t("app.renamed_one", { name: renamed[0]! }));
         } else if (renamed.length > 1) {
           toasts.info(
-            `${renamed.length} items were renamed to avoid clashes on another device, including ${renamed.slice(0, 3).join(", ")}.`,
+            t("app.renamed_many", { count: renamed.length, names: renamed.slice(0, 3).join(", ") }),
           );
         }
       }),
@@ -757,7 +754,7 @@ export default function App() {
       dropRebuild(siloId);
       await refreshCurrentFolder();
       await refreshSync();
-      toasts.success("This computer is back in step with the silo.");
+      toasts.success(t("app.rebuilt_in_step"));
     } catch (e) {
       toasts.error(e);
     } finally {
@@ -921,7 +918,7 @@ export default function App() {
       if (on) {
         // Fetching happens on the sync pass, so say what will happen rather
         // than letting a checkbox tick and nothing visibly follow.
-        toasts.info("This computer will download anything it is missing in the background.");
+        toasts.info(t("app.full_copy_on"));
         await refreshSync();
       }
     } catch (e) {
@@ -1034,9 +1031,7 @@ export default function App() {
       if (await refreshRotationPending()) {
         setView("settings");
         setSettingsSection("advanced");
-        toasts.info(
-          "Replacing the encryption key did not finish. Syncing fails until you finish it under Advanced.",
-        );
+        toasts.info(t("app.rotation_pending"));
       }
     })();
   }, [bootstrap?.silo?.id, bootstrap?.locked, refreshRotationPending, toasts]);
@@ -1150,7 +1145,7 @@ export default function App() {
         // morning trains people to dismiss it unread.
         if (localStorage.getItem(UPDATE_NOTIFIED_KEY) !== result.version) {
           localStorage.setItem(UPDATE_NOTIFIED_KEY, result.version);
-          toasts.info(`SilentSilo ${result.version} is available. Install it from Settings, under Updates and about.`);
+          toasts.info(t("app.update_available", { version: result.version }));
         }
       } catch {
         // Offline or endpoint unreachable. The next hourly pass retries.
@@ -1173,9 +1168,7 @@ export default function App() {
   /// what failed part way.
   const updateFailedAfterLock = useCallback(
     (message: string) => {
-      toasts.errorText(
-        `The update did not install: ${message.replace(/\.$/, "")}. Every silo was locked before the install, so unlock to carry on.`,
-      );
+      toasts.errorText(t("app.update_failed_locked", { error: message.replace(/\.$/, "") }));
       resetExplorer();
       void refreshBootstrap();
       void refreshSilos();
@@ -1190,7 +1183,7 @@ export default function App() {
       await refreshSilos();
       setBootstrap(await invoke<Bootstrap>("app_bootstrap"));
       resetExplorer();
-      toasts.success(`Silo “${name}” created. Enrol a key to lock it.`);
+      toasts.success(t("app.silo_created", { name }));
     } catch (e) {
       toasts.error(e);
     } finally {
@@ -1205,7 +1198,7 @@ export default function App() {
       await invoke("silo_rename", { id: bootstrap.silo.id, name });
       await refreshSilos();
       setBootstrap(await invoke<Bootstrap>("app_bootstrap"));
-      toasts.success("Renamed.");
+      toasts.success(t("app.renamed"));
     } catch (e) {
       toasts.error(e);
     } finally {
@@ -1221,17 +1214,17 @@ export default function App() {
     // learning there was a harsher half. The box appears only when the
     // folder is reachable.
     const { ok, option: alsoDelete } = await askConfirmWith(
-      "Remove this silo?",
+      t("app.forget_title"),
       silo.present
-        ? `“${silo.name}” comes out of the list. The folder at ${silo.path} stays where it is, so you can add it back later.`
-        : `“${silo.name}” comes out of the list. Its folder is not reachable right now, so nothing on disk is touched.`,
+        ? t("app.forget_present", { name: silo.name, path: silo.path })
+        : t("app.forget_absent", { name: silo.name }),
       {
-        confirmLabel: "Remove",
+        confirmLabel: t("app.forget_button"),
         danger: true,
         option: silo.present
           ? {
-              label: "Delete the files as well",
-              hint: `Erases everything at ${silo.path} and cannot be undone. Any copy in your backup storage is left behind.`,
+              label: t("app.forget_delete_files"),
+              hint: t("app.forget_delete_files_hint", { path: silo.path }),
             }
           : undefined,
       },
@@ -1252,7 +1245,7 @@ export default function App() {
       await refreshSilos();
       setBootstrap(await invoke<Bootstrap>("app_bootstrap"));
       resetExplorer();
-      toasts.success(alsoDelete ? "Silo removed and deleted." : "Silo removed from the list.");
+      toasts.success(alsoDelete ? t("app.forget_done_deleted") : t("app.forget_done"));
     } catch (e) {
       toasts.error(e);
     } finally {
@@ -1344,7 +1337,7 @@ export default function App() {
     setBootstrap(await invoke<Bootstrap>("app_bootstrap"));
     setJoining(false);
     await finishOpeningSilo(meta as VaultMeta);
-    toasts.success("This computer is set up from backup storage.");
+    toasts.success(t("app.joined"));
   };
 
   const enrollPrimaryKey = async (authenticator: Authenticator, organisation = false) => {
@@ -1359,8 +1352,8 @@ export default function App() {
       setFirstRun(true);
       toasts.success(
         authenticator === "this-device"
-          ? `${platform.builtIn} enrolled. It opens this silo from now on.`
-          : "Security key enrolled. It opens this silo from now on.",
+          ? t("app.enrolled_builtin", { name: platform.builtIn })
+          : t("app.enrolled_key"),
       );
     } catch (e) {
       toasts.error(e);
@@ -1386,7 +1379,7 @@ export default function App() {
         await invoke("vault_repair_from_storage", { siloId, code: recoveryCodeUsed });
         repairedNow = true;
         setRepairWithCode(null);
-        toasts.info("This silo was rebuilt from backup storage.");
+        toasts.info(t("app.repaired"));
       }
       // Same session either way: a code and a key both end up handing the
       // silo its data encryption key, and nothing downstream can tell which.
@@ -1422,11 +1415,9 @@ export default function App() {
       const corrupted = String(e).includes("database corrupted");
       if (corrupted && !recoveryCodeUsed && bootstrap?.silo?.id) {
         const rebuild = await askConfirm(
-          "Rebuild this computer's copy?",
-          "This silo is damaged on this computer and cannot be opened. It can be rebuilt " +
-            "from backup storage with your recovery code. Changes that never reached backup " +
-            "storage are lost.",
-          { confirmLabel: "Enter the recovery code" },
+          t("app.repair_title"),
+          t("app.repair_with_code"),
+          { confirmLabel: t("app.repair_enter_code") },
         );
         if (rebuild) {
           setRepairWithCode(bootstrap.silo.id);
@@ -1435,11 +1426,9 @@ export default function App() {
       }
       if (corrupted && recoveryCodeUsed && !repairedNow && bootstrap?.silo?.id) {
         const rebuild = await askConfirm(
-          "Rebuild this computer's copy?",
-          "This silo is damaged on this computer and cannot be opened. It can be rebuilt " +
-            "from backup storage with the code you entered. Changes that never reached backup " +
-            "storage are lost.",
-          { confirmLabel: "Rebuild from backup storage" },
+          t("app.repair_title"),
+          t("app.repair_with_entered_code"),
+          { confirmLabel: t("app.repair_button") },
         );
         if (rebuild) {
           // The outer finally still runs after these returns.
@@ -1448,7 +1437,7 @@ export default function App() {
               siloId: bootstrap.silo.id,
               code: recoveryCodeUsed,
             });
-            toasts.info("This silo was rebuilt from backup storage.");
+            toasts.info(t("app.repaired"));
             // Opened again the ordinary way once this attempt has wound
             // down. Opening it here skipped the bootstrap refresh, so the
             // unlock screen stayed up over an open silo, with no trash,
@@ -1500,9 +1489,9 @@ export default function App() {
     // the folder here erased such a silo on the strength of a sentence
     // saying it was empty.
     const confirmed = await askConfirm(
-      "Remove this silo from the list?",
-      `“${silo.name}” has no key set up, so it cannot be opened as it is. The folder at ${silo.path} stays on disk; delete it yourself if you no longer need it.`,
-      { confirmLabel: "Remove from list", danger: true },
+      t("app.discard_unenrolled_title"),
+      t("app.discard_unenrolled", { name: silo.name, path: silo.path }),
+      { confirmLabel: t("app.discard_unenrolled_button"), danger: true },
     );
     if (!confirmed) return;
     begin("silo");
@@ -1757,7 +1746,7 @@ export default function App() {
       });
       setNewFolderName("");
       await refreshCurrentFolder();
-      toasts.success("Folder created.");
+      toasts.success(t("app.folder_created"));
     } catch (e) {
       toasts.error(e);
     } finally {
@@ -1780,7 +1769,9 @@ export default function App() {
     const failed: string[] = [];
 
     const refreshProgress = () => {
-      setUploadProgress(`Encrypting ${counters.imported + counters.failed}/${total}…`);
+      setUploadProgress(
+        t("app.progress_encrypting", { done: counters.imported + counters.failed, total }),
+      );
     };
 
     // Files should appear as they land, but not at the cost of a folder
@@ -1831,15 +1822,20 @@ export default function App() {
         // formatAppError, which rewrites anything containing "cancelled"
         // into a FIDO-prompt message unrelated to this import.
         toasts.info(
-          `Stopped. ${counters.imported} added, ${total - counters.imported - counters.failed} skipped.`,
+          t("app.add_stopped", {
+            added: counters.imported,
+            skipped: total - counters.imported - counters.failed,
+          }),
         );
       } else if (failed.length === 0) {
-        toasts.success(
-          counters.imported === 1 ? "Added 1 file." : `Added ${counters.imported} files.`,
-        );
+        toasts.success(t("app.added_files", { count: counters.imported }));
       } else {
         toasts.errorText(
-          `Added ${counters.imported} of ${total}. Failed: ${failed.slice(0, 3).join("; ")}${failed.length > 3 ? "…" : ""}`,
+          t("app.added_some_failed", {
+            added: counters.imported,
+            total,
+            failures: failed.slice(0, 3).join("; ") + (failed.length > 3 ? "…" : ""),
+          }),
         );
       }
     } finally {
@@ -1881,7 +1877,7 @@ export default function App() {
     setUploadCancelable(true);
     setUploadCancelling(false);
     begin("transfer");
-    setUploadProgress("Scanning folder…");
+    setUploadProgress(t("app.progress_scanning_folder"));
 
     let skipped = 0;
     const unlisten = await listen<{
@@ -1895,19 +1891,23 @@ export default function App() {
       const { phase, current, total, name } = event.payload;
       if (phase === "scanning") {
         setUploadProgress(
-          total > 0 ? `Scanning… ${total} files found` : "Scanning folder…",
+          total > 0
+            ? t("app.progress_scanning_found", { count: total })
+            : t("app.progress_scanning_folder"),
         );
       } else if (phase === "folders") {
-        setUploadProgress(`Creating folders… ${name}`);
+        setUploadProgress(t("app.progress_creating_folders", { name }));
       } else if (phase === "encrypting") {
         setUploadProgress(
           total > 0
-            ? `Encrypting ${current}/${total}: ${name}`
-            : `Encrypting: ${name}`,
+            ? t("app.progress_encrypting_name", { done: current, total, name })
+            : t("app.progress_encrypting_one", { name }),
         );
       } else if (phase === "done") {
         setUploadProgress(
-          total > 0 ? `Imported ${current}/${total} files` : "Import complete",
+          total > 0
+            ? t("app.progress_imported", { done: current, total })
+            : t("app.progress_import_complete"),
         );
       }
     });
@@ -1920,18 +1920,16 @@ export default function App() {
       await refreshCurrentFolder();
 
       if (skipped > 0) {
-        toasts.info(
-          `Folder imported. ${skipped === 1 ? "1 item" : `${skipped} items`} could not be read and ${skipped === 1 ? "was" : "were"} left out.`,
-        );
+        toasts.info(t("app.folder_imported_skipped", { count: skipped }));
       } else {
-        toasts.success("Folder imported.");
+        toasts.success(t("app.folder_imported"));
       }
     } catch (e) {
       if (String(e) === "cancelled") {
         await refreshCurrentFolder();
         // toasts.info, not .error — see the comment on the equivalent
         // branch in handleAddFiles for why.
-        toasts.info("Stopped. Part of the folder was added.");
+        toasts.info(t("app.folder_stopped"));
       } else {
         toasts.error(e);
       }
@@ -1976,23 +1974,24 @@ export default function App() {
     if (report.verdict === "insufficient") {
       const short = report.wanted_bytes - (report.available_bytes ?? 0);
       toasts.errorText(
-        `Not enough room: this needs about ${formatBytes(report.wanted_bytes)} and the disk has ` +
-          `${formatBytes(report.available_bytes ?? 0)} left, about ${formatBytes(short)} short.`,
+        t("app.room_insufficient", {
+          wanted: formatBytes(report.wanted_bytes),
+          available: formatBytes(report.available_bytes ?? 0),
+          short: formatBytes(short),
+        }),
       );
       return false;
     }
 
     if (report.verdict === "tight") {
       if (!ask) {
-        toasts.info("This will leave very little room on the disk where the silo lives.");
+        toasts.info(t("app.room_tight_info"));
         return true;
       }
       const ok = await askConfirm(
-        "This will nearly fill the disk",
-        `Adding this leaves under ${formatBytes(report.headroom_bytes)} free where the silo lives. ` +
-          `${platform.osName} needs room of its own to keep working, and the silo needs room to record what ` +
-          "changed.",
-        { confirmLabel: "Add anyway" },
+        t("app.room_tight_title"),
+        t("app.room_tight", { free: formatBytes(report.headroom_bytes), os: platform.osName }),
+        { confirmLabel: t("app.room_add_anyway") },
       );
       if (!ok) return false;
     }
@@ -2012,7 +2011,7 @@ export default function App() {
     setUploadCancelable(true);
     setUploadCancelling(false);
     begin("transfer");
-    setUploadProgress(verb === "Pasted" ? "Pasting…" : "Adding…");
+    setUploadProgress(verb === "Pasted" ? t("app.progress_pasting") : t("app.progress_adding"));
 
     let skipped = 0;
     const unlisten = await listen<{
@@ -2025,15 +2024,25 @@ export default function App() {
       skipped = event.payload.skipped ?? skipped;
       const { phase, current, total, name } = event.payload;
       if (phase === "scanning") {
-        setUploadProgress(total > 0 ? `Scanning… ${total} files found` : "Scanning…");
+        setUploadProgress(
+          total > 0
+            ? t("app.progress_scanning_found", { count: total })
+            : t("app.progress_scanning"),
+        );
       } else if (phase === "folders") {
-        setUploadProgress(`Creating folders… ${name}`);
+        setUploadProgress(t("app.progress_creating_folders", { name }));
       } else if (phase === "encrypting") {
         setUploadProgress(
-          total > 0 ? `Encrypting ${current}/${total}: ${name}` : `Encrypting: ${name}`,
+          total > 0
+            ? t("app.progress_encrypting_name", { done: current, total, name })
+            : t("app.progress_encrypting_one", { name }),
         );
       } else if (phase === "done") {
-        setUploadProgress(total > 0 ? `Imported ${current}/${total} files` : "Import complete");
+        setUploadProgress(
+          total > 0
+            ? t("app.progress_imported", { done: current, total })
+            : t("app.progress_import_complete"),
+        );
       }
     });
     try {
@@ -2046,12 +2055,17 @@ export default function App() {
 
       const totalImported = result.imported_files + result.imported_folders;
       if (result.failed.length > 0) {
+        const failures =
+          result.failed.slice(0, 3).join("; ") + (result.failed.length > 3 ? "…" : "");
         toasts.errorText(
-          `${verb} ${totalImported} ${totalImported === 1 ? "item" : "items"}. Failed: ${result.failed.slice(0, 3).join("; ")}${result.failed.length > 3 ? "…" : ""}`,
+          t(verb === "Pasted" ? "app.pasted_some_failed" : "app.added_items_some_failed", {
+            count: totalImported,
+            failures,
+          }),
         );
       } else if (totalImported > 0) {
         toasts.success(
-          totalImported === 1 ? `${verb} 1 item.` : `${verb} ${totalImported} items.`,
+          t(verb === "Pasted" ? "app.pasted_items" : "app.added_items", { count: totalImported }),
         );
       }
     } catch (e) {
@@ -2096,7 +2110,7 @@ export default function App() {
 
       const total = result.imported_files + result.imported_folders;
       if (total > 0) {
-        toasts.success(total === 1 ? "Added 1 item." : `Added ${total} items.`);
+        toasts.success(t("app.added_items", { count: total }));
       }
       // Named rather than folded into a count: an item that did not arrive
       // is the one thing the user needs to know about. Only the first few,
@@ -2105,12 +2119,12 @@ export default function App() {
         const named = result.failed.slice(0, 3).join(", ");
         toasts.errorText(
           result.failed.length > 3
-            ? `${result.failed.length} items were not added, including ${named}.`
+            ? t("app.not_added_many", { count: result.failed.length, names: named })
             : named,
         );
       }
       if (total === 0 && result.failed.length === 0) {
-        toasts.info("Nothing was added.");
+        toasts.info(t("app.nothing_added"));
       }
     } catch (e) {
       toasts.error(e);
@@ -2127,11 +2141,7 @@ export default function App() {
     const count = pendingShellUploadPaths?.length ?? 0;
     setPendingShellUploadPaths(null);
     if (count > 0) {
-      toasts.info(
-        count === 1
-          ? "Cancelled. 1 item was not added."
-          : `Cancelled. ${count} items were not added.`,
-      );
+      toasts.info(t("app.shell_upload_cancelled", { count }));
     }
   };
 
@@ -2197,10 +2207,13 @@ export default function App() {
       setPendingShellDownloadTarget(null);
       if (failed.length > 0) {
         toasts.errorText(
-          `Saved ${count} ${count === 1 ? "item" : "items"}. Failed: ${failed.slice(0, 3).join("; ")}${failed.length > 3 ? "…" : ""}`,
+          t("app.saved_some_failed", {
+            count,
+            failures: failed.slice(0, 3).join("; ") + (failed.length > 3 ? "…" : ""),
+          }),
         );
       } else {
-        toasts.success(count === 1 ? "Saved 1 item." : `Saved ${count} items.`);
+        toasts.success(t("app.saved_items", { count }));
       }
     } finally {
       setShellDownloadBusy(false);
@@ -2238,8 +2251,8 @@ export default function App() {
       await refreshTrash();
       toasts.info(
         targets.length === 1
-          ? `Moved “${targets[0]!.name}” to trash.`
-          : `Moved ${targets.length} items to trash.`,
+          ? t("app.trashed_one", { name: targets[0]!.name })
+          : t("app.trashed_many", { count: targets.length }),
       );
     } catch (e) {
       toasts.error(e);
@@ -2277,7 +2290,7 @@ export default function App() {
       await refreshTrash();
       // It may land in the folder the explorer is showing.
       await refreshCurrentFolder().catch(() => {});
-      toasts.success(`Restored “${entry.name}”.`);
+      toasts.success(t("app.restored_one", { name: entry.name }));
     } catch (e) {
       toasts.error(e);
     } finally {
@@ -2306,9 +2319,9 @@ export default function App() {
       await refreshCurrentFolder().catch(() => {});
       const done = items.length - failed;
       if (failed > 0) {
-        toasts.errorText(`Restored ${done} of ${items.length}. The rest can be retried.`);
+        toasts.errorText(t("app.restored_some_failed", { done, total: items.length }));
       } else {
-        toasts.success(done === 1 ? "Restored 1 item." : `Restored ${done} items.`);
+        toasts.success(t("app.restored_items", { count: done }));
       }
     } finally {
       end("entry");
@@ -2422,16 +2435,19 @@ export default function App() {
       if (clashes.length > 0) {
         const { ok, option } = await askConfirmWith(
           clashes.length === 1
-            ? `${destination.label} has "${clashes[0]}" already`
-            : `${destination.label} has ${clashes.length} of these names already`,
+            ? t("app.move_clash_title_one", { folder: destination.label, name: clashes[0]! })
+            : t("app.move_clash_title_many", { folder: destination.label, count: clashes.length }),
           clashes.length === 1
-            ? "Both are kept: the one you move is shown with a number after its name. Nothing is replaced."
-            : `Both of each are kept: the ones you move are shown with a number after their names. Nothing is replaced. (${clashes.slice(0, 3).join(", ")}${clashes.length > 3 ? ", …" : ""})`,
+            ? t("app.move_clash_one")
+            : t("app.move_clash_many", {
+                names: clashes.slice(0, 3).join(", ") + (clashes.length > 3 ? ", …" : ""),
+              }),
           {
-            confirmLabel: "Move",
+            confirmLabel: t("app.move_button"),
             option: {
-              label: clashes.length === 1 ? "Leave that one where it is" : "Leave those where they are",
-              hint: moving.length > clashes.length ? "The others still move." : undefined,
+              label:
+                clashes.length === 1 ? t("app.move_leave_one") : t("app.move_leave_many"),
+              hint: moving.length > clashes.length ? t("app.move_others_still_move") : undefined,
             },
           },
         );
@@ -2464,7 +2480,7 @@ export default function App() {
     begin("transfer");
     try {
       await invoke("vault_export_file", { fileId: file.id, destPath: dest });
-      toasts.success("Saved a copy.");
+      toasts.success(t("app.saved_copy"));
     } catch (e) {
       toasts.error(e);
     } finally {
@@ -2511,9 +2527,9 @@ export default function App() {
         }
       }
       if (saved > 0) {
-        toasts.success(saved === 1 ? "Saved 1 file." : `Saved ${saved} files.`);
+        toasts.success(t("app.saved_files", { count: saved }));
       } else if (!failure) {
-        toasts.info("Nothing was saved. Every file was already there.");
+        toasts.info(t("app.nothing_saved"));
       }
       if (failure) {
         toasts.error(failure);
@@ -2544,10 +2560,10 @@ export default function App() {
     }
 
     begin("transfer");
-    setUploadProgress(`Saving “${folder.name}”…`);
+    setUploadProgress(t("app.progress_saving_folder", { name: folder.name }));
     const unlisten = await listen<number>("export-progress", (event) => {
       setUploadProgress(
-        `Saving “${folder.name}”… ${event.payload} ${event.payload === 1 ? "file" : "files"}`,
+        t("app.progress_saving_folder_count", { name: folder.name, count: event.payload }),
       );
     });
     try {
@@ -2557,9 +2573,9 @@ export default function App() {
         skipExisting: !replace,
       });
       if (count === 0) {
-        toasts.info("Nothing was saved. Every file was already there.");
+        toasts.info(t("app.nothing_saved"));
       } else {
-        toasts.success(count === 1 ? "Saved 1 file." : `Saved ${count} files.`);
+        toasts.success(t("app.saved_files", { count }));
       }
     } catch (e) {
       toasts.error(e);
@@ -2680,9 +2696,9 @@ export default function App() {
   const confirmRun = useCallback(
     (name: string) =>
       askConfirm(
-        "Run this file?",
-        `“${name}” is a program or a shortcut, so opening it runs it rather than showing it. Only continue if you know where it came from.`,
-        { confirmLabel: "Run it", danger: true },
+        t("app.run_title"),
+        t("app.run_message", { name }),
+        { confirmLabel: t("app.run_button"), danger: true },
       ),
     [askConfirm],
   );
@@ -2770,13 +2786,13 @@ export default function App() {
       );
 
       if (contentFetchCancelRef.current) {
-        toasts.info("Stopped. What had already downloaded is on this computer.");
+        toasts.info(t("app.fetch_stopped"));
       } else if (failed > 0) {
-        toasts.errorText(`Downloaded ${ids.length - failed} of ${ids.length}. The rest can be retried.`);
-      } else {
-        toasts.success(
-          ids.length === 1 ? "1 file downloaded." : `${ids.length} files downloaded.`,
+        toasts.errorText(
+          t("app.fetch_some_failed", { done: ids.length - failed, total: ids.length }),
         );
+      } else {
+        toasts.success(t("app.fetch_done", { count: ids.length }));
       }
     } finally {
       contentFetchRunningRef.current = false;
@@ -3024,19 +3040,18 @@ export default function App() {
       securityKeys.some((k) => (k.label || "").toLowerCase() === label.toLowerCase())
     ) {
       const ok = await askConfirm(
-        "Use that label twice?",
-        `A key labelled “${label}” is already enrolled. Two entries with the same name are hard to tell apart later.`,
-        { confirmLabel: "Add anyway" },
+        t("app.key_label_twice_title"),
+        t("app.key_label_twice", { label }),
+        { confirmLabel: t("app.room_add_anyway") },
       );
       if (!ok) return;
     }
 
     setKeyAddSuccess(null);
-    const kind = authenticator === "this-device" ? platform.builtIn : "Security key";
     setFidoProgress(
       authenticator === "this-device"
-        ? `Follow the ${platform.osName} prompts to set up ${platform.builtIn}…`
-        : `Insert the new security key, then follow the ${platform.osName} prompts…`,
+        ? t("app.key_add_progress_builtin", { os: platform.osName, name: platform.builtIn })
+        : t("app.key_add_progress_key", { os: platform.osName }),
     );
     begin("keys");
     try {
@@ -3050,10 +3065,12 @@ export default function App() {
       setSecurityKeys(keys);
       const b = await invoke<Bootstrap>("app_bootstrap");
       setBootstrap(b);
-      setKeyAddSuccess(
-        `Added “${securityKeyDisplayName(added, osOf(b))}”. That key can unlock this silo.`,
+      setKeyAddSuccess(t("app.key_added_detail", { name: securityKeyDisplayName(added, osOf(b)) }));
+      toasts.success(
+        authenticator === "this-device"
+          ? t("app.key_added_builtin", { name: platform.builtIn })
+          : t("app.key_added_key"),
       );
-      toasts.success(`${kind} added.`);
     } catch (e) {
       toasts.error(e);
     } finally {
@@ -3069,7 +3086,7 @@ export default function App() {
     try {
       await invoke("fido_rename_key", { credentialId, label });
       setSecurityKeys(await invoke<SecurityKeyInfo[]>("fido_list_keys"));
-      toasts.success("Key renamed.");
+      toasts.success(t("app.key_renamed"));
     } catch (e) {
       toasts.error(e);
     } finally {
@@ -3079,9 +3096,9 @@ export default function App() {
 
   const removeSecurityKey = async (credentialId: string) => {
     const ok = await askConfirm(
-      "Remove this key?",
-      `It stops opening this silo. Make sure another key or a recovery code still can.${neverDeleteKeyNote(archiveTargets, "key")}`,
-      { confirmLabel: "Remove", danger: true },
+      t("app.key_remove_title"),
+      `${t("app.key_remove")}${neverDeleteKeyNote(archiveTargets, "key")}`,
+      { confirmLabel: t("app.forget_button"), danger: true },
     );
     if (!ok) return;
     begin("keys");
@@ -3097,17 +3114,13 @@ export default function App() {
         // Removed everywhere the app deletes from. On an append-only copy
         // the envelope stays, and it is what lets that key unlock the silo,
         // so calling this revocation would be false.
-        toasts.info(
-          `Key removed. ${outcome.withheld.join(", ")} is a never-delete copy, so that key still opens what is stored there. Replace the encryption key to keep it out of anything saved from now on.`,
-        );
+        toasts.info(t("app.key_removed_withheld", { names: outcome.withheld.join(", ") }));
       } else if (outcome.published) {
-        toasts.success("Key removed.");
+        toasts.success(t("app.key_removed"));
       } else {
         // Removed here, but the copy in the bucket is what lets that key open
         // the silo from another computer, and it is still there.
-        toasts.info(
-          "Key removed on this computer. It can still open this silo elsewhere until the next sync reaches your backup storage.",
-        );
+        toasts.info(t("app.key_removed_local"));
       }
     } catch (e) {
       toasts.error(e);
@@ -3193,25 +3206,35 @@ export default function App() {
   /// The right-hand end of the status bar. Names what the current view is
   /// showing, which is what turns a lone sync label into a status bar.
   const statusSummary = useMemo(() => {
+    // Written in the language on screen, which is why it is a dependency.
+    const tl = (key: Key, params?: Record<string, number>) => translate(lang, key, params);
     if (view === "files") {
       if (!currentFolder) return undefined;
       const folders = entries.filter((e) => e.kind === "folder").length;
       const files = entries.length - folders;
       const parts: string[] = [];
-      if (folders > 0) parts.push(`${folders} folder${folders === 1 ? "" : "s"}`);
-      if (files > 0) parts.push(`${files} file${files === 1 ? "" : "s"}`);
-      if (parts.length === 0) parts.push("Empty folder");
-      if (selectedIds.size > 0) parts.push(`${selectedIds.size} selected`);
+      if (folders > 0) parts.push(tl("app.status_folders", { count: folders }));
+      if (files > 0) parts.push(tl("app.status_files", { count: files }));
+      if (parts.length === 0) parts.push(tl("app.status_empty_folder"));
+      if (selectedIds.size > 0) parts.push(tl("app.status_selected", { count: selectedIds.size }));
       return parts.join(" · ");
     }
     if (view === "trash") {
-      return trashEntries.length === 1 ? "1 item" : `${trashEntries.length} items`;
+      return tl("app.status_items", { count: trashEntries.length });
     }
     if (view === "passwords") {
-      return passwordEntries.length === 1 ? "1 item" : `${passwordEntries.length} items`;
+      return tl("app.status_entries", { count: passwordEntries.length });
     }
     return undefined;
-  }, [view, currentFolder, entries, selectedIds, trashEntries.length, passwordEntries.length]);
+  }, [
+    view,
+    currentFolder,
+    entries,
+    selectedIds,
+    trashEntries.length,
+    passwordEntries.length,
+    lang,
+  ]);
 
   /// The silo-level facts Health judges: which keys can open it, and whether
   /// a recovery code exists. Both used to be read only on entering Settings,
@@ -3261,12 +3284,10 @@ export default function App() {
     void refreshFavorites();
   }, [view, meta, refreshFavorites]);
 
+  const rootLabel = bootstrap?.silo?.name ?? t("app.crumb_silo");
   const crumbs = useMemo(
-    () =>
-      currentFolder
-        ? breadcrumbSegments(currentFolder.path, bootstrap?.silo?.name ?? "Silo")
-        : [],
-    [currentFolder, bootstrap?.silo?.name],
+    () => (currentFolder ? breadcrumbSegments(currentFolder.path, rootLabel) : []),
+    [currentFolder, rootLabel],
   );
   const canGoBack = navIndex > 0;
   const canGoForward = navIndex < navHistory.length - 1;
@@ -3621,14 +3642,10 @@ export default function App() {
   const rebuildSiloId = bootstrap?.silo?.id;
   const rebuildHost = rebuildSiloId !== undefined && needsRebuild.has(rebuildSiloId) && (
     <ConfirmDialog
-      title="This computer is out of step"
-      message={
-        "It was away so long that the changes it missed are no longer in backup storage. " +
-        "Setting it up again takes a moment and keeps everything in backup storage. " +
-        "Changes made here that were never sent are lost."
-      }
-      confirmLabel="Set up again"
-      cancelLabel="Not now"
+      title={t("app.out_of_step_title")}
+      message={t("app.out_of_step")}
+      confirmLabel={t("app.out_of_step_button")}
+      cancelLabel={t("app.not_now")}
       busy={rebuilding}
       onConfirm={() => void rebuildFromSnapshot()}
       onCancel={() => dropRebuild(rebuildSiloId)}
@@ -3661,13 +3678,13 @@ export default function App() {
 
   if (!bootstrap) {
     return (
-      <AuthShell title="SilentSilo" subtitle="Loading…">
+      <AuthShell title="SilentSilo" subtitle={t("app.loading")}>
         {toastHost}
         {confirmHost}
         {mintedCodeHost}
         {rebuildHost}
         <p className="hint">
-          <span className="spinner" aria-hidden /> Starting…
+          <span className="spinner" aria-hidden /> {t("app.starting")}
         </p>
       </AuthShell>
     );
@@ -3834,8 +3851,12 @@ export default function App() {
         <div className="drop-overlay" aria-hidden>
           <div className="drop-overlay-card">
             <IconFilePlus size={32} />
-            <strong>Drop to add to {currentFolder?.name ?? "this folder"}</strong>
-            <span className="hint">Files are encrypted as they land.</span>
+            <strong>
+              {currentFolder
+                ? t("app.drop_to_add", { name: currentFolder.name })
+                : t("app.drop_to_add_here")}
+            </strong>
+            <span className="hint">{t("app.drop_hint")}</span>
           </div>
         </div>
       )}
@@ -3914,28 +3935,32 @@ export default function App() {
           <div className="content-offer" role="status">
             <div className="content-offer-text">
               <strong>
-                {blobStatus!.missing.length === 1
-                  ? "1 file is in backup storage but not on this computer"
-                  : `${blobStatus!.missing.length} files are in backup storage but not on this computer`}
+                {t("app.offer_missing", { count: blobStatus!.missing.length })}
               </strong>
               <p>
                 {contentFetch
-                  ? `Downloading ${contentFetch.done} of ${contentFetch.total}…`
-                  : `They open on demand. Download all ${formatBytes(blobStatus!.missing_bytes)} now to have them here offline.`}
+                  ? t("app.offer_downloading", {
+                      done: contentFetch.done,
+                      total: contentFetch.total,
+                    })
+                  : t("app.offer_hint", {
+                      count: blobStatus!.missing.length,
+                      size: formatBytes(blobStatus!.missing_bytes),
+                    })}
               </p>
             </div>
             <div className="content-offer-actions">
               {contentFetch ? (
                 <button type="button" className="secondary" onClick={cancelFetchAllContent}>
-                  Stop
+                  {t("app.offer_stop")}
                 </button>
               ) : (
                 <>
                   <button type="button" onClick={() => void fetchAllContent()}>
-                    Download everything
+                    {t("app.offer_download")}
                   </button>
                   <button type="button" className="secondary" onClick={dismissContentOffer}>
-                    Not now
+                    {t("app.not_now")}
                   </button>
                 </>
               )}
@@ -4096,7 +4121,9 @@ export default function App() {
               <BackupPanel
                 busy={busy("transfer", "silo")}
                 lastSyncAt={sync.lastSyncAt}
-                syncError={sync.state === "error" ? (sync.lastError ?? "unknown error") : null}
+                syncError={
+                  sync.state === "error" ? (sync.lastError ?? t("app.unknown_error")) : null
+                }
                 onTestBackup={() => setSettingsSection("verify")}
                 lastTestedAt={
                   Math.max(
@@ -4130,11 +4157,8 @@ export default function App() {
                 <VerifyPanel busy={busy("transfer", "silo")} siloId={bootstrap.silo.id} />
               ) : (
                 <div className="panel-section">
-                  <h3>Test backup</h3>
-                  <p className="hint">
-                    Connect backup storage on the Backup page first. Then you can check it and test
-                    a recovery here.
-                  </p>
+                  <h3>{t("settings.verify")}</h3>
+                  <p className="hint">{t("app.verify_needs_backup")}</p>
                 </div>
               )
             }

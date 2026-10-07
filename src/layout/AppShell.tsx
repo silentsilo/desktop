@@ -34,24 +34,31 @@ export type SyncIndicator = {
 
 /** What the status bar says about a step of a running pass. */
 function describeProgress(p: SyncProgress): string {
-  const count = p.total > 1 ? ` ${Math.min(p.done + 1, p.total)} of ${p.total}` : "";
+  const count =
+    p.total > 1 ? ` ${t("start.of", { done: Math.min(p.done + 1, p.total), total: p.total })}` : "";
   const name = p.name ? `: ${p.name}` : "";
   // One large file holds the count still for the whole of its upload, which
   // is the case these bytes exist for. Zero on the phases counted in items,
   // and then nothing is added.
   const bytes =
-    p.bytes_total > 0 ? ` (${formatBytes(p.bytes_done)} of ${formatBytes(p.bytes_total)})` : "";
+    p.bytes_total > 0
+      ? ` (${t("start.of", { done: formatBytes(p.bytes_done), total: formatBytes(p.bytes_total) })})`
+      : "";
   switch (p.phase) {
     case "sending-changes":
-      return `Sending changes${count}`;
-    case "uploading":
-      return `Uploading${p.target ? ` to ${p.target}` : ""}${count}${name}${bytes}`;
+      return `${t("start.progress_sending")}${count}`;
+    case "uploading": {
+      const label = p.target
+        ? t("start.progress_uploading_to", { target: p.target })
+        : t("start.progress_uploading");
+      return `${label}${count}${name}${bytes}`;
+    }
     case "fetching-changes":
-      return `Getting changes${count}`;
+      return `${t("start.progress_fetching")}${count}`;
     case "downloading":
-      return `Downloading${count}${name}${bytes}`;
+      return `${t("start.progress_downloading")}${count}${name}${bytes}`;
     case "importing":
-      return `Adding from phone backup${count}`;
+      return `${t("start.progress_importing")}${count}`;
   }
 }
 
@@ -186,7 +193,7 @@ export function AppShell({
           )}
         </button>
 
-        <nav className="sidebar-nav" aria-label="Main navigation">
+        <nav className="sidebar-nav" aria-label={t("start.main_nav")}>
           {NAV.map((item) => {
             const Icon = item.icon;
             const active = view === item.id;
@@ -257,11 +264,14 @@ export function AppShell({
               type="button"
               className="sidebar-storage sidebar-storage-vertical"
               onClick={onOpenBackup}
-              title={`${formatBytes(storage.localBytes)} on this computer${
+              title={
                 storage.unsyncedBytes > 0
-                  ? `, ${formatBytes(storage.unsyncedBytes)} waiting to sync`
-                  : ""
-              }. Click to open Backup.`}
+                  ? t("start.storage_title_unsynced", {
+                      size: formatBytes(storage.localBytes),
+                      unsynced: formatBytes(storage.unsyncedBytes),
+                    })
+                  : t("start.storage_title_local", { size: formatBytes(storage.localBytes) })
+              }
             >
               {storage.unsyncedBytes > 0 && (
                 <span className="sidebar-storage-dot" aria-hidden />
@@ -273,15 +283,15 @@ export function AppShell({
               type="button"
               className="sidebar-storage"
               onClick={onOpenBackup}
-              title="What this silo occupies on this computer. Click to open Backup."
+              title={t("start.storage_title")}
             >
               <span className="sidebar-storage-line">
                 <span>{formatBytes(storage.localBytes)}</span>
-                <span className="sidebar-storage-limit">on this computer</span>
+                <span className="sidebar-storage-limit">{t("start.on_this_computer")}</span>
               </span>
               {storage.unsyncedBytes > 0 && (
                 <span className="sidebar-storage-note">
-                  {formatBytes(storage.unsyncedBytes)} waiting to sync
+                  {t("start.waiting_to_sync", { size: formatBytes(storage.unsyncedBytes) })}
                 </span>
               )}
             </button>
@@ -294,7 +304,7 @@ export function AppShell({
               className="btn-theme"
               onClick={onToggleTheme}
               title={theme === "light" ? t("nav.dark") : t("nav.light")}
-              aria-label="Toggle theme"
+              aria-label={t("start.toggle_theme")}
             >
               {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
             </button>
@@ -308,7 +318,7 @@ export function AppShell({
                 className="btn-collapse"
                 onClick={toggleCollapsed}
                 title={collapsed ? t("nav.expand") : t("nav.collapse")}
-                aria-label="Toggle sidebar"
+                aria-label={t("start.toggle_sidebar")}
               >
                 {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
               </button>
@@ -352,7 +362,7 @@ export function AppShell({
               // and what to do; retrying from here repeated it without a word.
               onClick={sync.state === "error" ? onOpenBackup : onSyncNow}
               disabled={sync.state === "syncing"}
-              title={sync.lastError ?? "Sync now"}
+              title={sync.lastError ?? t("start.sync_now")}
             >
               <span
                 className={`dot ${
@@ -366,26 +376,26 @@ export function AppShell({
               {sync.progress
                 ? describeProgress(sync.progress)
                 : sync.state === "syncing"
-                ? "Syncing…"
+                ? t("start.syncing")
                 : sync.state === "error"
-                  ? "Sync failed. Click for details"
+                  ? t("start.sync_failed")
                   : sync.pending > 0
-                    ? `${sync.pending} change${sync.pending === 1 ? "" : "s"} waiting to sync`
+                    ? t("start.changes_waiting", { count: sync.pending })
                     : sync.lastSyncAt
-                      ? `Synced ${formatAge(sync.lastSyncAt)}`
-                      : "Backup storage connected"}
+                      ? t("start.synced_ago", { age: formatAge(sync.lastSyncAt) })
+                      : t("start.storage_connected")}
             </button>
           ) : (
             <button
               type="button"
               className="status-sync"
               onClick={onOpenBackup}
-              title="Open Backup to connect backup storage"
+              title={t("start.open_backup_title")}
             >
               {/* Neutral, not green: a silo with no backup is not a state
                   worth a reassuring colour, it is the one Health flags. */}
               <span className="dot neutral" />
-              Not backed up. This silo is only on this computer.
+              {t("start.not_backed_up")}
             </button>
           )}
             {statusSummary && <span className="status-summary">{statusSummary}</span>}

@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { PasswordEntry } from "./types";
 
 /**
@@ -106,38 +107,31 @@ export function appendNotes(notes: string, lines: string[]): string {
   return [notes, ...lines].filter(Boolean).join("\n");
 }
 
-/** The note a Bitwarden zip's unmatched files go on. */
+/** The note a Bitwarden zip's unmatched files go on. Stored in the silo, so
+ * not translated. */
 export const UNMATCHED_NOTE = "Files from Bitwarden";
 
 /** The import summary's account of the above, or "" when there was none. */
 export function describeExtras(extras: ImportExtras): string {
-  const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   const moved: string[] = [];
   if (extras.extraUris > 0) {
-    moved.push(count(extras.extraUris, "extra web address", "extra web addresses"));
+    moved.push(t("pw.extras_uris", { count: extras.extraUris }));
   }
   if (extras.unsupportedOtp > 0) {
-    moved.push(
-      count(extras.unsupportedOtp, "two-factor secret", "two-factor secrets") +
-        " SilentSilo cannot show codes for",
-    );
+    moved.push(t("pw.extras_otp", { count: extras.unsupportedOtp }));
   }
   const sentences: string[] = [];
-  if (moved.length > 0) {
-    const list =
-      moved.length === 1
-        ? moved[0]
-        : `${moved.slice(0, -1).join(", ")} and ${moved[moved.length - 1]}`;
-    sentences.push(`Moved into notes: ${list}.`);
+  if (moved.length === 1) {
+    sentences.push(t("pw.extras_moved_one", { item: moved[0]! }));
+  } else if (moved.length === 2) {
+    sentences.push(t("pw.extras_moved_two", { first: moved[0]!, second: moved[1]! }));
   }
   if (extras.passkeys > 0) {
-    sentences.push(
-      `Left out: ${count(extras.passkeys, "passkey", "passkeys")}, which SilentSilo does not store.`,
-    );
+    sentences.push(t("pw.extras_passkeys", { count: extras.passkeys }));
   }
   if (extras.unmatchedFiles > 0) {
     sentences.push(
-      `${count(extras.unmatchedFiles, "attached file", "attached files")} could not be matched to one item by name, so ${extras.unmatchedFiles === 1 ? "it is" : "they are"} on the note "${UNMATCHED_NOTE}".`,
+      t("pw.extras_unmatched", { count: extras.unmatchedFiles, note: UNMATCHED_NOTE }),
     );
   }
   return sentences.join(" ");

@@ -5,6 +5,7 @@ import { FilePlus2, Folder, ChevronUp } from "lucide-react";
 import type { Bootstrap, FolderEntry, Silo, VaultEntry } from "../lib/types";
 import { formatAppError } from "../lib/errors";
 import { useModal } from "../hooks/useModal";
+import { t, useLocale } from "../i18n";
 
 type Props = {
   /** Names the file manager the items came from. */
@@ -21,6 +22,7 @@ type Props = {
 type Subfolder = Extract<VaultEntry, { kind: "folder" }>;
 
 export function ShellUploadDialog(props: Props) {
+  useLocale();
   const { os, paths, busy, onConfirm, onCancel } = props;
   const platform = platformStrings(os);
   const [folder, setFolder] = useState<FolderEntry | null>(null);
@@ -113,7 +115,7 @@ export function ShellUploadDialog(props: Props) {
     await loadInbox();
   };
 
-  const currentLabel = folder ? (folder.path === "/" ? "Silo root" : folder.name) : "";
+  const currentLabel = folder ? (folder.path === "/" ? t("trash.silo_root") : folder.name) : "";
   const siloLabel = openSilos.find((s) => s.id === siloId)?.name ?? "";
   const cardRef = useModal(busy ? undefined : handleCancel);
 
@@ -124,30 +126,28 @@ export function ShellUploadDialog(props: Props) {
         className="modal-card modal-card-wide"
         role="dialog"
         aria-modal="true"
-        aria-label="Add to SilentSilo"
+        aria-label={t("dlg.upload_title")}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-title-row">
           <span className="modal-title-icon">
             <FilePlus2 size={20} />
           </span>
-          <h3 className="modal-title">Add to SilentSilo</h3>
+          <h3 className="modal-title">{t("dlg.upload_title")}</h3>
         </div>
         <div className="modal-body">
           <p className="hint">
             {/* "Item" rather than "file": the context menu is offered on
                 folders too, and calling a folder a file here was the first
                 sign that the path behind this only handled files. */}
-            {paths.length === 1
-              ? `1 item from ${platform.fileManager}. Choose where it should go.`
-              : `${paths.length} items from ${platform.fileManager}. Choose where they should go.`}
+            {t("dlg.upload_intro", { count: paths.length, app: platform.fileManager })}
           </p>
           {/* Only when there is a choice to make. One open silo is not a
               question, and asking it anyway would tax the common case to
               serve the rare one. */}
           {openSilos.length > 1 && (
             <label className="field">
-              <span>Silo</span>
+              <span>{t("dlg.silo")}</span>
               <select
                 value={siloId ?? ""}
                 disabled={busy || loading}
@@ -167,7 +167,7 @@ export function ShellUploadDialog(props: Props) {
               className="explorer-icon-btn"
               disabled={!folder?.parent_id || busy || loading}
               onClick={() => folder?.parent_id && void loadFolder(folder.parent_id)}
-              title="Up one level"
+              title={t("dlg.up")}
             >
               <ChevronUp size={16} />
             </button>
@@ -175,11 +175,11 @@ export function ShellUploadDialog(props: Props) {
           </div>
           <ul className="folder-picker-list">
             {loading ? (
-              <li className="browser-empty">Loading…</li>
+              <li className="browser-empty">{t("dlg.loading")}</li>
             ) : error ? (
               <li className="browser-empty is-error">{error}</li>
             ) : subfolders.length === 0 ? (
-              <li className="browser-empty">No subfolders here.</li>
+              <li className="browser-empty">{t("dlg.no_subfolders")}</li>
             ) : (
               subfolders.map((f) => (
                 <li key={f.id}>
@@ -199,7 +199,7 @@ export function ShellUploadDialog(props: Props) {
         </div>
         <div className="modal-actions">
           <button type="button" className="secondary" disabled={busy} onClick={handleCancel}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -210,12 +210,12 @@ export function ShellUploadDialog(props: Props) {
             }
           >
             {busy
-              ? "Adding…"
+              ? t("dlg.adding")
               : !folder
-                ? "Add"
+                ? t("dlg.add")
                 : openSilos.length > 1 && siloLabel
-                  ? `Add to “${currentLabel}” in ${siloLabel}`
-                  : `Add to “${currentLabel}”`}
+                  ? t("dlg.add_to_in", { folder: currentLabel, silo: siloLabel })
+                  : t("dlg.add_to", { folder: currentLabel })}
           </button>
         </div>
       </div>

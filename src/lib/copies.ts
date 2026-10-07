@@ -1,6 +1,7 @@
 import { formatBytes } from "./format";
 import type { SeedProgress, StoreConfigView } from "./types";
 import { CLOUD_NAME } from "./cloud";
+import { t } from "../i18n";
 
 /**
  * One place this silo backs up to, as the backend reports it.
@@ -42,10 +43,8 @@ export type Protection = {
 export function protectionWarning(p: Protection | null, archive: boolean): string {
   if (!archive || !p) return "";
   if (p.object_lock) return "";
-  if (p.versioning) {
-    return "This bucket has versioning but no object lock. SilentSilo does not delete from it, but anyone with the access key can, and old versions stay readable after revoking a key. Use a bucket with object lock, or an access key that cannot delete.";
-  }
-  return "This backup storage reports no object lock and no versioning. SilentSilo does not delete from it, but anyone with the same sign-in details can. Use sign-in details that cannot delete.";
+  if (p.versioning) return t("backup.protection_versioning_only");
+  return t("backup.protection_none");
 }
 
 /**
@@ -68,17 +67,17 @@ export const STALE_AFTER_SECONDS = 7 * 24 * 60 * 60;
  */
 export function describeDuration(seconds: number): string {
   const s = Math.max(0, Math.round(seconds));
-  if (s < 60) return s <= 1 ? "a moment" : `${s} seconds`;
+  if (s < 60) return s <= 1 ? t("backup.duration_moment") : t("backup.duration_seconds", { count: s });
   const minutes = Math.round(s / 60);
-  if (minutes < 60) return minutes === 1 ? "a minute" : `${minutes} minutes`;
+  if (minutes < 60) return t("backup.duration_minutes", { count: minutes });
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return hours === 1 ? "an hour" : `${hours} hours`;
+  if (hours < 24) return t("backup.duration_hours", { count: hours });
   const days = Math.round(hours / 24);
-  if (days < 30) return days === 1 ? "a day" : `${days} days`;
+  if (days < 30) return t("backup.duration_days", { count: days });
   const months = Math.round(days / 30);
-  if (months < 12) return months === 1 ? "a month" : `${months} months`;
+  if (months < 12) return t("backup.duration_months", { count: months });
   const years = Math.round(months / 12);
-  return years === 1 ? "a year" : `${years} years`;
+  return t("backup.duration_years", { count: years });
 }
 
 export type CopyState = {
@@ -99,22 +98,25 @@ export function copyState(target: BackupTargetView, nowSeconds: number): CopySta
   const behind = target.ops_behind;
   const files = target.blobs_behind ?? 0;
   const retry =
-    target.retry_in > 0 ? `Next attempt in ${describeDuration(target.retry_in)}.` : "";
+    target.retry_in > 0
+      ? t("backup.copy_next_attempt", { duration: describeDuration(target.retry_in) })
+      : "";
 
   if (target.last_success === 0) {
     return {
       health: "never",
-      headline: "Not written to yet",
-      detail: retry || "The next sync will write to it.",
+      headline: t("backup.copy_never"),
+      detail: retry || t("backup.copy_never_detail"),
     };
   }
 
   const age = Math.max(0, nowSeconds - target.last_success);
-  const ago = `Last written ${describeDuration(age)} ago.`;
-  const backlog = [
-    files > 0 ? `${files} file${files === 1 ? "" : "s"} not there yet.` : "",
-    behind > 0 ? `${behind} change${behind === 1 ? "" : "s"} not there yet.` : "",
-  ]
+  // Each headline below doubles as a sentence in the detail, with a full stop.
+  const lastWritten = t("backup.copy_last_written", { duration: describeDuration(age) });
+  const filesBehind = t("backup.copy_files_behind", { count: files });
+  const changesBehind = t("backup.copy_changes_behind", { count: behind });
+  const ago = `${lastWritten}.`;
+  const backlog = [files > 0 ? `${filesBehind}.` : "", behind > 0 ? `${changesBehind}.` : ""]
     .filter(Boolean)
     .join(" ");
 
@@ -125,7 +127,7 @@ export function copyState(target: BackupTargetView, nowSeconds: number): CopySta
   if (age >= STALE_AFTER_SECONDS) {
     return {
       health: "stale",
-      headline: `Last written ${describeDuration(age)} ago`,
+      headline: lastWritten,
       detail: [backlog, retry].filter(Boolean).join(" "),
     };
   }
@@ -135,16 +137,14 @@ export function copyState(target: BackupTargetView, nowSeconds: number): CopySta
   if (files > 0 || behind > 0) {
     return {
       health: "behind",
-      headline: files > 0
-        ? `${files} file${files === 1 ? "" : "s"} not there yet`
-        : `${behind} change${behind === 1 ? "" : "s"} not there yet`,
-      detail: [files > 0 && behind > 0 ? `${behind} change${behind === 1 ? "" : "s"} too.` : "", ago, retry]
+      headline: files > 0 ? filesBehind : changesBehind,
+      detail: [files > 0 && behind > 0 ? t("backup.copy_changes_too", { count: behind }) : "", ago, retry]
         .filter(Boolean)
         .join(" "),
     };
   }
 
-  return { health: "current", headline: "Up to date", detail: ago };
+  return { health: "current", headline: t("backup.copy_current"), detail: ago };
 }
 
 /**
@@ -155,7 +155,7 @@ export function copyState(target: BackupTargetView, nowSeconds: number): CopySta
  * when one has been unplugged since spring is the failure mode.
  */
 export function currentCopies(targets: BackupTargetView[], nowSeconds: number): number {
-  return targets.filter((t) => copyState(t, nowSeconds).health === "current").length;
+  return targets.filter((target) => copyState(target, nowSeconds).health === "current").length;
 }
 
 /**
@@ -166,16 +166,18 @@ export function currentCopies(targets: BackupTargetView[], nowSeconds: number): 
  * a thousand small records are what is left.
  */
 export function seedHeadline(p: SeedProgress): string {
-  const objects = `${p.objects_done} of ${p.objects_total} item${
-    p.objects_total === 1 ? "" : "s"
-  }`;
-  if (p.bytes_total <= 0) return `Copying: ${objects}.`;
+  const objects = { done: p.objects_done, count: p.objects_total };
+  if (p.bytes_total <= 0) return t("backup.seed_progress", objects);
   // Rounded, a few MB of records left reads as "1.2 GB of 1.2 GB" while
   // hundreds of items still go across.
   if (onlySmallLeft(p)) {
-    return `Copying: ${objects}. The ${formatBytes(p.bytes_total)} of files is across; only small items are left.`;
+    return t("backup.seed_progress_small_left", { ...objects, size: formatBytes(p.bytes_total) });
   }
-  return `Copying: ${objects}, ${formatBytes(p.bytes_done)} of ${formatBytes(p.bytes_total)}.`;
+  return t("backup.seed_progress_bytes", {
+    ...objects,
+    bytesDone: formatBytes(p.bytes_done),
+    bytesTotal: formatBytes(p.bytes_total),
+  });
 }
 
 /** Items still to go, and less than 1% of the bytes with them. */
@@ -194,9 +196,12 @@ function onlySmallLeft(p: SeedProgress): boolean {
  */
 export function seedLabel(p: SeedProgress): string {
   if (p.bytes_total <= 0 || onlySmallLeft(p) || p.bytes_done >= p.bytes_total) {
-    return `${p.objects_done} of ${p.objects_total}…`;
+    return t("backup.seed_label", { done: p.objects_done, total: p.objects_total });
   }
-  return `${formatBytes(p.bytes_done)} of ${formatBytes(p.bytes_total)}…`;
+  return t("backup.seed_label", {
+    done: formatBytes(p.bytes_done),
+    total: formatBytes(p.bytes_total),
+  });
 }
 
 /**

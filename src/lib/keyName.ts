@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { platformStrings } from "./platformStrings";
 import type { Os, SecurityKeyInfo } from "./types";
 
@@ -34,6 +35,6 @@ export function usableHere(key: SecurityKeyInfo): boolean {
  */
 export function securityKeyDisplayName(key: SecurityKeyInfo, os: Os = "windows"): string {
   if (key.label) return key.label;
-  if (!usableHere(key)) return "Key from another device";
-  return key.platform ? platformStrings(os).builtIn : `Security key ${key.key_slot}`;
+  if (!usableHere(key)) return t("set.key_from_other_device");
+  return key.platform ? platformStrings(os).builtIn : t("set.key_slot_name", { slot: key.key_slot });
 }

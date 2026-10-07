@@ -7,6 +7,7 @@ import { alreadySaved, existingEntry, savedEntry } from "../lib/browserSave";
 import { formatAppError } from "../lib/errors";
 import { useEventSubscription } from "../hooks/useEventSubscription";
 import { useModal } from "../hooks/useModal";
+import { t, useLocale } from "../i18n";
 
 /**
  * A login the browser extension read from a page on the person's click,
@@ -76,6 +77,7 @@ function SaveCard({
   onSave: (entry: PasswordEntry, change?: EntryChange) => Promise<boolean>;
   onClose: () => void;
 }) {
+  useLocale();
   const existing = existingEntry(prompt, entries);
   const unchanged = alreadySaved(prompt, existing);
   const [update, setUpdate] = useState(existing !== undefined);
@@ -107,7 +109,7 @@ function SaveCard({
     );
     try {
       if (!(await onSave(entry, updated ? "edited" : "created"))) {
-        setError("The login could not be saved. Nothing was written.");
+        setError(t("dlg.save_failed"));
         return;
       }
       // Saved here whatever the browser hears: it may have stopped waiting.
@@ -127,27 +129,21 @@ function SaveCard({
         className="modal-card browser-fill"
         role="alertdialog"
         aria-modal="true"
-        aria-label="Save a login from your browser?"
+        aria-label={t("dlg.save_title")}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-title-row">
           <span className="modal-title-icon" aria-hidden>
             <Globe size={18} />
           </span>
-          <h3 className="modal-title">Save a login from your browser?</h3>
+          <h3 className="modal-title">{t("dlg.save_title")}</h3>
         </div>
         <div className="modal-body">
           {/* As for a fill: the request came through the browser channel,
               which another program of this user can reach too. */}
-          <p>
-            Your browser offers a login for {prompt.site}. If you did not just click Save in the
-            SilentSilo extension, choose Cancel.
-          </p>
+          <p>{t("dlg.save_body", { site: prompt.site })}</p>
           {unchanged ? (
-            <p>
-              This login is already in your silo as {existing!.service}, with this password. Nothing
-              needs saving.
-            </p>
+            <p>{t("dlg.save_unchanged", { name: existing!.service })}</p>
           ) : (
             <>
               {existing && (
@@ -161,8 +157,8 @@ function SaveCard({
                       onChange={() => setUpdate(true)}
                     />
                     <span>
-                      Update {existing.service}
-                      <span className="hint"> The old password goes into its history.</span>
+                      {t("dlg.save_update_option", { name: existing.service })}
+                      <span className="hint"> {t("dlg.save_update_hint")}</span>
                     </span>
                   </label>
                   <label className="key-choice">
@@ -173,13 +169,13 @@ function SaveCard({
                       disabled={busy}
                       onChange={() => setUpdate(false)}
                     />
-                    <span>Save as a new login</span>
+                    <span>{t("dlg.save_new_option")}</span>
                   </label>
                 </div>
               )}
               {!update && (
                 <label className="field">
-                  <span>Name</span>
+                  <span>{t("dlg.save_name")}</span>
                   <input
                     value={label}
                     disabled={busy}
@@ -189,7 +185,7 @@ function SaveCard({
                 </label>
               )}
               <label className="field">
-                <span>Username</span>
+                <span>{t("dlg.save_username")}</span>
                 <input
                   value={username}
                   disabled={busy}
@@ -198,21 +194,18 @@ function SaveCard({
                   onChange={(e) => setUsername(e.target.value)}
                 />
               </label>
-              <p className="hint">
-                The password typed on the page is saved with it. You can see it in the login
-                afterwards.
-              </p>
+              <p className="hint">{t("dlg.save_password_hint")}</p>
             </>
           )}
           {error && <p className="hint is-error">{error}</p>}
         </div>
         <div className="modal-actions">
           <button type="button" className="secondary" disabled={busy} onClick={cancel}>
-            {unchanged ? "Close" : "Cancel"}
+            {unchanged ? t("dlg.close") : t("common.cancel")}
           </button>
           {!unchanged && (
             <button type="button" disabled={busy || !armed} onClick={() => void save()}>
-              {update && existing ? "Update" : "Save"}
+              {update && existing ? t("dlg.update") : t("dlg.save")}
             </button>
           )}
         </div>

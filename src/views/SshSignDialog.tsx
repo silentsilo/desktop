@@ -7,6 +7,7 @@ import { builtInOrKey, platformStrings } from "../lib/platformStrings";
 import { formatAppError } from "../lib/errors";
 import { useEventSubscription } from "../hooks/useEventSubscription";
 import { useModal } from "../hooks/useModal";
+import { t, useLocale } from "../i18n";
 
 /**
  * A signature an SSH client asked the agent for, decided here. The Rust
@@ -58,10 +59,10 @@ function program(path: string | null): string | null {
 
 /** What the signature is for, in words. */
 function purpose(prompt: SshSignPrompt): string {
-  if (prompt.namespace === "git") return "Sign a Git commit or tag";
-  if (prompt.namespace) return `Sign data for "${prompt.namespace}"`;
-  if (prompt.user) return `Sign in as ${prompt.user}`;
-  return "Sign in to a server";
+  if (prompt.namespace === "git") return t("dlg.ssh_purpose_git");
+  if (prompt.namespace) return t("dlg.ssh_purpose_namespace", { namespace: prompt.namespace });
+  if (prompt.user) return t("dlg.ssh_purpose_user", { user: prompt.user });
+  return t("dlg.ssh_purpose_server");
 }
 
 function SignCard({
@@ -73,6 +74,7 @@ function SignCard({
   os: Os;
   onClose: () => void;
 }) {
+  useLocale();
   const platform = platformStrings(os);
   const [busy, setBusy] = useState(false);
   const [remember, setRemember] = useState(false);
@@ -102,7 +104,7 @@ function SignCard({
     }
   };
 
-  const who = program(prompt.program) ?? "A program";
+  const who = program(prompt.program);
   return (
     <div className="modal-overlay" onClick={busy ? undefined : cancel}>
       <div
@@ -110,33 +112,40 @@ function SignCard({
         className="modal-card browser-fill"
         role="alertdialog"
         aria-modal="true"
-        aria-label="Use an SSH key?"
+        aria-label={t("dlg.ssh_title")}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-title-row">
           <span className="modal-title-icon" aria-hidden>
             <KeyRound size={18} />
           </span>
-          <h3 className="modal-title">Use an SSH key?</h3>
+          <h3 className="modal-title">{t("dlg.ssh_title")}</h3>
         </div>
         <div className="modal-body">
           {/* The program is what the system reports. Any program running as
               you can ask, so the name is a hint, not a proof. */}
           <p>
-            {who} asks to use your {prompt.key} key. If you did not just start ssh, Git or a
-            connection in your editor, choose Cancel.
+            {who
+              ? t("dlg.ssh_body", { program: who, key: prompt.key })
+              : t("dlg.ssh_body_unknown", { key: prompt.key })}
           </p>
           <dl className="browser-fill-facts">
-            <dt>For</dt>
+            <dt>{t("dlg.ssh_for")}</dt>
             <dd>{purpose(prompt)}</dd>
-            <dt>Server</dt>
+            <dt>{t("dlg.ssh_server")}</dt>
             <dd>
-              {prompt.host ?? (prompt.namespace ? "None" : "Not named by the program")}
+              {prompt.host ??
+                (prompt.namespace ? t("dlg.ssh_server_none") : t("dlg.ssh_server_unnamed"))}
             </dd>
-            <dt>Program</dt>
+            <dt>{t("dlg.ssh_program")}</dt>
             <dd>
-              {prompt.program ?? "Unknown"}
-              {prompt.parent && <span className="hint"> started by {program(prompt.parent)}</span>}
+              {prompt.program ?? t("dlg.ssh_program_unknown")}
+              {prompt.parent && (
+                <span className="hint">
+                  {" "}
+                  {t("dlg.ssh_started_by", { parent: program(prompt.parent) ?? prompt.parent })}
+                </span>
+              )}
             </dd>
           </dl>
           {prompt.can_remember && (
@@ -149,22 +158,24 @@ function SignCard({
               />
               <span>
                 {prompt.namespace === "git"
-                  ? "Allow this key for Git signatures until the silo locks"
-                  : "Allow this key for this server until the silo locks"}
+                  ? t("dlg.ssh_remember_git")
+                  : t("dlg.ssh_remember_server")}
               </span>
             </label>
           )}
           {prompt.require_reauth && (
-            <p className="hint">You confirm with {builtInOrKey(platform)} next.</p>
+            <p className="hint">
+              {t("dlg.ssh_confirm_next", { method: builtInOrKey(platform) })}
+            </p>
           )}
           {error && <p className="hint is-error">{error}</p>}
         </div>
         <div className="modal-actions">
           <button type="button" className="secondary" disabled={busy} onClick={cancel}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button type="button" disabled={busy || !armed} onClick={() => void confirm()}>
-            Sign
+            {t("dlg.ssh_sign")}
           </button>
         </div>
       </div>

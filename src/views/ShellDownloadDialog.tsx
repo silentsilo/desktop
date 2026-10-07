@@ -4,6 +4,7 @@ import { ChevronUp, FileText, Folder, HardDriveDownload } from "lucide-react";
 import type { FolderEntry, VaultEntry } from "../lib/types";
 import { formatAppError } from "../lib/errors";
 import { useModal } from "../hooks/useModal";
+import { t, tx, useLocale } from "../i18n";
 
 type Props = {
   targetDir: string;
@@ -13,6 +14,7 @@ type Props = {
 };
 
 export function ShellDownloadDialog(props: Props) {
+  useLocale();
   const { targetDir, busy, onConfirm, onCancel } = props;
   const [folder, setFolder] = useState<FolderEntry | null>(null);
   const [entries, setEntries] = useState<VaultEntry[]>([]);
@@ -66,7 +68,7 @@ export function ShellDownloadDialog(props: Props) {
   const dirName = targetDir.replace(/[/\\]+$/, "").split(/[/\\]/).pop() || targetDir;
   // A share on another machine gets plaintext over the network: said so.
   const onNetwork = targetDir.startsWith("\\\\") || targetDir.startsWith("//");
-  const currentLabel = folder ? (folder.path === "/" ? "Silo root" : folder.name) : "";
+  const currentLabel = folder ? (folder.path === "/" ? t("trash.silo_root") : folder.name) : "";
   const cardRef = useModal(busy ? undefined : onCancel);
 
   return (
@@ -76,20 +78,22 @@ export function ShellDownloadDialog(props: Props) {
         className="modal-card modal-card-wide"
         role="dialog"
         aria-modal="true"
-        aria-label="Save from SilentSilo"
+        aria-label={t("dlg.download_title")}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-title-row">
           <span className="modal-title-icon is-download">
             <HardDriveDownload size={20} />
           </span>
-          <h3 className="modal-title">Save from SilentSilo</h3>
+          <h3 className="modal-title">{t("dlg.download_title")}</h3>
         </div>
         <div className="modal-body">
           <p className="hint">
-            Pick what to save into <strong title={targetDir}>{dirName}</strong> ({targetDir}). The
-            copies written there are not encrypted.
-            {onNetwork && " This folder is on another computer, and the files travel there unencrypted."}
+            {tx("dlg.download_intro", {
+              dir: <strong title={targetDir}>{dirName}</strong>,
+              path: targetDir,
+            })}
+            {onNetwork && ` ${t("dlg.download_network")}`}
           </p>
           <div className="browser-nav">
             <button
@@ -97,7 +101,7 @@ export function ShellDownloadDialog(props: Props) {
               className="explorer-icon-btn"
               disabled={!folder?.parent_id || busy || loading}
               onClick={() => folder?.parent_id && void loadFolder(folder.parent_id)}
-              title="Up one level"
+              title={t("dlg.up")}
             >
               <ChevronUp size={16} />
             </button>
@@ -105,11 +109,11 @@ export function ShellDownloadDialog(props: Props) {
           </div>
           <ul className="folder-picker-list">
             {loading ? (
-              <li className="browser-empty">Loading…</li>
+              <li className="browser-empty">{t("dlg.loading")}</li>
             ) : error ? (
               <li className="browser-empty is-error">{error}</li>
             ) : entries.length === 0 ? (
-              <li className="browser-empty">Empty folder.</li>
+              <li className="browser-empty">{t("dlg.empty_folder")}</li>
             ) : (
               entries.map((entry) => (
                 <li key={entry.id}>
@@ -133,7 +137,7 @@ export function ShellDownloadDialog(props: Props) {
                         disabled={busy}
                         onClick={() => void loadFolder(entry.id)}
                       >
-                        Open
+                        {t("dlg.open")}
                       </button>
                     )}
                   </div>
@@ -144,19 +148,17 @@ export function ShellDownloadDialog(props: Props) {
         </div>
         <div className="modal-actions">
           <span className="hint" style={{ marginRight: "auto" }}>
-            {selected.size > 0
-              ? `${selected.size} item${selected.size === 1 ? "" : "s"} selected`
-              : ""}
+            {selected.size > 0 ? t("trash.selected", { count: selected.size }) : ""}
           </span>
           <button type="button" className="secondary" disabled={busy} onClick={onCancel}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"
             disabled={busy || selected.size === 0}
             onClick={() => onConfirm(Array.from(selected.values()))}
           >
-            {busy ? "Saving…" : "Save here"}
+            {busy ? t("dlg.saving") : t("dlg.save_here")}
           </button>
         </div>
       </div>

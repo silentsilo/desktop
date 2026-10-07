@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 /**
  * Whether an address will be reached over plain HTTP.
  *
@@ -14,5 +16,7 @@ export function isPlainHttp(address: string): boolean {
   return /^http:\/\//i.test(address.trim());
 }
 
-export const PLAIN_HTTP_WARNING =
-  "Plain HTTP. Files stay encrypted, but the sign-in details for this storage are sent readable, as are the size and timing of what you store. Use https:// unless this server is on your own network.";
+/** A function rather than a constant, so it follows the language in use. */
+export function plainHttpWarning(): string {
+  return t("backup.plain_http");
+}

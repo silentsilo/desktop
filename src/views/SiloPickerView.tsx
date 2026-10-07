@@ -33,12 +33,12 @@ type Props = {
 type Mode = "list" | "create";
 
 function describeLastOpened(at: number): string {
-  if (!at) return "never opened";
+  if (!at) return t("start.never_opened");
   const days = Math.floor((Date.now() / 1000 - at) / 86400);
-  if (days < 1) return "opened today";
-  if (days === 1) return "opened yesterday";
-  if (days < 30) return `opened ${days} days ago`;
-  return `opened ${formatDay(at)}`;
+  if (days < 1) return t("start.opened_today");
+  if (days === 1) return t("start.opened_yesterday");
+  if (days < 30) return t("start.opened_days_ago", { count: days });
+  return t("start.opened_on", { date: formatDay(at) });
 }
 
 /**
@@ -59,7 +59,7 @@ export function SiloPickerView({
 }: Props) {
   useLocale();
   const [mode, setMode] = useState<Mode>(silos.length === 0 ? "create" : "list");
-  const [name, setName] = useState("Personal");
+  const [name, setName] = useState(() => t("start.default_name"));
   const [location, setLocation] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [syncProvider, setSyncProvider] = useState<string | null>(null);
@@ -134,7 +134,9 @@ export function SiloPickerView({
     return (
       <AuthShell
         title="SilentSilo"
-        subtitle={silos.length === 0 ? "Create your first silo." : "Create another silo."}
+        subtitle={
+          silos.length === 0 ? t("start.create_first_subtitle") : t("start.create_another_subtitle")
+        }
       >
         <form
           className="card auth-card is-wide"
@@ -143,24 +145,21 @@ export function SiloPickerView({
             if (!busy && name.trim()) onCreate(name.trim(), location.trim() || null);
           }}
         >
-          <h2>New silo</h2>
-          <p className="hint">
-            A silo is an encrypted folder. Each one has its own keys and backup storage, so you
-            can keep work and personal files apart.
-          </p>
+          <h2>{t("start.new_silo")}</h2>
+          <p className="hint">{t("start.new_silo_intro")}</p>
 
           <label className="field">
-            <span>Name</span>
+            <span>{t("start.name_label")}</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Personal"
+              placeholder={t("start.default_name")}
               autoFocus
             />
           </label>
 
           <label className="field">
-            <span>Where to keep it</span>
+            <span>{t("start.location_label")}</span>
             <div className="path-picker">
               <input
                 value={location}
@@ -172,19 +171,14 @@ export function SiloPickerView({
               />
               <button type="button" className="secondary" disabled={busy} onClick={() => void chooseLocation()}>
                 <FolderOpen size={15} />
-                Browse
+                {t("start.browse")}
               </button>
             </div>
-            <p className="hint">
-              Any folder works, including one on an external drive. What SilentSilo writes here is
-              encrypted.
-            </p>
+            <p className="hint">{t("start.location_hint")}</p>
             {syncProvider && (
               <p className="hint is-warning">
                 <AlertTriangle size={14} />
-                This is inside {syncProvider}. That works as a backup for one computer, but{" "}
-                {syncProvider} cannot merge changes from two. To use two computers, keep the silo
-                elsewhere and connect backup storage in Settings.
+                {t("start.sync_folder_warning", { provider: syncProvider })}
               </p>
             )}
           </label>
@@ -199,7 +193,7 @@ export function SiloPickerView({
           <div className="actions">
             <button type="submit" disabled={busy || name.trim().length === 0}>
               <Plus size={15} />
-              {busy ? "Creating…" : "Create silo"}
+              {busy ? t("start.creating") : t("start.create")}
             </button>
             {silos.length > 0 && (
               <button
@@ -209,7 +203,7 @@ export function SiloPickerView({
                 onClick={() => setMode("list")}
               >
                 <ArrowLeft size={15} />
-                Back
+                {t("start.back")}
               </button>
             )}
           </div>
@@ -246,9 +240,9 @@ export function SiloPickerView({
   }
 
   return (
-    <AuthShell title="SilentSilo" subtitle="Which silo do you want to open?">
+    <AuthShell title="SilentSilo" subtitle={t("start.picker_subtitle")}>
       <section className="card auth-card">
-        <h2>Your silos</h2>
+        <h2>{t("start.your_silos")}</h2>
         <ul className="silo-list">
           {silos.map((silo) => (
             <li key={silo.id} className="silo-row">
@@ -257,7 +251,7 @@ export function SiloPickerView({
                 className={`silo-item${silo.present ? "" : " is-missing"}`}
                 disabled={busy || !silo.present}
                 onClick={() => onOpen(silo.id)}
-                title={silo.present ? silo.path : `${silo.path} (not reachable)`}
+                title={silo.present ? silo.path : t("start.path_not_reachable", { path: silo.path })}
               >
                 <HardDrive size={18} />
                 <span className="silo-item-text">
@@ -267,10 +261,10 @@ export function SiloPickerView({
                         an unlocked silo opens on click, a locked one asks
                         for a key first, and that is the difference worth
                         knowing before clicking. */}
-                    {silo.unlocked && <span className="silo-open-badge">unlocked</span>}
+                    {silo.unlocked && <span className="silo-open-badge">{t("start.unlocked_badge")}</span>}
                   </strong>
                   <span className="hint">
-                    {silo.present ? describeLastOpened(silo.last_opened) : "not reachable"} ·{" "}
+                    {silo.present ? describeLastOpened(silo.last_opened) : t("start.not_reachable")} ·{" "}
                     {silo.path}
                   </span>
                 </span>
@@ -280,8 +274,8 @@ export function SiloPickerView({
                 className="silo-info"
                 disabled={busy}
                 onClick={() => void showReport(silo.id)}
-                title={`What ${silo.name} looks like on disk`}
-                aria-label={`About ${silo.name}`}
+                title={t("start.report_tooltip", { name: silo.name })}
+                aria-label={t("start.about_silo", { name: silo.name })}
               >
                 <Info size={15} />
               </button>
@@ -290,8 +284,8 @@ export function SiloPickerView({
                 className="silo-remove"
                 disabled={busy}
                 onClick={() => onForget(silo)}
-                title={`Remove ${silo.name} from this list`}
-                aria-label={`Remove ${silo.name} from this list`}
+                title={t("start.remove_from_list", { name: silo.name })}
+                aria-label={t("start.remove_from_list", { name: silo.name })}
               >
                 <X size={15} />
               </button>
@@ -302,8 +296,7 @@ export function SiloPickerView({
         {silos.some((s) => !s.present) && (
           <p className="hint">
             <AlertTriangle size={14} />
-            A silo shown as unreachable is on a drive or folder that is not there right now. Plug
-            it back in, or remove it from this list if it is gone for good.
+            {t("start.unreachable_hint")}
           </p>
         )}
 
@@ -326,7 +319,7 @@ export function SiloPickerView({
         <div className="silo-actions">
           <button type="button" disabled={busy} onClick={() => setMode("create")}>
             <Plus size={16} />
-            <span>New silo</span>
+            <span>{t("start.new_silo")}</span>
           </button>
           <button
             type="button"

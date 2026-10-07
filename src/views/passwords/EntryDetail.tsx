@@ -24,6 +24,7 @@ import {
   typeOf,
 } from "./util";
 import { IconCopy, IconEdit, IconEye, IconEyeOff, IconTrash } from "../../ui/Icons";
+import { t, useLocale } from "../../i18n";
 
 type Props = {
   entry: PasswordEntry;
@@ -77,6 +78,7 @@ export function EntryDetail({
   onRestoreVersion,
   onClearHistory,
 }: Props) {
+  useLocale();
   /// Which entry the user asked to see, rather than a bare "revealed" flag.
   ///
   /// Derived, so a reveal cannot outlive the entry it was granted for. The
@@ -114,8 +116,8 @@ export function EntryDetail({
     <button
       type="button"
       className="pw-inline-btn"
-      title={revealed ? "Hide" : "Show"}
-      aria-label={revealed ? "Hide" : "Show"}
+      title={revealed ? t("pw.hide") : t("pw.show")}
+      aria-label={revealed ? t("pw.hide") : t("pw.show")}
       onClick={toggleReveal}
     >
       {revealed ? <IconEyeOff size={14} /> : <IconEye size={14} />}
@@ -123,9 +125,16 @@ export function EntryDetail({
   );
 
   const copyBadge = (key: string, icon_: React.ReactNode = <IconCopy size={14} />) =>
-    copiedId === key ? <span className="pw-copied-badge">Copied</span> : icon_;
+    copiedId === key ? <span className="pw-copied-badge">{t("pw.copied")}</span> : icon_;
 
-  const plainRow = (label: string, value: string | undefined, copyKey?: string) =>
+  /// `copyLabel` names the copy button; `audit`, below, names the field for
+  /// the activity log, which stays in English.
+  const plainRow = (
+    label: string,
+    value: string | undefined,
+    copyKey?: string,
+    copyLabel?: string,
+  ) =>
     value ? (
       <div className="pw-field-row">
         <span className="pw-field-label">{label}</span>
@@ -134,8 +143,8 @@ export function EntryDetail({
           <button
             type="button"
             className="pw-inline-btn"
-            title={`Copy ${label.toLowerCase()}`}
-            aria-label={`Copy ${label.toLowerCase()}`}
+            title={copyLabel}
+            aria-label={copyLabel}
             onClick={() => onCopyPlain(copyKey, value)}
           >
             {copyBadge(copyKey)}
@@ -144,7 +153,14 @@ export function EntryDetail({
       </div>
     ) : null;
 
-  const secretRow = (label: string, value: string, shown: string, copyKey: string) => (
+  const secretRow = (
+    label: string,
+    value: string,
+    shown: string,
+    copyKey: string,
+    copyLabel: string,
+    audit: string,
+  ) => (
     <div className="pw-field-row">
       <span className="pw-field-label">{label}</span>
       <span className="pw-field-value pw-mask">{revealed ? shown : "••••••••••••"}</span>
@@ -152,9 +168,9 @@ export function EntryDetail({
       <button
         type="button"
         className="pw-inline-btn"
-        title={`Copy ${label.toLowerCase()}`}
-        aria-label={`Copy ${label.toLowerCase()}`}
-        onClick={() => onCopySecretField(entry, copyKey, value, label.toLowerCase())}
+        title={copyLabel}
+        aria-label={copyLabel}
+        onClick={() => onCopySecretField(entry, copyKey, value, audit)}
       >
         {copyBadge(copyKey)}
       </button>
@@ -192,7 +208,7 @@ export function EntryDetail({
           )}
         </div>
         <div className="pw-card-title">
-          <span className="pw-detail-service">{entry.service || "Untitled"}</span>
+          <span className="pw-detail-service">{entry.service || t("pw.untitled")}</span>
           <span className="pw-card-category" style={{ color: colorFor(entry.category) }}>
             {entry.category}
           </span>
@@ -201,7 +217,7 @@ export function EntryDetail({
           <button
             type="button"
             className={`pw-action-btn${entry.favorite ? " is-starred" : ""}`}
-            title={entry.favorite ? "Remove from favourites" : "Add to favourites"}
+            title={entry.favorite ? t("pw.unfavorite") : t("pw.favorite")}
             aria-pressed={entry.favorite ?? false}
             disabled={busy}
             onClick={() => onToggleFavorite(entry)}
@@ -211,7 +227,7 @@ export function EntryDetail({
           <button
             type="button"
             className="pw-action-btn"
-            title="Edit"
+            title={t("pw.edit")}
             disabled={busy}
             onClick={() => onEdit(entry)}
           >
@@ -224,7 +240,7 @@ export function EntryDetail({
           <button
             type="button"
             className="pw-action-btn danger"
-            title="Delete"
+            title={t("pw.delete")}
             disabled={busy}
             onClick={() => onDelete(entry.id)}
           >
@@ -241,19 +257,26 @@ export function EntryDetail({
         {type === "login" && (
           <>
             <div className="pw-field-row">
-              <span className="pw-field-label">Username or email</span>
+              <span className="pw-field-label">{t("pw.field_username_or_email")}</span>
               <span className="pw-field-value">{entry.username || "-"}</span>
               <button
                 type="button"
                 className="pw-inline-btn"
-                title="Copy username"
-                aria-label="Copy username"
+                title={t("pw.copy_username")}
+                aria-label={t("pw.copy_username")}
                 onClick={() => onCopyUsername(entry)}
               >
                 {copyBadge(`u-${entry.id}`)}
               </button>
             </div>
-            {secretRow("Password", entry.password, entry.password, entry.id)}
+            {secretRow(
+              t("pw.field_password"),
+              entry.password,
+              entry.password,
+              entry.id,
+              t("pw.copy_password"),
+              "password",
+            )}
             {entry.totp_secret && (
               <TotpDisplay
                 entry={entry}
@@ -268,55 +291,80 @@ export function EntryDetail({
 
         {type === "card" && (
           <>
-            {plainRow("Cardholder", entry.card_holder, `h-${entry.id}`)}
-            {plainRow("Brand", entry.card_brand)}
+            {plainRow(
+              t("pw.field_cardholder"),
+              entry.card_holder,
+              `h-${entry.id}`,
+              t("pw.copy_cardholder"),
+            )}
+            {plainRow(t("pw.field_brand"), entry.card_brand)}
             {secretRow(
-              "Number",
+              t("pw.field_number"),
               cardDigits(entry),
               groupCardNumber(cardDigits(entry)),
-              entry.id
+              entry.id,
+              t("pw.copy_number"),
+              "number",
             )}
             {(entry.card_exp_month || entry.card_exp_year) && (
               <div className="pw-field-row">
-                <span className="pw-field-label">Expiry</span>
+                <span className="pw-field-label">{t("pw.field_expiry")}</span>
                 <span className="pw-field-value">
                   {entry.card_exp_month || "??"}/{entry.card_exp_year || "??"}
                 </span>
               </div>
             )}
             {entry.card_code &&
-              secretRow("Security code", entry.card_code, entry.card_code, `c-${entry.id}`)}
+              secretRow(
+                t("pw.field_security_code"),
+                entry.card_code,
+                entry.card_code,
+                `c-${entry.id}`,
+                t("pw.copy_security_code"),
+                "security code",
+              )}
           </>
         )}
 
         {type === "identity" && (
           <>
-            {plainRow("Name", entry.id_full_name, `n-${entry.id}`)}
-            {plainRow("Company", entry.id_company)}
-            {plainRow("Email", entry.id_email, `e-${entry.id}`)}
-            {plainRow("Phone", entry.id_phone, `p-${entry.id}`)}
             {plainRow(
-              "Address",
+              t("pw.field_person_name"),
+              entry.id_full_name,
+              `n-${entry.id}`,
+              t("pw.copy_person_name"),
+            )}
+            {plainRow(t("pw.field_company"), entry.id_company)}
+            {plainRow(t("pw.field_email"), entry.id_email, `e-${entry.id}`, t("pw.copy_email"))}
+            {plainRow(t("pw.field_phone"), entry.id_phone, `p-${entry.id}`, t("pw.copy_phone"))}
+            {plainRow(
+              t("pw.field_address"),
               [entry.id_address, entry.id_city, entry.id_state, entry.id_zip, entry.id_country]
                 .filter(Boolean)
                 .join(", "),
-              `a-${entry.id}`
+              `a-${entry.id}`,
+              t("pw.copy_address"),
             )}
           </>
         )}
 
         {type === "ssh_key" && (
           <>
-            {plainRow("Fingerprint", entry.ssh_fingerprint, `f-${entry.id}`)}
+            {plainRow(
+              t("pw.field_fingerprint"),
+              entry.ssh_fingerprint,
+              `f-${entry.id}`,
+              t("pw.copy_fingerprint"),
+            )}
             {entry.ssh_public_key && (
               <div className="pw-field-row">
-                <span className="pw-field-label">Public key</span>
+                <span className="pw-field-label">{t("pw.field_public_key")}</span>
                 <span className="pw-field-value pw-pubkey">{entry.ssh_public_key}</span>
                 <button
                   type="button"
                   className="pw-inline-btn"
-                  title="Copy public key"
-                  aria-label="Copy public key"
+                  title={t("pw.copy_public_key")}
+                  aria-label={t("pw.copy_public_key")}
                   onClick={() => onCopyPlain(`k-${entry.id}`, entry.ssh_public_key ?? "")}
                 >
                   {copyBadge(`k-${entry.id}`)}
@@ -328,13 +376,13 @@ export function EntryDetail({
                 ssh config, an agent) takes a paste. Copy is gated the same
                 as a password. */}
             <div className="pw-field-row">
-              <span className="pw-field-label">Private key</span>
+              <span className="pw-field-label">{t("pw.field_private_key")}</span>
               <span className="pw-field-value pw-mask">••••••••••••</span>
               <button
                 type="button"
                 className="pw-inline-btn"
-                title="Copy private key"
-                aria-label="Copy private key"
+                title={t("pw.copy_private_key")}
+                aria-label={t("pw.copy_private_key")}
                 onClick={() =>
                   onCopySecretField(entry, entry.id, entry.ssh_private_key ?? "", "private key")
                 }
@@ -351,12 +399,23 @@ export function EntryDetail({
           <Fragment key={`f${i}`}>
             {field.hidden
               ? secretRow(
-                  field.name || "Hidden field",
+                  field.name || t("pw.hidden_field"),
                   field.value,
                   field.value,
                   `f${i}-${entry.id}`,
+                  field.name
+                    ? t("pw.copy_named", { name: field.name.toLowerCase() })
+                    : t("pw.copy_hidden_field"),
+                  (field.name || "Hidden field").toLowerCase(),
                 )
-              : plainRow(field.name || "Field", field.value, `f${i}-${entry.id}`)}
+              : plainRow(
+                  field.name || t("pw.field"),
+                  field.value,
+                  `f${i}-${entry.id}`,
+                  field.name
+                    ? t("pw.copy_named", { name: field.name.toLowerCase() })
+                    : t("pw.copy_field"),
+                )}
           </Fragment>
         ))}
 
@@ -368,7 +427,7 @@ export function EntryDetail({
             if (!href) {
               return (
                 <div className="pw-field-row">
-                  <span className="pw-field-label">Website</span>
+                  <span className="pw-field-label">{t("pw.field_website")}</span>
                   <span className="pw-field-value">{entry.url}</span>
                 </div>
               );
@@ -386,7 +445,7 @@ export function EntryDetail({
                   }
                 }}
               >
-                <span className="pw-field-label">Website</span>
+                <span className="pw-field-label">{t("pw.field_website")}</span>
                 <span className="pw-field-value pw-link">{entry.url}</span>
               </div>
             );
@@ -394,14 +453,14 @@ export function EntryDetail({
 
         {(entry.attachments ?? []).length > 0 && (
           <div className="pw-field-row pw-field-notes">
-            <span className="pw-field-label">Attached files</span>
+            <span className="pw-field-label">{t("pw.field_attached_files")}</span>
             <div className="pw-attachments">
               {entry.attachments!.map((a) => (
                 <button
                   key={a.blob_id}
                   type="button"
                   className="pw-attachment-row is-clickable"
-                  title="Open (downloaded from backup storage if not on this computer)"
+                  title={t("pw.open_attachment")}
                   onClick={() => onOpenAttachment(a)}
                 >
                   <Paperclip size={14} aria-hidden />
@@ -421,7 +480,7 @@ export function EntryDetail({
             entry is nothing but its note, so the rule matters most there. */}
         {entry.notes && (
           <div className="pw-field-row pw-field-notes">
-            <span className="pw-field-label">Notes</span>
+            <span className="pw-field-label">{t("pw.field_notes")}</span>
             <span className="pw-field-value pw-notes-value">
               {notesAreSecret(entry) && !revealed
                 ? "••••••••••••"
@@ -431,8 +490,8 @@ export function EntryDetail({
             <button
               type="button"
               className="pw-inline-btn"
-              title="Copy notes"
-              aria-label="Copy notes"
+              title={t("pw.copy_notes")}
+              aria-label={t("pw.copy_notes")}
               onClick={() => onCopySecretField(entry, `notes-${entry.id}`, entry.notes, "notes")}
             >
               {copyBadge(`notes-${entry.id}`)}
@@ -444,7 +503,7 @@ export function EntryDetail({
             list is about recovering something, not reading it every time. */}
         {history.length > 0 && (
           <div className="pw-field-row pw-field-notes">
-            <span className="pw-field-label">Earlier versions</span>
+            <span className="pw-field-label">{t("pw.history_label")}</span>
             <div className="pw-history">
               <button
                 type="button"
@@ -453,7 +512,7 @@ export function EntryDetail({
                 onClick={() => setHistoryOpen((open) => !open)}
               >
                 <History size={14} aria-hidden />
-                {history.length === 1 ? "1 version" : `${history.length} versions`}
+                {t("pw.history_versions", { count: history.length })}
               </button>
               {historyOpen && (
                 <>
@@ -464,7 +523,9 @@ export function EntryDetail({
                       <div key={`${version.saved_at}-${i}`} className="pw-history-row">
                         <span className="pw-history-date">{formatDate(version.saved_at)}</span>
                         <span className="pw-history-what">
-                          {changed.length > 0 ? `Next change: ${changed.join(", ")}` : "No change"}
+                          {changed.length > 0
+                            ? t("pw.history_next_change", { changes: changed.join(", ") })
+                            : t("pw.history_no_change")}
                         </span>
                         {version.password && (
                           <>
@@ -474,8 +535,8 @@ export function EntryDetail({
                             <button
                               type="button"
                               className="pw-inline-btn"
-                              title="Copy this password"
-                              aria-label="Copy this password"
+                              title={t("pw.copy_this_password")}
+                              aria-label={t("pw.copy_this_password")}
                               onClick={() =>
                                 onCopySecretField(
                                   entry,
@@ -493,10 +554,12 @@ export function EntryDetail({
                           type="button"
                           className="secondary pw-history-restore"
                           disabled={busy}
-                          aria-label={`Restore the version of ${formatDate(version.saved_at)}`}
+                          aria-label={t("pw.history_restore_label", {
+                            date: formatDate(version.saved_at),
+                          })}
                           onClick={() => onRestoreVersion(entry, version)}
                         >
-                          Restore
+                          {t("pw.history_restore")}
                         </button>
                       </div>
                     );
@@ -507,7 +570,7 @@ export function EntryDetail({
                     disabled={busy}
                     onClick={() => onClearHistory(entry)}
                   >
-                    Clear history
+                    {t("pw.clear_history")}
                   </button>
                 </>
               )}

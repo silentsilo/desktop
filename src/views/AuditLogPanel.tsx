@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ScrollText } from "lucide-react";
 import { formatAppError } from "../lib/errors";
 import type { AuditStatus } from "../lib/types";
+import { t, useLocale, type Key } from "../i18n";
 
 type Props = {
   busy: boolean;
@@ -11,11 +12,11 @@ type Props = {
 };
 
 /** How long an organisation's log keeps its records; `null` keeps them. */
-const RETENTION_CHOICES: { days: number | null; label: string }[] = [
-  { days: 90, label: "90 days" },
-  { days: 365, label: "1 year" },
-  { days: 1095, label: "3 years" },
-  { days: null, label: "Keep everything" },
+const RETENTION_CHOICES: { days: number | null; label: Key }[] = [
+  { days: 90, label: "set.ret_90_days" },
+  { days: 365, label: "set.ret_1_year" },
+  { days: 1095, label: "set.ret_3_years" },
+  { days: null, label: "set.ret_forever" },
 ];
 
 function retentionValue(days: number | null): string {
@@ -32,6 +33,7 @@ function retentionDays(value: string): number | null {
  * is its own page, Activity.
  */
 export function AuditLogPanel({ busy, onChanged }: Props) {
+  useLocale();
   const [status, setStatus] = useState<AuditStatus | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,11 +78,7 @@ export function AuditLogPanel({ busy, onChanged }: Props) {
     setNotice(null);
     try {
       const removed = await invoke<number>("audit_org_expire");
-      setNotice(
-        removed === 0
-          ? "Nothing in the log is past the retention."
-          : "Removed what was past the retention.",
-      );
+      setNotice(removed === 0 ? t("set.audit_expire_none") : t("set.audit_expired"));
     } catch (e) {
       setError(formatAppError(e));
     } finally {
@@ -94,10 +92,10 @@ export function AuditLogPanel({ busy, onChanged }: Props) {
   if (status?.organisation) {
     body = (
       <>
-        <p>Kept by your organisation, always on. Changes here ask for an organisation key.</p>
+        <p>{t("set.audit_org_intro")}</p>
         <div className="settings-row">
           <label className="settings-row-label" htmlFor="audit-retention">
-            Keep records for
+            {t("set.audit_keep_for")}
           </label>
           <select
             id="audit-retention"
@@ -112,7 +110,7 @@ export function AuditLogPanel({ busy, onChanged }: Props) {
           >
             {RETENTION_CHOICES.map((c) => (
               <option key={retentionValue(c.days)} value={retentionValue(c.days)}>
-                {c.label}
+                {t(c.label)}
               </option>
             ))}
           </select>
@@ -125,20 +123,20 @@ export function AuditLogPanel({ busy, onChanged }: Props) {
               disabled={disabled}
               onClick={() => void expire()}
             >
-              Remove records past the retention
+              {t("set.audit_expire")}
             </button>
           </div>
         )}
-        <p className="hint">A copy kept as never-delete keeps every record.</p>
+        <p className="hint">{t("set.audit_archive")}</p>
       </>
     );
   } else if (status?.org_controlled) {
     body = (
       <>
-        <p>Start the organisation&apos;s record of activity. Once started it stays on.</p>
+        <p>{t("set.audit_org_start_intro")}</p>
         <div className="settings-row">
           <label className="settings-row-label" htmlFor="audit-start-retention">
-            Keep records for
+            {t("set.audit_keep_for")}
           </label>
           <select
             id="audit-start-retention"
@@ -149,7 +147,7 @@ export function AuditLogPanel({ busy, onChanged }: Props) {
           >
             {RETENTION_CHOICES.map((c) => (
               <option key={retentionValue(c.days)} value={retentionValue(c.days)}>
-                {c.label}
+                {t(c.label)}
               </option>
             ))}
           </select>
@@ -164,10 +162,10 @@ export function AuditLogPanel({ busy, onChanged }: Props) {
               })
             }
           >
-            Start
+            {t("set.audit_start")}
           </button>
         </div>
-        <p className="hint">Asks for one of the organisation's security keys.</p>
+        <p className="hint">{t("set.audit_org_key")}</p>
       </>
     );
   } else {
@@ -181,11 +179,8 @@ export function AuditLogPanel({ busy, onChanged }: Props) {
             onChange={(e) => void change("audit_set_enabled", { enabled: e.target.checked })}
           />
           <span>
-            Record activity
-            <span className="hint">
-              Unlocks, secrets shown or copied, files opened, and changes. Encrypted, and read by
-              anyone who can open this silo.
-            </span>
+            {t("set.audit_record")}
+            <span className="hint">{t("set.audit_record_hint")}</span>
           </span>
         </label>
       </>
@@ -197,15 +192,11 @@ export function AuditLogPanel({ busy, onChanged }: Props) {
       <div className="panel-section">
         <h3>
           <ScrollText size={16} />
-          Activity
+          {t("nav.activity")}
         </h3>
         {body}
         {status && status.waiting > 0 && (
-          <p className="hint">
-            {status.waiting === 1
-              ? "1 record is on this computer and not yet on every copy."
-              : `${status.waiting} records are on this computer and not yet on every copy.`}
-          </p>
+          <p className="hint">{t("set.audit_waiting", { count: status.waiting })}</p>
         )}
         {notice && <p className="hint">{notice}</p>}
         {error && <p className="hint is-error">{error}</p>}

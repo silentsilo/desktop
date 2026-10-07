@@ -1,5 +1,6 @@
 import { CloudAlert, CloudCheck, CloudDownload, CloudUpload } from "lucide-react";
 import type { FileSyncState } from "../lib/types";
+import { t, useLocale, type Key } from "../i18n";
 
 /**
  * Where one file's content is, in a mark small enough to sit in a row.
@@ -15,43 +16,46 @@ import type { FileSyncState } from "../lib/types";
 /// still owes the backup, coming down means the backup owes this machine.
 const LOOK: Record<
   Exclude<FileSyncState, "local-only">,
-  { Icon: typeof CloudCheck; label: string; title: string }
+  { Icon: typeof CloudCheck; label: Key; title: Key }
 > = {
   pending: {
     Icon: CloudUpload,
-    label: "Waiting",
-    title: "Not backed up yet. This computer holds the only copy.",
+    label: "start.badge_pending",
+    title: "start.badge_pending_title",
   },
   "backed-up": {
     Icon: CloudCheck,
-    label: "Backed up",
-    title: "Backed up, and kept on this computer for offline use.",
+    label: "start.badge_backed_up",
+    title: "start.badge_backed_up_title",
   },
   "remote-only": {
     Icon: CloudDownload,
-    label: "In backup only",
-    title: "Backed up. The content downloads when you open it.",
+    label: "start.badge_remote_only",
+    title: "start.badge_remote_only_title",
   },
   uploading: {
     Icon: CloudUpload,
-    label: "Uploading",
-    title: "Uploading to backup storage now.",
+    label: "start.badge_uploading",
+    title: "start.badge_uploading_title",
   },
   downloading: {
     Icon: CloudDownload,
-    label: "Downloading",
-    title: "Downloading from backup storage now.",
+    label: "start.badge_downloading",
+    title: "start.badge_downloading_title",
   },
   absent: {
     Icon: CloudAlert,
-    label: "Missing",
-    title: "The content is in no backup storage and not on this computer, so it cannot be opened.",
+    label: "start.badge_missing",
+    title: "start.badge_missing_title",
   },
 };
 
 export function SyncBadge({ state, compact }: { state: FileSyncState; compact?: boolean }) {
+  useLocale();
   if (state === "local-only") return null;
-  const { Icon, label, title } = LOOK[state];
+  const { Icon } = LOOK[state];
+  const label = t(LOOK[state].label);
+  const title = t(LOOK[state].title);
   return (
     <span className={`sync-badge sync-${state}`} title={title} aria-label={title}>
       <Icon size={12} aria-hidden />

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "../lib/dialog";
 import { FolderHeart, RefreshCw, Trash2 } from "lucide-react";
 import { formatAppError } from "../lib/errors";
+import { t, useLocale } from "../i18n";
 
 type ProtectedFolder = { path: string; target: string };
 
@@ -17,6 +18,7 @@ type ProtectedFolder = { path: string; target: string };
  * day to find out.
  */
 export function ProtectedFoldersPanel() {
+  useLocale();
   const [folders, setFolders] = useState<ProtectedFolder[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -79,11 +81,14 @@ export function ProtectedFoldersPanel() {
       const report = await invoke<{ imported: number; skipped: number }>(
         "protected_folders_scan",
       );
-      const parts = [
-        report.imported === 1 ? "1 file copied in" : `${report.imported} files copied in`,
-      ];
-      if (report.skipped > 0) parts.push(`${report.skipped} could not be read`);
-      setStatus(report.imported === 0 && report.skipped === 0 ? "Nothing new." : parts.join(", "));
+      const imported = t("set.pf_scan_imported", { count: report.imported });
+      setStatus(
+        report.imported === 0 && report.skipped === 0
+          ? t("set.pf_nothing_new")
+          : report.skipped > 0
+            ? t("set.pf_scan_skipped", { imported, count: report.skipped })
+            : imported,
+      );
     } catch (e) {
       setError(formatAppError(e));
     } finally {
@@ -95,16 +100,10 @@ export function ProtectedFoldersPanel() {
     <div className="panel-section">
       <h3>
         <FolderHeart size={16} />
-        Auto-import folders
+        {t("settings.protected")}
       </h3>
-      <p>
-        Files from these folders are copied into the silo each time you unlock it, and when you
-        press Check now. Nothing is written back to the folders.
-      </p>
-      <p className="hint">
-        Deleting a file here on the computer does not delete it from the silo. To remove it from
-        the silo, delete it in Files.
-      </p>
+      <p>{t("set.pf_intro")}</p>
+      <p className="hint">{t("set.pf_delete_hint")}</p>
 
       {folders !== null && folders.length > 0 && (
         <ul className="key-list">
@@ -114,17 +113,17 @@ export function ProtectedFoldersPanel() {
                   together read as a single nonsense string. */}
               <div className="protected-row-text">
                 <strong>{folder.path}</strong>
-                <span className="hint">Copied into {folder.target}</span>
+                <span className="hint">{t("set.pf_target", { target: folder.target })}</span>
               </div>
               <button
                 type="button"
                 className="secondary"
                 disabled={busy}
                 onClick={() => void remove(folder.path)}
-                title="Stop importing this folder. What is already in the silo stays."
+                title={t("set.pf_stop_tooltip")}
               >
                 <Trash2 size={14} />
-                Stop importing
+                {t("set.pf_stop")}
               </button>
             </li>
           ))}
@@ -132,13 +131,13 @@ export function ProtectedFoldersPanel() {
       )}
 
       {folders !== null && folders.length === 0 && (
-        <p className="hint">No folders are imported yet.</p>
+        <p className="hint">{t("set.pf_none")}</p>
       )}
 
       <div className="actions">
         <button type="button" disabled={busy} onClick={() => void add()}>
           <FolderHeart size={15} />
-          Add a folder to import
+          {t("set.pf_add")}
         </button>
         <button
           type="button"
@@ -147,7 +146,7 @@ export function ProtectedFoldersPanel() {
           onClick={() => void scan()}
         >
           <RefreshCw size={15} />
-          Check now
+          {t("set.pf_check")}
         </button>
       </div>
 

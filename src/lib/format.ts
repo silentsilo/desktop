@@ -1,14 +1,28 @@
-import { dateLocale } from "../i18n";
+import { dateLocale, t } from "../i18n";
 import type { BreadcrumbSeg } from "./types";
 
+/** The unit names, in the language in use: French writes octets. */
+const units = () => [
+  t("app.unit_b"),
+  t("app.unit_kb"),
+  t("app.unit_mb"),
+  t("app.unit_gb"),
+  t("app.unit_tb"),
+];
+
 export function formatBytes(n: number): string {
-  if (n === 0) return "0 B";
-  if (n < 0) return "0 B";
+  const sizes = units();
+  if (n <= 0) return `0 ${sizes[0]}`;
   const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(n) / Math.log(k));
   const p = Math.min(i, sizes.length - 1);
-  return `${parseFloat((n / Math.pow(k, p)).toFixed(1))} ${sizes[p]}`;
+  // One decimal at most, with the language's own decimal mark and no
+  // thousands separator, the shape "1.5 MB" always had.
+  const value = new Intl.NumberFormat(dateLocale(), {
+    maximumFractionDigits: 1,
+    useGrouping: false,
+  }).format(parseFloat((n / Math.pow(k, p)).toFixed(1)));
+  return `${value} ${sizes[p]}`;
 }
 
 /**
@@ -82,13 +96,13 @@ export function formatDay(ts: number): string {
 /** How long ago a Unix ms instant was, in the words a status line uses. */
 export function formatAge(at: number): string {
   const seconds = Math.round((Date.now() - at) / 1000);
-  if (seconds < 45) return "just now";
+  if (seconds < 45) return t("app.age_just_now");
   const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 60) return t("app.age_minutes", { count: minutes });
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return hours === 1 ? "an hour ago" : `${hours} hours ago`;
+  if (hours < 24) return t("app.age_hours", { count: hours });
   // "49 hours ago" made the reader do arithmetic to learn it was the day
   // before yesterday.
   const days = Math.round(hours / 24);
-  return days === 1 ? "yesterday" : `${days} days ago`;
+  return days === 1 ? t("app.age_yesterday") : t("app.age_days", { count: days });
 }

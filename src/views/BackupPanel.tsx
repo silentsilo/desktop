@@ -20,6 +20,7 @@ import { formatBytes, formatDay } from "../lib/format";
 import { detectPreset } from "../lib/s3Presets";
 import { backupHeadline, syncOutcome, type Status, type SyncReport } from "../lib/syncOutcome";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { t, tx, useLocale } from "../i18n";
 import {
   discardSignIns,
   EMPTY_STORE_DRAFT,
@@ -33,13 +34,16 @@ import {
 /// a bucket needs six, and a single struct covering both would make "a
 /// folder with an access key" expressible.
 
-const KIND_LABEL: Record<StoreConfigView["kind"], string> = {
-  s3: "S3 bucket",
-  folder: "Folder",
-  "web-dav": "WebDAV",
-  sftp: "SFTP",
-  ...CLOUD_NAME,
-};
+function kindLabel(kind: StoreConfigView["kind"]): string {
+  const labels: Record<StoreConfigView["kind"], string> = {
+    s3: t("backup.kind_s3"),
+    folder: t("backup.kind_folder"),
+    "web-dav": "WebDAV",
+    sftp: "SFTP",
+    ...CLOUD_NAME,
+  };
+  return labels[kind];
+}
 
 /**
  * The saved connection, shown back without inputs.
@@ -50,27 +54,37 @@ const KIND_LABEL: Record<StoreConfigView["kind"], string> = {
  * says it kept.
  */
 function StoredSummary({ stored }: { stored: StoreConfigView }) {
-  const rows: [string, string][] = [["Type", KIND_LABEL[stored.kind]]];
+  useLocale();
+  const rows: [string, string][] = [[t("backup.summary_type"), kindLabel(stored.kind)]];
   if (stored.kind === "s3") {
     rows.push(
-      ["Bucket", stored.prefix ? `${stored.bucket}/${stored.prefix}` : stored.bucket],
-      ["Endpoint", stored.endpoint],
-      ["Region", stored.region],
-      ["Access key", stored.access_key_id],
+      [t("backup.s3_bucket"), stored.prefix ? `${stored.bucket}/${stored.prefix}` : stored.bucket],
+      [t("backup.s3_endpoint"), stored.endpoint],
+      [t("backup.s3_region"), stored.region],
+      [t("backup.summary_access_key"), stored.access_key_id],
     );
   } else if (stored.kind === "folder") {
-    rows.push(["Path", stored.path]);
+    rows.push([t("backup.summary_path"), stored.path]);
   } else if (stored.kind === "web-dav") {
-    rows.push(["Address", stored.url], ["Username", stored.username]);
+    rows.push(
+      [t("backup.field_address"), stored.url],
+      [t("backup.field_username"), stored.username],
+    );
   } else if (isCloudView(stored)) {
-    rows.push(["Account", stored.account], ["Folder", stored.folder]);
+    rows.push(
+      [t("backup.summary_account"), stored.account],
+      [t("backup.field_folder"), stored.folder],
+    );
   } else {
     rows.push(
-      ["Server", `${stored.username}@${stored.host}:${stored.port}`],
-      ["Folder", stored.path || "/"],
-      ["Sign-in", stored.auth_method === "key" ? "private key" : "password"],
+      [t("backup.field_server"), `${stored.username}@${stored.host}:${stored.port}`],
+      [t("backup.field_folder"), stored.path || "/"],
+      [
+        t("backup.summary_sign_in"),
+        stored.auth_method === "key" ? t("backup.word_private_key") : t("backup.word_password"),
+      ],
     );
-    if (stored.host_fingerprint) rows.push(["Server key", stored.host_fingerprint]);
+    if (stored.host_fingerprint) rows.push([t("backup.summary_server_key"), stored.host_fingerprint]);
   }
   return (
     <dl className="backup-config">
@@ -165,6 +179,7 @@ export function BackupPanel({
   onTestBackup,
   lastTestedAt = null,
 }: Props) {
+  useLocale();
   const [connected, setConnected] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [expanded, setExpanded] = useState(false);
@@ -278,7 +293,7 @@ export function BackupPanel({
   const guard = (): boolean => {
     const missing = missingStoreFields(draft, connected);
     if (missing.length > 0) {
-      setStatus({ kind: "error", message: `Still needed: ${missing.join(", ")}.` });
+      setStatus({ kind: "error", message: t("backup.still_needed", { fields: missing.join(", ") }) });
       return false;
     }
     return true;
@@ -286,10 +301,10 @@ export function BackupPanel({
 
   const handleTest = async () => {
     if (!guard()) return;
-    setStatus({ kind: "busy", message: "Writing a test file…" });
+    setStatus({ kind: "busy", message: t("backup.status_testing") });
     try {
       await invoke("s3_test_config", { config: payload() });
-      setStatus({ kind: "ok", message: "Connected. The backup storage is writable." });
+      setStatus({ kind: "ok", message: t("backup.status_test_ok") });
     } catch (e) {
       setStatus({ kind: "error", message: formatAppError(e) });
     }
@@ -297,7 +312,7 @@ export function BackupPanel({
 
   const handleSave = async () => {
     if (!guard()) return;
-    setStatus({ kind: "busy", message: "Verifying and saving…" });
+    setStatus({ kind: "busy", message: t("backup.status_saving") });
     try {
       await invoke("s3_save_config", { config: payload() });
       setConnected(true);
@@ -307,7 +322,7 @@ export function BackupPanel({
         s3: { ...prev.s3, secretAccessKey: "" },
         dav: { ...prev.dav, password: "" },
       }));
-      setStatus({ kind: "ok", message: "Backup storage connected." });
+      setStatus({ kind: "ok", message: t("backup.status_saved") });
       void load();
       onActivity();
     } catch (e) {
@@ -316,14 +331,16 @@ export function BackupPanel({
   };
 
   const handleSyncNow = async () => {
-    setStatus({ kind: "busy", message: "Syncing…" });
+    setStatus({ kind: "busy", message: t("backup.syncing") });
     try {
       const report = await invoke<SyncReport>("sync_now");
       // Renames happen when another device claimed a name first. Surfacing
       // them matters more than the counts: a file the user knows by name is
       // now called something else.
       const renamed =
-        report.renamed.length > 0 ? ` Renamed to avoid clashes: ${report.renamed.join(", ")}.` : "";
+        report.renamed.length > 0
+          ? ` ${t("backup.renamed", { names: report.renamed.join(", ") })}`
+          : "";
       setStatus(syncOutcome(report, renamed));
       const s = await invoke<{ pending_ops: number }>("sync_status");
       setPending(s.pending_ops);
@@ -334,14 +351,14 @@ export function BackupPanel({
   };
 
   const handleDisconnect = async () => {
-    setStatus({ kind: "busy", message: "Disconnecting…" });
+    setStatus({ kind: "busy", message: t("backup.status_disconnecting") });
     try {
       await invoke("s3_disconnect");
       setConnected(false);
       setStored(null);
       setDraft(EMPTY_STORE_DRAFT);
       setWhere("");
-      setStatus({ kind: "ok", message: "Disconnected. Nothing in backup storage was deleted." });
+      setStatus({ kind: "ok", message: t("backup.status_disconnected") });
       onActivity();
     } catch (e) {
       setStatus({ kind: "error", message: formatAppError(e) });
@@ -362,7 +379,7 @@ export function BackupPanel({
           <div className="backup-status-text">
             {connected ? (
               <>
-                <h3>Backing up to {where}</h3>
+                <h3>{t("backup.backing_up_to", { where })}</h3>
                 {/* File content is asked about separately from records,
                     because it goes separately: records are pushed first and
                     the blobs follow, so a pass can deliver every record and
@@ -371,17 +388,14 @@ export function BackupPanel({
                 <p>{backupHeadline(pending, unsyncedCount, unsyncedBytes, lastSyncAt)}</p>
                 {syncError && status.kind === "idle" && (
                   <p className="hint is-error" role="status">
-                    The last sync failed: {formatAppError(syncError)}
+                    {t("backup.last_sync_failed", { error: formatAppError(syncError) })}
                   </p>
                 )}
               </>
             ) : (
               <>
-                <h3>Not backed up. This silo is only on this computer.</h3>
-                <p>
-                  If this computer fails, the silo is lost with it. Connect backup storage you
-                  control to keep an encrypted copy there.
-                </p>
+                <h3>{t("backup.not_backed_up")}</h3>
+                <p>{t("backup.not_backed_up_body")}</p>
               </>
             )}
           </div>
@@ -409,16 +423,16 @@ export function BackupPanel({
               ) : (
                 <RefreshCw size={15} />
               )}
-              {status.kind === "busy" ? "Syncing…" : "Sync now"}
+              {status.kind === "busy" ? t("backup.syncing") : t("backup.sync_now")}
             </button>
             <button type="button" className="secondary" onClick={() => setExpanded(true)}>
               <Pencil size={15} />
-              Edit
+              {t("backup.edit")}
             </button>
             {onTestBackup && (
               <button type="button" className="secondary" disabled={working} onClick={onTestBackup}>
                 <SearchCheck size={15} />
-                Test backup
+                {t("backup.test_backup")}
               </button>
             )}
             <button
@@ -428,7 +442,7 @@ export function BackupPanel({
               onClick={() => setConfirmingDisconnect(true)}
             >
               <Unplug size={15} />
-              Disconnect
+              {t("backup.disconnect")}
             </button>
           </div>
         )}
@@ -436,17 +450,17 @@ export function BackupPanel({
         {!expanded && connected && onTestBackup && (
           <p className="hint">
             {lastTestedAt
-              ? `Last tested ${formatDay(Math.floor(lastTestedAt / 1000))} on this computer.`
-              : "Never tested from this computer."}
+              ? t("backup.last_tested", { date: formatDay(Math.floor(lastTestedAt / 1000)) })
+              : t("backup.never_tested")}
           </p>
         )}
       </div>
 
       {confirmingDisconnect && (
         <ConfirmDialog
-          title="Disconnect this backup?"
-          message={`This silo stops backing up to ${where} and to every other copy. Nothing there is deleted, but the silo is only on this computer until you connect backup storage again.`}
-          confirmLabel="Disconnect"
+          title={t("backup.disconnect_title")}
+          message={t("backup.disconnect_body", { where })}
+          confirmLabel={t("backup.disconnect")}
           danger
           busy={working}
           onConfirm={() => {
@@ -468,51 +482,40 @@ export function BackupPanel({
         <div className="panel-section">
           <h3>
             <HardDriveDownload size={16} />
-            On this computer
+            {t("backup.on_this_computer")}
           </h3>
           {absentCount > 0 && (
-            <p className="hint">
-              {absentCount === 1
-                ? "1 file is missing: its content is in no backup storage and not on this computer."
-                : `${absentCount} files are missing: their content is in no backup storage and not on this computer.`}{" "}
-              They show as Missing in Files. A device that still has them uploads them when it syncs.
-            </p>
+            <p className="hint">{t("backup.absent", { count: absentCount })}</p>
           )}
           {missingCount > 0 ? (
             <>
               <p>
-                {missingCount === 1
-                  ? "1 file is in backup storage but not here"
-                  : `${missingCount} files are in backup storage but not here`}{" "}
-                ({formatBytes(missingBytes)}). A computer that was just set up from backup storage
-                starts with the file list and downloads each file when you open it.
+                {t("backup.missing_here", { count: missingCount, size: formatBytes(missingBytes) })}
               </p>
               <div className="actions">
                 {contentFetch ? (
                   <>
                     <button type="button" disabled>
-                      Downloading {contentFetch.done} of {contentFetch.total}…
+                      {t("backup.downloading", {
+                        done: contentFetch.done,
+                        total: contentFetch.total,
+                      })}
                     </button>
                     <button type="button" className="secondary" onClick={onCancelFetchContent}>
-                      Stop
+                      {t("backup.stop")}
                     </button>
                   </>
                 ) : (
                   <button type="button" disabled={busy} onClick={onFetchAllContent}>
                     <HardDriveDownload size={15} />
-                    Download everything
+                    {t("backup.download_all")}
                   </button>
                 )}
               </div>
-              <p className="hint">
-                Stopping keeps whatever has already arrived. Running it again fetches the rest.
-              </p>
+              <p className="hint">{t("backup.download_stop_hint")}</p>
             </>
           ) : (
-            <p>
-              Every file in this silo is on this computer ({formatBytes(localBytes)}), as well as in
-              backup storage.
-            </p>
+            <p>{t("backup.all_here", { size: formatBytes(localBytes) })}</p>
           )}
 
           {/* The setting that decides whether this device counts as a copy at
@@ -526,12 +529,8 @@ export function BackupPanel({
               onChange={(e) => void onFullCopy(e.target.checked)}
             />
             <span>
-              Keep a full copy on this computer
-              <span className="hint">
-                Without this, this computer keeps the file list and downloads each file when you
-                open it, so it does not count as a copy. With it, every file is downloaded in the
-                background and kept here.
-              </span>
+              {t("backup.full_copy")}
+              <span className="hint">{t("backup.full_copy_hint")}</span>
             </span>
           </label>
         </div>
@@ -541,11 +540,11 @@ export function BackupPanel({
         <div className="panel-section">
           <h3>
             <Server size={16} />
-            {connected ? "Change backup storage" : "Choose backup storage"}
+            {connected ? t("backup.change_storage") : t("backup.choose_storage")}
           </h3>
           <p>
-            Your OneDrive, Dropbox or Google Drive, or storage you run or rent.
-            {connected && " Saving replaces the current backup storage."}
+            {t("backup.choose_intro")}
+            {connected && ` ${t("backup.choose_replaces")}`}
           </p>
 
           <div className="s3-form">
@@ -569,7 +568,7 @@ export function BackupPanel({
             <div className="actions">
               <button type="button" disabled={working} onClick={() => void handleSave()}>
                 {status.kind === "busy" && <span className="spinner" aria-hidden />}
-                {status.kind === "busy" ? "Working…" : "Save and connect"}
+                {status.kind === "busy" ? t("backup.working") : t("backup.save_connect")}
               </button>
               <button
                 type="button"
@@ -577,7 +576,7 @@ export function BackupPanel({
                 disabled={working}
                 onClick={() => void handleTest()}
               >
-                Test connection
+                {t("backup.test_connection")}
               </button>
               {connected && (
                 <button
@@ -590,7 +589,7 @@ export function BackupPanel({
                     setExpanded(false);
                   }}
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               )}
             </div>
@@ -603,7 +602,7 @@ export function BackupPanel({
       <div className="panel-section backup-explainer">
         <h3>
           <LockKeyhole size={16} />
-          How it works
+          {t("backup.how_title")}
         </h3>
         <ul className="backup-points">
           <li>
@@ -611,11 +610,8 @@ export function BackupPanel({
               <LockKeyhole size={16} />
             </span>
             <div>
-              <strong>Encrypted before it leaves.</strong>
-              <p>
-                Files, names and passwords are encrypted on this computer before they are sent to
-                backup storage.
-              </p>
+              <strong>{t("backup.how_encrypted_title")}</strong>
+              <p>{t("backup.how_encrypted")}</p>
             </div>
           </li>
           <li>
@@ -623,11 +619,8 @@ export function BackupPanel({
               <Server size={16} />
             </span>
             <div>
-              <strong>Storage you already own.</strong>
-              <p>
-                Your OneDrive, Dropbox or Google Drive, or a bucket, a NAS folder, a Nextcloud, an
-                SFTP account. No SilentSilo server.
-              </p>
+              <strong>{t("backup.how_own_title")}</strong>
+              <p>{t("backup.how_own")}</p>
             </div>
           </li>
           <li>
@@ -635,11 +628,8 @@ export function BackupPanel({
               <Laptop size={16} />
             </span>
             <div>
-              <strong>It is also sync.</strong>
-              <p>
-                Point a second computer at the same backup storage and the silo appears there, kept up
-                to date in both directions.
-              </p>
+              <strong>{t("backup.how_sync_title")}</strong>
+              <p>{t("backup.how_sync")}</p>
             </div>
           </li>
           <li>
@@ -647,15 +637,12 @@ export function BackupPanel({
               <HardDriveDownload size={16} />
             </span>
             <div>
-              <strong>It is your way back.</strong>
-              <p>
-                On a new computer, choose <em>Set up from backup storage</em> and unlock with your
-                key or recovery code.
-              </p>
+              <strong>{t("backup.how_back_title")}</strong>
+              <p>{tx("backup.how_back", { action: <em>{t("welcome.join")}</em> })}</p>
             </div>
           </li>
         </ul>
-        <p className="hint">Each silo has its own backup storage, so different silos can back up to different places.</p>
+        <p className="hint">{t("backup.how_per_silo")}</p>
       </div>
       )}
     </div>

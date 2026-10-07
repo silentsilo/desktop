@@ -93,7 +93,7 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
     // nothing to fall back on.
     const missing = missingStoreFields(draft, false);
     if (missing.length > 0) {
-      setError(`Still needed: ${missing.join(", ")}.`);
+      setError(t("start.still_needed", { fields: missing.join(", ") }));
       return;
     }
     setWorking(true);
@@ -135,15 +135,10 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
   const disabled = busy || working;
 
   return (
-    <AuthShell
-      subtitle="Bring a silo you already back up onto this computer."
-    >
+    <AuthShell subtitle={t("start.join_subtitle")}>
       <section className="card auth-card is-form">
         <h2>{t("welcome.join")}</h2>
-        <p className="hint">
-          Enter your silo&apos;s backup storage details. The silo is copied here and unlocked with
-          a key you already have.
-        </p>
+        <p className="hint">{t("start.join_intro")}</p>
 
         <div className="s3-form">
           <StoreConfigForm
@@ -172,35 +167,34 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
             screen after it finishes is a number nobody is waiting for. */}
         {working && fetched !== null && fetched.total > 0 && (
           <p className="hint" role="status">
-            Downloading this silo&apos;s changes: {fetched.done} of {fetched.total}.
+            {t("start.join_downloading", { done: fetched.done, total: fetched.total })}
           </p>
         )}
 
         {preview && !preview.vault_id && (
           <p className="hint is-error" role="status">
             <AlertCircle size={14} />
-            There is no silo there yet. Sync once from the computer that has it, or create a new
-            silo here instead.
+            {t("start.join_no_silo")}
           </p>
         )}
 
         {preview?.vault_id && (
           <>
             <label className="field">
-              <span>Call this silo</span>
+              <span>{t("start.join_name_label")}</span>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={defaultSiloName(draft) || "Personal"}
+                placeholder={defaultSiloName(draft) || t("start.default_name")}
               />
             </label>
             <label className="field">
-              <span>Where to keep it on this computer</span>
+              <span>{t("start.join_location_label")}</span>
               <div className="path-picker">
                 <input
                   value={location ?? ""}
                   onChange={(e) => setLocation(e.target.value || null)}
-                  placeholder="Default location"
+                  placeholder={t("start.join_default_location")}
                   spellCheck={false}
                 />
                 <button
@@ -214,23 +208,21 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
                   }}
                 >
                   <FolderOpen size={15} />
-                  Browse
+                  {t("start.browse")}
                 </button>
               </div>
             </label>
             <p className="hint success-msg" role="status">
               <CheckCircle2 size={14} />
               {preview.key_labels.length > 0
-                ? `Found a silo. Keys that can open it: ${preview.key_labels.join(", ")}.`
-                : "Found a silo, but no keys have been added to it yet."}
+                ? t("start.join_found_keys", { keys: preview.key_labels.join(", ") })
+                : t("start.join_found_no_keys")}
             </p>
             {mode === "code" ? (
               <div className="field">
-                <span>Recovery code</span>
+                <span>{t("settings.recovery")}</span>
                 <RecoveryCodeInput value={code} onChange={setCode} disabled={disabled} />
-                <p className="hint">
-                  Paste the whole code into any box and the rest fill in. No key is needed.
-                </p>
+                <p className="hint">{t("start.join_code_hint")}</p>
               </div>
             ) : (
               <p className="hint">
@@ -241,7 +233,7 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
                   onClick={() => setMode("code")}
                 >
                   <LifeBuoy size={14} />
-                  No key left? Use your recovery code instead
+                  {t("start.join_use_code")}
                 </button>
               </p>
             )}
@@ -259,13 +251,13 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
               {working && <span className="spinner" aria-hidden />}
               {working
                 ? mode === "code"
-                  ? "Setting up…"
-                  : "Waiting for your key…"
-                : "Set up on this computer"}
+                  ? t("start.join_setting_up")
+                  : t("start.join_waiting_key")
+                : t("start.join_set_up")}
             </button>
           ) : (
             <button type="button" disabled={disabled} onClick={() => void handleLook()}>
-              {working ? "Checking…" : "See what is there"}
+              {working ? t("start.checking") : t("start.join_look")}
             </button>
           )}
           <button
@@ -278,7 +270,7 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
             }}
           >
             <ArrowLeft size={15} />
-            Back
+            {t("start.back")}
           </button>
         </div>
       </section>

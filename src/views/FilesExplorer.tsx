@@ -19,6 +19,7 @@ import { FileDetailsPanel, SelectionDetails, type PanelAction } from "./FileDeta
 import { MoveToDialog } from "./MoveToDialog";
 import { canMoveTo, type MoveDestination } from "../lib/moves";
 import { useModal } from "../hooks/useModal";
+import { t, useLocale } from "../i18n";
 import {
   IconBack,
   IconFile,
@@ -47,16 +48,29 @@ const SORT_FIELDS: readonly SortField[] = ["name", "size", "modified"] as const;
 
 /** What ascending and descending mean for each field, in words. */
 function orderLabel(field: SortField, order: "asc" | "desc"): string {
-  if (field === "size") return order === "asc" ? "smallest first" : "largest first";
-  if (field === "modified") return order === "asc" ? "oldest first" : "newest first";
+  if (field === "size") return t(order === "asc" ? "files.order_smallest" : "files.order_largest");
+  if (field === "modified") return t(order === "asc" ? "files.order_oldest" : "files.order_newest");
   return order === "asc" ? "A-Z" : "Z-A";
 }
 
-const SORT_LABELS: Record<SortField, string> = {
-  name: "Name",
-  size: "Size",
-  modified: "Modified",
-};
+function sortLabel(field: SortField): string {
+  if (field === "size") return t("files.sort_size");
+  if (field === "modified") return t("files.modified");
+  return t("files.sort_name");
+}
+
+/** The right-click menu's sort item, with the direction while it is active. */
+function sortMenuLabel(field: SortField, order: "asc" | "desc" | null): string {
+  if (order === null) {
+    if (field === "size") return t("files.sort_by_size");
+    if (field === "modified") return t("files.sort_by_modified");
+    return t("files.sort_by_name");
+  }
+  const params = { order: orderLabel(field, order) };
+  if (field === "size") return t("files.sort_by_size_order", params);
+  if (field === "modified") return t("files.sort_by_modified_order", params);
+  return t("files.sort_by_name_order", params);
+}
 
 type Props = {
   currentFolder: FolderEntry | null;
@@ -134,6 +148,7 @@ function parentPath(path: string): string | null {
 }
 
 export function FilesExplorer(props: Props) {
+  useLocale();
   const {
     entries,
     crumbs,
@@ -314,12 +329,12 @@ export function FilesExplorer(props: Props) {
   const openBackgroundMenu = (e: MouseEvent) => {
     e.preventDefault();
     const items: ContextMenuItem[] = [
-      { kind: "action", label: "Add files", icon: <IconFile size={14} />, onClick: onAddFiles, disabled: busy },
+      { kind: "action", label: t("files.add_files"), icon: <IconFile size={14} />, onClick: onAddFiles, disabled: busy },
     ];
     if (onAddFolder) {
       items.push({
         kind: "action",
-        label: "Add folder",
+        label: t("files.add_folder"),
         icon: <IconFolder size={14} />,
         onClick: onAddFolder,
         disabled: busy,
@@ -328,7 +343,7 @@ export function FilesExplorer(props: Props) {
     if (cut && onMoveEntries) {
       items.push({
         kind: "action",
-        label: cut.entries.length === 1 ? "Paste 1 item here" : `Paste ${cut.entries.length} items here`,
+        label: t("files.paste_here", { count: cut.entries.length }),
         icon: <ClipboardPaste size={14} />,
         onClick: pasteHere,
         disabled: busy || !canPasteHere,
@@ -338,7 +353,7 @@ export function FilesExplorer(props: Props) {
       { kind: "divider" },
       {
         kind: "action",
-        label: "New folder",
+        label: t("files.new_folder"),
         icon: <IconFolder size={14} />,
         onClick: () => {
           onNewFolderName("");
@@ -353,10 +368,7 @@ export function FilesExplorer(props: Props) {
       // same gesture as the toolbar and the column headers.
       ...SORT_FIELDS.map<ContextMenuItem>((field) => ({
         kind: "action",
-        label:
-          sortBy === field
-            ? `Sort by ${SORT_LABELS[field].toLowerCase()} (${orderLabel(field, sortOrder)})`
-            : `Sort by ${SORT_LABELS[field].toLowerCase()}`,
+        label: sortMenuLabel(field, sortBy === field ? sortOrder : null),
         icon: sortBy === field ? <Check size={14} /> : <ArrowUpDown size={14} />,
         onClick: () => handleSort(field),
       })),
@@ -364,7 +376,7 @@ export function FilesExplorer(props: Props) {
         ? [
             {
               kind: "action" as const,
-              label: "Folder order",
+              label: t("files.folder_order"),
               icon: <IconClose size={14} />,
               onClick: () => setSortBy(null),
             },
@@ -373,7 +385,7 @@ export function FilesExplorer(props: Props) {
       { kind: "divider" },
       {
         kind: "action",
-        label: "Refresh",
+        label: t("files.refresh"),
         icon: <IconRefresh size={14} />,
         onClick: onRefresh,
         disabled: navigating,
@@ -386,7 +398,7 @@ export function FilesExplorer(props: Props) {
   /// the click will do rather than what the entry currently is.
   const favoriteItem = (entry: VaultEntry): ContextMenuItem => ({
     kind: "action",
-    label: entry.favorite ? "Remove from favourites" : "Add to favourites",
+    label: entry.favorite ? t("files.remove_favorite") : t("files.add_favorite"),
     icon: <Star size={14} fill={entry.favorite ? "currentColor" : "none"} />,
     onClick: () => onToggleFavorite(entry),
     disabled: busy,
@@ -399,14 +411,14 @@ export function FilesExplorer(props: Props) {
     return [
       {
         kind: "action",
-        label: many ? `Cut ${list.length} items` : "Cut",
+        label: many ? t("files.cut_count", { count: list.length }) : t("files.cut"),
         icon: <Scissors size={14} />,
         onClick: () => cutEntries(list),
         disabled: busy,
       },
       {
         kind: "action",
-        label: many ? `Move ${list.length} items to…` : "Move to…",
+        label: many ? t("files.move_count_to", { count: list.length }) : t("files.move_to"),
         icon: <FolderInput size={14} />,
         onClick: () => setMoveDialog(list),
         disabled: busy,
@@ -438,7 +450,7 @@ export function FilesExplorer(props: Props) {
         items.push(
           {
             kind: "action",
-            label: `Save a copy of ${selectedFiles.length} files…`,
+            label: t("files.save_copies_of", { count: selectedFiles.length }),
             icon: <IconDownload size={14} />,
             onClick: () => onSaveCopies(selectedFiles),
             disabled: busy,
@@ -449,7 +461,7 @@ export function FilesExplorer(props: Props) {
       items.push(...moveMenuItems(movingWith(entry)));
       items.push({
         kind: "action",
-        label: `Move ${selectedIds.size} items to trash`,
+        label: t("files.trash_count", { count: selectedIds.size }),
         icon: <IconTrash size={14} />,
         danger: true,
         onClick: onTrash,
@@ -457,8 +469,8 @@ export function FilesExplorer(props: Props) {
       });
     } else if (entry.kind === "folder") {
       items.push(
-        { kind: "action", label: "Open", icon: <IconFolder size={14} />, onClick: () => onOpenFolder(entry), disabled: busy },
-        { kind: "action", label: "Rename", icon: <IconEdit size={14} />, onClick: () => onRenameEntry(entry), disabled: busy },
+        { kind: "action", label: t("files.open"), icon: <IconFolder size={14} />, onClick: () => onOpenFolder(entry), disabled: busy },
+        { kind: "action", label: t("files.rename"), icon: <IconEdit size={14} />, onClick: () => onRenameEntry(entry), disabled: busy },
         favoriteItem(entry),
         ...moveMenuItems([entry]),
         { kind: "divider" },
@@ -466,18 +478,18 @@ export function FilesExplorer(props: Props) {
       if (onSaveFolder) {
         items.push({
           kind: "action",
-          label: "Save a copy…",
+          label: t("files.save_copy_ellipsis"),
           icon: <IconFolderDown size={14} />,
           onClick: () => onSaveFolder(entry),
           disabled: busy,
         });
       }
       items.push(
-        { kind: "action", label: "Info", icon: <IconInfo size={14} />, onClick: () => showDetails(entry) },
+        { kind: "action", label: t("files.info"), icon: <IconInfo size={14} />, onClick: () => showDetails(entry) },
         { kind: "divider" },
         {
           kind: "action",
-          label: "Move to trash",
+          label: t("files.move_to_trash"),
           icon: <IconTrash size={14} />,
           danger: true,
           onClick: () => onTrashEntry(entry),
@@ -486,17 +498,17 @@ export function FilesExplorer(props: Props) {
       );
     } else {
       items.push(
-        { kind: "action", label: "Open", icon: <IconExternalLink size={14} />, onClick: () => onOpenFile(entry), disabled: busy },
-        { kind: "action", label: "Save a copy…", icon: <IconDownload size={14} />, onClick: () => onSaveCopy(entry), disabled: busy },
-        { kind: "action", label: "Rename", icon: <IconEdit size={14} />, onClick: () => onRenameEntry(entry), disabled: busy },
+        { kind: "action", label: t("files.open"), icon: <IconExternalLink size={14} />, onClick: () => onOpenFile(entry), disabled: busy },
+        { kind: "action", label: t("files.save_copy_ellipsis"), icon: <IconDownload size={14} />, onClick: () => onSaveCopy(entry), disabled: busy },
+        { kind: "action", label: t("files.rename"), icon: <IconEdit size={14} />, onClick: () => onRenameEntry(entry), disabled: busy },
         favoriteItem(entry),
         ...moveMenuItems([entry]),
         { kind: "divider" },
-        { kind: "action", label: "Info", icon: <IconInfo size={14} />, onClick: () => showDetails(entry) },
+        { kind: "action", label: t("files.info"), icon: <IconInfo size={14} />, onClick: () => showDetails(entry) },
         { kind: "divider" },
         {
           kind: "action",
-          label: "Move to trash",
+          label: t("files.move_to_trash"),
           icon: <IconTrash size={14} />,
           danger: true,
           onClick: () => onTrashEntry(entry),
@@ -563,7 +575,7 @@ export function FilesExplorer(props: Props) {
   // ── Moving: dragging onto a folder, Cut and Paste, "Move to…" ──
   const currentPath = props.currentFolder?.path ?? "/";
   const currentLabel =
-    currentPath === "/" ? crumbs[0]?.label || "Silo root" : (props.currentFolder?.name ?? "");
+    currentPath === "/" ? crumbs[0]?.label || t("trash.silo_root") : (props.currentFolder?.name ?? "");
   /// Cut entries wait here, with the folder they were cut from, until a
   /// paste somewhere else. Nothing moves before the paste.
   const [cut, setCut] = useState<{ entries: VaultEntry[]; from: string } | null>(null);
@@ -715,7 +727,7 @@ export function FilesExplorer(props: Props) {
   const entryActions = (entry: VaultEntry): PanelAction[] => {
     const actions: PanelAction[] = [
       {
-        label: "Open",
+        label: t("files.open"),
         icon: entry.kind === "file" ? <IconExternalLink size={15} /> : <IconFolder size={15} />,
         onClick: () => (entry.kind === "folder" ? onOpenFolder(entry) : onOpenFile(entry)),
         disabled: busy,
@@ -724,14 +736,14 @@ export function FilesExplorer(props: Props) {
     ];
     if (entry.kind === "file") {
       actions.push({
-        label: "Save a copy",
+        label: t("files.save_copy"),
         icon: <IconDownload size={15} />,
         onClick: () => onSaveCopy(entry),
         disabled: busy,
       });
     } else if (onSaveFolder) {
       actions.push({
-        label: "Save a copy",
+        label: t("files.save_copy"),
         icon: <IconFolderDown size={15} />,
         onClick: () => onSaveFolder(entry),
         disabled: busy,
@@ -739,13 +751,13 @@ export function FilesExplorer(props: Props) {
     }
     actions.push(
       {
-        label: "Rename",
+        label: t("files.rename"),
         icon: <IconEdit size={15} />,
         onClick: onStartRename,
         disabled: busy || renamingId !== null,
       },
       {
-        label: entry.favorite ? "Remove from favourites" : "Add to favourites",
+        label: entry.favorite ? t("files.remove_favorite") : t("files.add_favorite"),
         icon: <Star size={15} />,
         onClick: () => onToggleFavorite(entry),
         disabled: busy,
@@ -753,7 +765,7 @@ export function FilesExplorer(props: Props) {
       ...(onMoveEntries
         ? [
             {
-              label: "Move to…",
+              label: t("files.move_to"),
               icon: <FolderInput size={15} />,
               onClick: () => setMoveDialog([entry]),
               disabled: busy,
@@ -761,7 +773,7 @@ export function FilesExplorer(props: Props) {
           ]
         : []),
       {
-        label: "Move to trash",
+        label: t("files.move_to_trash"),
         icon: <IconTrash size={15} />,
         onClick: () => onTrashEntry(entry),
         disabled: busy,
@@ -779,7 +791,7 @@ export function FilesExplorer(props: Props) {
     // Only when every one is a file: a folder needs its own recursive copy.
     if (files.length === chosen.length) {
       actions.push({
-        label: `Save ${files.length} copies`,
+        label: t("files.save_count_copies", { count: files.length }),
         icon: <IconDownload size={15} />,
         onClick: () => onSaveCopies(files),
         disabled: busy,
@@ -788,14 +800,14 @@ export function FilesExplorer(props: Props) {
     }
     if (onMoveEntries) {
       actions.push({
-        label: `Move ${chosen.length} items to…`,
+        label: t("files.move_count_to", { count: chosen.length }),
         icon: <FolderInput size={15} />,
         onClick: () => setMoveDialog(chosen),
         disabled: busy,
       });
     }
     actions.push({
-      label: `Move ${chosen.length} items to trash`,
+      label: t("files.trash_count", { count: chosen.length }),
       icon: <IconTrash size={15} />,
       onClick: onTrash,
       disabled: busy,
@@ -803,7 +815,7 @@ export function FilesExplorer(props: Props) {
     });
     if (onClearSelection) {
       actions.push({
-        label: "Clear selection",
+        label: t("files.clear_selection"),
         icon: <IconClose size={15} />,
         onClick: onClearSelection,
       });
@@ -812,9 +824,9 @@ export function FilesExplorer(props: Props) {
   };
 
   const folderActions: PanelAction[] = [
-    { label: "Add files", icon: <IconFilePlus size={15} />, onClick: onAddFiles, disabled: busy, primary: true },
+    { label: t("files.add_files"), icon: <IconFilePlus size={15} />, onClick: onAddFiles, disabled: busy, primary: true },
     {
-      label: "New folder",
+      label: t("files.new_folder"),
       icon: <IconFolderPlus size={15} />,
       onClick: () => {
         onNewFolderName("");
@@ -823,12 +835,12 @@ export function FilesExplorer(props: Props) {
       disabled: busy,
     },
     ...(onAddFolder
-      ? [{ label: "Add a folder", icon: <IconFolder size={15} />, onClick: onAddFolder, disabled: busy }]
+      ? [{ label: t("files.add_a_folder"), icon: <IconFolder size={15} />, onClick: onAddFolder, disabled: busy }]
       : []),
     ...(cut && onMoveEntries
       ? [
           {
-            label: cut.entries.length === 1 ? "Paste 1 item here" : `Paste ${cut.entries.length} items here`,
+            label: t("files.paste_here", { count: cut.entries.length }),
             icon: <ClipboardPaste size={15} />,
             onClick: pasteHere,
             disabled: busy || !canPasteHere,
@@ -932,11 +944,11 @@ export function FilesExplorer(props: Props) {
   return (
     <>
       <div className="explorer-chrome">
-        <div className="explorer-nav" role="toolbar" aria-label="Folder navigation">
+        <div className="explorer-nav" role="toolbar" aria-label={t("files.nav_label")}>
           <button
             type="button"
             className="explorer-icon-btn"
-            title="Back (Alt+Left)"
+            title={t("files.back")}
             disabled={navigating || !canGoBack}
             onClick={onBack}
           >
@@ -945,7 +957,7 @@ export function FilesExplorer(props: Props) {
           <button
             type="button"
             className="explorer-icon-btn"
-            title="Forward (Alt+Right)"
+            title={t("files.forward")}
             disabled={navigating || !canGoForward}
             onClick={onForward}
           >
@@ -954,13 +966,13 @@ export function FilesExplorer(props: Props) {
           <button
             type="button"
             className="explorer-icon-btn"
-            title="Up (Alt+Up / Backspace)"
+            title={t("files.up")}
             disabled={navigating || !canGoUp}
             onClick={onUp}
           >
             <IconUp />
           </button>
-          <div className="explorer-address" aria-label="Address bar" ref={addressBarRef}>
+          <div className="explorer-address" aria-label={t("files.address_bar")} ref={addressBarRef}>
             {crumbs.map((seg, i) => {
               const isLast = i === crumbs.length - 1;
               return (
@@ -995,7 +1007,7 @@ export function FilesExplorer(props: Props) {
               <span className="search-icon"><IconSearch size={16} /></span>
               <input
                 type="text"
-                placeholder="Search this silo…"
+                placeholder={t("files.search_placeholder")}
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
@@ -1006,7 +1018,7 @@ export function FilesExplorer(props: Props) {
                 <button
                   type="button"
                   className="search-clear"
-                  aria-label="Clear search"
+                  aria-label={t("files.clear_search")}
                   onClick={() => {
                     setSearchQuery("");
                     onSearch("");
@@ -1026,10 +1038,10 @@ export function FilesExplorer(props: Props) {
               onClick={() => setShowAddDropdown(!showAddDropdown)}
               aria-haspopup="menu"
               aria-expanded={showAddDropdown}
-              title="Add or create"
+              title={t("files.add_or_create")}
             >
               <IconPlus size={15} />
-              <span className="btn-add-new-label">Add</span>
+              <span className="btn-add-new-label">{t("files.add")}</span>
               <ChevronDown className="chevron-icon" size={13} aria-hidden />
             </button>
             {showAddDropdown && (
@@ -1046,7 +1058,7 @@ export function FilesExplorer(props: Props) {
                     }}
                   >
                     <IconFilePlus size={16} />
-                    <span>Add files</span>
+                    <span>{t("files.add_files")}</span>
                   </button>
                   <button
                     type="button"
@@ -1058,7 +1070,7 @@ export function FilesExplorer(props: Props) {
                     }}
                   >
                     <IconFolderPlus size={16} />
-                    <span>Add folder</span>
+                    <span>{t("files.add_folder")}</span>
                   </button>
                   <div className="dropdown-divider" />
                   <button
@@ -1072,7 +1084,7 @@ export function FilesExplorer(props: Props) {
                     }}
                   >
                     <IconFolder size={16} />
-                    <span>New folder</span>
+                    <span>{t("files.new_folder")}</span>
                   </button>
                 </div>
               </>
@@ -1084,8 +1096,8 @@ export function FilesExplorer(props: Props) {
             className="explorer-icon-btn btn-refresh-sync"
             disabled={navigating}
             onClick={onRefresh}
-            title="Refresh (F5)"
-            aria-label="Refresh"
+            title={t("files.refresh_f5")}
+            aria-label={t("files.refresh")}
           >
             <IconRefresh size={16} />
           </button>
@@ -1095,8 +1107,8 @@ export function FilesExplorer(props: Props) {
             className={`view-toggle-btn${detailsShown ? " active" : ""}`}
             onClick={() => setDetailsShown((v) => !v)}
             aria-pressed={detailsShown}
-            title={detailsShown ? "Hide details" : "Show details"}
-            aria-label={detailsShown ? "Hide details" : "Show details"}
+            title={detailsShown ? t("files.hide_details") : t("files.show_details")}
+            aria-label={detailsShown ? t("files.hide_details") : t("files.show_details")}
           >
             <IconInfo size={18} />
           </button>
@@ -1105,8 +1117,8 @@ export function FilesExplorer(props: Props) {
             type="button"
             className={`view-toggle-btn${viewType === "grid" ? " active" : ""}`}
             onClick={() => setViewType(viewType === "list" ? "grid" : "list")}
-            title={viewType === "list" ? "Switch to grid view" : "Switch to list view"}
-            aria-label={viewType === "list" ? "Switch to grid view" : "Switch to list view"}
+            title={viewType === "list" ? t("files.grid_view") : t("files.list_view")}
+            aria-label={viewType === "list" ? t("files.grid_view") : t("files.list_view")}
           >
             {viewType === "list" ? <IconGrid size={18} /> : <IconList size={18} />}
           </button>
@@ -1119,14 +1131,14 @@ export function FilesExplorer(props: Props) {
               type="button"
               className={`view-toggle-btn view-toggle-labelled${sortBy ? " active" : ""}`}
               onClick={() => setShowSortMenu((v) => !v)}
-              title={sortBy ? `Sorted by ${SORT_LABELS[sortBy]}` : "Sort"}
+              title={sortBy ? t("files.sorted_by", { field: sortLabel(sortBy) }) : t("files.sort")}
               aria-haspopup="menu"
               aria-expanded={showSortMenu}
             >
               <ArrowUpDown size={17} />
               {/* Named, not just drawn: an arrow pair alone was not read as
                   sorting. */}
-              <span>{sortBy ? SORT_LABELS[sortBy] : "Sort"}</span>
+              <span>{sortBy ? sortLabel(sortBy) : t("files.sort")}</span>
             </button>
             {showSortMenu && (
               <>
@@ -1145,7 +1157,7 @@ export function FilesExplorer(props: Props) {
                       }}
                     >
                       {sortBy === field ? <Check size={15} /> : <span className="dropdown-tick" />}
-                      <span>{SORT_LABELS[field]}</span>
+                      <span>{sortLabel(field)}</span>
                       {sortBy === field && (
                         <span className="dropdown-hint">{orderLabel(field, sortOrder)}</span>
                       )}
@@ -1163,7 +1175,7 @@ export function FilesExplorer(props: Props) {
                         }}
                       >
                         <IconClose size={15} />
-                        <span>Folder order</span>
+                        <span>{t("files.folder_order")}</span>
                       </button>
                     </>
                   )}
@@ -1183,7 +1195,7 @@ export function FilesExplorer(props: Props) {
                 disabled={progressCancelling}
                 onClick={onCancelProgress}
               >
-                {progressCancelling ? "Stopping…" : "Stop"}
+                {progressCancelling ? t("files.stopping") : t("files.stop")}
               </button>
             )}
           </div>
@@ -1212,12 +1224,12 @@ export function FilesExplorer(props: Props) {
           // keystroke made typing look like the search kept failing.
           <div className={`search-results${searching ? " is-stale" : ""}`}>
             {globalResults === null ? (
-              <p className="hint">Searching…</p>
+              <p className="hint">{t("files.searching")}</p>
             ) : globalResults.length === 0 ? (
               <div className="empty-state">
-                <p className="empty-title">Nothing matches “{searchQuery}”</p>
+                <p className="empty-title">{t("files.no_match", { query: searchQuery })}</p>
                 <p className="hint">
-                  Search looks at names only, not file contents.
+                  {t("files.names_only")}
                 </p>
               </div>
             ) : (
@@ -1261,15 +1273,12 @@ export function FilesExplorer(props: Props) {
           </div>
         ) : entries.length === 0 ? (
           <div className="empty-state">
-            <p className="empty-title">This folder is empty</p>
-            <p className="hint">
-              Add files from this computer, or drag them onto the window. They are encrypted as
-              they are added.
-            </p>
+            <p className="empty-title">{t("files.empty_title")}</p>
+            <p className="hint">{t("files.empty_hint")}</p>
             <div className="actions">
               <button type="button" disabled={busy} onClick={onAddFiles}>
                 <IconFilePlus size={15} />
-                Add files
+                {t("files.add_files")}
               </button>
               <button
                 type="button"
@@ -1281,7 +1290,7 @@ export function FilesExplorer(props: Props) {
                 }}
               >
                 <IconFolder size={15} />
-                New folder
+                {t("files.new_folder")}
               </button>
             </div>
           </div>
@@ -1320,7 +1329,7 @@ export function FilesExplorer(props: Props) {
                     </span>
                   )}
                   {entry.favorite && (
-                    <span className="grid-card-star" title="In favourites">
+                    <span className="grid-card-star" title={t("files.in_favorites")}>
                       <Star size={13} fill="currentColor" />
                     </span>
                   )}
@@ -1360,7 +1369,7 @@ export function FilesExplorer(props: Props) {
                       sorting the grid by "Modified" ordered cards by a value
                       nowhere on screen. */}
                   <div className="grid-card-meta">
-                    {isFolder ? "Folder" : sizeStr} · {formatDay(entry.updated_at)}
+                    {isFolder ? t("files.folder") : sizeStr} · {formatDay(entry.updated_at)}
                   </div>
 
                 </div>
@@ -1373,19 +1382,19 @@ export function FilesExplorer(props: Props) {
             <thead>
               <tr>
                 <th onClick={() => handleSort("name")} className="th-sortable">
-                  Name
+                  {t("files.sort_name")}
                   {sortBy === "name" && (
                     <span className="sort-indicator">{sortOrder === "asc" ? "▲" : "▼"}</span>
                   )}
                 </th>
                 <th onClick={() => handleSort("size")} className="th-sortable">
-                  Size
+                  {t("files.sort_size")}
                   {sortBy === "size" && (
                     <span className="sort-indicator">{sortOrder === "asc" ? "▲" : "▼"}</span>
                   )}
                 </th>
                 <th onClick={() => handleSort("modified")} className="th-sortable">
-                  Modified
+                  {t("files.modified")}
                   {sortBy === "modified" && (
                     <span className="sort-indicator">{sortOrder === "asc" ? "▲" : "▼"}</span>
                   )}
@@ -1447,7 +1456,7 @@ export function FilesExplorer(props: Props) {
                           <span>{entry.name || "/"}</span>
                         )}
                         {entry.favorite && !renaming && (
-                          <span className="row-star" title="In favourites">
+                          <span className="row-star" title={t("files.in_favorites")}>
                             <Star size={12} fill="currentColor" />
                           </span>
                         )}
@@ -1470,7 +1479,7 @@ export function FilesExplorer(props: Props) {
                             onOpenFolder(entry);
                           }}
                         >
-                          Open
+                          {t("files.open")}
                         </button>
                       ) : (
                         <button
@@ -1481,7 +1490,7 @@ export function FilesExplorer(props: Props) {
                             onSaveCopy(entry);
                           }}
                         >
-                          Save a copy
+                          {t("files.save_copy")}
                         </button>
                       )}
                     </td>
@@ -1515,7 +1524,7 @@ export function FilesExplorer(props: Props) {
           location={parentPath(folderOnScreen.path)}
           title={
             parentPath(folderOnScreen.path) === null
-              ? crumbs[0]?.label || "Silo root"
+              ? crumbs[0]?.label || t("trash.silo_root")
               : undefined
           }
           count={entries.length}
@@ -1535,10 +1544,12 @@ export function FilesExplorer(props: Props) {
           <FolderInput size={14} />
           <span>
             {drag.target
-              ? `Move ${drag.moving.length === 1 ? `"${drag.moving[0]!.name}"` : `${drag.moving.length} items`} to ${drag.target.label}`
+              ? drag.moving.length === 1
+                ? t("files.drag_move_named", { name: drag.moving[0]!.name, folder: drag.target.label })
+                : t("files.drag_move_count", { count: drag.moving.length, folder: drag.target.label })
               : drag.moving.length === 1
                 ? drag.moving[0]!.name
-                : `${drag.moving.length} items`}
+                : t("files.item_count", { count: drag.moving.length })}
           </span>
         </div>
       )}
@@ -1547,7 +1558,7 @@ export function FilesExplorer(props: Props) {
         <MoveToDialog
           moving={moveDialog}
           currentPath={currentPath}
-          rootLabel={crumbs[0]?.label || "Silo root"}
+          rootLabel={crumbs[0]?.label || t("trash.silo_root")}
           onCancel={() => setMoveDialog(null)}
           onPick={(destination) => {
             const moving = moveDialog;
@@ -1575,7 +1586,7 @@ export function FilesExplorer(props: Props) {
       {selectedIds.size > 0 && !(detailsShown && !searchActive) && (
         <div className="selection-toolbar">
           <span className="selection-toolbar-count">
-            {selectedIds.size} {selectedIds.size === 1 ? "item" : "items"} selected
+            {t("trash.selected", { count: selectedIds.size })}
           </span>
           <div className="selection-toolbar-actions">
             <button
@@ -1584,7 +1595,7 @@ export function FilesExplorer(props: Props) {
               disabled={busy || selectedIds.size !== 1 || renamingId !== null}
               onClick={onStartRename}
             >
-              <IconEdit size={14} /> Rename
+              <IconEdit size={14} /> {t("files.rename")}
             </button>
 
             {(() => {
@@ -1611,7 +1622,7 @@ export function FilesExplorer(props: Props) {
                       : onSaveCopies(selectedFiles)
                   }
                 >
-                  <IconDownload size={14} /> Save a copy
+                  <IconDownload size={14} /> {t("files.save_copy")}
                   {selectedFiles.length > 1 ? ` (${selectedFiles.length})` : ""}
                 </button>
               );
@@ -1623,7 +1634,7 @@ export function FilesExplorer(props: Props) {
               disabled={busy}
               onClick={onTrash}
             >
-              <IconTrash size={14} /> Move to trash
+              <IconTrash size={14} /> {t("files.move_to_trash")}
             </button>
 
             {onClearSelection && (
@@ -1631,9 +1642,9 @@ export function FilesExplorer(props: Props) {
                 type="button"
                 className="selection-toolbar-btn"
                 onClick={onClearSelection}
-                title="Clear selection"
+                title={t("files.clear_selection")}
               >
-                <IconClose size={14} /> Clear
+                <IconClose size={14} /> {t("trash.clear")}
               </button>
             )}
           </div>
@@ -1647,15 +1658,15 @@ export function FilesExplorer(props: Props) {
             className="modal-card"
             role="dialog"
             aria-modal="true"
-            aria-label="New folder"
+            aria-label={t("files.new_folder")}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="modal-title">New folder</h3>
+            <h3 className="modal-title">{t("files.new_folder")}</h3>
             <div className="modal-body">
               <input
                 type="text"
-                placeholder="Folder name"
-                aria-label="Folder name"
+                placeholder={t("files.folder_name")}
+                aria-label={t("files.folder_name")}
                 value={newFolderName}
                 disabled={busy}
                 autoFocus
@@ -1679,14 +1690,14 @@ export function FilesExplorer(props: Props) {
                 disabled={busy}
                 onClick={() => setIsModalOpen(false)}
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 type="button"
                 disabled={busy || !newFolderName.trim()}
                 onClick={handleCreate}
               >
-                Create
+                {t("files.create")}
               </button>
             </div>
           </div>

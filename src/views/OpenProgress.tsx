@@ -1,4 +1,5 @@
 import { formatBytes } from "../lib/format";
+import { t, useLocale } from "../i18n";
 
 /** A file being made ready to open, as `open-progress` reports it. */
 export type Opening = {
@@ -16,10 +17,10 @@ type Props = {
 
 /** What the step is, in words, with the file's name. */
 export function openingTitle(o: Opening): string {
-  if (o.phase === "downloading") return `Downloading ${o.name}`;
-  if (o.phase === "decrypting") return `Decrypting ${o.name}`;
-  if (o.phase === "opening") return `Opening ${o.name}`;
-  return `Getting ${o.name} ready`;
+  if (o.phase === "downloading") return t("start.opening_downloading", { name: o.name });
+  if (o.phase === "decrypting") return t("start.opening_decrypting", { name: o.name });
+  if (o.phase === "opening") return t("start.opening_opening", { name: o.name });
+  return t("start.opening_preparing", { name: o.name });
 }
 
 /** How far the step is, 0 to 100, or null when it cannot be told. */
@@ -35,14 +36,15 @@ export function openingPercent(o: Opening): number | null {
  * as if the click did nothing.
  */
 export function OpenProgress({ opening, onCancel }: Props) {
+  useLocale();
   const percent = openingPercent(opening);
   const detail =
     opening.phase === "downloading" && opening.total > 0
-      ? `${formatBytes(opening.done)} of ${formatBytes(opening.total)}`
+      ? t("start.of", { done: formatBytes(opening.done), total: formatBytes(opening.total) })
       : opening.phase === "decrypting" && percent !== null
         ? `${percent}%`
         : opening.phase === "opening"
-          ? "Handing it to its application"
+          ? t("start.opening_handing")
           : "";
 
   return (
@@ -65,7 +67,7 @@ export function OpenProgress({ opening, onCancel }: Props) {
       </div>
       {opening.phase !== "opening" && (
         <button type="button" className="secondary open-progress-cancel" onClick={onCancel}>
-          Cancel
+          {t("common.cancel")}
         </button>
       )}
     </div>

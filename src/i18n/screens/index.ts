@@ -1,4 +1,11 @@
 import { common } from "./common";
+import { files } from "./files";
+import { passwords } from "./passwords";
+import { backup } from "./backup";
+import { settingsPanels } from "./settings-panels";
+import { start } from "./start";
+import { dialogs } from "./dialogs";
+import { appMessages } from "./app-messages";
 import { emergencyKit } from "./emergency-kit";
 import { firstRun } from "./first-run";
 import { recovery } from "./recovery";
@@ -27,4 +34,11 @@ export const SCREENS = [
   settingsRail,
   recovery,
   rotateKey,
+  files,
+  passwords,
+  backup,
+  settingsPanels,
+  start,
+  dialogs,
+  appMessages,
 ] as const;

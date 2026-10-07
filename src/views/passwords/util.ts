@@ -5,18 +5,33 @@
  */
 
 import type { CredentialType, PasswordCategory, PasswordEntry } from "../../lib/types";
+import { t, type Key } from "../../i18n";
 
 /** Absent means login: every entry predating the other kinds is one. */
 export function typeOf(entry: PasswordEntry): CredentialType {
   return entry.type ?? "login";
 }
 
-export const TYPE_LABELS: Record<CredentialType, { singular: string; plural: string }> = {
-  login: { singular: "Login", plural: "Logins" },
-  card: { singular: "Card", plural: "Cards" },
-  identity: { singular: "Identity", plural: "Identities" },
-  ssh_key: { singular: "SSH key", plural: "SSH keys" },
-  note: { singular: "Note", plural: "Notes" },
+type TypeLabel = { readonly singular: string; readonly plural: string };
+
+/** Read when shown, so a language change is picked up. */
+function typeLabel(singular: Key, plural: Key): TypeLabel {
+  return {
+    get singular() {
+      return t(singular);
+    },
+    get plural() {
+      return t(plural);
+    },
+  };
+}
+
+export const TYPE_LABELS: Record<CredentialType, TypeLabel> = {
+  login: typeLabel("pw.type_login", "pw.type_logins"),
+  card: typeLabel("pw.type_card", "pw.type_cards"),
+  identity: typeLabel("pw.type_identity", "pw.type_identities"),
+  ssh_key: typeLabel("pw.type_ssh_key", "pw.type_ssh_keys"),
+  note: typeLabel("pw.type_note", "pw.type_notes"),
 };
 
 export const CREDENTIAL_TYPES: CredentialType[] = [
@@ -26,6 +41,33 @@ export const CREDENTIAL_TYPES: CredentialType[] = [
   "ssh_key",
   "note",
 ];
+
+/** Whole sentences per kind, because the kind's word changes form in them. */
+export const TYPE_TEXTS: Record<
+  CredentialType,
+  { add: Key; edit: Key; noneYet: Key; count: Key }
+> = {
+  login: {
+    add: "pw.add_login",
+    edit: "pw.edit_login",
+    noneYet: "pw.none_yet_login",
+    count: "pw.count_login",
+  },
+  card: { add: "pw.add_card", edit: "pw.edit_card", noneYet: "pw.none_yet_card", count: "pw.count_card" },
+  identity: {
+    add: "pw.add_identity",
+    edit: "pw.edit_identity",
+    noneYet: "pw.none_yet_identity",
+    count: "pw.count_identity",
+  },
+  ssh_key: {
+    add: "pw.add_ssh_key",
+    edit: "pw.edit_ssh_key",
+    noneYet: "pw.none_yet_ssh_key",
+    count: "pw.count_ssh_key",
+  },
+  note: { add: "pw.add_note", edit: "pw.edit_note", noneYet: "pw.none_yet_note", count: "pw.count_note" },
+};
 
 /** Digits only, however the number was typed or imported. */
 export function cardDigits(entry: PasswordEntry): string {
@@ -55,7 +97,7 @@ export function subtitleFor(entry: PasswordEntry): string {
       // The first line is the note's own summary of itself, unless the note
       // is protected: then it is the secret, and the list, Favourites and
       // Health would show it without the key touch the detail pane asks for.
-      return notesAreSecret(entry) ? "Protected note" : (entry.notes.split("\n", 1)[0] ?? "");
+      return notesAreSecret(entry) ? t("pw.protected_note") : (entry.notes.split("\n", 1)[0] ?? "");
   }
 }
 
@@ -233,11 +275,11 @@ export function passwordStrength(pw: string): PasswordStrength {
   if (/[^A-Za-z0-9]/.test(pw)) score++;
   const capped = Math.min(score, 4) as 0 | 1 | 2 | 3 | 4;
   const levels: [string, string][] = [
-    ["Very weak", "var(--danger-on-dark)"],
-    ["Weak", "var(--strength-weak)"],
-    ["Fair", "var(--strength-fair)"],
-    ["Good", "var(--strength-good)"],
-    ["Strong", "var(--success)"],
+    [t("pw.strength_very_weak"), "var(--danger-on-dark)"],
+    [t("pw.strength_weak"), "var(--strength-weak)"],
+    [t("pw.strength_fair"), "var(--strength-fair)"],
+    [t("pw.strength_good"), "var(--strength-good)"],
+    [t("pw.strength_strong"), "var(--success)"],
   ];
   const [label, color] = levels[capped]!;
   return { score: capped, label, color };

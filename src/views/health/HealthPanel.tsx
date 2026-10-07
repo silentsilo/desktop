@@ -7,6 +7,7 @@ import { checkPasswords, type PwnedReport } from "../../lib/pwned";
 import { subtitleFor, typeOf, TYPE_LABELS } from "../passwords/util";
 import { summarise, type HealthFinding, type HealthFix } from "./analysis";
 import { canIgnore, fingerprint } from "./ignored";
+import { dateLocale, t, useLocale, type Key } from "../../i18n";
 
 type Props = {
   /** Computed by the shell, which also badges the count on the tab: one
@@ -25,11 +26,11 @@ type Props = {
   onOpenFix: (fix: HealthFix) => void;
 };
 
-const FIX_LABELS: Record<HealthFix, string> = {
-  backup: "Set up backup",
-  keys: "Add a security key",
-  recovery: "Create a recovery code",
-  verify: "Test backup",
+const FIX_LABELS: Record<HealthFix, Key> = {
+  backup: "dlg.health_fix_backup",
+  keys: "dlg.health_fix_keys",
+  recovery: "dlg.health_fix_recovery",
+  verify: "settings.verify",
 };
 
 /** The breach check, as a state the page can be in. */
@@ -62,6 +63,7 @@ export function HealthPanel({
   onOpenEntry,
   onOpenFix,
 }: Props) {
+  useLocale();
   const counts = useMemo(() => summarise(findings), [findings]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showIgnored, setShowIgnored] = useState(false);
@@ -96,23 +98,27 @@ export function HealthPanel({
 
   const subtitle =
     findings.length === 0
-      ? `Nothing to fix across ${entryCount} ${entryCount === 1 ? "entry" : "entries"}`
-      : `${findings.length} ${findings.length === 1 ? "thing" : "things"} to look at across ` +
-        `${entryCount} ${entryCount === 1 ? "entry" : "entries"}`;
+      ? t("dlg.health_nothing", { count: entryCount })
+      : t("dlg.health_things", {
+          count: findings.length,
+          entries: t("dlg.health_entry_count", { count: entryCount }),
+        });
 
   return (
     <div className="health-view">
-      <ViewHeader icon={HeartPulse} title="Health" subtitle={subtitle} />
+      <ViewHeader icon={HeartPulse} title={t("nav.health")} subtitle={subtitle} />
 
       {findings.length > 0 && (
         <div className="health-counters">
           <span className="health-counter health-high">
-            {counts.high} to fix
+            {t("dlg.health_to_fix", { count: counts.high })}
           </span>
           <span className="health-counter health-medium">
-            {counts.medium} worth doing
+            {t("dlg.health_worth_doing", { count: counts.medium })}
           </span>
-          <span className="health-counter health-info">{counts.info} to know</span>
+          <span className="health-counter health-info">
+            {t("dlg.health_to_know", { count: counts.info })}
+          </span>
         </div>
       )}
 
@@ -121,9 +127,7 @@ export function HealthPanel({
           <div className="health-empty-state">
             <ShieldCheck size={28} />
             <p className="hint">
-              {ignored.length > 0
-                ? "Nothing else to look at."
-                : "No reused or weak passwords, and this silo has a recovery code, a spare key and a backup."}
+              {ignored.length > 0 ? t("dlg.health_nothing_else") : t("dlg.health_all_good")}
             </p>
           </div>
         ) : (
@@ -151,7 +155,7 @@ export function HealthPanel({
               aria-expanded={showIgnored}
             >
               {showIgnored ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-              Ignored ({ignored.length})
+              {t("dlg.health_ignored", { count: ignored.length })}
             </button>
             {showIgnored && (
               <ul className="health-list">
@@ -174,25 +178,19 @@ export function HealthPanel({
         <div className="health-breach">
           <div className="health-breach-head">
             <Globe size={16} aria-hidden />
-            <span className="health-finding-title">Passwords in known breaches</span>
+            <span className="health-finding-title">{t("dlg.health_breach_title")}</span>
             <button
               type="button"
               className="secondary health-finding-fix"
               disabled={breaches.kind === "busy" || entryCount === 0}
               onClick={() => void runBreachCheck()}
             >
-              {breaches.kind === "busy" ? "Checking…" : "Check now"}
+              {breaches.kind === "busy" ? t("dlg.health_checking") : t("dlg.health_check_now")}
             </button>
           </div>
-          <p className="hint">
-            Compares your passwords with the Have I Been Pwned database. Only the first five
-            characters of each password&apos;s hash are sent, and the check changes nothing in this
-            silo.
-          </p>
+          <p className="hint">{t("dlg.health_breach_hint")}</p>
           {breaches.kind === "unavailable" && (
-            <p className="hint">
-              The breach service could not be reached, so nothing was checked. Try again later.
-            </p>
+            <p className="hint">{t("dlg.health_breach_unavailable")}</p>
           )}
           {breaches.kind === "done" && (
             <BreachResults report={breaches.report} entries={entries} onOpenEntry={onOpenEntry} />
@@ -212,15 +210,16 @@ function BreachResults({
   entries: PasswordEntry[];
   onOpenEntry: (id: string) => void;
 }) {
-  const nameOf = (id: string) => entries.find((e) => e.id === id)?.service || "Untitled";
+  useLocale();
+  const nameOf = (id: string) =>
+    entries.find((e) => e.id === id)?.service || t("dlg.untitled");
 
   if (report.exposures.length === 0) {
     return (
       <p className="hint">
-        None of the {report.checked} distinct {report.checked === 1 ? "password" : "passwords"}{" "}
-        checked appears in known breaches.
+        {t("dlg.health_breach_none", { count: report.checked })}
         {report.unavailable > 0 &&
-          ` ${report.unavailable} could not be checked because the service did not answer.`}
+          ` ${t("dlg.health_breach_partial", { count: report.unavailable })}`}
       </p>
     );
   }
@@ -228,8 +227,7 @@ function BreachResults({
   return (
     <>
       <p className="health-finding-detail">
-        {report.exposures.length} {report.exposures.length === 1 ? "password appears" : "passwords appear"}{" "}
-        in breached data. Change each on the site first, then here.
+        {t("dlg.health_breach_found", { count: report.exposures.length })}
       </p>
       <ul className="health-entry-group">
         {report.exposures.flatMap((exposure) =>
@@ -239,11 +237,14 @@ function BreachResults({
                 type="button"
                 className="health-entry"
                 onClick={() => onOpenEntry(id)}
-                title={`Open ${nameOf(id)} in Passwords`}
+                title={t("dlg.health_open_entry", { name: nameOf(id) })}
               >
                 <span className="health-entry-name">{nameOf(id)}</span>
                 <span className="health-entry-sub">
-                  seen {exposure.count.toLocaleString("en-US")} times
+                  {t("dlg.health_seen", {
+                    count: exposure.count,
+                    times: exposure.count.toLocaleString(dateLocale()),
+                  })}
                 </span>
               </button>
             </li>
@@ -273,6 +274,7 @@ function FindingRow({
   /** Only on an ignored finding. */
   onShowAgain?: () => void;
 }) {
+  useLocale();
   const expandable = finding.entries.length > 0;
 
   return (
@@ -301,7 +303,7 @@ function FindingRow({
               className="secondary health-finding-fix"
               onClick={() => onOpenFix(finding.fix!)}
             >
-              {FIX_LABELS[finding.fix]}
+              {t(FIX_LABELS[finding.fix])}
             </button>
           )}
           {onIgnore && (
@@ -309,14 +311,14 @@ function FindingRow({
               type="button"
               className="secondary health-finding-fix"
               onClick={onIgnore}
-              title="Stop counting this on this computer. It comes back if it changes."
+              title={t("dlg.health_ignore_tooltip")}
             >
-              Ignore
+              {t("dlg.health_ignore")}
             </button>
           )}
           {onShowAgain && (
             <button type="button" className="secondary health-finding-fix" onClick={onShowAgain}>
-              Show again
+              {t("dlg.health_show_again")}
             </button>
           )}
         </span>
@@ -354,6 +356,7 @@ function EntryButton({
   entry: PasswordEntry;
   onOpen: (id: string) => void;
 }) {
+  useLocale();
   const subtitle = subtitleFor(entry);
   return (
     <li>
@@ -361,9 +364,9 @@ function EntryButton({
         type="button"
         className="health-entry"
         onClick={() => onOpen(entry.id)}
-        title={`Open ${entry.service} in Passwords`}
+        title={t("dlg.health_open_entry", { name: entry.service })}
       >
-        <span className="health-entry-name">{entry.service || "Untitled"}</span>
+        <span className="health-entry-name">{entry.service || t("dlg.untitled")}</span>
         {subtitle && <span className="health-entry-sub">{subtitle}</span>}
         <span className="health-entry-kind">{TYPE_LABELS[typeOf(entry)].singular}</span>
       </button>

@@ -2,6 +2,7 @@ import { ScrollText } from "lucide-react";
 import { ViewHeader } from "../components/ViewHeader";
 import type { AuditStatus } from "../lib/types";
 import { AuditLogList } from "./AuditLogList";
+import { t, useLocale } from "../i18n";
 
 type Props = {
   status: AuditStatus | null;
@@ -11,21 +12,22 @@ type Props = {
 
 /** What was done with this silo, from every device: its activity log. */
 export function ActivityView({ status, devices, onOpenSettings }: Props) {
+  useLocale();
   return (
     <div className="activity-view">
       <ViewHeader
         icon={ScrollText}
-        title="Activity"
-        subtitle={status?.organisation ? "Kept by your organisation" : undefined}
+        title={t("nav.activity")}
+        subtitle={status?.organisation ? t("dlg.activity_org_subtitle") : undefined}
       />
       <div className="activity-pane">
         {status === null ? (
-          <p className="hint">Reading…</p>
+          <p className="hint">{t("dlg.activity_reading")}</p>
         ) : status.kept ? (
           // Read again when the log changes, so its own event shows.
           <>
             {!status.enabled && (
-              <p className="hint">Activity is off. What was recorded before stays here.</p>
+              <p className="hint">{t("dlg.activity_off_kept")}</p>
             )}
             <AuditLogList
             key={`${status.enabled}-${status.organisation}`}
@@ -35,16 +37,13 @@ export function ActivityView({ status, devices, onOpenSettings }: Props) {
           </>
         ) : status.enabled ? (
           // On, with the key still on its way from another device.
-          <p className="hint">
-            Activity is on. This computer has not received what it needs to show it yet: sync, then
-            come back.
-          </p>
+          <p className="hint">{t("dlg.activity_waiting")}</p>
         ) : (
           <div className="panel-section">
-            <p>Activity is off for this silo.</p>
+            <p>{t("dlg.activity_off")}</p>
             <div className="actions">
               <button type="button" className="secondary" onClick={onOpenSettings}>
-                Turn it on in Settings
+                {t("dlg.activity_turn_on")}
               </button>
             </div>
           </div>

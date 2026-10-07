@@ -7,6 +7,7 @@ import { builtInOrKey, platformStrings } from "../lib/platformStrings";
 import { formatAppError } from "../lib/errors";
 import { useEventSubscription } from "../hooks/useEventSubscription";
 import { useModal } from "../hooks/useModal";
+import { t, useLocale } from "../i18n";
 
 /**
  * The browser extension's fill, confirmed here rather than in the browser:
@@ -69,6 +70,7 @@ function FillCard({
   os: Os;
   onClose: () => void;
 }) {
+  useLocale();
   const platform = platformStrings(os);
   const [busy, setBusy] = useState(false);
   // Fill stays inert for a moment after a question appears. The card is
@@ -118,26 +120,23 @@ function FillCard({
         className="modal-card browser-fill"
         role="alertdialog"
         aria-modal="true"
-        aria-label="Fill a login in your browser?"
+        aria-label={t("dlg.fill_title")}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-title-row">
           <span className="modal-title-icon" aria-hidden>
             <Globe size={18} />
           </span>
-          <h3 className="modal-title">Fill a login in your browser?</h3>
+          <h3 className="modal-title">{t("dlg.fill_title")}</h3>
         </div>
         <div className="modal-body">
           {/* Says only what the app knows: the request came through the
               browser channel. Another program of this user can send one too. */}
-          <p>
-            A fill request from your browser for {prompt.site}. If you did not just click
-            SilentSilo in the browser, choose Cancel.
-          </p>
+          <p>{t("dlg.fill_body", { site: prompt.site })}</p>
           <dl className="browser-fill-facts">
-            <dt>Site</dt>
+            <dt>{t("dlg.fill_site")}</dt>
             <dd>{prompt.site}</dd>
-            <dt>Login</dt>
+            <dt>{t("dlg.fill_login")}</dt>
             <dd>
               {prompt.label}
               {prompt.username && <span className="hint"> {prompt.username}</span>}
@@ -145,12 +144,11 @@ function FillCard({
           </dl>
           {prompt.mismatch && (
             <p className="browser-fill-mismatch" role="alert">
-              {prompt.mismatch} Fill it only if you meant to use it on this site.
+              {prompt.mismatch} {t("dlg.fill_mismatch_advice")}
             </p>
           )}
           <p className="hint">
-            You confirm with {builtInOrKey(platform)} next. The browser receives
-            the login only after that.
+            {t("dlg.fill_confirm_next", { method: builtInOrKey(platform) })}
           </p>
           {busy && progress && (
             <p className="hint" role="status">
@@ -161,7 +159,7 @@ function FillCard({
         </div>
         <div className="modal-actions">
           <button type="button" className="secondary" disabled={busy} onClick={cancel}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -169,7 +167,7 @@ function FillCard({
             disabled={busy || !armed}
             onClick={() => void confirm()}
           >
-            {prompt.mismatch ? "Fill anyway" : "Fill"}
+            {prompt.mismatch ? t("dlg.fill_anyway") : t("dlg.fill_button")}
           </button>
         </div>
       </div>

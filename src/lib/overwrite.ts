@@ -7,6 +7,8 @@
 /// set. This is the wording for the one question asked instead, before
 /// anything is written.
 
+import { t } from "../i18n";
+
 /// Names the clash, listing enough of it to decide with.
 ///
 /// Three names and a count, rather than all of them: a folder export can
@@ -16,22 +18,26 @@
 /// list of collisions.
 export function overwriteMessage(clashes: string[], total?: number): string {
   if (clashes.length === 0) return "";
-  const shown = clashes.slice(0, 3).join(", ");
-  const rest = clashes.length - 3;
-  const more = rest > 0 ? `, and ${rest} more` : "";
+  const count = clashes.length;
+  const list = clashes.slice(0, 3).join(", ");
+  const rest = count - 3;
   const which =
-    clashes.length === 1
-      ? `“${clashes[0]}” is already in the folder you picked.`
-      : total !== undefined && clashes.length < total
-        ? `${clashes.length} of the ${total} files you are saving are already in the folder you picked: ${shown}${more}.`
-        : `${clashes.length} files are already in the folder you picked: ${shown}${more}.`;
-  return `${which} They are left alone unless you say otherwise.`;
+    count === 1
+      ? t("files.overwrite_one", { name: clashes[0]! })
+      : total !== undefined && count < total
+        ? rest > 0
+          ? t("files.overwrite_some_more", { count, total, list, rest })
+          : t("files.overwrite_some", { count, total, list })
+        : rest > 0
+          ? t("files.overwrite_all_more", { count, list, rest })
+          : t("files.overwrite_all", { count, list });
+  return `${which} ${t("files.overwrite_left_alone")}`;
 }
 
 /// The confirm button. It is the safe answer, so it says what happens when
 /// the box below it is left unticked, and a save where everything collides
 /// has nothing left to write.
 export function overwriteConfirmLabel(clashCount: number, total?: number): string {
-  if (total !== undefined && clashCount >= total) return "Save nothing";
-  return "Save the rest";
+  if (total !== undefined && clashCount >= total) return t("files.overwrite_save_nothing");
+  return t("files.overwrite_save_rest");
 }

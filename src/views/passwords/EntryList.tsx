@@ -3,6 +3,7 @@ import { Contact, CreditCard, StickyNote, TerminalSquare, User } from "lucide-re
 import type { PasswordEntry } from "../../lib/types";
 import { faviconUrl, inkOn, serviceInitials, subtitleFor, typeOf } from "./util";
 import { IconCopy } from "../../ui/Icons";
+import { t, useLocale } from "../../i18n";
 
 type Props = {
   entries: PasswordEntry[];
@@ -33,6 +34,7 @@ export function EntryList({
   onCopyUsername,
   onCopyPassword,
 }: Props) {
+  useLocale();
   const [faviconErrorIds, setFaviconErrorIds] = useState<Set<string>>(new Set());
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -53,7 +55,7 @@ export function EntryList({
     <div
       className="pw-rows"
       role="listbox"
-      aria-label="Passwords"
+      aria-label={t("nav.passwords")}
       tabIndex={0}
       onKeyDown={onKeyDown}
     >
@@ -101,7 +103,7 @@ export function EntryList({
               )}
             </div>
             <div className="pw-row-text">
-              <span className="pw-row-service">{entry.service || "Untitled"}</span>
+              <span className="pw-row-service">{entry.service || t("pw.untitled")}</span>
               <span className="pw-row-username">{subtitleFor(entry) || " "}</span>
             </div>
             {/* Quick copies without opening the entry — the two things done
@@ -112,15 +114,17 @@ export function EntryList({
                 <button
                   type="button"
                   className="pw-inline-btn"
-                  title="Copy username"
-                  aria-label={`Copy username for ${entry.service || "untitled entry"}`}
+                  title={t("pw.copy_username")}
+                  aria-label={t("pw.list_copy_username_label", {
+                    name: entry.service || t("pw.untitled_entry"),
+                  })}
                   onClick={(e) => {
                     e.stopPropagation();
                     onCopyUsername(entry);
                   }}
                 >
                   {copiedId === `u-${entry.id}` ? (
-                    <span className="pw-copied-badge">Copied</span>
+                    <span className="pw-copied-badge">{t("pw.copied")}</span>
                   ) : (
                     <User size={14} />
                   )}
@@ -131,23 +135,25 @@ export function EntryList({
                 className="pw-inline-btn"
                 title={
                   type === "card"
-                    ? "Copy card number"
+                    ? t("pw.copy_card_number")
                     : type === "identity"
-                      ? "Copy email"
+                      ? t("pw.copy_email")
                       : type === "ssh_key"
-                        ? "Copy public key"
+                        ? t("pw.copy_public_key")
                         : type === "note"
-                          ? "Copy note"
-                          : "Copy password"
+                          ? t("pw.copy_note")
+                          : t("pw.copy_password")
                 }
-                aria-label={`Copy from ${entry.service || "untitled entry"}`}
+                aria-label={t("pw.list_copy_from_label", {
+                  name: entry.service || t("pw.untitled_entry"),
+                })}
                 onClick={(e) => {
                   e.stopPropagation();
                   onCopyPassword(entry);
                 }}
               >
                 {copiedId === entry.id ? (
-                  <span className="pw-copied-badge">Copied</span>
+                  <span className="pw-copied-badge">{t("pw.copied")}</span>
                 ) : (
                   <IconCopy size={14} />
                 )}

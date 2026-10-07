@@ -3,6 +3,7 @@ import { Check, Contact, CreditCard, KeyRound, StickyNote, TerminalSquare } from
 import type { CredentialType, PasswordCategory } from "../../lib/types";
 import { CREDENTIAL_TYPES, FALLBACK_CATEGORY, hashColor, TYPE_LABELS } from "./util";
 import { IconClose, IconEdit, IconPlus, IconTrash } from "../../ui/Icons";
+import { t, useLocale } from "../../i18n";
 
 export const TYPE_ICONS: Record<CredentialType, typeof KeyRound> = {
   login: KeyRound,
@@ -49,6 +50,7 @@ export function CategoryRail({
   onRename,
   onDelete,
 }: Props) {
+  useLocale();
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -76,7 +78,7 @@ export function CategoryRail({
   };
 
   return (
-    <nav className="view-rail" aria-label="Entry types and categories">
+    <nav className="view-rail" aria-label={t("pw.rail_label")}>
       {/* Kinds first: "show me my cards" is the question asked walking up
           to a checkout, and it should not require remembering a category. */}
       <button
@@ -84,7 +86,7 @@ export function CategoryRail({
         className={`view-rail-item${selectedType === null ? " active" : ""}`}
         onClick={() => onSelectType(null)}
       >
-        <span className="view-rail-label">All entries</span>
+        <span className="view-rail-label">{t("pw.rail_all_entries")}</span>
         <span className="view-rail-count">{total}</span>
       </button>
       {CREDENTIAL_TYPES.map((type) => {
@@ -103,13 +105,13 @@ export function CategoryRail({
         );
       })}
 
-      <div className="view-rail-heading">Categories</div>
+      <div className="view-rail-heading">{t("pw.rail_categories")}</div>
       <button
         type="button"
         className={`view-rail-item${selected === null ? " active" : ""}`}
         onClick={() => onSelect(null)}
       >
-        <span className="view-rail-label">All</span>
+        <span className="view-rail-label">{t("pw.rail_all")}</span>
         <span className="view-rail-count">{total}</span>
       </button>
 
@@ -121,7 +123,7 @@ export function CategoryRail({
                 type="text"
                 value={renameDraft}
                 autoFocus
-                aria-label={`Rename ${cat.name}`}
+                aria-label={t("pw.rail_rename_label", { name: cat.name })}
                 onChange={(e) => setRenameDraft(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") submitRename();
@@ -131,7 +133,7 @@ export function CategoryRail({
               <button
                 type="button"
                 className="pw-inline-btn"
-                title="Save name"
+                title={t("pw.rail_save_name")}
                 disabled={
                   !renameDraft.trim() || nameTaken(renameDraft.trim(), cat.name)
                 }
@@ -142,14 +144,14 @@ export function CategoryRail({
               <button
                 type="button"
                 className="pw-inline-btn"
-                title="Cancel"
+                title={t("common.cancel")}
                 onClick={() => setRenaming(null)}
               >
                 <IconClose size={14} />
               </button>
             </div>
             {nameTaken(renameDraft.trim(), cat.name) && (
-              <p className="hint pw-rail-hint">That name is already in the list.</p>
+              <p className="hint pw-rail-hint">{t("pw.rail_name_taken")}</p>
             )}
           </div>
         ) : (
@@ -171,7 +173,7 @@ export function CategoryRail({
                 <button
                   type="button"
                   className="pw-inline-btn danger"
-                  title={`Delete ${cat.name}. Its entries move to ${FALLBACK_CATEGORY}.`}
+                  title={t("pw.rail_delete_confirm", { name: cat.name, fallback: FALLBACK_CATEGORY })}
                   onClick={() => {
                     setConfirmingDelete(null);
                     onDelete(cat.name);
@@ -182,7 +184,7 @@ export function CategoryRail({
                 <button
                   type="button"
                   className="pw-inline-btn"
-                  title="Keep it"
+                  title={t("pw.rail_keep")}
                   onClick={() => setConfirmingDelete(null)}
                 >
                   <IconClose size={14} />
@@ -193,7 +195,7 @@ export function CategoryRail({
                 <button
                   type="button"
                   className="pw-inline-btn"
-                  title="Rename category"
+                  title={t("pw.rail_rename")}
                   disabled={busy}
                   onClick={() => {
                     setRenameDraft(cat.name);
@@ -208,7 +210,7 @@ export function CategoryRail({
                   <button
                     type="button"
                     className="pw-inline-btn danger"
-                    title="Delete category"
+                    title={t("pw.rail_delete")}
                     disabled={busy}
                     onClick={() => setConfirmingDelete(cat.name)}
                   >
@@ -228,8 +230,8 @@ export function CategoryRail({
               type="text"
               value={draft}
               autoFocus
-              placeholder="Category name"
-              aria-label="New category name"
+              placeholder={t("pw.rail_new_placeholder")}
+              aria-label={t("pw.rail_new_label")}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") submitAdd();
@@ -242,7 +244,7 @@ export function CategoryRail({
             <button
               type="button"
               className="pw-inline-btn"
-              title="Add category"
+              title={t("pw.rail_add")}
               disabled={!draft.trim() || nameTaken(draft.trim())}
               onClick={submitAdd}
             >
@@ -251,7 +253,7 @@ export function CategoryRail({
             <button
               type="button"
               className="pw-inline-btn"
-              title="Cancel"
+              title={t("common.cancel")}
               onClick={() => {
                 setAdding(false);
                 setDraft("");
@@ -263,7 +265,7 @@ export function CategoryRail({
           {/* A disabled check with no explanation reads as a broken button.
               Say which rule the name is failing while it is being typed. */}
           {nameTaken(draft.trim()) && (
-            <p className="hint pw-rail-hint">That name is already in the list.</p>
+            <p className="hint pw-rail-hint">{t("pw.rail_name_taken")}</p>
           )}
         </>
       ) : (
@@ -274,7 +276,7 @@ export function CategoryRail({
           onClick={() => setAdding(true)}
         >
           <IconPlus size={14} />
-          <span>New category</span>
+          <span>{t("pw.rail_new")}</span>
         </button>
       )}
     </nav>

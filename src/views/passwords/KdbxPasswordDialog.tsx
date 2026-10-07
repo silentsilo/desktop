@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useModal } from "../../hooks/useModal";
 import { open as openFileDialog } from "../../lib/dialog";
+import { t, useLocale } from "../../i18n";
 
 type Props = {
   /** Opening a database someone else made, or writing a new one. */
@@ -20,6 +21,7 @@ const MIN_EXPORT_LENGTH = 8;
  * typed twice. Nothing here is kept once the dialog closes.
  */
 export function KdbxPasswordDialog({ mode, busy, error, onSubmit, onCancel }: Props) {
+  useLocale();
   // While it works the files are already being written into the silo:
   // cancelling then would leave them with nothing to point at.
   const cancel = busy ? undefined : onCancel;
@@ -31,12 +33,12 @@ export function KdbxPasswordDialog({ mode, busy, error, onSubmit, onCancel }: Pr
   const exporting = mode === "export";
   const problem = exporting
     ? password.length < MIN_EXPORT_LENGTH
-      ? `At least ${MIN_EXPORT_LENGTH} characters.`
+      ? t("pw.kdbx_min_length", { count: MIN_EXPORT_LENGTH })
       : password !== repeat
-        ? "The two do not match."
+        ? t("pw.kdbx_mismatch")
         : null
     : !password && !keyFile
-      ? "The password, the key file, or both."
+      ? t("pw.kdbx_need_secret")
       : null;
 
   const submit = () => {
@@ -56,17 +58,15 @@ export function KdbxPasswordDialog({ mode, busy, error, onSubmit, onCancel }: Pr
         className="modal-card"
         role="dialog"
         aria-modal="true"
-        aria-label={exporting ? "Password for the KeePass file" : "Open the KeePass database"}
+        aria-label={exporting ? t("pw.kdbx_export_label") : t("pw.kdbx_open_title")}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3>{exporting ? "Protect the KeePass file" : "Open the KeePass database"}</h3>
+        <h3>{exporting ? t("pw.kdbx_export_title") : t("pw.kdbx_open_title")}</h3>
         <p>
-          {exporting
-            ? "The file holds every entry, with its passwords, fields, files and history. This password is all that protects it once it leaves the silo, so make it long."
-            : "The password KeePass asks for when it opens this file."}
+          {exporting ? t("pw.kdbx_export_body") : t("pw.kdbx_open_body")}
         </p>
         <label className="field field-full">
-          <span>Password</span>
+          <span>{t("pw.field_password")}</span>
           <input
             autoFocus
             type="password"
@@ -80,7 +80,7 @@ export function KdbxPasswordDialog({ mode, busy, error, onSubmit, onCancel }: Pr
         </label>
         {exporting ? (
           <label className="field field-full">
-            <span>Again</span>
+            <span>{t("pw.kdbx_again")}</span>
             <input
               type="password"
               autoComplete="new-password"
@@ -93,15 +93,15 @@ export function KdbxPasswordDialog({ mode, busy, error, onSubmit, onCancel }: Pr
           </label>
         ) : (
           <div className="field field-full">
-            <span>Key file</span>
+            <span>{t("pw.kdbx_key_file")}</span>
             <div className="pw-kdbx-keyfile">
-              <span className="hint">{keyFile ?? "None"}</span>
+              <span className="hint">{keyFile ?? t("pw.kdbx_no_key_file")}</span>
               <button type="button" className="btn" onClick={() => void chooseKeyFile()}>
-                {keyFile ? "Change" : "Choose"}
+                {keyFile ? t("pw.kdbx_change") : t("pw.kdbx_choose")}
               </button>
               {keyFile && (
                 <button type="button" className="link" onClick={() => setKeyFile(null)}>
-                  Remove
+                  {t("pw.remove")}
                 </button>
               )}
             </div>
@@ -112,7 +112,7 @@ export function KdbxPasswordDialog({ mode, busy, error, onSubmit, onCancel }: Pr
         )}
         <div className="modal-actions">
           <button type="button" className="btn" onClick={onCancel} disabled={busy}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -120,7 +120,7 @@ export function KdbxPasswordDialog({ mode, busy, error, onSubmit, onCancel }: Pr
             disabled={busy || problem !== null}
             onClick={submit}
           >
-            {busy ? "Working…" : exporting ? "Export" : "Open"}
+            {busy ? t("pw.kdbx_working") : exporting ? t("pw.export") : t("pw.kdbx_open")}
           </button>
         </div>
       </div>

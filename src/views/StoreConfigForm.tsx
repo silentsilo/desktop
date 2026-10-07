@@ -32,14 +32,17 @@ import {
 import {
   CLOUD_COMPANY,
   CLOUD_NAME,
-  CLOUD_PLACE,
+  cloudFolderHint,
   cloudFolderProblem,
+  cloudFoldersHint,
+  cloudNoSilo,
   DEFAULT_CLOUD_FOLDER,
 } from "../lib/cloud";
 import { formatBytes } from "../lib/format";
 import { KDRIVE_DEFAULT_FOLDER, kdriveIdFrom, kdriveUrl } from "../lib/kdrive";
 import { S3ConfigForm } from "./S3ConfigForm";
-import { PLAIN_HTTP_WARNING, isPlainHttp } from "../lib/plainHttp";
+import { plainHttpWarning, isPlainHttp } from "../lib/plainHttp";
+import { t, tx, useLocale, type Key } from "../i18n";
 
 /**
  * Every field any backend needs, held together.
@@ -217,29 +220,31 @@ export function missingStoreFields(draft: StoreDraft, hasStoredSecret: boolean):
   if (isCloudKind(draft.kind)) {
     const cloud = draft.cloud[draft.kind];
     return [
-      !cloud.signIn && !cloud.account && `a ${CLOUD_NAME[draft.kind]} sign-in`,
-      !cloud.folder.trim() && "folder name",
+      !cloud.signIn &&
+        !cloud.account &&
+        t("backup.missing_cloud_sign_in", { provider: CLOUD_NAME[draft.kind] }),
+      !cloud.folder.trim() && t("backup.missing_folder_name"),
     ].filter((v): v is string => typeof v === "string");
   }
   switch (draft.kind) {
     case "folder":
-      return draft.folder.trim() ? [] : ["folder"];
+      return draft.folder.trim() ? [] : [t("backup.missing_folder")];
     case "web-dav":
       return [
         draft.dav.preset === "kdrive"
-          ? !kdriveIdFrom(draft.dav.kdriveId) && "kDrive ID"
-          : !draft.dav.url.trim() && "address",
-        !draft.dav.username.trim() && "username",
-        !draft.dav.password.trim() && !hasStoredSecret && "password",
+          ? !kdriveIdFrom(draft.dav.kdriveId) && t("backup.kdrive_id")
+          : !draft.dav.url.trim() && t("backup.missing_address"),
+        !draft.dav.username.trim() && t("backup.missing_username"),
+        !draft.dav.password.trim() && !hasStoredSecret && t("backup.word_password"),
       ].filter((v): v is string => typeof v === "string");
     case "sftp":
       return [
-        !draft.sftp.host.trim() && "address",
-        !draft.sftp.username.trim() && "username",
+        !draft.sftp.host.trim() && t("backup.missing_address"),
+        !draft.sftp.username.trim() && t("backup.missing_username"),
         draft.sftp.method === "password"
-          ? !draft.sftp.password.trim() && !hasStoredSecret && "password"
-          : !draft.sftp.privateKey.trim() && !hasStoredSecret && "private key",
-        !draft.sftp.fingerprint.trim() && !hasStoredSecret && "the server's fingerprint",
+          ? !draft.sftp.password.trim() && !hasStoredSecret && t("backup.word_password")
+          : !draft.sftp.privateKey.trim() && !hasStoredSecret && t("backup.word_private_key"),
+        !draft.sftp.fingerprint.trim() && !hasStoredSecret && t("backup.missing_fingerprint"),
       ].filter((v): v is string => typeof v === "string");
     default:
       return missingFields(draft.s3, hasStoredSecret);
@@ -268,6 +273,7 @@ function HostKeyStep({
   set: (patch: Partial<SftpForm>) => void;
   busy: boolean;
 }) {
+  useLocale();
   const [offered, setOffered] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -297,12 +303,9 @@ function HostKeyStep({
           <ShieldCheck size={16} />
           <code>{sftp.fingerprint}</code>
         </div>
-        <p className="hint">
-          SilentSilo connects only to a server with this key. If the key changes, the connection
-          stops.
-        </p>
+        <p className="hint">{t("backup.host_key_pinned")}</p>
         <button type="button" className="secondary" disabled={busy || checking} onClick={check}>
-          Check again
+          {t("backup.host_key_check_again")}
         </button>
       </div>
     );
@@ -318,8 +321,10 @@ function HostKeyStep({
         </div>
         <p className="hint">
           {changed
-            ? "This is not the key this silo has been using. Unless you rebuilt or moved the server, do not accept it."
-            : "Compare this with the server itself before accepting it. Running ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub there prints the same line."}
+            ? t("backup.host_key_changed")
+            : t("backup.host_key_compare", {
+                command: "ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub",
+              })}
         </p>
         <div className="host-key-actions">
           <button
@@ -330,10 +335,10 @@ function HostKeyStep({
               setOffered(null);
             }}
           >
-            This is my server
+            {t("backup.host_key_accept")}
           </button>
           <button type="button" className="secondary" disabled={busy} onClick={() => setOffered(null)}>
-            Cancel
+            {t("common.cancel")}
           </button>
         </div>
       </div>
@@ -349,17 +354,14 @@ function HostKeyStep({
         onClick={check}
       >
         <ShieldCheck size={15} />
-        {checking ? "Asking the server…" : "Check the server's identity"}
+        {checking ? t("backup.host_key_asking") : t("backup.host_key_check")}
       </button>
       {error ? (
         <p className="hint is-error" role="status">
           {error}
         </p>
       ) : null}
-      <p className="hint">
-        Your username and password are not sent at this step. The server shows its key first, and
-        this silo is tied to that key.
-      </p>
+      <p className="hint">{t("backup.host_key_hint")}</p>
     </div>
   );
 }
@@ -385,6 +387,7 @@ function CloudStep({
   busy: boolean;
   joining: boolean;
 }) {
+  useLocale();
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [found, setFound] = useState<string[] | null>(null);
@@ -428,8 +431,12 @@ function CloudStep({
             <div className="host-key-line">
               <UserCheck size={16} />
               <span>
-                Connected as <strong>{form.account}</strong>
-                {form.freeBytes !== null ? `, ${formatBytes(form.freeBytes)} free` : ""}
+                {form.freeBytes !== null
+                  ? tx("backup.cloud_connected_as_free", {
+                      account: <strong>{form.account}</strong>,
+                      size: formatBytes(form.freeBytes),
+                    })
+                  : tx("backup.cloud_connected_as", { account: <strong>{form.account}</strong> })}
               </span>
             </div>
             <button
@@ -438,32 +445,31 @@ function CloudStep({
               disabled={busy}
               onClick={() => void signIn()}
             >
-              Use another account
+              {t("backup.cloud_other_account")}
             </button>
           </>
         ) : signingIn ? (
           <>
             <p className="hint" role="status">
-              <span className="spinner" aria-hidden /> Finish signing in to {CLOUD_NAME[kind]} in
-              your browser, then come back here.
+              <span className="spinner" aria-hidden />{" "}
+              {t("backup.cloud_finish_sign_in", { provider: CLOUD_NAME[kind] })}
             </p>
             <button
               type="button"
               className="secondary"
               onClick={() => void invoke("cloud_cancel_sign_in").catch(() => {})}
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </>
         ) : (
           <>
             <button type="button" disabled={busy} onClick={() => void signIn()}>
               <LogIn size={15} />
-              Connect {CLOUD_NAME[kind]}
+              {t("backup.cloud_connect", { provider: CLOUD_NAME[kind] })}
             </button>
             <p className="hint">
-              Opens {CLOUD_COMPANY[kind]}&apos;s sign-in page in your browser. SilentSilo never
-              sees your password, and gets access only to its own folder.
+              {t("backup.cloud_connect_hint", { company: CLOUD_COMPANY[kind] })}
             </p>
           </>
         )}
@@ -477,7 +483,7 @@ function CloudStep({
       {joining && found !== null ? (
         found.length > 0 ? (
           <label className="field">
-            <span>Silo folder</span>
+            <span>{t("backup.cloud_silo_folder")}</span>
             <select
               value={form.folder}
               disabled={busy}
@@ -489,16 +495,16 @@ function CloudStep({
                 </option>
               ))}
             </select>
-            <p className="hint">The folders in {CLOUD_PLACE[kind]}.</p>
+            <p className="hint">{cloudFoldersHint(kind)}</p>
           </label>
         ) : (
           <p className="hint is-error" role="status">
-            There is no silo in {CLOUD_PLACE[kind]} yet. Sync once from the computer that has it.
+            {cloudNoSilo(kind)}
           </p>
         )
       ) : !joining ? (
         <label className="field">
-          <span>Folder name</span>
+          <span>{t("backup.cloud_folder_name")}</span>
           <input
             value={form.folder}
             disabled={busy}
@@ -506,8 +512,7 @@ function CloudStep({
             spellCheck={false}
           />
           <p className={`hint${folderProblem ? " is-error" : ""}`}>
-            {folderProblem ??
-              `In ${CLOUD_PLACE[kind]}. ${CLOUD_COMPANY[kind]} sees this name. Your files inside are encrypted.`}
+            {folderProblem ?? cloudFolderHint(kind)}
           </p>
         </label>
       ) : null}
@@ -516,27 +521,17 @@ function CloudStep({
 }
 
 /** The kinds that need no sign-in, in the order they are offered. */
-const OWN_STORAGE = [
+const OWN_STORAGE: readonly { kind: StoreKind; label: Key; title: Key; Icon: typeof HardDrive }[] = [
   {
     kind: "folder",
-    label: "Drive or NAS folder",
-    title: "A network share, an external drive or a synced folder",
+    label: "backup.kind_folder_button",
+    title: "backup.kind_folder_title",
     Icon: HardDrive,
   },
-  {
-    kind: "s3",
-    label: "S3 bucket",
-    title: "Backblaze B2, Cloudflare R2, Wasabi, AWS or any S3-compatible storage",
-    Icon: Cloud,
-  },
-  {
-    kind: "web-dav",
-    label: "WebDAV server",
-    title: "Nextcloud, ownCloud, Synology, kDrive or any WebDAV server",
-    Icon: Server,
-  },
-  { kind: "sftp", label: "SFTP server", title: "Any server you reach over SSH", Icon: Terminal },
-] as const;
+  { kind: "s3", label: "backup.kind_s3", title: "backup.kind_s3_title", Icon: Cloud },
+  { kind: "web-dav", label: "backup.kind_webdav", title: "backup.kind_webdav_title", Icon: Server },
+  { kind: "sftp", label: "backup.kind_sftp", title: "backup.kind_sftp_title", Icon: Terminal },
+];
 
 type Props = {
   draft: StoreDraft;
@@ -557,6 +552,7 @@ type Props = {
  * three kinds.
  */
 export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joining }: Props) {
+  useLocale();
   const latest = useRef(draft);
   latest.current = draft;
   const setKind = (kind: StoreKind) => onChange({ ...draft, kind });
@@ -580,10 +576,10 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
   return (
     <>
       <div className="field">
-        <span>Where should the encrypted copy live?</span>
+        <span>{t("backup.where_question")}</span>
         {clouds.length > 0 && (
           <>
-            <p className="store-kind-group">An account you already have</p>
+            <p className="store-kind-group">{t("backup.group_accounts")}</p>
             <div className="store-kind-grid is-accounts">
               {clouds.map((kind) => (
                 <button
@@ -597,7 +593,7 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
                 </button>
               ))}
             </div>
-            <p className="store-kind-group">Storage you run or rent</p>
+            <p className="store-kind-group">{t("backup.group_own")}</p>
           </>
         )}
         <div className="store-kind-grid">
@@ -605,12 +601,12 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
             <button
               key={kind}
               type="button"
-              title={title}
+              title={t(title)}
               className={draft.kind === kind ? "" : "secondary"}
               onClick={() => setKind(kind)}
             >
               <Icon size={15} />
-              {label}
+              {t(label)}
             </button>
           ))}
         </div>
@@ -637,7 +633,7 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
 
       {draft.kind === "folder" && (
         <label className="field">
-          <span>Folder</span>
+          <span>{t("backup.field_folder")}</span>
           <div className="path-picker">
             <input
               value={draft.folder}
@@ -656,27 +652,24 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
               }}
             >
               <FolderOpen size={15} />
-              Browse
+              {t("backup.browse")}
             </button>
           </div>
-          <p className="hint">
-            A network share, an external drive, or a folder that Dropbox, OneDrive or Google Drive
-            already syncs. What SilentSilo writes there is encrypted.
-          </p>
+          <p className="hint">{t("backup.folder_hint")}</p>
         </label>
       )}
 
       {draft.kind === "web-dav" && (
         <>
           <div className="field">
-            <span>Server</span>
+            <span>{t("backup.field_server")}</span>
             <div className="store-kind-picker">
               <button
                 type="button"
                 className={draft.dav.preset === "any" ? "" : "secondary"}
                 onClick={() => setDav({ preset: "any" })}
               >
-                Any WebDAV server
+                {t("backup.dav_any")}
               </button>
               <button
                 type="button"
@@ -690,7 +683,7 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
           {draft.dav.preset === "kdrive" ? (
             <div className="s3-form-row">
               <label className="field">
-                <span>kDrive ID</span>
+                <span>{t("backup.kdrive_id")}</span>
                 <input
                   value={draft.dav.kdriveId}
                   onChange={(e) => setDav({ kdriveId: kdriveIdFrom(e.target.value) })}
@@ -698,40 +691,38 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
                   inputMode="numeric"
                   spellCheck={false}
                 />
-                <p className="hint">
-                  The number after /drive/ in the address bar when kDrive is open in your
-                  browser.
-                </p>
+                <p className="hint">{t("backup.kdrive_id_hint")}</p>
               </label>
               <label className="field">
-                <span>Folder in kDrive</span>
+                <span>{t("backup.kdrive_folder")}</span>
                 <input
                   value={draft.dav.kdriveFolder}
                   onChange={(e) => setDav({ kdriveFolder: e.target.value })}
                   spellCheck={false}
                 />
-                <p className="hint">Created if it does not exist.</p>
+                <p className="hint">{t("backup.created_if_missing")}</p>
               </label>
             </div>
           ) : (
             <label className="field">
-              <span>Address</span>
+              <span>{t("backup.field_address")}</span>
               <input
                 value={draft.dav.url}
                 onChange={(e) => onChange({ ...draft, dav: { ...draft.dav, url: e.target.value } })}
                 placeholder="https://cloud.example.com/remote.php/dav/files/you/silentsilo"
                 spellCheck={false}
               />
-              <p className="hint">
-                The folder inside your Nextcloud, ownCloud, Synology or other WebDAV server. It is
-                created if it does not exist.
-              </p>
-              {isPlainHttp(draft.dav.url) && <p className="hint">{PLAIN_HTTP_WARNING}</p>}
+              <p className="hint">{t("backup.dav_address_hint")}</p>
+              {isPlainHttp(draft.dav.url) && <p className="hint">{plainHttpWarning()}</p>}
             </label>
           )}
           <div className="s3-form-row">
             <label className="field">
-              <span>{draft.dav.preset === "kdrive" ? "Infomaniak email" : "Username"}</span>
+              <span>
+                {draft.dav.preset === "kdrive"
+                  ? t("backup.infomaniak_email")
+                  : t("backup.field_username")}
+              </span>
               <input
                 value={draft.dav.username}
                 onChange={(e) =>
@@ -742,20 +733,20 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
               />
             </label>
             <label className="field">
-              <span>Password</span>
+              <span>{t("backup.field_password")}</span>
             <input
               type="password"
               value={draft.dav.password}
               onChange={(e) =>
                 onChange({ ...draft, dav: { ...draft.dav, password: e.target.value } })
               }
-              placeholder={hasStoredSecret ? "unchanged" : ""}
+              placeholder={hasStoredSecret ? t("backup.unchanged") : ""}
               autoComplete="off"
             />
               <p className="hint">
                 {draft.dav.preset === "kdrive"
-                  ? "An app password from your Infomaniak profile, not your account password. It is required when the account has two-step sign-in, and you can revoke it on its own."
-                  : "On Nextcloud, use an app password, not your account password. You can revoke it on its own."}
+                  ? t("backup.kdrive_password_hint")
+                  : t("backup.dav_password_hint")}
               </p>
             </label>
           </div>
@@ -766,7 +757,7 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
         <>
           <div className="sftp-host-row">
             <label className="field">
-              <span>Server</span>
+              <span>{t("backup.field_server")}</span>
               <input
                 value={draft.sftp.host}
                 // A different machine means a different key, so the one
@@ -777,7 +768,7 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
               />
             </label>
             <label className="field">
-              <span>Port</span>
+              <span>{t("backup.field_port")}</span>
               <input
                 value={draft.sftp.port}
                 onChange={(e) => setSftp({ port: e.target.value, fingerprint: "" })}
@@ -791,7 +782,7 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
 
           <div className="s3-form-row">
             <label className="field">
-              <span>Username</span>
+              <span>{t("backup.field_username")}</span>
               <input
                 value={draft.sftp.username}
                 onChange={(e) => setSftp({ username: e.target.value })}
@@ -801,14 +792,14 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
             </label>
 
             <div className="field">
-              <span>Sign in with</span>
+              <span>{t("backup.sign_in_with")}</span>
             <div className="store-kind-picker">
               <button
                 type="button"
                 className={draft.sftp.method === "password" ? "" : "secondary"}
                 onClick={() => setSftp({ method: "password" })}
               >
-                Password
+                {t("backup.field_password")}
               </button>
                 <button
                   type="button"
@@ -816,7 +807,7 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
                   onClick={() => setSftp({ method: "key" })}
                 >
                   <KeyRound size={15} />
-                  Private key
+                  {t("backup.private_key_label")}
                 </button>
               </div>
             </div>
@@ -824,40 +815,39 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
 
           {draft.sftp.method === "password" ? (
             <label className="field">
-              <span>Password</span>
+              <span>{t("backup.field_password")}</span>
               <input
                 type="password"
                 value={draft.sftp.password}
                 onChange={(e) => setSftp({ password: e.target.value })}
-                placeholder={hasStoredSecret ? "unchanged" : ""}
+                placeholder={hasStoredSecret ? t("backup.unchanged") : ""}
                 autoComplete="off"
               />
             </label>
           ) : (
             <>
               <label className="field">
-                <span>Private key</span>
+                <span>{t("backup.private_key_label")}</span>
                 <textarea
                   value={draft.sftp.privateKey}
                   onChange={(e) => setSftp({ privateKey: e.target.value })}
                   placeholder={
-                    hasStoredSecret ? "unchanged" : "-----BEGIN OPENSSH PRIVATE KEY-----"
+                    hasStoredSecret ? t("backup.unchanged") : "-----BEGIN OPENSSH PRIVATE KEY-----"
                   }
                   spellCheck={false}
                   rows={4}
                 />
-                <p className="hint">
-                  Paste the key itself, not a path to it. SilentSilo keeps it with the
-                  silo&apos;s other sign-in details.
-                </p>
+                <p className="hint">{t("backup.private_key_hint")}</p>
               </label>
               <label className="field">
-                <span>Key passphrase</span>
+                <span>{t("backup.passphrase")}</span>
                 <input
                   type="password"
                   value={draft.sftp.passphrase}
                   onChange={(e) => setSftp({ passphrase: e.target.value })}
-                  placeholder={hasStoredSecret ? "unchanged" : "if the key has one"}
+                  placeholder={
+                    hasStoredSecret ? t("backup.unchanged") : t("backup.passphrase_placeholder")
+                  }
                   autoComplete="off"
                 />
               </label>
@@ -865,17 +855,14 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
           )}
 
           <label className="field">
-            <span>Folder on the server</span>
+            <span>{t("backup.sftp_folder")}</span>
             <input
               value={draft.sftp.path}
               onChange={(e) => setSftp({ path: e.target.value })}
               placeholder="backups/silentsilo"
               spellCheck={false}
             />
-            <p className="hint">
-              Relative to where you land when you log in, or an absolute path. It is created if it
-              does not exist.
-            </p>
+            <p className="hint">{t("backup.sftp_folder_hint")}</p>
           </label>
         </>
       )}

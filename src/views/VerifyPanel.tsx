@@ -9,6 +9,7 @@ import { markDone } from "../lib/siloMemory";
 import { describeRestoreDifference } from "../lib/restoreDiff";
 import { isComplete } from "../lib/recoveryCode";
 import { RecoveryCodeInput } from "../components/RecoveryCodeInput";
+import { t, useLocale } from "../i18n";
 
 type Result = {
   id: string;
@@ -56,6 +57,7 @@ type Props = {
  * restored, and this is the only thing that asks before that day.
  */
 export function VerifyPanel({ busy, siloId }: Props) {
+  useLocale();
   const [results, setResults] = useState<Result[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   /// Set when the user pressed stop. Its own state rather than an error:
@@ -139,17 +141,14 @@ export function VerifyPanel({ busy, siloId }: Props) {
     <div className="panel-section">
       <h3>
         <SearchCheck size={16} />
-        Check this silo against its backup storage
+        {t("backup.verify_title")}
       </h3>
-      <p>
-        Reads what each copy holds and compares it with what this silo expects. Lost or damaged
-        files do not show up any other way until you try to restore them.
-      </p>
+      <p>{t("backup.verify_intro")}</p>
 
       <div className="actions">
         <button type="button" disabled={busy || running !== null} onClick={() => void run(false)}>
           {running === "quick" ? <span className="spinner" aria-hidden /> : <SearchCheck size={15} />}
-          {running === "quick" ? "Checking…" : "Quick check"}
+          {running === "quick" ? t("backup.checking") : t("backup.quick_check")}
         </button>
         <button
           type="button"
@@ -158,25 +157,26 @@ export function VerifyPanel({ busy, siloId }: Props) {
           onClick={() => void run(true)}
         >
           {running === "deep" && <span className="spinner" aria-hidden />}
-          {running === "deep" ? "Reading everything…" : "Read every file back"}
+          {running === "deep" ? t("backup.reading_all") : t("backup.deep_check")}
         </button>
         {running !== null && (
           <button type="button" className="secondary" disabled={cancelling} onClick={cancelRun}>
             <X size={15} />
-            {cancelling ? "Stopping…" : "Stop"}
+            {cancelling ? t("backup.stopping") : t("backup.stop")}
           </button>
         )}
       </div>
 
-      <p className="hint">
-        The quick check looks for missing or empty files and is fast at any size. Reading every
-        file back also finds damaged ones, but downloads the whole silo. Stopping changes nothing.
-      </p>
+      <p className="hint">{t("backup.verify_hint")}</p>
 
       {running !== null && progress && progress[2] > 0 && (
         <div className="progress-row" role="status">
           <p className="hint">
-            {progress[0]}: {progress[1]} of {progress[2]}
+            {t("backup.verify_progress", {
+              label: progress[0],
+              done: progress[1],
+              total: progress[2],
+            })}
           </p>
           <div className="progress-track">
             <div
@@ -189,7 +189,7 @@ export function VerifyPanel({ busy, siloId }: Props) {
 
       {stopped && (
         <p className="hint" role="status">
-          Stopped. Nothing was changed.
+          {t("backup.verify_stopped")}
         </p>
       )}
 
@@ -211,27 +211,30 @@ export function VerifyPanel({ busy, siloId }: Props) {
                   {state === "sound" && (
                     <span className="hint success-msg">
                       <CheckCircle2 size={14} />
-                      No problems found. {r.records_read} changes and {r.blobs_checked} files
-                      checked
-                      {r.bytes_read > 0 ? `, ${formatBytes(r.bytes_read)} read back` : ""}.
+                      {r.bytes_read > 0
+                        ? t("backup.verify_sound_bytes", {
+                            changes: r.records_read,
+                            files: r.blobs_checked,
+                            size: formatBytes(r.bytes_read),
+                          })
+                        : t("backup.verify_sound", {
+                            changes: r.records_read,
+                            files: r.blobs_checked,
+                          })}
                     </span>
                   )}
                   {state === "unchecked" && (
                     <span className="hint is-error">
-                      Could not be checked: {r.failed}
+                      {t("backup.verify_failed", { reason: r.failed ?? "" })}
                     </span>
                   )}
                   {state === "broken" && (
                     <>
                       <span className="hint is-error">
                         <AlertTriangle size={14} />
-                        {r.missing > 0
-                          ? r.missing === 1
-                            ? "1 file this silo believes it has is not there."
-                            : `${r.missing} files this silo believes it has are not there.`
-                          : ""}{" "}
+                        {r.missing > 0 ? t("backup.verify_missing", { count: r.missing }) : ""}{" "}
                         {r.damaged.length > 0
-                          ? `${r.damaged.length} file${r.damaged.length === 1 ? " is" : "s are"} damaged.`
+                          ? t("backup.verify_damaged", { count: r.damaged.length })
                           : ""}
                       </span>
                       {/* Named, not counted. A report that says "3 problems"
@@ -242,7 +245,9 @@ export function VerifyPanel({ busy, siloId }: Props) {
                         </span>
                       ))}
                       {r.damaged.length > 5 && (
-                        <span className="hint">and {r.damaged.length - 5} more.</span>
+                        <span className="hint">
+                          {t("backup.and_more", { count: r.damaged.length - 5 })}
+                        </span>
                       )}
                     </>
                   )}
@@ -250,9 +255,7 @@ export function VerifyPanel({ busy, siloId }: Props) {
                     <>
                       <span className="hint success-msg">
                         <CheckCircle2 size={14} />
-                        {r.repaired.length === 1
-                          ? "Repaired 1 file from a good copy."
-                          : `Repaired ${r.repaired.length} files from good copies.`}
+                        {t("backup.verify_repaired", { count: r.repaired.length })}
                       </span>
                       {r.repaired.slice(0, 5).map((d) => (
                         <span key={d} className="hint">
@@ -260,26 +263,21 @@ export function VerifyPanel({ busy, siloId }: Props) {
                         </span>
                       ))}
                       {r.repaired.length > 5 && (
-                        <span className="hint">and {r.repaired.length - 5} more.</span>
+                        <span className="hint">
+                          {t("backup.and_more", { count: r.repaired.length - 5 })}
+                        </span>
                       )}
                     </>
                   )}
                   {state === "broken" && r.never_delete && (
-                    <span className="hint">
-                      This is a never-delete copy, so nothing on it is rewritten. Add a new
-                      never-delete copy to have one that is whole.
-                    </span>
+                    <span className="hint">{t("backup.verify_never_delete")}</span>
                   )}
                   {state === "broken" && !r.never_delete && (
-                    <span className="hint">
-                      No other copy, and not this computer, holds these whole, so they could not
-                      be repaired.
-                    </span>
+                    <span className="hint">{t("backup.verify_unrepaired")}</span>
                   )}
                   {r.unreferenced > 0 && (
                     <span className="hint">
-                      {r.unreferenced} leftover file{r.unreferenced === 1 ? "" : "s"} this silo
-                      does not use. This is normal: they are cleared up later.
+                      {t("backup.verify_leftover", { count: r.unreferenced })}
                     </span>
                   )}
                 </div>
@@ -290,27 +288,18 @@ export function VerifyPanel({ busy, siloId }: Props) {
       )}
 
       {results && results.every((r) => verdict(r) === "sound") && (
-        <p className="hint">
-          A check covers only the moment it ran. Run it again every few months.
-        </p>
+        <p className="hint">{t("backup.verify_again_later")}</p>
       )}
 
       <h3 className="verify-restore-head">
         <LifeBuoy size={16} />
-        Test a recovery
+        {t("backup.restore_title")}
       </h3>
-      <p>
-        Rebuilds this silo in a temporary folder from backup storage and your recovery code, then
-        compares it with what you have. This is how you would get the silo back if this computer
-        were lost.
-      </p>
-      <p className="hint">
-        It rebuilds the file list and opens one file, to show the code still opens your content.
-        Nothing here is changed, and the rebuild is deleted afterwards.
-      </p>
+      <p>{t("backup.restore_intro")}</p>
+      <p className="hint">{t("backup.restore_hint")}</p>
 
       <div className="field">
-        <span>Your recovery code</span>
+        <span>{t("backup.restore_code_label")}</span>
         <RecoveryCodeInput
           value={code}
           disabled={busy || restoring}
@@ -329,7 +318,7 @@ export function VerifyPanel({ busy, siloId }: Props) {
           onClick={() => void runRestore()}
         >
           {restoring ? <span className="spinner" aria-hidden /> : <LifeBuoy size={15} />}
-          {restoring ? "Rebuilding…" : "Try a recovery now"}
+          {restoring ? t("backup.restore_running") : t("backup.restore_run")}
         </button>
       </div>
 
@@ -337,8 +326,11 @@ export function VerifyPanel({ busy, siloId }: Props) {
         <div className="progress-row" role="status">
           <p className="hint">
             {restoreProgress && restoreProgress[1] > 0
-              ? `Downloading this silo's changes: ${restoreProgress[0]} of ${restoreProgress[1]}.`
-              : "Reading the backup storage…"}
+              ? t("backup.restore_downloading", {
+                  done: restoreProgress[0],
+                  total: restoreProgress[1],
+                })
+              : t("backup.restore_reading")}
           </p>
           {restoreProgress && restoreProgress[1] > 0 && (
             <div className="progress-track">
@@ -363,8 +355,9 @@ export function VerifyPanel({ busy, siloId }: Props) {
       {restore?.matches && (
         <p className="hint success-msg" role="status">
           <CheckCircle2 size={14} />
-          Recovery works. Your code and backup storage rebuilt {restore.entries} folders and files
-          {restore.checked_file ? `, and “${restore.checked_file}” opened and matched` : ""}.
+          {restore.checked_file
+            ? t("backup.restore_ok_file", { count: restore.entries, file: restore.checked_file })
+            : t("backup.restore_ok", { count: restore.entries })}
         </p>
       )}
 
@@ -372,13 +365,15 @@ export function VerifyPanel({ busy, siloId }: Props) {
         <>
           <p className="hint is-error" role="status">
             <AlertTriangle size={14} />
-            The rebuild does not match what you have. Your files here are fine, but recovering from
-            backup storage now would not give you the same silo.
+            {t("backup.restore_mismatch")}
           </p>
           {restore.content_error && (
             <p className="hint is-error">
               {restore.checked_file
-                ? `“${restore.checked_file}” could not be opened from backup storage: ${restore.content_error}`
+                ? t("backup.restore_content_error", {
+                    file: restore.checked_file,
+                    error: restore.content_error,
+                  })
                 : restore.content_error}
             </p>
           )}
@@ -388,11 +383,11 @@ export function VerifyPanel({ busy, siloId }: Props) {
             </p>
           ))}
           {restore.differences.length > 8 && (
-            <p className="hint">and {restore.differences.length - 8} more differences.</p>
+            <p className="hint">
+              {t("backup.restore_more_differences", { count: restore.differences.length - 8 })}
+            </p>
           )}
-          <p className="hint">
-            The usual cause is changes that have not reached backup storage yet. Sync, then try again.
-          </p>
+          <p className="hint">{t("backup.restore_usual_cause")}</p>
         </>
       )}
     </div>

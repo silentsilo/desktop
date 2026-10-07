@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { Bootstrap, Os } from "./types";
 
 export type { Os };
@@ -37,24 +38,29 @@ export type PlatformStrings = {
   offersPhone: boolean;
 };
 
+// The generic words are getters, so each read is in the language in use.
+// Product names (Windows Hello, Touch ID, Finder) stay as they are.
 const WINDOWS: PlatformStrings = {
   os: "windows",
   osName: "Windows",
   builtIn: "Windows Hello",
   hasBuiltIn: true,
   fileManager: "Windows Explorer",
-  trayArea: "the notification area",
-  signIn: "sign in to Windows",
-  builtInSetupHint:
-    "Windows Hello is not set up on this computer, so a security key is the only way in " +
-    "here. Add a PIN or a fingerprint in Windows sign-in settings and Hello shows up as " +
-    "a second option.",
-  autostartHint:
-    "Windows lists this under Startup apps in Task Manager. Turning it off there and " +
-    "turning it off here are the same thing.",
-  fidoUnavailable:
-    "Security key support is not available on this system. Use Windows 10 (1903+) or later with a " +
-    "compatible security key.",
+  get trayArea() {
+    return t("app.platform_tray_windows");
+  },
+  get signIn() {
+    return t("app.platform_sign_in_windows");
+  },
+  get builtInSetupHint() {
+    return t("app.platform_setup_hint_windows");
+  },
+  get autostartHint() {
+    return t("app.platform_autostart_windows");
+  },
+  get fidoUnavailable() {
+    return t("app.platform_fido_unavailable_windows");
+  },
   offersPhone: true,
 };
 
@@ -64,18 +70,21 @@ const MACOS: PlatformStrings = {
   builtIn: "Touch ID",
   hasBuiltIn: true,
   fileManager: "Finder",
-  trayArea: "the menu bar",
-  signIn: "log in to this Mac",
-  builtInSetupHint:
-    "Touch ID is not set up on this Mac, so a security key is the only way in here. " +
-    "Add a fingerprint under Touch ID & Password in System Settings and Touch ID shows " +
-    "up as a second option.",
-  autostartHint:
-    "macOS lists this under Login Items in System Settings. Turning it off there and " +
-    "turning it off here are the same thing.",
-  fidoUnavailable:
-    "Security key support is not available on this system. Use macOS 13 or later with a compatible " +
-    "security key.",
+  get trayArea() {
+    return t("app.platform_tray_macos");
+  },
+  get signIn() {
+    return t("app.platform_sign_in_macos");
+  },
+  get builtInSetupHint() {
+    return t("app.platform_setup_hint_macos");
+  },
+  get autostartHint() {
+    return t("app.platform_autostart_macos");
+  },
+  get fidoUnavailable() {
+    return t("app.platform_fido_unavailable_macos");
+  },
   offersPhone: false,
 };
 
@@ -83,14 +92,28 @@ const MACOS: PlatformStrings = {
 const LINUX: PlatformStrings = {
   os: "linux",
   osName: "Linux",
-  builtIn: "the built-in key",
+  get builtIn() {
+    return t("app.platform_builtin_linux");
+  },
   hasBuiltIn: false,
-  fileManager: "the file manager",
-  trayArea: "the system tray",
-  signIn: "log in",
-  builtInSetupHint: "This build has no built-in key, so a security key is the only way in.",
-  autostartHint: "Turning autostart off in the desktop's own settings and here are the same thing.",
-  fidoUnavailable: "Security key support is not available on this system. Use a compatible security key.",
+  get fileManager() {
+    return t("app.platform_file_manager_linux");
+  },
+  get trayArea() {
+    return t("app.platform_tray_linux");
+  },
+  get signIn() {
+    return t("app.platform_sign_in_linux");
+  },
+  get builtInSetupHint() {
+    return t("app.platform_setup_hint_linux");
+  },
+  get autostartHint() {
+    return t("app.platform_autostart_linux");
+  },
+  get fidoUnavailable() {
+    return t("app.platform_fido_unavailable_linux");
+  },
   offersPhone: false,
 };
 
@@ -118,5 +141,7 @@ export function osOf(bootstrap: Pick<Bootstrap, "os"> | null | undefined): Os {
 
 /** "Windows Hello or your security key", or on Linux "your security key". */
 export function builtInOrKey(platform: PlatformStrings): string {
-  return platform.hasBuiltIn ? `${platform.builtIn} or your security key` : "your security key";
+  return platform.hasBuiltIn
+    ? t("app.platform_builtin_or_key", { builtIn: platform.builtIn })
+    : t("app.platform_your_key");
 }

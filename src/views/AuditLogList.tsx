@@ -42,6 +42,7 @@ import {
 } from "../lib/activityEvents";
 import { IconSearch } from "../ui/Icons";
 import type { AuditEntry, AuditPage } from "../lib/types";
+import { t, useLocale } from "../i18n";
 
 type Props = {
   devices: { id: string; label: string | null; system_name: string | null }[];
@@ -97,6 +98,7 @@ function timeOf(ms: number): string {
  * to see. Searching and filtering run in Rust, over the whole log.
  */
 export function AuditLogList({ devices, needsKey = false }: Props) {
+  useLocale();
   const [log, setLog] = useState<AuditPage | null>(null);
   const [loading, setLoading] = useState(!needsKey);
   const [error, setError] = useState<string | null>(null);
@@ -121,7 +123,7 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
   const nameOf = useCallback(
     (id: string) => {
       const device = devices.find((d) => d.id === id);
-      return device?.label || device?.system_name || `Device ${id.slice(0, 8)}`;
+      return device?.label || device?.system_name || t("set.log_device", { id: id.slice(0, 8) });
     },
     [devices],
   );
@@ -232,9 +234,9 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
       });
       if (!path) return;
       const count = await invoke<number>("audit_export", { path, format });
-      setNotice(count === 1 ? "Exported 1 event." : `Exported ${count} events.`);
+      setNotice(t("set.log_exported", { count }));
     } catch (e) {
-      setNotice(`The log was not exported: ${formatAppError(e)}`);
+      setNotice(t("set.log_export_failed", { reason: formatAppError(e) }));
     }
   };
 
@@ -244,27 +246,22 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
       trail.missing_events.reduce((sum, [from, to]) => sum + (to - from + 1), 0) +
       trail.missing_segments.length;
     if (missing > 0) {
-      warnings.push(
-        `Records from ${nameOf(trail.device)} are missing. Some may not have reached the copies yet, or were removed.`,
-      );
+      warnings.push(t("set.log_missing", { device: nameOf(trail.device) }));
     }
     if (trail.broken_segments.length > 0) {
       warnings.push(
-        `The records from ${nameOf(trail.device)} do not follow on from each other in ${trail.broken_segments.length === 1 ? "one place" : `${trail.broken_segments.length} places`}. Some may have been changed.`,
+        t("set.log_broken", {
+          device: nameOf(trail.device),
+          count: trail.broken_segments.length,
+        }),
       );
     }
   }
   if (log && log.unreadable > 0) {
-    warnings.push(
-      log.unreadable === 1
-        ? "1 record does not open with this log's key."
-        : `${log.unreadable} records do not open with this log's key.`,
-    );
+    warnings.push(t("set.log_unreadable", { count: log.unreadable }));
   }
   if (log && log.copies_unread.length > 0) {
-    warnings.push(
-      `Not read from ${log.copies_unread.join(", ")}. Records only there are not shown.`,
-    );
+    warnings.push(t("set.log_not_read", { copies: log.copies_unread.join(", ") }));
   }
 
   const row = (e: AuditEntry) => {
@@ -301,8 +298,8 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
           </span>
           <input
             type="text"
-            placeholder="Search activity…"
-            aria-label="Search activity"
+            placeholder={t("set.log_search")}
+            aria-label={t("set.log_search_label")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -313,7 +310,7 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
             className="secondary"
             disabled={!log || log.total === 0}
             onClick={() => void exportAs("csv")}
-            title="Export the whole log as CSV"
+            title={t("set.log_export_csv")}
           >
             <Download size={14} />
             CSV
@@ -323,7 +320,7 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
             className="secondary"
             disabled={!log || log.total === 0}
             onClick={() => void exportAs("jsonl")}
-            title="Export the whole log as JSON lines"
+            title={t("set.log_export_json")}
           >
             <Download size={14} />
             JSON
@@ -331,14 +328,14 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
         </div>
       </div>
 
-      <div className="activity-filters" role="group" aria-label="Show">
+      <div className="activity-filters" role="group" aria-label={t("set.log_filters")}>
         <button
           type="button"
           className={`activity-chip${kind === null ? " is-on" : ""}`}
           aria-pressed={kind === null}
           onClick={() => chooseKind(null)}
         >
-          All
+          {t("set.log_all")}
         </button>
         {KINDS.map((k) => (
           <button
@@ -354,8 +351,8 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
         {log && (
           <span className="activity-count">
             {search.trim() || kind
-              ? `${log.matched} of ${log.total}`
-              : `${log.total} ${log.total === 1 ? "event" : "events"}`}
+              ? t("set.log_matched", { matched: log.matched, total: log.total })
+              : t("set.log_events", { count: log.total })}
           </span>
         )}
       </div>
@@ -373,25 +370,25 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
         </p>
       )}
       {notice && <p className="hint">{notice}</p>}
-      {loading && !log && <p className="hint">Reading activity…</p>}
+      {loading && !log && <p className="hint">{t("set.log_reading")}</p>}
       {needsKey && !log && !loading && (
         <div className="activity-empty">
-          <p>Reading it asks for one of the organisation&apos;s security keys.</p>
+          <p>{t("set.log_needs_key")}</p>
           <button type="button" onClick={() => void load()}>
-            Read activity
+            {t("set.log_read")}
           </button>
         </div>
       )}
       {!needsKey && !log && !loading && error && (
         <div className="activity-empty">
           <button type="button" onClick={() => void load()}>
-            Try again
+            {t("set.log_retry")}
           </button>
         </div>
       )}
       {log && entries.length === 0 && !loading && (
         <p className="activity-empty">
-          {search.trim() || kind ? "Nothing matches." : "Nothing recorded yet."}
+          {search.trim() || kind ? t("set.log_no_match") : t("set.log_nothing")}
         </p>
       )}
 
@@ -410,7 +407,7 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
             disabled={loading}
             onClick={() => void fetchPage(false, entries.length, search, kind, true)}
           >
-            Show older
+            {t("set.log_older")}
           </button>
         </div>
       )}

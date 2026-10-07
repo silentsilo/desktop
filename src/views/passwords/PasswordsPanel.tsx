@@ -12,7 +12,12 @@ import type {
   PasswordCategory,
   PasswordEntry,
 } from "../../lib/types";
-import { csvToEntries, entriesToCsv, formatLabel } from "../../lib/passwordCsv";
+import {
+  csvToEntries,
+  entriesToCsv,
+  formatDisplayName,
+  formatLabel,
+} from "../../lib/passwordCsv";
 import {
   attachZipFiles,
   bitwardenJsonToEntries,
@@ -53,9 +58,11 @@ import {
   resolveCategories,
   searchTextFor,
   TYPE_LABELS,
+  TYPE_TEXTS,
   typeOf,
 } from "./util";
 import { IconEye, IconEyeOff, IconPlus, IconSearch } from "../../ui/Icons";
+import { t, useLocale, type Key } from "../../i18n";
 
 type Props = {
   entries: PasswordEntry[];
@@ -86,6 +93,37 @@ type Props = {
 };
 
 const SHOW_FAVICONS_KEY = "silentsilo.passwords.showFavicons";
+
+/** What an import counts, by where it came from: Bitwarden items, CSV
+ * logins or KeePass entries, each with what its skipped rows were. */
+type ImportKind = "item" | "login" | "entry";
+
+const IMPORT_TEXTS: Record<
+  ImportKind,
+  { what: Key; imported: Key; importedWith: Key; nothingNew: Key; skipped: Key }
+> = {
+  item: {
+    what: "pw.import_what_item",
+    imported: "pw.imported_item",
+    importedWith: "pw.imported_item_with",
+    nothingNew: "pw.nothing_new_item",
+    skipped: "pw.skip_unsupported",
+  },
+  login: {
+    what: "pw.import_what_login",
+    imported: "pw.imported_login",
+    importedWith: "pw.imported_login_with",
+    nothingNew: "pw.nothing_new_login",
+    skipped: "pw.skip_non_login",
+  },
+  entry: {
+    what: "pw.import_what_entry",
+    imported: "pw.imported_entry",
+    importedWith: "pw.imported_entry_with",
+    nothingNew: "pw.nothing_new_entry",
+    skipped: "pw.skip_empty",
+  },
+};
 
 function emptyEntry(type: CredentialType): PasswordEntry {
   return {
@@ -126,6 +164,7 @@ export function PasswordsPanel({
   onSaveCategories,
   onConfirmRun,
 }: Props) {
+  useLocale();
   const platform = platformStrings(os);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -142,9 +181,11 @@ export function PasswordsPanel({
   const [pendingImport, setPendingImport] = useState<{
     imported: PasswordEntry[];
     skipped: number;
+    /** For the activity log, in English. */
     source: string;
-    unit: [string, string];
-    skippedUnit: [string, string];
+    /** For the notice on screen. */
+    sourceLabel: string;
+    kind: ImportKind;
     extras: ImportExtras;
     /** Attachments a KeePass import already encrypted into the silo, which
      * a cancel deletes again. */
@@ -266,26 +307,21 @@ export function PasswordsPanel({
   const typeCounts = useMemo(() => {
     const counts = new Map<CredentialType, number>();
     for (const e of entries) {
-      const t = typeOf(e);
-      counts.set(t, (counts.get(t) ?? 0) + 1);
+      const kind = typeOf(e);
+      counts.set(kind, (counts.get(kind) ?? 0) + 1);
     }
     return counts;
   }, [entries]);
 
   /// What the silo holds, by kind, in the header. Counts of one read as
   /// "1 card", not "1 cards", and a kind with none of them says nothing.
-  const headerSummary = useMemo(() => {
-    if (entries.length === 0) return "Logins, cards, identities, SSH keys and notes";
-    return CREDENTIAL_TYPES.filter((type) => (typeCounts.get(type) ?? 0) > 0)
-      .map((type) => {
-        const count = typeCounts.get(type)!;
-        const label = count === 1 ? TYPE_LABELS[type].singular : TYPE_LABELS[type].plural;
-        // Only "SSH" is an initialism; the rest read better lower-case mid
-        // sentence.
-        return `${count} ${label === "SSH key" || label === "SSH keys" ? label : label.toLowerCase()}`;
-      })
-      .join(" · ");
-  }, [entries.length, typeCounts]);
+  /// Not memoised: it follows the language too, and costs nothing.
+  const headerSummary =
+    entries.length === 0
+      ? t("pw.header_kinds")
+      : CREDENTIAL_TYPES.filter((type) => (typeCounts.get(type) ?? 0) > 0)
+          .map((type) => t(TYPE_TEXTS[type].count, { count: typeCounts.get(type)! }))
+          .join(" · ");
 
   const filtered = useMemo(() => {
     let list = entries;
@@ -536,8 +572,8 @@ export function PasswordsPanel({
         imported,
         skipped: parsed.skipped,
         source: "Bitwarden",
-        unit: ["item", "items"],
-        skippedUnit: ["unsupported item", "unsupported items"],
+        sourceLabel: "Bitwarden",
+        kind: "item",
         extras: { ...parsed.extras, unmatchedFiles: unmatched },
         blobs,
       });
@@ -557,7 +593,7 @@ export function PasswordsPanel({
       multiple: false,
       filters: [
         {
-          name: "Password export (KeePass, CSV, Bitwarden JSON or zip)",
+          name: t("pw.import_filter"),
           extensions: ["kdbx", "csv", "json", "zip"],
         },
       ],
@@ -581,28 +617,28 @@ export function PasswordsPanel({
       let imported: PasswordEntry[];
       let skipped: number;
       let source: string;
-      let unit: [string, string];
-      let skippedUnit: [string, string];
+      let sourceLabel: string;
+      let kind: ImportKind;
       let extras: ImportExtras;
 
       if (looksLikeBitwardenJson(text)) {
         ({ entries: imported, skipped, extras } = bitwardenJsonToEntries(text));
         source = "Bitwarden JSON";
-        unit = ["item", "items"];
-        skippedUnit = ["unsupported item", "unsupported items"];
+        sourceLabel = source;
+        kind = "item";
       } else {
         const parsed = csvToEntries(text);
         imported = parsed.entries;
         skipped = parsed.skipped;
         extras = parsed.extras;
         source = formatLabel(parsed.format);
-        unit = ["login", "logins"];
-        skippedUnit = ["non-login row", "non-login rows"];
+        sourceLabel = formatDisplayName(parsed.format);
+        kind = "login";
       }
 
       // Parsed but not yet stored: the user first says where these get
       // filed. Nothing is written until they confirm.
-      setPendingImport({ imported, skipped, source, unit, skippedUnit, extras });
+      setPendingImport({ imported, skipped, source, sourceLabel, kind, extras });
     } catch (e) {
       setTransferError(formatAppError(e));
     } finally {
@@ -637,8 +673,8 @@ export function PasswordsPanel({
           imported,
           skipped: skipped.length,
           source: "KeePass",
-          unit: ["entry", "entries"],
-          skippedUnit: ["empty entry", "empty entries"],
+          sourceLabel: "KeePass",
+          kind: "entry",
           extras: noExtras(),
           blobs: attachmentBlobs(imported),
         });
@@ -659,7 +695,8 @@ export function PasswordsPanel({
   const finishImport = useCallback(
     (choice: ImportCategoryChoice) => {
       if (!pendingImport) return;
-      const { skipped, source, unit, skippedUnit, extras } = pendingImport;
+      const { skipped, source, sourceLabel, kind, extras } = pendingImport;
+      const texts = IMPORT_TEXTS[kind];
       const imported = applyImportCategory(pendingImport.imported, choice);
       setPendingImport(null);
 
@@ -674,19 +711,21 @@ export function PasswordsPanel({
         dropBlobs(pendingImport.blobs.filter((id) => !kept.has(id)));
       }
 
-      const plural = (n: number, [one, many]: [string, string]) => (n === 1 ? one : many);
-      const notes: string[] = [];
-      if (duplicates > 0) notes.push(`skipped ${duplicates} already in this silo`);
-      if (skipped > 0) notes.push(`skipped ${skipped} ${plural(skipped, skippedUnit)}`);
-      const suffix = notes.length > 0 ? `, ${notes.join(", ")}` : "";
+      const skips: string[] = [];
+      if (duplicates > 0) skips.push(t("pw.skip_duplicates", { count: duplicates }));
+      if (skipped > 0) skips.push(t(texts.skipped, { count: skipped }));
 
       setTransferNotice(
         fresh.length === 0 && duplicates > 0
-          ? `Nothing new in that file: ${
-              duplicates === 1 ? `the ${unit[0]} is` : `all ${duplicates} ${unit[1]} are`
-            } already in this silo.`
+          ? t(texts.nothingNew, { count: duplicates })
           : [
-              `Imported ${fresh.length} ${plural(fresh.length, unit)} from ${source}${suffix}.`,
+              skips.length > 0
+                ? t(texts.importedWith, {
+                    count: fresh.length,
+                    source: sourceLabel,
+                    skips: skips.join(", "),
+                  })
+                : t(texts.imported, { count: fresh.length, source: sourceLabel }),
               describeExtras(extras),
             ]
               .filter(Boolean)
@@ -715,15 +754,13 @@ export function PasswordsPanel({
       try {
         const path = await saveFileDialog({
           defaultPath: "silentsilo-passwords.kdbx",
-          filters: [{ name: "KeePass database", extensions: ["kdbx"] }],
+          filters: [{ name: t("pw.kdbx_filter"), extensions: ["kdbx"] }],
         });
         if (!path) return;
         setTransferBusy(true);
         await invoke("passwords_write_kdbx", { path, password, entries: JSON.stringify(entries) });
         setKdbx(null);
-        setTransferNotice(
-          `Exported ${entries.length} ${entries.length === 1 ? "entry" : "entries"} to a KeePass file, encrypted with the password you chose. It opens in KeePassXC and KeePassDX.`
-        );
+        setTransferNotice(t("pw.kdbx_exported", { count: entries.length }));
       } catch (e) {
         setKdbxError(formatAppError(e));
       } finally {
@@ -765,12 +802,14 @@ export function PasswordsPanel({
         contents: entriesToCsv(logins),
         count: logins.length,
       });
-      const leftOut =
-        entries.length - logins.length > 0
-          ? ` Cards, identities, SSH keys and notes (${entries.length - logins.length}) are not part of the CSV format and stayed behind.`
-          : "";
+      const leftOut = entries.length - logins.length;
       setTransferNotice(
-        `Exported ${logins.length} ${logins.length === 1 ? "login" : "logins"} as an unencrypted CSV file. Store or delete it carefully.${leftOut}`
+        [
+          t("pw.csv_exported", { count: logins.length }),
+          leftOut > 0 ? t("pw.csv_left_out", { count: leftOut }) : "",
+        ]
+          .filter(Boolean)
+          .join(" ")
       );
     } catch (e) {
       setTransferError(formatAppError(e));
@@ -782,7 +821,7 @@ export function PasswordsPanel({
 
   return (
     <div className="pw-view">
-      <ViewHeader icon={KeyRound} title="Passwords" subtitle={headerSummary} />
+      <ViewHeader icon={KeyRound} title={t("nav.passwords")} subtitle={headerSummary} />
       {/* Toolbar spans all three panes: search and transfer act on the whole
           store, not on any one pane. */}
       <div className="view-toolbar">
@@ -792,8 +831,8 @@ export function PasswordsPanel({
           </span>
           <input
             type="text"
-            placeholder="Search passwords…"
-            aria-label="Search passwords"
+            placeholder={t("pw.search")}
+            aria-label={t("pw.search_label")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -803,23 +842,21 @@ export function PasswordsPanel({
           className={`pw-favicon-toggle${showFavicons ? " active" : ""}`}
           onClick={toggleShowFavicons}
           title={
-            showFavicons
-              ? "Site icons are on. Each saved site sees your IP address whenever this list renders. Click to turn them off."
-              : "Site icons are off. Turning them on lets each saved site see your IP address whenever this list renders."
+            showFavicons ? t("pw.site_icons_on_tip") : t("pw.site_icons_off_tip")
           }
         >
           {showFavicons ? <IconEye size={15} /> : <IconEyeOff size={15} />}
-          <span>Site icons</span>
+          <span>{t("pw.site_icons")}</span>
         </button>
         <button
           type="button"
           className="pw-transfer-btn"
           disabled={busy || transferBusy}
           onClick={() => void handleImport()}
-          title="Import from another password manager or browser: a KeePass database (.kdbx), CSV from Bitwarden, LastPass, 1Password, Proton Pass, Dashlane, NordPass, KeePass, RoboForm, Chrome, Edge, Firefox or Apple Passwords, plus Bitwarden JSON or zip with attachments"
+          title={t("pw.import_tip")}
         >
           <Upload size={15} />
-          <span>Import</span>
+          <span>{t("pw.import")}</span>
         </button>
         <button
           type="button"
@@ -830,10 +867,10 @@ export function PasswordsPanel({
             setTransferNotice(null);
             setConfirmingExport(true);
           }}
-          title="Export to a KeePass database, or the logins to a CSV file"
+          title={t("pw.export_tip")}
         >
           <Download size={15} />
-          <span>Export</span>
+          <span>{t("pw.export")}</span>
         </button>
         <div className="pw-add-wrap">
           <button
@@ -844,7 +881,7 @@ export function PasswordsPanel({
             onClick={() => setAddMenuOpen((v) => !v)}
           >
             <IconPlus size={16} />
-            <span>Add entry</span>
+            <span>{t("pw.add_entry")}</span>
           </button>
           {addMenuOpen && (
             <>
@@ -873,9 +910,10 @@ export function PasswordsPanel({
 
       {pendingImport && (
         <ImportFilingDialog
-          what={`${pendingImport.imported.length} ${
-            pendingImport.imported.length === 1 ? pendingImport.unit[0] : pendingImport.unit[1]
-          } from ${pendingImport.source}.`}
+          what={t(IMPORT_TEXTS[pendingImport.kind].what, {
+            count: pendingImport.imported.length,
+            source: pendingImport.sourceLabel,
+          })}
           categories={categories.map((c) => c.name)}
           onConfirm={finishImport}
           onCancel={cancelImport}
@@ -895,28 +933,21 @@ export function PasswordsPanel({
       )}
 
       {confirmingExport && (
-        <div className="pw-export-warning" role="alertdialog" aria-label="Choose an export">
+        <div className="pw-export-warning" role="alertdialog" aria-label={t("pw.export_choose_label")}>
           <div>
-            <strong>Export to a KeePass file or to CSV.</strong>
-            <p>
-              A KeePass file (.kdbx) holds every entry, with its fields, attached files and
-              history, encrypted with a password you choose. KeePassXC and KeePassDX open it.
-            </p>
-            <p>
-              A CSV file is not encrypted. It holds the logins only, with their passwords and TOTP
-              secrets, for another password manager to import. Anyone who opens it can read them,
-              so delete it once you are done.
-            </p>
+            <strong>{t("pw.export_title")}</strong>
+            <p>{t("pw.export_kdbx_body")}</p>
+            <p>{t("pw.export_csv_body")}</p>
           </div>
           <div className="pw-export-warning-actions">
             <button type="button" className="secondary" onClick={() => setConfirmingExport(false)}>
-              Cancel
+              {t("common.cancel")}
             </button>
             <button type="button" className="secondary" disabled={transferBusy} onClick={() => void handleExport()}>
-              CSV, not encrypted
+              {t("pw.export_csv_button")}
             </button>
             <button type="button" disabled={transferBusy} onClick={() => void startKdbxExport()}>
-              KeePass file
+              {t("pw.export_kdbx_button")}
             </button>
           </div>
         </div>
@@ -926,7 +957,7 @@ export function PasswordsPanel({
         <div className="pw-transfer-notice" role="status">
           <span>{transferNotice}</span>
           <button type="button" className="link" onClick={() => setTransferNotice(null)}>
-            Dismiss
+            {t("pw.dismiss")}
           </button>
         </div>
       )}
@@ -935,7 +966,7 @@ export function PasswordsPanel({
         <div className="pw-transfer-notice is-error" role="alert">
           <span>{transferError}</span>
           <button type="button" className="link" onClick={() => setTransferError(null)}>
-            Dismiss
+            {t("pw.dismiss")}
           </button>
         </div>
       )}
@@ -943,22 +974,23 @@ export function PasswordsPanel({
       {verifying && (
         <div className="pw-transfer-notice" role="status">
           <span>
-            Touch your security key
-            {platform.hasBuiltIn ? `, or confirm with ${platform.builtIn}` : ""}…
+            {platform.hasBuiltIn
+              ? t("pw.touch_key_or_builtin", { builtIn: platform.builtIn })
+              : t("pw.touch_key")}
           </span>
         </div>
       )}
 
       {editLockNoticeUp && (
         <div className="pw-transfer-notice" role="status">
-          <span>An entry is being edited. Save it or press Cancel before opening another.</span>
+          <span>{t("pw.edit_lock")}</span>
         </div>
       )}
 
       {entries.length === 0 && !editing ? (
         <div className="empty-state">
           <ShieldCheck size={48} className="empty-icon" />
-          <p className="empty-title">Nothing here yet</p>
+          <p className="empty-title">{t("pw.empty_title")}</p>
           {/* Every kind on offer, up front: a single "Add login" made the
               other three discoverable only through a menu nobody has opened
               yet. */}
@@ -979,9 +1011,7 @@ export function PasswordsPanel({
               );
             })}
           </div>
-          <p className="hint">
-            Or use Import to bring everything over from Bitwarden, LastPass, 1Password or Chrome.
-          </p>
+          <p className="hint">{t("pw.empty_hint")}</p>
         </div>
       ) : (
         <div className="pw-layout">
@@ -1007,8 +1037,8 @@ export function PasswordsPanel({
                 // the user is looking for something they believe exists.
                 <div className="empty-state">
                   <IconSearch size={36} className="empty-icon" />
-                  <p className="empty-title">No matching entries</p>
-                  <p className="hint">Try a different search, kind or category.</p>
+                  <p className="empty-title">{t("pw.no_matches")}</p>
+                  <p className="hint">{t("pw.no_matches_hint")}</p>
                 </div>
               ) : selectedType ? (
                 (() => {
@@ -1016,16 +1046,14 @@ export function PasswordsPanel({
                   return (
                     <div className="empty-state">
                       <Icon size={36} className="empty-icon" />
-                      <p className="empty-title">
-                        No {TYPE_LABELS[selectedType].plural.toLowerCase()} yet
-                      </p>
+                      <p className="empty-title">{t(TYPE_TEXTS[selectedType].noneYet)}</p>
                       <button
                         type="button"
                         disabled={busy}
                         onClick={() => startCreate(selectedType)}
                       >
                         <IconPlus size={15} />
-                        Add {TYPE_LABELS[selectedType].singular.toLowerCase()}
+                        {t(TYPE_TEXTS[selectedType].add)}
                       </button>
                     </div>
                   );
@@ -1033,8 +1061,8 @@ export function PasswordsPanel({
               ) : (
                 <div className="empty-state">
                   <ShieldCheck size={36} className="empty-icon" />
-                  <p className="empty-title">Nothing in this category yet</p>
-                  <p className="hint">Use Add entry, or pick another category.</p>
+                  <p className="empty-title">{t("pw.category_empty")}</p>
+                  <p className="hint">{t("pw.category_empty_hint")}</p>
                 </div>
               )
             ) : (
@@ -1103,7 +1131,7 @@ export function PasswordsPanel({
             ) : filtered.length > 0 ? (
               <div className="pw-detail-placeholder">
                 <MousePointerClick size={32} className="empty-icon" />
-                <p className="hint">Select an entry to see its details.</p>
+                <p className="hint">{t("pw.select_hint")}</p>
               </div>
             ) : // An empty list already says everything; a second pane
             // repeating "select something" would be advice about nothing.
@@ -1114,23 +1142,24 @@ export function PasswordsPanel({
 
       {pendingDelete && (
         <ConfirmDialog
-          title="Delete this entry?"
-          message={`${
+          title={t("pw.delete_title")}
+          message={[
             backedUp
-              ? `“${pendingDelete.service}” is removed from every device on the next sync.`
-              : `“${pendingDelete.service}” is removed from this silo.`
-          } Entries deleted here do not go to the trash.${
+              ? t("pw.delete_synced", { name: pendingDelete.service })
+              : t("pw.delete_local", { name: pendingDelete.service }),
+            t("pw.delete_no_trash"),
             backedUp && (pendingDelete.attachments ?? []).length > 0
-              ? " Backup storage keeps the attached files for 30 days before they are cleared."
-              : ""
-          }${
+              ? t("pw.delete_attachments_kept")
+              : "",
             !backedUp || archiveTargets === 0
               ? ""
               : (pendingDelete.attachments ?? []).length > 0
-                ? " A never-delete copy keeps the entry and its attached files until that storage's own rules remove them."
-                : " A never-delete copy keeps the entry until that storage's own rules remove it."
-          }`}
-          confirmLabel="Delete"
+                ? t("pw.delete_archive_with_files")
+                : t("pw.delete_archive"),
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          confirmLabel={t("pw.delete")}
           danger
           busy={busy}
           onConfirm={confirmDelete}
@@ -1140,15 +1169,16 @@ export function PasswordsPanel({
 
       {pendingClearHistory && (
         <ConfirmDialog
-          title="Clear this entry's history?"
-          message={`The earlier versions of “${pendingClearHistory.service}”, with their passwords, are removed${
-            backedUp ? " from every device on the next sync" : ""
-          }. The current version stays.${
-            backedUp && archiveTargets > 0
-              ? " A never-delete copy keeps them until that storage's own rules remove them."
-              : ""
-          }`}
-          confirmLabel="Clear history"
+          title={t("pw.clear_history_title")}
+          message={[
+            backedUp
+              ? t("pw.clear_history_synced", { name: pendingClearHistory.service })
+              : t("pw.clear_history_local", { name: pendingClearHistory.service }),
+            backedUp && archiveTargets > 0 ? t("pw.clear_history_archive") : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          confirmLabel={t("pw.clear_history")}
           danger
           busy={busy}
           onConfirm={() => {

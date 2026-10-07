@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { Star } from "lucide-react";
 import { ViewHeader } from "../components/ViewHeader";
 import type { PasswordEntry, SearchHit } from "../lib/types";
@@ -7,6 +6,7 @@ import { fileIconFor, fileKindOf } from "../lib/fileKinds";
 import { subtitleFor, typeOf } from "./passwords/util";
 import { TYPE_ICONS } from "./passwords/CategoryRail";
 import { IconFolder } from "../ui/Icons";
+import { t, useLocale } from "../i18n";
 
 type Props = {
   /** Starred files and folders, each with the folder it lives in. */
@@ -37,40 +37,35 @@ export function FavoritesPanel({
   onUnstarHit,
   onUnstarCredential,
 }: Props) {
+  useLocale();
   const total = hits.length + credentials.length;
 
-  const subtitle = useMemo(() => {
-    if (total === 0) return "Nothing starred yet";
-    const parts: string[] = [];
-    if (hits.length > 0) {
-      parts.push(`${hits.length} ${hits.length === 1 ? "item" : "items"} from Files`);
-    }
-    if (credentials.length > 0) {
-      parts.push(
-        `${credentials.length} ${credentials.length === 1 ? "entry" : "entries"} from Passwords`
-      );
-    }
-    return parts.join(" · ");
-  }, [credentials.length, hits.length, total]);
+  const parts: string[] = [];
+  if (hits.length > 0) {
+    parts.push(t("files.fav_items_from_files", { count: hits.length }));
+  }
+  if (credentials.length > 0) {
+    parts.push(t("files.fav_entries_from_passwords", { count: credentials.length }));
+  }
+  const subtitle = total === 0 ? t("files.fav_nothing") : parts.join(" · ");
 
   return (
     <div className="favorites-view">
-      <ViewHeader icon={Star} title="Favourites" subtitle={subtitle} />
+      <ViewHeader icon={Star} title={t("nav.favorites")} subtitle={subtitle} />
 
       <div className="favorites-pane">
         {total === 0 ? (
           <div className="favorites-empty-state">
             <Star size={28} />
             <p className="hint">
-              Right-click a file or folder and choose Add to favourites, or star an entry in
-              Passwords. Favourites travel with the silo, so they are the same on every device.
+              {t("files.fav_empty_hint", { action: t("files.add_favorite") })}
             </p>
           </div>
         ) : (
           <>
             {hits.length > 0 && (
               <section className="favorites-section">
-                <h3>Files</h3>
+                <h3>{t("nav.files")}</h3>
                 <ul className="favorites-grid">
                   {hits.map((hit) => {
                     const isFolder = hit.kind === "folder";
@@ -81,7 +76,7 @@ export function FavoritesPanel({
                           type="button"
                           className="favorites-card-open"
                           onClick={() => onOpenHit(hit)}
-                          title={`Open ${hit.name || "/"}`}
+                          title={t("files.fav_open", { name: hit.name || "/" })}
                         >
                           <span
                             className={`favorites-card-icon ${
@@ -93,7 +88,7 @@ export function FavoritesPanel({
                           <span className="favorites-card-name">{hit.name || "/"}</span>
                           <span className="favorites-card-sub">{hit.folder_path}</span>
                           <span className="favorites-card-meta">
-                            {hit.kind === "file" ? formatBytes(hit.size_bytes) : "Folder"}
+                            {hit.kind === "file" ? formatBytes(hit.size_bytes) : t("files.folder")}
                           </span>
                         </button>
                         <button
@@ -101,8 +96,12 @@ export function FavoritesPanel({
                           className="favorites-unstar"
                           onClick={() => onUnstarHit(hit)}
                           disabled={busy}
-                          title="Remove from favourites"
-                          aria-label={`Remove ${hit.name || "this folder"} from favourites`}
+                          title={t("files.remove_favorite")}
+                          aria-label={
+                            hit.name
+                              ? t("files.fav_remove_named", { name: hit.name })
+                              : t("files.fav_remove_this_folder")
+                          }
                         >
                           <Star size={14} fill="currentColor" />
                         </button>
@@ -115,7 +114,7 @@ export function FavoritesPanel({
 
             {credentials.length > 0 && (
               <section className="favorites-section">
-                <h3>Passwords</h3>
+                <h3>{t("nav.passwords")}</h3>
                 <ul className="favorites-grid">
                   {credentials.map((entry) => {
                     const Icon = TYPE_ICONS[typeOf(entry)];
@@ -126,12 +125,12 @@ export function FavoritesPanel({
                           type="button"
                           className="favorites-card-open"
                           onClick={() => onOpenCredential(entry.id)}
-                          title={`Open ${entry.service} in Passwords`}
+                          title={t("files.fav_open_in_passwords", { name: entry.service })}
                         >
                           <span className="favorites-card-icon">
                             <Icon size={26} />
                           </span>
-                          <span className="favorites-card-name">{entry.service || "Untitled"}</span>
+                          <span className="favorites-card-name">{entry.service || t("files.untitled")}</span>
                           <span className="favorites-card-sub">{sub}</span>
                           <span className="favorites-card-meta">{entry.category}</span>
                         </button>
@@ -140,8 +139,8 @@ export function FavoritesPanel({
                           className="favorites-unstar"
                           onClick={() => onUnstarCredential(entry)}
                           disabled={busy}
-                          title="Remove from favourites"
-                          aria-label={`Remove ${entry.service} from favourites`}
+                          title={t("files.remove_favorite")}
+                          aria-label={t("files.fav_remove_named", { name: entry.service })}
                         >
                           <Star size={14} fill="currentColor" />
                         </button>

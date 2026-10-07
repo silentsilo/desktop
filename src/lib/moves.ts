@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { VaultEntry } from "./types";
 
 /** Where a move goes: a folder by id (a row in the listing) or by path (a
@@ -38,25 +39,24 @@ export function canMoveTo(
 export function moveSummary(report: MoveReport, destination: string): { text: string; error: boolean } {
   const parts: string[] = [];
   if (report.moved > 0) {
-    parts.push(
-      report.moved === 1 ? `Moved 1 item to ${destination}.` : `Moved ${report.moved} items to ${destination}.`,
-    );
+    parts.push(t("files.moved", { count: report.moved, destination }));
   }
   if (report.skipped.length > 0) {
     parts.push(
       report.skipped.length === 1
-        ? `Left "${report.skipped[0]}" where it was: ${destination} has one already.`
-        : `Left ${report.skipped.length} items where they were: ${destination} has their names already.`,
+        ? t("files.skipped_one", { name: report.skipped[0]!, destination })
+        : t("files.skipped_many", { count: report.skipped.length, destination }),
     );
   }
   if (report.failed.length > 0) {
     const first = report.failed[0]!;
+    const reason = first.reason.replace(/\.$/, "");
     parts.push(
       report.failed.length === 1
-        ? `"${first.name}" did not move: ${first.reason.replace(/\.$/, "")}.`
-        : `${report.failed.length} items did not move. The first, "${first.name}": ${first.reason.replace(/\.$/, "")}.`,
+        ? t("files.failed_one", { name: first.name, reason })
+        : t("files.failed_many", { count: report.failed.length, name: first.name, reason }),
     );
   }
-  if (parts.length === 0) parts.push("Nothing moved: everything is there already.");
+  if (parts.length === 0) parts.push(t("files.nothing_moved"));
   return { text: parts.join(" "), error: report.failed.length > 0 };
 }

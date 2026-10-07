@@ -1,4 +1,5 @@
 import type { CloudKind } from "./types";
+import { t, type Key } from "../i18n";
 
 /** The provider's own name for its storage. */
 export const CLOUD_NAME: Record<CloudKind, string> = {
@@ -14,12 +15,43 @@ export const CLOUD_COMPANY: Record<CloudKind, string> = {
   "google-drive": "Google",
 };
 
-/** Where the silo folder ends up in the user's account. */
-export const CLOUD_PLACE: Record<CloudKind, string> = {
-  onedrive: "Apps/SilentSilo on your OneDrive",
-  dropbox: "Apps/SilentSilo in your Dropbox",
-  "google-drive": "the SilentSilo folder of your Google Drive",
+/**
+ * The sentences that say where the silo folder ends up in the user's
+ * account. Whole sentences per provider rather than one place phrase, since
+ * the preposition and its article change with the place in most languages.
+ */
+const CLOUD_PLACE_TEXT: Record<CloudKind, { folders: Key; noSilo: Key; folderHint: Key }> = {
+  onedrive: {
+    folders: "backup.cloud_folders_onedrive",
+    noSilo: "backup.cloud_no_silo_onedrive",
+    folderHint: "backup.cloud_folder_hint_onedrive",
+  },
+  dropbox: {
+    folders: "backup.cloud_folders_dropbox",
+    noSilo: "backup.cloud_no_silo_dropbox",
+    folderHint: "backup.cloud_folder_hint_dropbox",
+  },
+  "google-drive": {
+    folders: "backup.cloud_folders_google",
+    noSilo: "backup.cloud_no_silo_google",
+    folderHint: "backup.cloud_folder_hint_google",
+  },
 };
+
+/** "The folders in Apps/SilentSilo on your OneDrive." */
+export function cloudFoldersHint(kind: CloudKind): string {
+  return t(CLOUD_PLACE_TEXT[kind].folders);
+}
+
+/** Setting up from an account that holds no silo yet. */
+export function cloudNoSilo(kind: CloudKind): string {
+  return t(CLOUD_PLACE_TEXT[kind].noSilo);
+}
+
+/** Where a new copy's folder goes, and that the provider sees its name. */
+export function cloudFolderHint(kind: CloudKind): string {
+  return t(CLOUD_PLACE_TEXT[kind].folderHint);
+}
 
 /**
  * The folder name a new copy starts with. Neutral on purpose: the provider
@@ -34,7 +66,7 @@ export const DEFAULT_CLOUD_FOLDER = "Silo";
  */
 export function cloudFolderProblem(folder: string): string | null {
   const name = folder.trim();
-  if (!name) return "Give the folder a name.";
+  if (!name) return t("backup.cloud_folder_empty");
   if (
     name.length > 100 ||
     /["*:<>?/\\|]/.test(name) ||
@@ -44,7 +76,7 @@ export function cloudFolderProblem(folder: string): string | null {
     name.startsWith(".") ||
     name.endsWith(".")
   ) {
-    return 'Use a plain folder name: no slashes, none of " * : < > ? |, no dot at either end.';
+    return t("backup.cloud_folder_invalid");
   }
   return null;
 }

@@ -3,7 +3,7 @@ import { LOCALES, languagePreference, setLanguage, systemLocale, t, useLocale } 
 import { CheckCircle2, DownloadCloud, ExternalLink, Globe, Info, SlidersHorizontal } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Update } from "@tauri-apps/plugin-updater";
-import { builtInOrKey, type Os, platformStrings } from "../../lib/platformStrings";
+import { type Os, platformStrings } from "../../lib/platformStrings";
 import { formatBytes } from "../../lib/format";
 import { formatAppError } from "../../lib/errors";
 import {
@@ -25,9 +25,8 @@ import { loadHistoryPolicy, saveHistoryPolicy } from "../../lib/historySetting";
 export type AppSectionId = "general" | "browser" | "ssh" | "updates";
 
 export function formatMinutes(minutes: number): string {
-  if (minutes < 60) return `${minutes} min`;
-  const hours = minutes / 60;
-  return hours === 1 ? "1 hour" : `${hours} hours`;
+  if (minutes < 60) return t("set.minutes", { count: minutes });
+  return t("set.hours", { count: minutes / 60 });
 }
 
 export type UpdateState =
@@ -131,6 +130,7 @@ export function AppSettingsSection({
   onDefaultAutoLockMinutes,
   siloHasKeys,
 }: Props) {
+  useLocale();
   const platform = platformStrings(os);
   const themeControl = useTheme();
   const [historyPolicy, setHistoryPolicy] = useState<HistoryPolicy>(loadHistoryPolicy);
@@ -207,11 +207,10 @@ export function AppSettingsSection({
       <div className="panel-section">
         <h3>
           <SlidersHorizontal size={16} />
-          General
+          {t("settings.general")}
         </h3>
         <p>
-          Closing the window hides SilentSilo in {platform.trayArea}, so backup keeps running and
-          the {platform.fileManager} right-click actions reach the silo you unlocked.
+          {t("set.gen_tray", { tray: platform.trayArea, fileManager: platform.fileManager })}
         </p>
         <label className="s3-checkbox">
           <input
@@ -221,14 +220,11 @@ export function AppSettingsSection({
             onChange={(e) => void toggleAutostart(e.target.checked)}
           />
           <span>
-            Start SilentSilo when I {platform.signIn}
-            <span className="hint">
-              It starts in {platform.trayArea} with no window and nothing unlocked. A key is still
-              needed before a silo opens.
-            </span>
+            {t("set.gen_autostart", { signIn: platform.signIn })}
+            <span className="hint">{t("set.gen_autostart_hint", { tray: platform.trayArea })}</span>
           </span>
         </label>
-        {autostart && !autostart.supported && <p className="hint">Not available on this system.</p>}
+        {autostart && !autostart.supported && <p className="hint">{t("set.not_available")}</p>}
         {autostartError && <p className="hint is-error">{autostartError}</p>}
         <p className="hint">{platform.autostartHint}</p>
 
@@ -236,7 +232,7 @@ export function AppSettingsSection({
 
         <div className="settings-row">
           <label className="settings-row-label" htmlFor="auto-lock-default">
-            Lock a silo after
+            {t("set.gen_auto_lock")}
           </label>
           <select
             id="auto-lock-default"
@@ -252,13 +248,11 @@ export function AppSettingsSection({
             ))}
           </select>
         </div>
-        <p className="hint">
-          The default for every silo. A silo can have its own under Unlocking.
-        </p>
+        <p className="hint">{t("set.gen_auto_lock_hint")}</p>
 
         <div className="settings-row">
           <label className="settings-row-label" htmlFor="password-history">
-            Earlier versions of each entry
+            {t("set.gen_history")}
           </label>
           <select
             id="password-history"
@@ -273,22 +267,19 @@ export function AppSettingsSection({
           >
             {HISTORY_POLICIES.map((policy) => (
               <option key={String(policy)} value={String(policy)}>
-                {policy === "fit" ? "As many as fit" : `Last ${policy}`}
+                {policy === "fit"
+                  ? t("set.gen_history_fit")
+                  : t("set.gen_history_last", { count: policy })}
               </option>
             ))}
           </select>
         </div>
-        <p className="hint">
-          Each time a password, a field or a note changes, the entry keeps the version before
-          it. Old passwords stay in the silo until an entry's history is cleared. As many as fit
-          means up to 256 KB per entry, hundreds of versions of an ordinary login. On this
-          computer only.
-        </p>
+        <p className="hint">{t("set.gen_history_hint")}</p>
 
         {themeControl && (
           <div className="settings-row">
             <label className="settings-row-label" htmlFor="theme-choice">
-              Theme
+              {t("set.gen_theme")}
             </label>
             <select
               id="theme-choice"
@@ -296,9 +287,9 @@ export function AppSettingsSection({
               value={themeControl.choice}
               onChange={(e) => themeControl.choose(e.target.value as ThemeChoice)}
             >
-              <option value="system">Same as the system</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
+              <option value="system">{t("set.theme_system")}</option>
+              <option value="light">{t("set.theme_light")}</option>
+              <option value="dark">{t("set.theme_dark")}</option>
             </select>
           </div>
         )}
@@ -311,14 +302,11 @@ export function AppSettingsSection({
       <div className="panel-section">
         <h3>
           <Globe size={16} />
-          Browser extension
+          {t("settings.browser")}
         </h3>
-        <p>
-          Lets the browser extension fill logins from the silo that is open. It cannot see
-          your files.
-        </p>
+        <p>{t("set.br_intro")}</p>
         {browserExtension?.supported && !browserExtension.bundled ? (
-          <p className="hint">The browser extension is not part of this build.</p>
+          <p className="hint">{t("set.br_not_bundled")}</p>
         ) : (
           <>
             <label className="s3-checkbox">
@@ -329,42 +317,41 @@ export function AppSettingsSection({
                 onChange={(e) => void toggleBrowserExtension(e.target.checked)}
               />
               <span>
-                Allow the SilentSilo browser extension
+                {t("set.br_allow")}
                 <span className="hint">
-                  You confirm every fill in this window with {builtInOrKey(platform)}. Turned
-                  off, the extension cannot reach SilentSilo.
+                  {platform.hasBuiltIn
+                    ? t("set.br_allow_hint_builtin", { builtin: platform.builtIn })
+                    : t("set.br_allow_hint")}
                 </span>
               </span>
             </label>
             {browserExtension?.supported && siloHasKeys === false && (
               <p className="hint is-error">
-                This silo has no security key
-                {platform.hasBuiltIn ? ` or ${platform.builtIn}` : ""} set up, so the browser cannot
-                fill anything from it. Add one under Unlocking first.
+                {platform.hasBuiltIn
+                  ? t("set.br_no_keys_builtin", { builtin: platform.builtIn })
+                  : t("set.br_no_keys")}
               </p>
             )}
             {browserExtension && !browserExtension.supported && (
-              <p className="hint">Not available on this system yet.</p>
+              <p className="hint">{t("set.not_available_yet")}</p>
             )}
             {browserExtension?.enabled && !browserExtension.running && !browserExtensionError && (
-              <p className="hint is-error">
-                On, but the browser cannot reach SilentSilo yet. Turn it off and on again.
-              </p>
+              <p className="hint is-error">{t("set.br_not_running")}</p>
             )}
             {browserExtensionError && <p className="hint is-error">{browserExtensionError}</p>}
             {browserExtension?.enabled && (browserExtension.recent?.length ?? 0) > 0 && (
               <div className="browser-recent">
-                <p className="hint">
-                  Filled since SilentSilo started. If you do not recognise one, turn the extension
-                  off and check this computer.
-                </p>
+                <p className="hint">{t("set.br_recent")}</p>
                 <ul>
                   {browserExtension.recent.map((fill) => (
                     <li key={`${fill.at}-${fill.site}-${fill.label}`}>
-                      {fill.label} on {fill.site},{" "}
-                      {new Date(fill.at * 1000).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
+                      {t("set.br_recent_row", {
+                        label: fill.label,
+                        site: fill.site,
+                        time: new Date(fill.at * 1000).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }),
                       })}
                     </li>
                   ))}
@@ -395,34 +382,39 @@ export function AppSettingsSection({
       <div className="panel-section">
         <h3>
           <DownloadCloud size={16} />
-          Updates
+          {t("set.up_title")}
         </h3>
-        <p>Current version: v{__APP_VERSION__}</p>
+        <p>{t("set.up_current", { version: __APP_VERSION__ })}</p>
         {updateState.phase === "available" && (
           <div className="update-available" role="status">
             <DownloadCloud size={16} aria-hidden />
             <span>
-              <strong>Version {updateState.version} is available.</strong> Every open silo locks
-              before it installs, and the app restarts on its own.
+              <strong>{t("set.up_available", { version: updateState.version })}</strong>{" "}
+              {t("set.up_available_body")}
             </span>
           </div>
         )}
         {updateState.phase === "up-to-date" && (
           <p className="hint success-msg">
             <CheckCircle2 size={14} />
-            You are on the latest version.
+            {t("set.up_latest")}
           </p>
         )}
         {updateState.phase === "installing" && (
           <div className="progress-row" role="status">
             <p className="hint">
-              Downloading v{updateState.version}
               {updateState.contentLength
-                ? `: ${formatBytes(updateState.downloaded)} of ${formatBytes(updateState.contentLength)}`
+                ? t("set.up_downloading_of", {
+                    version: updateState.version,
+                    done: formatBytes(updateState.downloaded),
+                    total: formatBytes(updateState.contentLength),
+                  })
                 : updateState.downloaded > 0
-                  ? `: ${formatBytes(updateState.downloaded)} so far`
-                  : ""}
-              . The app restarts on its own when it is done.
+                  ? t("set.up_downloading_so_far", {
+                      version: updateState.version,
+                      done: formatBytes(updateState.downloaded),
+                    })
+                  : t("set.up_downloading", { version: updateState.version })}
             </p>
             {updateState.contentLength !== null && updateState.contentLength > 0 && (
               <div className="progress-track">
@@ -443,7 +435,7 @@ export function AppSettingsSection({
               type="button"
               onClick={() => void updater.install(updateState.update, updateState.version)}
             >
-              Download and install
+              {t("set.up_install")}
             </button>
           ) : (
             <button
@@ -452,7 +444,7 @@ export function AppSettingsSection({
               disabled={updateState.phase === "checking" || updateState.phase === "installing"}
               onClick={() => void updater.check()}
             >
-              {updateState.phase === "checking" ? "Checking…" : "Check for updates"}
+              {updateState.phase === "checking" ? t("unlock.checking") : t("set.up_check")}
             </button>
           )}
         </div>
@@ -463,12 +455,8 @@ export function AppSettingsSection({
             onChange={(e) => onAutoUpdateEnabled(e.target.checked)}
           />
           <span>
-            Check for updates automatically
-            <span className="hint">
-              Once a day at most. The request sends the app version and platform, and the server
-              sees your IP address. With this off, you get security fixes only when you check by
-              hand.
-            </span>
+            {t("set.up_auto")}
+            <span className="hint">{t("set.up_auto_hint")}</span>
           </span>
         </label>
       </div>
@@ -476,21 +464,21 @@ export function AppSettingsSection({
       <div className="panel-section">
         <h3>
           <Info size={16} />
-          About SilentSilo
+          {t("set.about_title")}
         </h3>
         <p>
-          Version {__APP_VERSION__}. An encrypted vault for files and passwords, unlocked by a
-          security key{platform.hasBuiltIn ? ` or ${platform.builtIn}` : ""}, backed up to storage
-          you control.
+          {platform.hasBuiltIn
+            ? t("set.about_body_builtin", { version: __APP_VERSION__, builtin: platform.builtIn })
+            : t("set.about_body", { version: __APP_VERSION__ })}
         </p>
         <dl className="backup-config">
           <div className="backup-config-row">
-            <dt>Publisher</dt>
+            <dt>{t("set.about_publisher")}</dt>
             <dd>Software Hive S.R.L.</dd>
           </div>
           <div className="backup-config-row">
-            <dt>Licence</dt>
-            <dd>GNU AGPL v3, provided as is, without warranty. The source code is public.</dd>
+            <dt>{t("set.about_licence")}</dt>
+            <dd>{t("set.about_licence_text")}</dd>
           </div>
         </dl>
         <div className="actions">
@@ -508,13 +496,10 @@ export function AppSettingsSection({
             onClick={() => void openUrl("https://github.com/silentsilo/desktop")}
           >
             <ExternalLink size={14} />
-            Source code
+            {t("set.about_source")}
           </button>
         </div>
-        <p className="hint">
-          © {new Date().getFullYear()} Software Hive S.R.L. SilentSilo is a trademark of Software
-          Hive S.R.L.
-        </p>
+        <p className="hint">{t("set.about_copyright", { year: new Date().getFullYear() })}</p>
       </div>
     </>
   );

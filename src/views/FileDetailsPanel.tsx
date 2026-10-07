@@ -13,6 +13,7 @@ import { fileIconFor, fileKindOf } from "../lib/fileKinds";
 import { formatBytes, formatDate } from "../lib/format";
 import type { FileSyncState, VaultEntry } from "../lib/types";
 import { IconClose, IconFolder } from "../ui/Icons";
+import { t, useLocale } from "../i18n";
 
 type Props = {
   entry: VaultEntry;
@@ -45,12 +46,12 @@ export type PanelAction = {
   primary?: boolean;
 };
 
-const COPY_STATE: Record<"holds" | "owed" | "unknown", string> = {
-  holds: "Has it",
+const copyState = (state: "holds" | "owed" | "unknown"): string => {
+  if (state === "holds") return t("files.copy_has_it");
   // Not sent from here or seen there by this computer: another device may
   // have put it there, which the next sync confirms.
-  owed: "Not confirmed yet",
-  unknown: "",
+  if (state === "owed") return t("files.copy_not_confirmed");
+  return "";
 };
 
 /**
@@ -69,6 +70,7 @@ export function FileDetailsPanel({
   actions,
   onClose,
 }: Props) {
+  useLocale();
   const isFile = entry.kind === "file";
   const blobId = isFile ? entry.blob_id : null;
   const [targets, setTargets] = useState<BackupTargetView[]>([]);
@@ -103,13 +105,13 @@ export function FileDetailsPanel({
   const onlyInBackup = lines.length > 0 && lines.every((line) => line.state === "unknown");
 
   return (
-    <aside className="details-panel" aria-label={isFile ? "File details" : "Folder details"}>
+    <aside className="details-panel" aria-label={isFile ? t("files.file_details") : t("files.folder_details")}>
       <button
         type="button"
         className="explorer-icon-btn details-close"
         onClick={onClose}
-        title="Hide details"
-        aria-label="Hide details"
+        title={t("files.hide_details")}
+        aria-label={t("files.hide_details")}
       >
         <IconClose size={14} />
       </button>
@@ -128,8 +130,8 @@ export function FileDetailsPanel({
           {isFile
             ? `${typeLabel(entry.name)} · ${formatBytes(entry.size_bytes)}`
             : count === undefined
-              ? "Folder"
-              : `Folder · ${count} ${count === 1 ? "item" : "items"}`}
+              ? t("files.folder")
+              : t("files.folder_count", { count })}
         </p>
       </div>
 
@@ -137,28 +139,28 @@ export function FileDetailsPanel({
 
       <dl className="details-rows">
         {location !== null && (
-          <Row icon={<FolderOpen size={15} />} label="Location">
-            {location === "/" ? "Silo root" : location}
+          <Row icon={<FolderOpen size={15} />} label={t("files.location")}>
+            {location === "/" ? t("trash.silo_root") : location}
           </Row>
         )}
         {location !== null && (
-          <Row icon={<Calendar size={15} />} label="Created">
+          <Row icon={<Calendar size={15} />} label={t("files.created")}>
             {formatDate(entry.created_at)}
           </Row>
         )}
         {isFile ? (
-          <Row icon={<Clock size={15} />} label="Modified">
+          <Row icon={<Clock size={15} />} label={t("files.modified")}>
             {formatDate(entry.updated_at)}
           </Row>
         ) : (
           lastChange !== undefined && (
-            <Row icon={<Clock size={15} />} label="Last change inside">
+            <Row icon={<Clock size={15} />} label={t("files.last_change_inside")}>
               {formatDate(lastChange)}
             </Row>
           )
         )}
         {isFile && syncState && (
-          <Row icon={<CopyIcon size={15} />} label="Backup">
+          <Row icon={<CopyIcon size={15} />} label={t("files.backup_row")}>
             <span
               className={`details-status is-${syncStateShort(syncState).tone}`}
               title={describeSyncState(syncState)}
@@ -170,8 +172,8 @@ export function FileDetailsPanel({
       </dl>
 
       {lines.length > 0 && (
-        <section className="details-copies" aria-label="Copies">
-          <h4>Copies</h4>
+        <section className="details-copies" aria-label={t("files.copies")}>
+          <h4>{t("files.copies")}</h4>
           {onlyInBackup ? (
             <p className="details-note">
               Put in backup storage by another device. Which copies hold it shows here once this
@@ -185,7 +187,7 @@ export function FileDetailsPanel({
                   <span className="details-copy-name" title={line.name}>
                     {line.name}
                   </span>
-                  <span className="details-copy-state">{COPY_STATE[line.state]}</span>
+                  <span className="details-copy-state">{copyState(line.state)}</span>
                 </li>
               ))}
             </ul>
@@ -222,21 +224,28 @@ export function SelectionDetails({
   actions: PanelAction[];
   onClose: () => void;
 }) {
+  useLocale();
   const files = entries.filter((e) => e.kind === "file");
   const folders = entries.length - files.length;
   const bytes = files.reduce((sum, f) => sum + (f.kind === "file" ? f.size_bytes : 0), 0);
-  const parts = [
-    files.length > 0 && `${files.length} ${files.length === 1 ? "file" : "files"}`,
-    folders > 0 && `${folders} ${folders === 1 ? "folder" : "folders"}`,
-  ].filter(Boolean);
+  const filesText = t("files.sel_files", { count: files.length });
+  const foldersText = t("files.sel_folders", { count: folders });
+  const kinds =
+    files.length > 0 && folders > 0
+      ? t("files.sel_files_and_folders", { files: filesText, folders: foldersText })
+      : files.length > 0
+        ? filesText
+        : folders > 0
+          ? foldersText
+          : "";
   return (
-    <aside className="details-panel" aria-label="Selection">
+    <aside className="details-panel" aria-label={t("files.selection")}>
       <button
         type="button"
         className="explorer-icon-btn details-close"
         onClick={onClose}
-        title="Hide details"
-        aria-label="Hide details"
+        title={t("files.hide_details")}
+        aria-label={t("files.hide_details")}
       >
         <IconClose size={14} />
       </button>
@@ -244,9 +253,9 @@ export function SelectionDetails({
         <div className="details-icon" aria-hidden>
           <Files size={36} strokeWidth={1.5} />
         </div>
-        <h3 className="details-name">{entries.length} items selected</h3>
+        <h3 className="details-name">{t("trash.selected", { count: entries.length })}</h3>
         <p className="details-kind">
-          {parts.join(" and ")}
+          {kinds}
           {files.length > 0 && ` · ${formatBytes(bytes)}`}
         </p>
       </div>
@@ -278,7 +287,7 @@ function ActionList({ actions }: { actions: PanelAction[] }) {
   const others = actions.filter((a) => !a.primary);
   if (others.length === 0) return null;
   return (
-    <ul className="details-list" aria-label="Actions">
+    <ul className="details-list" aria-label={t("files.actions")}>
       {others.map((action) => (
         <li key={action.label}>
           <button

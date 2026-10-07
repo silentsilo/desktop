@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useModal } from "../../hooks/useModal";
 import type { ImportCategoryChoice } from "../../lib/passwordImport";
+import { t, useLocale } from "../../i18n";
 
 type Props = {
   /** "12 logins from Bitwarden" — already counted and named by the caller. */
@@ -22,6 +23,7 @@ const NEW = "\u0000new";
  * they hold landed in "General" with no say in the matter.
  */
 export function ImportFilingDialog({ what, categories, onConfirm, onCancel }: Props) {
+  useLocale();
   const cardRef = useModal(onCancel);
   const [target, setTarget] = useState<string>(KEEP);
   const [fresh, setFresh] = useState("");
@@ -38,30 +40,30 @@ export function ImportFilingDialog({ what, categories, onConfirm, onCancel }: Pr
         ref={cardRef}
         className="modal-card"
         role="dialog"
-        aria-label="Choose a category for the import"
+        aria-label={t("pw.filing_label")}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3>Where should these go?</h3>
+        <h3>{t("pw.filing_title")}</h3>
         <p>{what}</p>
         <label className="field field-full">
-          <span>Category</span>
+          <span>{t("pw.field_category")}</span>
           <select value={target} onChange={(e) => setTarget(e.target.value)}>
-            <option value={KEEP}>Keep the categories from the file</option>
+            <option value={KEEP}>{t("pw.filing_keep")}</option>
             {categories.map((name) => (
               <option key={name} value={name}>
                 {name}
               </option>
             ))}
-            <option value={NEW}>New category…</option>
+            <option value={NEW}>{t("pw.filing_new")}</option>
           </select>
         </label>
         {target === NEW && (
           <label className="field field-full">
-            <span>Name</span>
+            <span>{t("pw.field_name")}</span>
             <input
               autoFocus
               type="text"
-              placeholder="e.g. Imported"
+              placeholder={t("pw.filing_placeholder")}
               value={fresh}
               onChange={(e) => setFresh(e.target.value)}
               onKeyDown={(e) => {
@@ -72,10 +74,10 @@ export function ImportFilingDialog({ what, categories, onConfirm, onCancel }: Pr
         )}
         <div className="modal-actions">
           <button type="button" className="btn" onClick={onCancel}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button type="button" className="btn btn-primary" onClick={confirm}>
-            Import
+            {t("pw.import")}
           </button>
         </div>
       </div>

@@ -18,7 +18,7 @@ import {
   DEFAULT_GEN_OPTIONS,
   generatePassword,
   passwordStrength,
-  TYPE_LABELS,
+  TYPE_TEXTS,
   typeOf,
   type PasswordGenOptions,
 } from "./util";
@@ -32,6 +32,7 @@ import {
   IconPlus,
   IconTrash,
 } from "../../ui/Icons";
+import { t, useLocale } from "../../i18n";
 
 type Props = {
   /** The entry as it was when editing started. The editor owns its draft. */
@@ -59,6 +60,7 @@ type Props = {
  * made every edit look like work.
  */
 export function EntryEditor({ os, initial, creating, categories, now, onSave, onCancel }: Props) {
+  useLocale();
   const [draft, setDraft] = useState<PasswordEntry>({ ...initial });
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [genOptions, setGenOptions] = useState<PasswordGenOptions>(DEFAULT_GEN_OPTIONS);
@@ -176,7 +178,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
 
   const strength = passwordStrength(draft.password);
   const type = typeOf(draft);
-  const kind = TYPE_LABELS[type].singular.toLowerCase();
+  const heading = t(creating ? TYPE_TEXTS[type].add : TYPE_TEXTS[type].edit);
 
   const [sshBusy, setSshBusy] = useState(false);
   const [sshError, setSshError] = useState<string | null>(null);
@@ -204,23 +206,31 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
   /// instruction rather than a mystery.
   const missingForSave: string[] = [];
   if (draft.service.trim().length === 0) {
-    missingForSave.push(type === "login" ? "a service name" : "a name");
+    missingForSave.push(type === "login" ? t("pw.need_service_name") : t("pw.need_name"));
   }
   // A login saved with a passkey from the phone signs in without a password.
   const hasPasskey = Boolean((draft as Record<string, unknown>).passkey);
   if (type === "login" && draft.password.trim().length === 0 && !hasPasskey) {
-    missingForSave.push("a password");
+    missingForSave.push(t("pw.need_password"));
   }
   if (type === "card" && (draft.card_number ?? "").trim().length === 0) {
-    missingForSave.push("the card number");
+    missingForSave.push(t("pw.need_card_number"));
   }
   if (type === "identity" && (draft.id_full_name ?? "").trim().length === 0) {
-    missingForSave.push("the full name");
+    missingForSave.push(t("pw.need_full_name"));
   }
   if (type === "ssh_key" && (draft.ssh_private_key ?? "").trim().length === 0) {
-    missingForSave.push("a private key");
+    missingForSave.push(t("pw.need_private_key"));
   }
   const canSave = missingForSave.length === 0;
+  // At most two: the name, and the one secret this kind needs.
+  const stillNeeded =
+    missingForSave.length === 1
+      ? t("pw.still_needed_one", { what: missingForSave[0]! })
+      : t("pw.still_needed_two", {
+          first: missingForSave[0] ?? "",
+          second: missingForSave.slice(1).join(", "),
+        });
 
   const field = (
     label: string,
@@ -241,24 +251,22 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
   );
 
   return (
-    <div className="pw-editor" role="form" aria-label={`${creating ? "Add" : "Edit"} ${kind}`}>
-      <h3 className="pw-detail-heading">
-        {creating ? "Add" : "Edit"} {kind}
-      </h3>
+    <div className="pw-editor" role="form" aria-label={heading}>
+      <h3 className="pw-detail-heading">{heading}</h3>
       <div className="pw-form">
         <label className="field">
-          <span>{type === "login" ? "Service" : "Name"}</span>
+          <span>{type === "login" ? t("pw.field_service") : t("pw.field_name")}</span>
           <input
             type="text"
             autoComplete="off"
             placeholder={
               type === "login"
-                ? "e.g. GitHub, Gmail"
+                ? t("pw.placeholder_login")
                 : type === "card"
-                  ? "e.g. Personal Visa"
+                  ? t("pw.placeholder_card")
                   : type === "identity"
-                    ? "e.g. Home address"
-                    : "e.g. Work laptop key"
+                    ? t("pw.placeholder_identity")
+                    : t("pw.placeholder_other")
             }
             autoFocus
             value={draft.service}
@@ -268,33 +276,33 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
 
         {type === "card" && (
           <>
-            {field("Cardholder", "card_holder", "Name on the card")}
-            {field("Number", "card_number", "1234 5678 9012 3456", true)}
-            {field("Expiry month", "card_exp_month", "MM")}
-            {field("Expiry year", "card_exp_year", "YYYY")}
-            {field("Security code", "card_code", "CVC")}
-            {field("Brand", "card_brand", "e.g. Visa")}
+            {field(t("pw.field_cardholder"), "card_holder", t("pw.placeholder_cardholder"))}
+            {field(t("pw.field_number"), "card_number", "1234 5678 9012 3456", true)}
+            {field(t("pw.field_expiry_month"), "card_exp_month", t("pw.placeholder_month"))}
+            {field(t("pw.field_expiry_year"), "card_exp_year", t("pw.placeholder_year"))}
+            {field(t("pw.field_security_code"), "card_code", "CVC")}
+            {field(t("pw.field_brand"), "card_brand", t("pw.placeholder_brand"))}
           </>
         )}
 
         {type === "identity" && (
           <>
-            {field("Full name", "id_full_name", "First and last name")}
-            {field("Company", "id_company")}
-            {field("Email", "id_email")}
-            {field("Phone", "id_phone")}
-            {field("Address", "id_address", "Street and number", true)}
-            {field("City", "id_city")}
-            {field("State / County", "id_state")}
-            {field("Postal code", "id_zip")}
-            {field("Country", "id_country")}
+            {field(t("pw.field_full_name"), "id_full_name", t("pw.placeholder_full_name"))}
+            {field(t("pw.field_company"), "id_company")}
+            {field(t("pw.field_email"), "id_email")}
+            {field(t("pw.field_phone"), "id_phone")}
+            {field(t("pw.field_address"), "id_address", t("pw.placeholder_address"), true)}
+            {field(t("pw.field_city"), "id_city")}
+            {field(t("pw.field_state"), "id_state")}
+            {field(t("pw.field_postal_code"), "id_zip")}
+            {field(t("pw.field_country"), "id_country")}
           </>
         )}
 
         {type === "ssh_key" && (
           <>
             <div className="field field-full">
-              <span>Key pair</span>
+              <span>{t("pw.field_key_pair")}</span>
               {(draft.ssh_private_key ?? "").trim() === "" ? (
                 <div className="pw-attachments">
                   <button
@@ -304,18 +312,16 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
                     onClick={() => void generateSshKey()}
                   >
                     <IconGenerate size={14} />
-                    <span>{sshBusy ? "Generating…" : "Generate an ed25519 key"}</span>
+                    <span>{sshBusy ? t("pw.ssh_generating") : t("pw.ssh_generate")}</span>
                   </button>
                 </div>
               ) : (
-                <p className="hint">
-                  To generate a fresh pair, clear the private key below first.
-                </p>
+                <p className="hint">{t("pw.ssh_clear_to_generate")}</p>
               )}
               {sshError && <p className="hint is-error">{sshError}</p>}
             </div>
             <label className="field field-full">
-              <span>Private key</span>
+              <span>{t("pw.field_private_key")}</span>
               <textarea
                 rows={5}
                 autoComplete="off"
@@ -326,7 +332,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
               />
             </label>
             <label className="field field-full">
-              <span>Public key</span>
+              <span>{t("pw.field_public_key")}</span>
               <textarea
                 rows={2}
                 autoComplete="off"
@@ -336,7 +342,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
                 onChange={(e) => setDraft({ ...draft, ssh_public_key: e.target.value })}
               />
             </label>
-            {field("Fingerprint", "ssh_fingerprint", "SHA256:…", true)}
+            {field(t("pw.field_fingerprint"), "ssh_fingerprint", "SHA256:…", true)}
             <SshAgentOption
               draft={draft}
               onChange={(changes) => setDraft((d) => ({ ...d, ...changes }))}
@@ -347,7 +353,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
         {type === "login" && (
           <>
         <label className="field">
-          <span>Username or email</span>
+          <span>{t("pw.field_username_or_email")}</span>
           <input
             type="text"
             autoComplete="off"
@@ -357,7 +363,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
           />
         </label>
         <label className="field field-full">
-          <span>Password</span>
+          <span>{t("pw.field_password")}</span>
           <div className="pw-password-input-row">
             <input
               type={passwordVisible ? "text" : "password"}
@@ -368,7 +374,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
             <button
               type="button"
               className="pw-gen-btn"
-              title={passwordVisible ? "Hide" : "Show"}
+              title={passwordVisible ? t("pw.hide") : t("pw.show")}
               onClick={() => setPasswordVisible((v) => !v)}
             >
               {passwordVisible ? <IconEyeOff size={15} /> : <IconEye size={15} />}
@@ -376,7 +382,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
             <button
               type="button"
               className="pw-gen-btn"
-              title="Copy password"
+              title={t("pw.copy_password")}
               onClick={() => void copySecret(draft.password, "password")}
             >
               <IconCopy size={15} />
@@ -384,7 +390,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
             <button
               type="button"
               className="pw-gen-btn accent"
-              title="Generate new password"
+              title={t("pw.generate_password")}
               onClick={() => setDraft({ ...draft, password: generatePassword(genOptions) })}
             >
               <IconGenerate size={15} />
@@ -411,15 +417,17 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
               onClick={() => setGenOpen((v) => !v)}
             >
               {genOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-              Generator options
+              {t("pw.generator_options")}
             </button>
           </div>
 
           {genOpen && (
             <div className="pw-gen-panel">
               <div className="pw-gen-panel-header">
-                <span>Generator</span>
-                <span className="pw-gen-length-value">{genOptions.length} characters</span>
+                <span>{t("pw.generator")}</span>
+                <span className="pw-gen-length-value">
+                  {t("pw.generator_length", { count: genOptions.length })}
+                </span>
               </div>
               <input
                 type="range"
@@ -453,7 +461,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
         </label>
 
         <label className="field field-full">
-          <span>One-time code (TOTP)</span>
+          <span>{t("pw.field_totp")}</span>
           <div className="pw-totp-panel">
             {draft.totp_secret && !totpError && !totpTyping ? (
               <>
@@ -465,14 +473,14 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
                 />
                 <button type="button" className="pw-totp-remove-btn" onClick={() => applyTotpInput("")}>
                   <IconClose size={13} />
-                  <span>Remove</span>
+                  <span>{t("pw.remove")}</span>
                 </button>
               </>
             ) : (
               <>
                 <input
                   type="text"
-                  placeholder="Secret key or otpauth:// link"
+                  placeholder={t("pw.totp_placeholder")}
                   value={totpInput}
                   onChange={(e) => applyTotpInput(e.target.value)}
                   onFocus={() => setTotpTyping(true)}
@@ -482,9 +490,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
                   spellCheck={false}
                 />
                 <p className={`hint pw-totp-hint${totpError ? " pw-totp-hint-error" : ""}`}>
-                  {totpError
-                    ? "That is not a TOTP secret or an otpauth:// link."
-                    : "Found under “can’t scan the QR code?” on the site’s 2FA setup page. Paste the text secret, or the whole otpauth:// link."}
+                  {totpError ? t("pw.totp_invalid") : t("pw.totp_hint")}
                 </p>
               </>
             )}
@@ -492,7 +498,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
         </label>
 
         <label className="field">
-          <span>Website</span>
+          <span>{t("pw.field_website")}</span>
           <input
             type="url"
             autoComplete="off"
@@ -505,7 +511,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
         )}
 
         <label className="field">
-          <span>Category</span>
+          <span>{t("pw.field_category")}</span>
           <select
             value={draft.category}
             onChange={(e) => setDraft({ ...draft, category: e.target.value })}
@@ -524,7 +530,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
         </label>
 
         <div className="field field-full">
-          <span>Custom fields</span>
+          <span>{t("pw.field_custom_fields")}</span>
           <div className="pw-custom-fields">
             {(draft.fields ?? []).map((field, i) => {
               const update = (change: Partial<CustomField>) =>
@@ -536,34 +542,42 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
                 <div key={i} className="pw-custom-field">
                   <input
                     type="text"
-                    aria-label="Field name"
-                    placeholder="Name"
+                    aria-label={t("pw.custom_name_label")}
+                    placeholder={t("pw.field_name")}
                     autoComplete="off"
                     value={field.name}
                     onChange={(e) => update({ name: e.target.value })}
                   />
                   <input
                     type={field.hidden && !passwordVisible ? "password" : "text"}
-                    aria-label={`Value of ${field.name || "this field"}`}
-                    placeholder="Value"
+                    aria-label={
+                      field.name
+                        ? t("pw.custom_value_label", { name: field.name })
+                        : t("pw.custom_value_label_unnamed")
+                    }
+                    placeholder={t("pw.custom_value")}
                     autoComplete="off"
                     spellCheck={false}
                     value={field.value}
                     onChange={(e) => update({ value: e.target.value })}
                   />
-                  <label className="pw-custom-hidden" title="Masked, and copied like a password">
+                  <label className="pw-custom-hidden" title={t("pw.custom_hidden_tip")}>
                     <input
                       type="checkbox"
                       checked={field.hidden}
                       onChange={(e) => update({ hidden: e.target.checked })}
                     />
-                    <span>Hidden</span>
+                    <span>{t("pw.custom_hidden")}</span>
                   </label>
                   <button
                     type="button"
                     className="pw-inline-btn danger"
-                    title="Remove field"
-                    aria-label={`Remove ${field.name || "this field"}`}
+                    title={t("pw.custom_remove")}
+                    aria-label={
+                      field.name
+                        ? t("pw.custom_remove_label", { name: field.name })
+                        : t("pw.custom_remove_label_unnamed")
+                    }
                     onClick={() =>
                       setDraft((d) => ({
                         ...d,
@@ -587,17 +601,14 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
               }
             >
               <IconPlus size={14} />
-              <span>Add a field</span>
+              <span>{t("pw.custom_add")}</span>
             </button>
           </div>
-          <p className="hint">
-            A customer number, a PIN, a security question. Hidden ones are masked like the
-            password.
-          </p>
+          <p className="hint">{t("pw.custom_hint")}</p>
         </div>
 
         <div className="field field-full">
-          <span>Attached files</span>
+          <span>{t("pw.field_attached_files")}</span>
           <div className="pw-attachments">
             {(draft.attachments ?? []).map((a) => (
               <div key={a.blob_id} className="pw-attachment-row">
@@ -607,7 +618,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
                 <button
                   type="button"
                   className="pw-inline-btn danger"
-                  title="Remove file"
+                  title={t("pw.attach_remove")}
                   onClick={() => removeAttachment(a.blob_id)}
                 >
                   <IconTrash size={13} />
@@ -621,17 +632,15 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
               onClick={() => void attachFiles()}
             >
               <IconPlus size={14} />
-              <span>{attachBusy ? "Encrypting…" : "Attach a file"}</span>
+              <span>{attachBusy ? t("pw.attach_encrypting") : t("pw.attach_add")}</span>
             </button>
           </div>
           {attachError && <p className="hint is-error">{attachError}</p>}
-          <p className="hint">
-            Encrypted and kept with this entry. They do not appear in Files.
-          </p>
+          <p className="hint">{t("pw.attach_hint")}</p>
         </div>
 
         <div className="field field-full">
-          <span>Protection</span>
+          <span>{t("pw.field_protection")}</span>
           <label className="pw-reauth-toggle">
             <input
               type="checkbox"
@@ -641,24 +650,21 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
               }
             />
             <span>
-              Ask for my security key
-              {platformStrings(os).hasBuiltIn ? ` or ${platformStrings(os).builtIn}` : ""} before
-              showing this entry
+              {platformStrings(os).hasBuiltIn
+                ? t("pw.reauth_option_builtin", { builtIn: platformStrings(os).builtIn })
+                : t("pw.reauth_option")}
             </span>
           </label>
-          <p className="hint">
-            Applies to revealing or copying the password, the one-time code, and opening attached
-            files. One confirmation covers the next few minutes.
-          </p>
+          <p className="hint">{t("pw.reauth_hint")}</p>
         </div>
 
         <label className="field field-full">
-          <span>Notes</span>
+          <span>{t("pw.field_notes")}</span>
           <textarea
             rows={type === "note" ? 10 : 6}
             autoComplete="off"
             placeholder={
-              type === "note" ? "The note itself" : "Anything else worth keeping with this entry"
+              type === "note" ? t("pw.placeholder_note") : t("pw.placeholder_notes")
             }
             value={draft.notes}
             onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
@@ -667,18 +673,18 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
       </div>
       <div className="pw-editor-actions">
         {!canSave && (
-          <span className="hint">Still needed: {missingForSave.join(" and ")}.</span>
+          <span className="hint">{stillNeeded}</span>
         )}
         <button type="button" className="secondary" onClick={handleCancel}>
-          Cancel
+          {t("common.cancel")}
         </button>
         <button
           type="button"
           disabled={!canSave}
-          title={!canSave ? `Still needed: ${missingForSave.join(" and ")}.` : undefined}
+          title={!canSave ? stillNeeded : undefined}
           onClick={handleSave}
         >
-          {creating ? "Add" : "Save"}
+          {creating ? t("pw.add") : t("pw.save")}
         </button>
       </div>
     </div>

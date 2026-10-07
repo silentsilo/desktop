@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { HistoryVersion, PasswordEntry } from "./types";
 
 /** How many versions to keep: a number, or as many as fit the budget. */
@@ -149,18 +150,18 @@ export function reusesOldPassword(entry: PasswordEntry): boolean {
 
 /** What a group of fields is called on screen. */
 function labelOf(key: string): string {
-  if (key === "password") return "Password";
-  if (key === "username") return "Username";
-  if (key === "service") return "Name";
-  if (key === "url") return "Website";
-  if (key === "notes") return "Notes";
-  if (key === "fields") return "Custom fields";
-  if (key === "type") return "Kind";
-  if (key.startsWith("totp_")) return "Two-factor code";
-  if (key.startsWith("card_")) return "Card";
-  if (key.startsWith("id_")) return "Identity";
-  if (key.startsWith("ssh_")) return "SSH key";
-  return "Other";
+  if (key === "password") return t("pw.field_password");
+  if (key === "username") return t("pw.changed_username");
+  if (key === "service") return t("pw.field_name");
+  if (key === "url") return t("pw.field_website");
+  if (key === "notes") return t("pw.field_notes");
+  if (key === "fields") return t("pw.field_custom_fields");
+  if (key === "type") return t("pw.changed_kind");
+  if (key.startsWith("totp_")) return t("pw.changed_two_factor");
+  if (key.startsWith("card_")) return t("pw.type_card");
+  if (key.startsWith("id_")) return t("pw.type_identity");
+  if (key.startsWith("ssh_")) return t("pw.type_ssh_key");
+  return t("pw.changed_other");
 }
 
 /** What changed from `older` to `newer`, as the labels a person reads. */

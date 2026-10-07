@@ -16,6 +16,7 @@ import { formatAge, formatDay } from "../../lib/format";
 import { isDue, lastDone } from "../../lib/siloMemory";
 import { platformStrings, type Os } from "../../lib/platformStrings";
 import type { SyncIndicator } from "../../layout/AppShell";
+import { t, useLocale } from "../../i18n";
 
 /** Where a row's action leads. */
 export type OverviewTarget = "backup" | "verify" | "recovery" | "keys" | "devices" | "activity";
@@ -101,6 +102,7 @@ export function OverviewPanel({
   onRenameSilo,
   onSwitchSilo,
 }: Props) {
+  useLocale();
   const platform = platformStrings(os);
   const [siloName, setSiloName] = useState(silo.name);
   const [targets, setTargets] = useState<BackupTargetView[] | null>(null);
@@ -136,77 +138,83 @@ export function OverviewPanel({
         <HardDrive size={16} />
         {silo.name}
       </h3>
-      <p>What keeps this silo safe. Anything marked needs a look.</p>
+      <p>{t("set.ov_intro")}</p>
 
       <ul className="key-list overview-list">
         {!sync.configured ? (
           <Row
             icon={<CloudUpload size={16} />}
-            title="Backup"
+            title={t("settings.backup")}
             tone="bad"
-            action="Set up backup"
+            action={t("set.ov_setup_backup")}
             onAction={() => onGo("backup")}
             busy={busy}
           >
-            Not backed up. This silo is only on this computer.
+            {t("set.ov_not_backed_up")}
           </Row>
         ) : sync.state === "error" ? (
           <Row
             icon={<CloudUpload size={16} />}
-            title="Backup"
+            title={t("settings.backup")}
             tone="bad"
-            action="Open Backup"
+            action={t("set.ov_open_backup")}
             onAction={() => onGo("backup")}
             busy={busy}
           >
-            Sync failed{sync.lastError ? `: ${sync.lastError}` : "."}
+            {sync.lastError
+              ? t("set.ov_sync_failed_reason", { reason: sync.lastError })
+              : t("set.ov_sync_failed")}
           </Row>
         ) : (
           <Row
             icon={<CloudUpload size={16} />}
-            title="Backup"
+            title={t("settings.backup")}
             tone="ok"
-            action="Open Backup"
+            action={t("set.ov_open_backup")}
             onAction={() => onGo("backup")}
             busy={busy}
           >
-            {sync.lastSyncAt ? `Synced ${formatAge(sync.lastSyncAt)}.` : "Backup storage connected."}
+            {sync.lastSyncAt
+              ? t("set.ov_synced", { age: formatAge(sync.lastSyncAt) })
+              : t("set.ov_storage_connected")}
           </Row>
         )}
 
         {sync.configured && targets && (
           <Row
             icon={<Copy size={16} />}
-            title="Copies"
+            title={t("set.ov_copies")}
             tone={current >= 3 ? "ok" : "warn"}
-            action={current >= 3 ? "Open" : "Add a copy"}
+            action={current >= 3 ? t("set.ov_open") : t("set.ov_add_copy")}
             onAction={() => onGo("backup")}
             busy={busy}
           >
-            {current} of {copies} {copies === 1 ? "copy" : "copies"} up to date.
-            {current < 3 ? " Aim for three, with one somewhere else." : ""}
+            {t("set.ov_copies_current", { current, count: copies })}
+            {current < 3 ? ` ${t("set.ov_copies_aim")}` : ""}
           </Row>
         )}
 
         <Row
           icon={<LifeBuoy size={16} />}
-          title="Recovery code"
+          title={t("settings.recovery")}
           tone={recovery.enabled ? "ok" : "bad"}
-          action={recovery.enabled ? "Open" : "Create one"}
+          action={recovery.enabled ? t("set.ov_open") : t("set.ov_create_one")}
           onAction={() => onGo("recovery")}
           busy={busy}
         >
           {recovery.enabled
-            ? `Set${recovery.created_at ? `, created ${formatDay(recovery.created_at)}` : ""}.`
-            : "None yet. Losing every key would mean losing the silo."}
+            ? recovery.created_at
+              ? t("set.ov_recovery_set_on", { date: formatDay(recovery.created_at) })
+              : t("set.ov_recovery_set")
+            : t("set.ov_recovery_none")}
         </Row>
 
         {recovery.enabled && (
           <Row
             icon={<Printer size={16} />}
-            title="Emergency kit"
+            title={t("set.ov_kit")}
             tone={printed ? "ok" : "neutral"}
-            action={printed ? "Print again" : "Print it"}
+            action={printed ? t("set.ov_print_again") : t("set.ov_print")}
             onAction={() => onGo("recovery")}
             busy={busy}
           >
@@ -214,51 +222,51 @@ export function OverviewPanel({
                 printed elsewhere or a code written on other paper: this is
                 a suggestion, not a problem. */}
             {printed
-              ? `Printed ${formatDay(Math.floor(printed / 1000))} on this computer.`
-              : "No kit printed on this computer yet. It is one sheet with the steps to get back in."}
+              ? t("set.ov_kit_printed", { date: formatDay(Math.floor(printed / 1000)) })
+              : t("set.ov_kit_none")}
           </Row>
         )}
 
         <Row
           icon={<KeyRound size={16} />}
-          title="A key you can carry"
+          title={t("set.ov_portable")}
           tone={hasPortableKey ? "ok" : "warn"}
-          action={hasPortableKey ? "Open" : "Add a key"}
+          action={hasPortableKey ? t("set.ov_open") : t("set.ov_add_key")}
           onAction={() => onGo("keys")}
           busy={busy}
         >
           {hasPortableKey
-            ? "A security key opens this silo from any computer."
-            : `Only ${platform.builtIn} opens it, and that works only on this computer.`}
+            ? t("set.ov_portable_yes")
+            : t("set.ov_portable_no", { builtin: platform.builtIn })}
         </Row>
 
         {sync.configured && (
           <Row
             icon={<SearchCheck size={16} />}
-            title="Last test"
+            title={t("set.ov_last_test")}
             tone={isDue(tested, REMIND_AFTER_DAYS) ? "warn" : "ok"}
-            action="Test backup"
+            action={t("settings.verify")}
             onAction={() => onGo("verify")}
             busy={busy}
           >
             {tested
-              ? `Tested ${formatDay(Math.floor(tested / 1000))} on this computer.`
-              : "Never tested from this computer."}
+              ? t("set.ov_tested", { date: formatDay(Math.floor(tested / 1000)) })
+              : t("set.ov_never_tested")}
           </Row>
         )}
         <Row
           icon={<ScrollText size={16} />}
-          title="Activity"
+          title={t("nav.activity")}
           tone="neutral"
-          action={auditLog?.enabled || auditLog?.organisation ? "Open" : "Turn on"}
+          action={auditLog?.enabled || auditLog?.organisation ? t("set.ov_open") : t("set.ov_turn_on")}
           onAction={() => onGo(auditLog?.enabled || auditLog?.organisation ? "activity" : "devices")}
           busy={busy}
         >
           {auditLog?.organisation
-            ? "Kept by your organisation."
+            ? t("set.ov_activity_org")
             : auditLog?.enabled
-              ? "On."
-              : "Off."}
+              ? t("set.ov_activity_on")
+              : t("set.ov_activity_off")}
         </Row>
       </ul>
 
@@ -269,23 +277,20 @@ export function OverviewPanel({
           value={siloName}
           disabled={busy}
           onChange={(e) => setSiloName(e.target.value)}
-          aria-label="Silo name"
+          aria-label={t("set.ov_silo_name")}
         />
         <button
           type="button"
           disabled={busy || siloName.trim() === silo.name || !siloName.trim()}
           onClick={() => onRenameSilo(siloName.trim())}
         >
-          Rename
+          {t("set.rename")}
         </button>
         <button type="button" className="secondary" disabled={busy} onClick={onSwitchSilo}>
-          Switch silo
+          {t("set.ov_switch")}
         </button>
       </div>
-      <p className="hint">
-        Renaming changes the label only. The folder keeps its name, so backups and shortcuts
-        pointing at it keep working.
-      </p>
+      <p className="hint">{t("set.ov_rename_hint")}</p>
     </div>
   );
 }

@@ -4,12 +4,13 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import { AuthShell } from "../../layout/AuthShell";
 import type { Os } from "../../lib/platformStrings";
 import { AppSettingsSection, useUpdater, type AppSectionId } from "./AppSettings";
+import { t, useLocale, type Key } from "../../i18n";
 
-const TABS: { id: AppSectionId; label: string }[] = [
-  { id: "general", label: "General" },
-  { id: "browser", label: "Browser extension" },
-  { id: "ssh", label: "SSH agent" },
-  { id: "updates", label: "Updates and about" },
+const TABS: { id: AppSectionId; label: Key }[] = [
+  { id: "general", label: "settings.general" },
+  { id: "browser", label: "settings.browser" },
+  { id: "ssh", label: "settings.ssh" },
+  { id: "updates", label: "settings.updates" },
 ];
 
 type Props = {
@@ -37,14 +38,15 @@ export function AppSettingsView({
   onClose,
   onUpdateFailedAfterLock,
 }: Props) {
+  useLocale();
   const [section, setSection] = useState<AppSectionId>(initial);
   const updater = useUpdater(backgroundUpdate, onUpdateFailedAfterLock);
 
   return (
-    <AuthShell subtitle="App settings, the same for every silo">
+    <AuthShell subtitle={t("set.app_subtitle")}>
       <section className="card auth-card app-settings-card">
-        <h2>App settings</h2>
-        <p className="hint">The same for every silo on this computer.</p>
+        <h2>{t("set.app_title")}</h2>
+        <p className="hint">{t("set.app_hint")}</p>
         <div className="app-settings-tabs" role="tablist">
           {TABS.map((tab) => (
             <button
@@ -55,9 +57,11 @@ export function AppSettingsView({
               className={section === tab.id ? "" : "secondary"}
               onClick={() => setSection(tab.id)}
             >
-              {tab.label}
+              {t(tab.label)}
               {tab.id === "updates" && updater.state.phase === "available" && (
-                <span className="tab-badge tab-badge-update rail-update-badge">New</span>
+                <span className="tab-badge tab-badge-update rail-update-badge">
+                  {t("settings.update_badge")}
+                </span>
               )}
             </button>
           ))}
@@ -76,7 +80,7 @@ export function AppSettingsView({
         <div className="auth-alt">
           <button type="button" className="link" onClick={onClose}>
             <ArrowLeft size={14} />
-            Back
+            {t("unlock.back")}
           </button>
         </div>
       </section>

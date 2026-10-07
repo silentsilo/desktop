@@ -7,6 +7,7 @@ import {
   replaceGroup,
   toGroups,
 } from "../lib/recoveryCode";
+import { t, useLocale } from "../i18n";
 
 type Props = {
   value: string;
@@ -21,6 +22,7 @@ type Props = {
  * moves on by itself and a code pasted into any box fills the rest.
  */
 export function RecoveryCodeInput({ value, onChange, disabled, autoFocus }: Props) {
+  useLocale();
   // State rather than a slice of `value`: a code rebuilt from one string
   // cannot say which box an empty one is.
   const [groups, setGroups] = useState(() => toGroups(value));
@@ -78,7 +80,7 @@ export function RecoveryCodeInput({ value, onChange, disabled, autoFocus }: Prop
   };
 
   return (
-    <div className="recovery-entry" role="group" aria-label="Recovery code">
+    <div className="recovery-entry" role="group" aria-label={t("settings.recovery")}>
       {groups.map((group, index) => (
         <input
           key={index}
@@ -98,7 +100,7 @@ export function RecoveryCodeInput({ value, onChange, disabled, autoFocus }: Prop
           autoCapitalize="characters"
           disabled={disabled}
           autoFocus={autoFocus && index === 0}
-          aria-label={`Group ${index + 1} of ${GROUP_COUNT}`}
+          aria-label={t("start.code_group", { n: index + 1, total: GROUP_COUNT })}
           placeholder="XXXX"
         />
       ))}

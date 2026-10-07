@@ -3,6 +3,7 @@ import { osOf, platformStrings } from "../lib/platformStrings";
 import { AlertTriangle, ArrowLeft, Building2, Fingerprint, KeyRound } from "lucide-react";
 import type { Authenticator, Bootstrap } from "../lib/types";
 import { AuthShell } from "../layout/AuthShell";
+import { t, tx, useLocale } from "../i18n";
 
 type Props = {
   bootstrap: Bootstrap;
@@ -23,6 +24,7 @@ export function EnrollView({
   onDiscard,
   onBack,
 }: Props) {
+  useLocale();
   const platform = platformStrings(osOf(bootstrap));
   /// Off unless someone deliberately says otherwise, and only offered here.
   /// A key its holder cannot remove has to be part of what the silo was set
@@ -32,21 +34,23 @@ export function EnrollView({
 
   return (
     <AuthShell
-      subtitle={`Choose what unlocks ${bootstrap.silo?.name ?? "this silo"}.`}
+      subtitle={
+        bootstrap.silo?.name
+          ? t("start.enroll_subtitle", { name: bootstrap.silo.name })
+          : t("start.enroll_subtitle_this")
+      }
     >
       <section className="card auth-card">
-        <h2>Set up unlocking</h2>
+        <h2>{t("start.enroll_title")}</h2>
         <p className="hint">
-          A security key (YubiKey, Nitrokey, SoloKeys) works on any computer.
-          {platform.hasBuiltIn &&
-            ` ${platform.builtIn} is quicker but works only on this one. You can add the other later in Settings.`}
+          {t("start.enroll_security_key")}
+          {platform.hasBuiltIn && ` ${t("start.enroll_built_in", { builtIn: platform.builtIn })}`}
         </p>
         {bootstrap.fido_available ? (
           <>
             <p className="hint">
-              {platform.osName} will show its own prompt.
-              {platform.offersPhone &&
-                " It may also offer a phone through a QR code. Recent Android phones work; others are refused with a reason."}
+              {t("start.enroll_os_prompt", { os: platform.osName })}
+              {platform.offersPhone && ` ${t("start.enroll_phone")}`}
             </p>
             {!bootstrap.platform_authenticator && (
               <p className="hint">{platform.builtInSetupHint}</p>
@@ -62,17 +66,10 @@ export function EnrollView({
         <div className="consequence">
           <h3>
             <AlertTriangle size={15} />
-            What happens if you lose it
+            {t("start.enroll_lose_title")}
           </h3>
-          <p>
-            If you lose what you choose here, only a recovery code gets you
-            back in. Without one, the files are lost for good. We keep no copy
-            of your key and cannot open the silo for you.
-          </p>
-          <p>
-            Make a recovery code in Settings as soon as you are in, and keep it
-            where you keep your passport.
-          </p>
+          <p>{t("start.enroll_lose_body")}</p>
+          <p>{t("start.enroll_lose_code")}</p>
         </div>
         {/* The one moment this can be chosen, so it is asked here rather than
             offered as a setting later. Unticked is the ordinary case and the
@@ -85,19 +82,14 @@ export function EnrollView({
             onChange={(e) => setOrganisation(e.target.checked)}
           />
           <span>
-            <Building2 size={14} aria-hidden /> This silo is administered by an organisation
+            <Building2 size={14} aria-hidden /> {t("start.enroll_org")}
             {/* The details show once the box is ticked. Almost every silo is
                 personal, and three sentences about escrow on every first run
                 made the screen longer than a short window, for a choice most
                 people rightly skip. The one-line label is enough to find; the
                 consequences appear before the enrolment they apply to. */}
             {organisation && (
-              <span className="hint">
-                The key you enrol next belongs to the organisation. The person using this computer
-                cannot remove it, or change the recovery code without it. Enrol a second
-                organisation key later in Settings: if the only one is lost, nobody can administer
-                the silo. This cannot be turned on later.
-              </span>
+              <span className="hint">{t("start.enroll_org_detail")}</span>
             )}
           </span>
         </label>
@@ -105,7 +97,7 @@ export function EnrollView({
         <div className="actions">
           {!bootstrap.fido_available && (
             <button type="button" className="secondary" disabled={busy} onClick={onRetry}>
-              {busy ? "Checking…" : "Retry detection"}
+              {busy ? t("start.checking") : t("start.enroll_retry")}
             </button>
           )}
           <button
@@ -114,7 +106,7 @@ export function EnrollView({
             onClick={() => onEnroll("security-key", organisation)}
           >
             <KeyRound size={15} />
-            {busy ? "Waiting…" : "Use a security key"}
+            {busy ? t("start.waiting") : t("start.enroll_use_key")}
           </button>
           {/* Hidden rather than disabled once the organisation box is
               ticked: Hello is sealed to this machine, and an organisation
@@ -128,22 +120,24 @@ export function EnrollView({
               onClick={() => onEnroll("this-device", false)}
             >
               <Fingerprint size={15} />
-              Use {platform.builtIn}
+              {t("start.enroll_use_built_in", { builtIn: platform.builtIn })}
             </button>
           )}
         </div>
         <div className="auth-alternatives">
           <button type="button" className="secondary" disabled={busy} onClick={onBack}>
             <ArrowLeft size={15} />
-            Switch silo
+            {t("start.switch_silo")}
           </button>
         </div>
         <p className="hint danger-hint">
-          Not setting this one up?{" "}
-          <button type="button" className="link" disabled={busy} onClick={onDiscard}>
-            Remove it from the list
-          </button>
-          . The folder stays on disk.
+          {tx("start.enroll_discard", {
+            link: (
+              <button type="button" className="link" disabled={busy} onClick={onDiscard}>
+                {t("start.enroll_discard_link")}
+              </button>
+            ),
+          })}
         </p>
       </section>
     </AuthShell>

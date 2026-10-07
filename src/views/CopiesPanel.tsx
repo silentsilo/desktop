@@ -33,6 +33,7 @@ import {
   type SeedProgress,
 } from "../lib/types";
 import { CLOUD_NAME } from "../lib/cloud";
+import { t, useLocale } from "../i18n";
 
 type Props = {
   busy: boolean;
@@ -53,6 +54,7 @@ type Props = {
  * afternoon on the network.
  */
 export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
+  useLocale();
   const [targets, setTargets] = useState<BackupTargetView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -121,7 +123,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
   const add = async () => {
     const missing = missingStoreFields(draft, false);
     if (missing.length > 0) {
-      setError(`Still needed: ${missing.join(", ")}.`);
+      setError(t("backup.still_needed", { fields: missing.join(", ") }));
       return;
     }
     setError(null);
@@ -193,16 +195,14 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
     try {
       const copied = await invoke<number>("backup_target_seed", { from: list[0]?.id ?? "", to: id });
       setNote(
-        copied === 0
-          ? "Already had everything."
-          : `Copied ${copied} item${copied === 1 ? "" : "s"}.`,
+        copied === 0 ? t("backup.copies_already") : t("backup.copies_copied", { count: copied }),
       );
       await refresh();
     } catch (e) {
       // Compared raw rather than after formatAppError, which rewrites
       // anything containing "cancelled" into a FIDO-prompt message.
       if (String(e) === "cancelled") {
-        setNote("Stopped. What was copied stays there. Run it again to carry on.");
+        setNote(t("backup.copies_stopped"));
         await refresh();
       } else {
         setError(formatAppError(e));
@@ -233,7 +233,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
     try {
       const signIn = await invoke<CloudSignIn>("cloud_sign_in", { kind });
       await invoke("backup_target_reconnect", { id, signIn: signIn.id });
-      setNote(`Signed in to ${CLOUD_NAME[kind]} again.`);
+      setNote(t("backup.signed_in_again", { provider: CLOUD_NAME[kind] }));
       await refresh();
       onActivity();
     } catch (e) {
@@ -269,17 +269,19 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
     <div className="panel-section">
       <h3>
         <Copy size={16} />
-        Copies
+        {t("backup.copies_title")}
       </h3>
       <p>
-        Aim for three copies on two kinds of storage, with one somewhere else. This silo has{" "}
-        {current} of {places}{" "}
-        {places === 1 ? "copy" : "copies"} up to date, across {media}{" "}
-        {media === 1 ? "kind" : "kinds"} of storage.
+        {t("backup.copies_aim")}{" "}
+        {t("backup.copies_has", {
+          current,
+          count: places,
+          kinds: t("backup.copies_kinds", { count: media }),
+        })}
         {/* Only storage reached over the network is known to be elsewhere. A
             folder may be an external drive or a spot on the same disk. */}
-        {list.some((t) => t.config.kind !== "folder")
-          ? " At least one of them is off this computer."
+        {list.some((target) => target.config.kind !== "folder")
+          ? ` ${t("backup.copies_offsite")}`
           : ""}
       </p>
 
@@ -289,11 +291,9 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
             <Laptop size={16} />
           </span>
           <div className="protected-row-text">
-            <strong>This computer</strong>
+            <strong>{t("backup.this_computer")}</strong>
             <span className="hint">
-              {fullCopy
-                ? "Holds every file, so it counts as a copy."
-                : "Holds the file list and downloads each file when you open it, so it does not count as a copy."}
+              {fullCopy ? t("backup.this_computer_full") : t("backup.this_computer_index")}
             </span>
           </div>
         </li>
@@ -305,8 +305,8 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
             seeding === target.id
               ? {
                   health: "behind" as const,
-                  headline: "Being filled from the main copy",
-                  detail: "It counts as up to date once the fill finishes.",
+                  headline: t("backup.copy_filling"),
+                  detail: t("backup.copy_filling_detail"),
                 }
               : copyState(target, now);
           return (
@@ -317,8 +317,10 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
               <div className="protected-row-text">
                 <strong>
                   {target.label || whereIs(target.config)}
-                  {target.primary && <span className="copy-tag">main</span>}
-                  {target.archive && <span className="copy-tag">never deletes</span>}
+                  {target.primary && <span className="copy-tag">{t("backup.tag_main")}</span>}
+                  {target.archive && (
+                    <span className="copy-tag">{t("backup.tag_never_deletes")}</span>
+                  )}
                 </strong>
                 {isCloudView(target.config) && (
                   <span className="hint">{target.config.account}</span>
@@ -326,10 +328,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                 <span className={`hint copy-state is-${state.health}`}>{state.headline}</span>
                 <span className="hint">{state.detail}</span>
                 {target.archive && (
-                  <span className="hint">
-                    SilentSilo does not delete anything here, so it keeps growing. Old keys and
-                    recovery codes stay in it too.
-                  </span>
+                  <span className="hint">{t("backup.archive_hint")}</span>
                 )}
               </div>
               {/* The main copy is the one the card above edits. Removing it
@@ -346,10 +345,10 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                       className="secondary"
                       disabled={busy || working || seeding !== null}
                       onClick={() => void reconnect(target.id, target.config.kind as CloudKind)}
-                      title="Sign in again, with the same account"
+                      title={t("backup.sign_in_again_title")}
                     >
                       <LogIn size={14} />
-                      Sign in again
+                      {t("backup.sign_in_again")}
                     </button>
                   )}
                   {!target.primary && (
@@ -359,7 +358,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                         className="secondary"
                         disabled={busy || working || seeding !== null}
                         onClick={() => void seed(target.id)}
-                        title="Copy everything from the main copy into this one"
+                        title={t("backup.fill_title")}
                       >
                         {seeding === target.id ? (
                           <span className="spinner" aria-hidden />
@@ -369,8 +368,8 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                         {seeding === target.id
                           ? seedProgress
                             ? seedLabel(seedProgress)
-                            : "Copying…"
-                          : "Fill from the main copy"}
+                            : t("backup.copying")
+                          : t("backup.fill")}
                       </button>
                       {seeding === target.id && (
                         <button
@@ -378,10 +377,10 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                           className="secondary"
                           disabled={seedCancelling}
                           onClick={cancelSeed}
-                          title="Stop copying. What already arrived stays, and running it again carries on."
+                          title={t("backup.fill_stop_title")}
                         >
                           <X size={14} />
-                          {seedCancelling ? "Stopping…" : "Stop"}
+                          {seedCancelling ? t("backup.stopping") : t("backup.stop")}
                         </button>
                       )}
                       <button
@@ -389,10 +388,10 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                         className="secondary"
                         disabled={busy || working || seeding !== null}
                         onClick={() => setConfirmRemove(target)}
-                        title="Stop backing up to this copy"
+                        title={t("backup.remove_title")}
                       >
                         <Trash2 size={14} />
-                        Remove
+                        {t("backup.remove")}
                       </button>
                     </>
                   )}
@@ -425,20 +424,17 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
       )}
 
       {list.length > 1 && (
-        <p className="hint">
-          Filling from the main copy goes straight from one storage to the other, for example onto
-          an external disk over a cable. You can stop it at any time and run it again to carry on.
-        </p>
+        <p className="hint">{t("backup.fill_hint")}</p>
       )}
 
       {adding ? (
         <div className="copies-add">
           <label className="field">
-            <span>What to call it</span>
+            <span>{t("backup.copy_name")}</span>
             <input
               value={label}
               disabled={working}
-              placeholder="External disk, office"
+              placeholder={t("backup.copy_name_placeholder")}
               onChange={(e) => setLabel(e.target.value)}
             />
           </label>
@@ -456,12 +452,8 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
               onChange={(e) => setArchive(e.target.checked)}
             />
             <span>
-              Never-delete copy
-              <span className="hint">
-                For a copy that should survive this computer being taken over. SilentSilo does
-                not delete anything here, so it keeps growing and keeps old keys and recovery
-                codes. Use storage with object lock, or sign-in details that cannot delete.
-              </span>
+              {t("backup.never_delete")}
+              <span className="hint">{t("backup.never_delete_hint")}</span>
             </span>
           </label>
 
@@ -471,14 +463,11 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
             </p>
           )}
 
-          <p className="hint">
-            SilentSilo writes a test file first, so storage it cannot write to is caught before
-            it is added.
-          </p>
+          <p className="hint">{t("backup.test_file_hint")}</p>
           <div className="actions">
             <button type="button" disabled={working} onClick={() => void add()}>
               {working ? <span className="spinner" aria-hidden /> : <Plus size={15} />}
-              {working ? "Checking…" : "Add this copy"}
+              {working ? t("backup.checking") : t("backup.add_copy")}
             </button>
             <button
               type="button"
@@ -491,7 +480,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
               }}
             >
               <X size={15} />
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         </div>
@@ -499,16 +488,18 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
         <div className="actions">
           <button type="button" disabled={busy || working} onClick={() => setAdding(true)}>
             <Plus size={15} />
-            Add another copy
+            {t("backup.add_another")}
           </button>
         </div>
       )}
 
       {confirmRemove && (
         <ConfirmDialog
-          title="Remove this copy?"
-          message={`“${confirmRemove.label || whereIs(confirmRemove.config)}” stops receiving this silo. Nothing there is deleted, and adding it back later carries on from where it stopped.`}
-          confirmLabel="Remove"
+          title={t("backup.remove_confirm_title")}
+          message={t("backup.remove_confirm_body", {
+            name: confirmRemove.label || whereIs(confirmRemove.config),
+          })}
+          confirmLabel={t("backup.remove")}
           danger
           busy={working}
           onConfirm={() => {

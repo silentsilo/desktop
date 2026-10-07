@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useModal } from "../hooks/useModal";
+import { t, useLocale } from "../i18n";
 import { IconFolder } from "../ui/Icons";
 import { formatAppError } from "../lib/errors";
 import { canMoveTo, type MoveDestination } from "../lib/moves";
@@ -32,6 +33,7 @@ export function MoveToDialog({
   onCancel,
   load = loadFolders,
 }: Props) {
+  useLocale();
   const cardRef = useModal(onCancel);
   const [folders, setFolders] = useState<FolderEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +61,10 @@ export function MoveToDialog({
       canMoveTo(moving, { id: folder.id, path: folder.path }, currentPath),
     [moving, currentPath],
   );
-  const title = moving.length === 1 ? `Move "${moving[0]!.name}" to…` : `Move ${moving.length} items to…`;
+  const title =
+    moving.length === 1
+      ? t("files.move_named_to", { name: moving[0]!.name })
+      : t("files.move_count_to", { count: moving.length });
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
@@ -74,9 +79,9 @@ export function MoveToDialog({
         <h3 className="modal-title">{title}</h3>
         <div className="modal-body">
           {error && <p className="hint is-error">{error}</p>}
-          {!folders && !error && <p className="hint">Reading the folders…</p>}
+          {!folders && !error && <p className="hint">{t("files.reading_folders")}</p>}
           {folders && (
-            <ul className="move-to-list" role="listbox" aria-label="Folders">
+            <ul className="move-to-list" role="listbox" aria-label={t("files.folders")}>
               {folders.map((folder) => {
                 const ok = allowed(folder);
                 return (
@@ -105,7 +110,7 @@ export function MoveToDialog({
         </div>
         <div className="modal-actions">
           <button type="button" className="secondary" onClick={onCancel}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -114,7 +119,7 @@ export function MoveToDialog({
               chosen && onPick({ id: chosen.id, path: chosen.path, label: labelOf(chosen) })
             }
           >
-            Move here
+            {t("files.move_here")}
           </button>
         </div>
       </div>

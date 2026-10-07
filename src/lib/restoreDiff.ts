@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { formatBytes } from "./format";
 
 /**
@@ -15,8 +16,8 @@ import { formatBytes } from "./format";
  */
 export function describeRestoreDifference(line: string): string {
   const sides: [string, string][] = [
-    ["only here: ", "Only in this silo"],
-    ["only in the restore: ", "Only in the restore"],
+    ["only here: ", t("files.diff_only_here")],
+    ["only in the restore: ", t("files.diff_only_restore")],
   ];
   for (const [prefix, side] of sides) {
     if (line.startsWith(prefix)) {
@@ -35,26 +36,30 @@ function describeDigestLine(rest: string, side: string): string | null {
     // The digest writes "folderpath::name"; the screen writes a plain path.
     const [dir = "", name = ""] = where!.split("::");
     const path = dir === "/" ? `/${name}` : `${dir}/${name}`;
-    return `${side}: the file ${path} (${formatBytes(Number(size))}${
-      deleted === "true" ? ", in the trash" : ""
-    }).`;
+    return t(deleted === "true" ? "files.diff_file_trashed" : "files.diff_file", {
+      side,
+      path,
+      size: formatBytes(Number(size)),
+    });
   }
 
   const folder = rest.match(/^folder (.+) deleted=(true|false) fav=[01]$/);
   if (folder) {
     const [, path, deleted] = folder;
-    return `${side}: the folder ${path}${deleted === "true" ? " (in the trash)" : ""}.`;
+    return t(deleted === "true" ? "files.diff_folder_trashed" : "files.diff_folder", {
+      side,
+      path: path!,
+    });
   }
 
   const password = rest.match(/^password (\S+)$/);
   if (password) {
-    return `${side}: a password entry (id ${password[1]!.slice(0, 8)}…).`;
+    return t("files.diff_password", { side, id: password[1]!.slice(0, 8) });
   }
 
   const ops = rest.match(/^ops count=(\d+)$/);
   if (ops) {
-    const count = Number(ops[1]);
-    return `${side}: ${count} change${count === 1 ? "" : "s"}. The two lists of changes are different lengths.`;
+    return t("files.diff_ops", { side, count: Number(ops[1]) });
   }
 
   return null;

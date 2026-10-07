@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { CustomField, PasswordAttachment, PasswordEntry } from "./types";
 import { parseTotpInput } from "./totp";
 import { appendNotes, noExtras, UNMATCHED_NOTE, type ImportExtras } from "./passwordImport";
@@ -62,16 +63,14 @@ export function bitwardenJsonToEntries(
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new JsonImportError("That file is not valid JSON.");
+    throw new JsonImportError(t("pw.json_invalid"));
   }
 
   if (parsed.encrypted) {
-    throw new JsonImportError(
-      "This is a password-protected Bitwarden export. Export again with the unencrypted JSON option, import it, then delete the file.",
-    );
+    throw new JsonImportError(t("pw.json_encrypted"));
   }
   if (!Array.isArray(parsed.items)) {
-    throw new JsonImportError("This JSON file does not look like a Bitwarden export.");
+    throw new JsonImportError(t("pw.json_not_bitwarden"));
   }
 
   // Folder names become categories, which is the closest idea we have.

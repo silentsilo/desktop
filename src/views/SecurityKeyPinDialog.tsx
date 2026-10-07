@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { KeyRound } from "lucide-react";
 import { useEventSubscription } from "../hooks/useEventSubscription";
 import { useModal } from "../hooks/useModal";
+import { t, useLocale } from "../i18n";
 
 /** What the key asked, as core sends it. */
 type PinAsk = { kind: "enter" | "wrong"; retries: number | null };
@@ -14,6 +15,7 @@ type PinAsk = { kind: "enter" | "wrong"; retries: number | null };
  * nowhere else; nothing here keeps it.
  */
 export function SecurityKeyPinDialog() {
+  useLocale();
   const [ask, setAsk] = useState<PinAsk | null>(null);
   const [pin, setPin] = useState("");
 
@@ -51,8 +53,8 @@ export function SecurityKeyPinDialog() {
     ask.retries === null
       ? ""
       : ask.retries === 1
-        ? " One try left before the key blocks its PIN."
-        : ` ${ask.retries} tries left.`;
+        ? ` ${t("dlg.pin_last_try")}`
+        : ` ${t("dlg.pin_tries_left", { count: ask.retries })}`;
 
   return (
     <div className="modal-overlay modal-overlay-top">
@@ -61,14 +63,14 @@ export function SecurityKeyPinDialog() {
         className="modal-card"
         role="alertdialog"
         aria-modal="true"
-        aria-label="Security key PIN"
+        aria-label={t("dlg.pin_title")}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-title-row">
           <span className="modal-title-icon" aria-hidden>
             <KeyRound size={18} />
           </span>
-          <h3 className="modal-title">Security key PIN</h3>
+          <h3 className="modal-title">{t("dlg.pin_title")}</h3>
         </div>
         <form
           onSubmit={(e) => {
@@ -79,24 +81,24 @@ export function SecurityKeyPinDialog() {
           <div className="modal-body">
             <p>
               {ask.kind === "wrong"
-                ? `That PIN was wrong.${left}`
-                : `Enter the PIN of your security key, then touch it when it blinks.${left}`}
+                ? `${t("dlg.pin_wrong")}${left}`
+                : `${t("dlg.pin_enter")}${left}`}
             </p>
             <input
               type="password"
               autoFocus
               autoComplete="off"
-              aria-label="Security key PIN"
+              aria-label={t("dlg.pin_title")}
               value={pin}
               onChange={(e) => setPin(e.target.value)}
             />
           </div>
           <div className="modal-actions">
             <button type="button" className="secondary" onClick={() => answer(null)}>
-              Cancel
+              {t("common.cancel")}
             </button>
             <button type="submit" disabled={!pin}>
-              Continue
+              {t("dlg.continue")}
             </button>
           </div>
         </form>

@@ -6,6 +6,7 @@
 /// running pushes nothing either. Reading all three as "up to date" is what
 /// this file exists to prevent.
 
+import { t } from "../i18n";
 import { formatBytes } from "./format";
 
 /// How one target fared. The pass reports this per target because a target
@@ -69,22 +70,25 @@ export function backupHeadline(
   unsyncedBytes: number,
   lastSyncAt: number | null,
 ): string {
-  const changes = (n: number) => `${n} change${n === 1 ? "" : "s"}`;
   if (unsyncedCount > 0) {
-    const one = unsyncedCount === 1;
-    const files = `${unsyncedCount} file${one ? "" : "s"}`;
-    const size = unsyncedBytes > 0 ? ` (${formatBytes(unsyncedBytes)})` : "";
+    const count = t("app.sync_n_files", { count: unsyncedCount });
+    const files =
+      unsyncedBytes > 0
+        ? t("app.sync_files_size", { files: count, size: formatBytes(unsyncedBytes) })
+        : count;
     // One phrase for pending work everywhere it is shown: the sidebar, the
     // status bar and this card used to say it three different ways.
-    const ops = pendingOps > 0 ? ` and ${changes(pendingOps)}` : "";
-    return `${files}${size}${ops} waiting to sync. The next sync retries ${one && !ops ? "it" : "them"}.`;
+    return pendingOps > 0
+      ? t("app.headline_files_changes", {
+          files,
+          changes: t("app.sync_n_changes", { count: pendingOps }),
+        })
+      : t("app.headline_files", { count: unsyncedCount, files });
   }
   if (pendingOps > 0) {
-    return `${changes(pendingOps)} waiting to sync.`;
+    return t("app.headline_changes", { count: pendingOps });
   }
-  return lastSyncAt
-    ? "Everything is synced."
-    : "Connected. The first sync runs in the background.";
+  return lastSyncAt ? t("app.headline_synced") : t("app.headline_connected");
 }
 
 export type Status =
@@ -96,46 +100,40 @@ export type Status =
 /// One line summarising what a pass actually did, rather than a bare "done".
 export function describeSync(r: SyncReport): string {
   if (r.needs_rejoin) {
-    return "The encryption key of this silo was replaced on another device, and this computer's key was not kept. Remove the silo here, then choose Set up from backup storage and use a current key or the recovery code.";
+    return t("app.sync_needs_rejoin");
   }
   // Never the rejoin wording: rejoining reads the same content key, so it
   // would fail on the same object and leave the user going round a loop.
   if (r.key_material_replaced) {
-    return "The key file in your backup storage does not match this silo, although the changes beside it do. That file was replaced or put back from an older copy. Nothing was sent. Restore it from another copy of the backup storage, or connect backup storage that has the right one.";
+    return t("app.sync_key_replaced");
   }
   if (r.needs_rebuild) {
-    return "This computer is too far behind to catch up. It has to be set up again from the current state.";
+    return t("app.sync_needs_rebuild");
   }
   const parts: string[] = [];
-  if (r.ops_pushed > 0) parts.push(`${r.ops_pushed} change${r.ops_pushed === 1 ? "" : "s"} sent`);
-  if (r.ops_applied > 0) parts.push(`${r.ops_applied} received`);
-  if (r.blobs_uploaded > 0)
-    parts.push(`${r.blobs_uploaded} file${r.blobs_uploaded === 1 ? "" : "s"} backed up`);
-  if (r.blobs_failed > 0) parts.push(`${r.blobs_failed} failed, will retry`);
+  if (r.ops_pushed > 0) parts.push(t("app.sync_sent", { count: r.ops_pushed }));
+  if (r.ops_applied > 0) parts.push(t("app.sync_received", { count: r.ops_applied }));
+  if (r.blobs_uploaded > 0) parts.push(t("app.sync_backed_up", { count: r.blobs_uploaded }));
+  if (r.blobs_failed > 0) parts.push(t("app.sync_failed_retry", { count: r.blobs_failed }));
   const restored = r.blobs_restored ?? 0;
-  if (restored > 0)
-    parts.push(`${restored} missing file${restored === 1 ? "" : "s"} put back in backup storage`);
+  if (restored > 0) parts.push(t("app.sync_restored", { count: restored }));
   const unreadable = r.unreadable?.length ?? 0;
-  if (unreadable > 0)
-    parts.push(
-      `${unreadable} file${unreadable === 1 ? "" : "s"} in backup storage could not be read`,
-    );
+  if (unreadable > 0) parts.push(t("app.sync_unreadable", { count: unreadable }));
   // Housekeeping, mentioned rather than announced: the user did not ask for
   // it and nothing of theirs changed.
-  if (r.compacted > 0)
-    parts.push(`${r.compacted} old change${r.compacted === 1 ? "" : "s"} combined`);
+  if (r.compacted > 0) parts.push(t("app.sync_compacted", { count: r.compacted }));
   if (parts.length > 0) return parts.join(", ");
 
   // A pass that stood down reached nothing, so its zeroes say nothing about
   // whether the copies are current. Reporting them as "up to date" is how a
   // backup still uploading gets announced as finished.
-  if (r.skipped) return "A sync was already running.";
+  if (r.skipped) return t("app.sync_already_running");
 
   // Nothing moved. That is only good news when every target was reachable:
   // a pass where each one failed produces exactly these zeroes, and saying
   // "up to date" over it turns a total failure into a green tick.
   const behind = (r.targets ?? []).some((t) => t.ops_behind > 0);
-  return behind ? "Nothing was sent." : "Already up to date.";
+  return behind ? t("app.sync_nothing_sent") : t("app.sync_up_to_date");
 }
 
 /// The pass as a status, so a failure reads as one.
@@ -167,7 +165,7 @@ export function syncOutcome(r: SyncReport, renamed: string): Status {
     const when = Math.max(...waiting.map((t) => t.retry_in));
     return {
       kind: "ok",
-      message: `Waiting before trying again, about ${Math.ceil(when / 60)} min.`,
+      message: t("app.sync_waiting", { minutes: Math.ceil(when / 60) }),
     };
   }
 

@@ -40,7 +40,7 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import type { SyncIndicator } from "../layout/AppShell";
 import { AppSettingsSection, formatMinutes, useUpdater } from "./settings/AppSettings";
 import { OverviewPanel } from "./settings/OverviewPanel";
-import { t, useLocale } from "../i18n";
+import { t, tx, useLocale } from "../i18n";
 
 type Props = {
   /** Whether the open silo keeps an activity log, for the overview. */
@@ -347,12 +347,11 @@ export function SettingsPanel(props: Props) {
             <div className="panel-section">
               <p className="hint is-error">
                 <AlertTriangle size={14} />
-                Replacing the encryption key was started and never finished. Syncing fails until
-                it is.
+                {t("set.rotation_pending")}
               </p>
               <div className="actions">
                 <button type="button" disabled={busy} onClick={() => onSection("advanced")}>
-                  Finish it under Advanced
+                  {t("set.rotation_finish")}
                 </button>
               </div>
             </div>
@@ -360,17 +359,17 @@ export function SettingsPanel(props: Props) {
           <div className="panel-section">
             <h3>
               <KeyRound size={16} />
-              Keys
+              {t("set.keys_title")}
             </h3>
             <p>
-              Most USB and NFC security keys work (YubiKey, Nitrokey, SoloKeys)
-              {platform.hasBuiltIn ? `, and so does ${platform.builtIn} on this computer` : ""}.
-              Each one unlocks the silo on its own.
+              {platform.hasBuiltIn
+                ? t("set.keys_intro_builtin", { builtin: platform.builtIn })
+                : t("set.keys_intro")}
             </p>
             {securityKeys.length === 0 ? (
               <p className="hint empty-state-row">
                 <Inbox size={14} />
-                The key list could not be read. Try reopening this page.
+                {t("set.keys_unreadable")}
               </p>
             ) : (
               <ul className="key-list">
@@ -383,7 +382,11 @@ export function SettingsPanel(props: Props) {
                         value={keyLabelDraft}
                         autoFocus
                         maxLength={64}
-                        aria-label={`Name for ${k.label || `slot ${k.key_slot}`}`}
+                        aria-label={
+                          k.label
+                            ? t("set.key_rename_label", { name: k.label })
+                            : t("set.key_rename_label_slot", { slot: k.key_slot })
+                        }
                         onChange={(e) => setKeyLabelDraft(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") commitKeyRename(k.credential_id);
@@ -397,10 +400,10 @@ export function SettingsPanel(props: Props) {
                           disabled={busy || !keyLabelDraft.trim()}
                           onClick={() => commitKeyRename(k.credential_id)}
                         >
-                          Save
+                          {t("set.save")}
                         </button>
                         <button type="button" className="link" onClick={() => setRenamingKey(null)}>
-                          Cancel
+                          {t("common.cancel")}
                         </button>
                       </div>
                     </li>
@@ -410,7 +413,10 @@ export function SettingsPanel(props: Props) {
                     className="key-list-item"
                     // For telling two keys apart when asking for help; not
                     // something to read on every visit.
-                    title={`Slot ${k.key_slot}, id ${k.credential_id.slice(0, 12)}`}
+                    title={t("set.key_tooltip", {
+                      slot: k.key_slot,
+                      id: k.credential_id.slice(0, 12),
+                    })}
                   >
                     <div>
                       <strong>{securityKeyDisplayName(k, props.os)}</strong>
@@ -418,19 +424,19 @@ export function SettingsPanel(props: Props) {
                           computer cannot remove is something they are entitled
                           to see named for what it is. */}
                       {k.policy === "org" && (
-                        <span className="key-badge" title="Administered by an organisation">
+                        <span className="key-badge" title={t("set.key_org_badge_tooltip")}>
                           <Building2 size={12} aria-hidden />
-                          Organisation
+                          {t("set.key_org_badge")}
                         </span>
                       )}
                       <span className="hint">
                         {" "}
                         ·{" "}
                         {!usableHere(k)
-                          ? "another device"
+                          ? t("set.key_where_other")
                           : k.platform
-                            ? "this computer only"
-                            : "portable"}
+                            ? t("set.key_where_local")
+                            : t("set.key_where_portable")}
                       </span>
                     </div>
                     <div className="key-list-actions">
@@ -446,7 +452,7 @@ export function SettingsPanel(props: Props) {
                           setRenamingKey(k.credential_id);
                         }}
                       >
-                        Rename
+                        {t("set.rename")}
                       </button>
                       <button
                         type="button"
@@ -454,14 +460,14 @@ export function SettingsPanel(props: Props) {
                         disabled={busy || securityKeys.length <= 1}
                         title={
                           securityKeys.length <= 1
-                            ? "The last key cannot be removed: nothing would open the silo."
+                            ? t("set.key_remove_last")
                             : k.policy === "org"
-                              ? "An organisation administers this key. Removing it asks for one of the organisation's keys."
+                              ? t("set.key_remove_org")
                               : undefined
                         }
                         onClick={() => onRemoveKey(k.credential_id)}
                       >
-                        Remove
+                        {t("set.remove")}
                       </button>
                     </div>
                   </li>
@@ -470,18 +476,17 @@ export function SettingsPanel(props: Props) {
               </ul>
             )}
             <div className="key-add-panel">
-              <p className="hint">To add another key:</p>
+              <p className="hint">{t("set.add_intro")}</p>
               <ol className="hint key-add-steps">
-                <li>Plug in the new key.</li>
-                <li>Give it a label, if you want one.</li>
-                <li>Click Add. {platform.osName} asks for two touches on that key.</li>
+                <li>{t("set.add_step_plug")}</li>
+                <li>{t("set.add_step_label")}</li>
+                <li>{t("set.add_step_click", { os: platform.osName })}</li>
               </ol>
-              <p className="hint">Wait for the confirmation before clicking again.</p>
+              <p className="hint">{t("set.add_wait")}</p>
               {!hasPortableKey && !recovery.enabled && securityKeys.length > 0 && (
                 <p className="hint is-error">
                   <AlertTriangle size={14} />
-                  Everything that opens this silo works only on this computer. If the computer
-                  fails, the silo is lost with it. Add a portable security key or a recovery code.
+                  {t("set.add_only_local")}
                 </p>
               )}
               {fidoProgress && (
@@ -507,12 +512,11 @@ export function SettingsPanel(props: Props) {
                     onChange={(e) => setAddAsOrganisation(e.target.checked)}
                   />
                   <span>
-                    Enrol as an organisation key
+                    {t("set.org_enrol")}
                     <span className="hint">
-                      A spare to keep in the company safe. You will be asked for an existing
-                      organisation key first.
+                      {t("set.org_enrol_hint")}
                       {platform.hasBuiltIn &&
-                        ` ${platform.builtIn} cannot be one, because it works only on this computer.`}
+                        ` ${t("set.org_enrol_hint_builtin", { builtin: platform.builtIn })}`}
                     </span>
                   </span>
                 </label>
@@ -520,7 +524,7 @@ export function SettingsPanel(props: Props) {
               <div className="inline-form explorer-new-folder">
                 <input
                   type="text"
-                  placeholder="Label (optional)"
+                  placeholder={t("set.label_placeholder")}
                   value={newKeyLabel}
                   disabled={busy}
                   onChange={(e) => onNewKeyLabel(e.target.value)}
@@ -531,7 +535,7 @@ export function SettingsPanel(props: Props) {
                   onClick={() => onAddKey("security-key", addAsOrganisation)}
                 >
                   {busy && fidoProgress && <span className="spinner" aria-hidden />}
-                  {busy && fidoProgress ? "Waiting…" : "Add security key"}
+                  {busy && fidoProgress ? t("unlock.waiting") : t("set.add_security_key")}
                 </button>
                 {platformAvailable && !addAsOrganisation && (
                   <button
@@ -540,7 +544,7 @@ export function SettingsPanel(props: Props) {
                     disabled={busy}
                     onClick={() => onAddKey("this-device", false)}
                   >
-                    Add {platform.builtIn}
+                    {t("set.add_builtin", { builtin: platform.builtIn })}
                   </button>
                 )}
               </div>
@@ -549,11 +553,11 @@ export function SettingsPanel(props: Props) {
           <div className="panel-section">
             <h3>
               <Timer size={16} />
-              Auto-lock
+              {t("set.auto_lock_title")}
             </h3>
             <div className="settings-row">
               <label className="settings-row-label" htmlFor="auto-lock-silo">
-                Lock <strong>{silo.name}</strong> after
+                {tx("set.auto_lock_silo", { name: <strong>{silo.name}</strong> })}
               </label>
               <select
                 id="auto-lock-silo"
@@ -566,7 +570,9 @@ export function SettingsPanel(props: Props) {
                   )
                 }
               >
-                <option value="default">the default ({formatMinutes(autoLockMinutes)})</option>
+                <option value="default">
+                  {t("set.auto_lock_default", { time: formatMinutes(autoLockMinutes) })}
+                </option>
                 {AUTO_LOCK_OPTIONS_MINUTES.map((minutes) => (
                   <option key={minutes} value={minutes}>
                     {formatMinutes(minutes)}
@@ -575,8 +581,7 @@ export function SettingsPanel(props: Props) {
               </select>
             </div>
             <p className="hint">
-              Each silo counts on its own, so working in one does not hold another open. The
-              default is under General.
+              {t("set.auto_lock_silo_hint")}
             </p>
           </div>
           </>
@@ -587,12 +592,9 @@ export function SettingsPanel(props: Props) {
           <div className="panel-section">
             <h3>
               <Laptop size={16} />
-              Devices
+              {t("settings.devices")}
             </h3>
-            <p>
-              Every device that has changed something in this silo. A name you give one here is
-              shown on every device.
-            </p>
+            <p>{t("set.devices_intro")}</p>
             <ul className="key-list">
               {devices.map((device) =>
                 renamingDevice === device.id ? (
@@ -603,8 +605,8 @@ export function SettingsPanel(props: Props) {
                       value={deviceLabelDraft}
                       autoFocus
                       maxLength={60}
-                      placeholder={device.system_name ?? "Laptop, Desktop, Work machine…"}
-                      aria-label={`Name for device ${device.id.slice(0, 8)}`}
+                      placeholder={device.system_name ?? t("set.device_name_placeholder")}
+                      aria-label={t("set.device_rename_label", { id: device.id.slice(0, 8) })}
                       onChange={(e) => setDeviceLabelDraft(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") commitDeviceRename(device.id);
@@ -618,14 +620,14 @@ export function SettingsPanel(props: Props) {
                         disabled={busy}
                         onClick={() => commitDeviceRename(device.id)}
                       >
-                        Save
+                        {t("set.save")}
                       </button>
                       <button
                         type="button"
                         className="link"
                         onClick={() => setRenamingDevice(null)}
                       >
-                        Cancel
+                        {t("common.cancel")}
                       </button>
                     </div>
                   </li>
@@ -633,19 +635,19 @@ export function SettingsPanel(props: Props) {
                   <li key={device.id} className="key-list-item">
                     <div>
                       <strong>
-                        {device.label || device.system_name || "Unnamed device"}
+                        {device.label || device.system_name || t("set.device_unnamed")}
                       </strong>
                       <span className="hint">
-                        {device.is_this_device ? " · this computer" : ""}
+                        {device.is_this_device ? ` · ${t("set.device_this")}` : ""}
                         {device.platform ? ` · ${device.platform}` : ""}
                         {/* Only when a person renamed it: otherwise the
                             heading already is the computer name and this
                             would print it twice. */}
                         {device.label && device.system_name ? ` · ${device.system_name}` : ""}
                         {" · "}
-                        {device.operations === 1 ? "1 change" : `${device.operations} changes`}
+                        {t("set.device_changes", { count: device.operations })}
                         {device.last_change_at > 0
-                          ? ` · last on ${formatDate(device.last_change_at)}`
+                          ? ` · ${t("set.device_last", { date: formatDate(device.last_change_at) })}`
                           : ""}
                       </span>
                     </div>
@@ -659,7 +661,7 @@ export function SettingsPanel(props: Props) {
                           setRenamingDevice(device.id);
                         }}
                       >
-                        Rename
+                        {t("set.rename")}
                       </button>
                     </div>
                   </li>
@@ -670,8 +672,7 @@ export function SettingsPanel(props: Props) {
                 devices with no way to remove one reads as a missing button
                 until you know where the door actually is. */}
             <p className="hint">
-              To stop a device opening the silo, remove its key under Unlocking. The device stays
-              in this list with the changes it made.
+              {t("set.devices_remove_hint")}
             </p>
           </div>
           <AuditLogPanel busy={busy} onChanged={onAuditChanged} />
@@ -718,15 +719,12 @@ export function SettingsPanel(props: Props) {
             <div className="panel-section panel-section-danger">
               <h3 className="is-danger">
                 <AlertTriangle size={16} />
-                Remove this silo
+                {t("set.remove_silo")}
               </h3>
-              <p>
-                Takes <strong>{silo.name}</strong> out of the list on this computer. The folder
-                stays on disk unless you choose otherwise, so you can add it back later.
-              </p>
+              <p>{tx("set.remove_silo_body", { name: <strong>{silo.name}</strong> })}</p>
               <div className="actions">
                 <button type="button" className="danger" disabled={busy} onClick={onForgetSilo}>
-                  Remove this silo
+                  {t("set.remove_silo")}
                 </button>
               </div>
             </div>

@@ -39,7 +39,7 @@ export function UpdateCard({ version, update, onLater, onFailedAfterLock, open =
       : null;
 
   return (
-    <section className="update-card" aria-label="Update available">
+    <section className="update-card" aria-label={t("set.update_card_label")}>
       <ArrowUpCircle size={22} className="update-card-icon" aria-hidden />
       <div className="update-card-body">
         <p className="update-card-title">{t("update.available", { version })}</p>

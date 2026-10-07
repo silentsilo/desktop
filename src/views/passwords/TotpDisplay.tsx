@@ -8,6 +8,7 @@ import {
   totpSecondsRemaining,
 } from "../../lib/totp";
 import { IconCopy } from "../../ui/Icons";
+import { t, useLocale } from "../../i18n";
 
 type Props = {
   entry: PasswordEntry;
@@ -23,6 +24,7 @@ type Props = {
  * the current time-step "bucket" changes, not on every tick, since the
  * code itself doesn't change within a period. */
 export function TotpDisplay({ entry, now, copied, hidden = false, onCopy }: Props) {
+  useLocale();
   const period = entry.totp_period ?? DEFAULT_TOTP_PERIOD;
   const digits = entry.totp_digits ?? DEFAULT_TOTP_DIGITS;
   const algorithm = entry.totp_algorithm ?? DEFAULT_TOTP_ALGORITHM;
@@ -50,22 +52,22 @@ export function TotpDisplay({ entry, now, copied, hidden = false, onCopy }: Prop
 
   return (
     <div className="pw-field-row">
-      <span className="pw-field-label">Code</span>
+      <span className="pw-field-label">{t("pw.totp_code")}</span>
       <span className="pw-field-value pw-mask pw-totp-code">{(!hidden && grouped) || "······"}</span>
       <span
         className="pw-totp-ring"
         style={{ "--pw-totp-frac": String(secondsLeft / period) } as React.CSSProperties}
-        title={`${secondsLeft}s left`}
+        title={t("pw.totp_left", { seconds: secondsLeft })}
       />
       <button
         type="button"
         className="pw-inline-btn"
-        title="Copy code"
-        aria-label="Copy one-time code"
+        title={t("pw.copy_code")}
+        aria-label={t("pw.copy_one_time_code")}
         disabled={!code}
         onClick={() => code && onCopy(code)}
       >
-        {copied ? <span className="pw-copied-badge">Copied</span> : <IconCopy size={14} />}
+        {copied ? <span className="pw-copied-badge">{t("pw.copied")}</span> : <IconCopy size={14} />}
       </button>
     </div>
   );

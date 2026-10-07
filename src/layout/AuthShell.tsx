@@ -3,6 +3,7 @@ import { Settings2 } from "lucide-react";
 import { BrandLogo } from "../components/BrandLogo";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { useOpenAppSettings, useUpdateCard } from "../lib/appSettings";
+import { t, useLocale } from "../i18n";
 
 type AuthShellProps = {
   /**
@@ -18,6 +19,7 @@ type AuthShellProps = {
 };
 
 export function AuthShell({ title, subtitle, children }: AuthShellProps) {
+  useLocale();
   const openSettings = useOpenAppSettings();
   const updateCard = useUpdateCard();
   return (
@@ -36,8 +38,8 @@ export function AuthShell({ title, subtitle, children }: AuthShellProps) {
             type="button"
             className="btn-theme"
             onClick={openSettings}
-            title="App settings"
-            aria-label="App settings"
+            title={t("start.app_settings")}
+            aria-label={t("start.app_settings")}
           >
             <Settings2 size={16} />
           </button>
@@ -55,7 +57,7 @@ export function AuthShell({ title, subtitle, children }: AuthShellProps) {
           front door, where a publisher line belongs. Inside the app it
           would be furniture. The version is here so a screenshot sent for
           help says which one it is; inside, the sidebar shows it. */}
-      <footer className="auth-footer" aria-label="Publisher">
+      <footer className="auth-footer" aria-label={t("start.publisher")}>
         © {new Date().getFullYear()} Software Hive S.R.L. · v{__APP_VERSION__}
       </footer>
     </main>

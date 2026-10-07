@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { whereIs, type BackupTargetView } from "./copies";
 import type { FileSyncState } from "./types";
 
@@ -14,8 +15,8 @@ export type CopyLine = { id: string; name: string; state: "holds" | "owed" | "un
 /** "JPG file", "File" when the name has no extension. */
 export function typeLabel(name: string): string {
   const dot = name.lastIndexOf(".");
-  if (dot <= 0 || dot === name.length - 1) return "File";
-  return `${name.slice(dot + 1).toUpperCase()} file`;
+  if (dot <= 0 || dot === name.length - 1) return t("files.type_file");
+  return t("files.type_ext", { ext: name.slice(dot + 1).toUpperCase() });
 }
 
 /** Each copy by the name the Copies screen gives it, with what this
@@ -34,13 +35,12 @@ export function copyLines(targets: BackupTargetView[], copies: FileCopy[]): Copy
 
 /** Where a file's content is, as a sentence: the row badges in words. */
 export function describeSyncState(state: FileSyncState): string {
-  if (state === "backed-up") return "On this computer and in backup storage.";
-  if (state === "pending") return "On this computer, waiting to be backed up.";
-  if (state === "uploading") return "On this computer, uploading to backup storage now.";
-  if (state === "downloading") return "In backup storage, downloading to this computer now.";
-  if (state === "absent")
-    return "Missing. Neither backup storage nor this computer has this file's content. If another device still has the file, open SilentSilo there and sync. Otherwise you can delete it.";
-  return "In backup storage only. It downloads when opened.";
+  if (state === "backed-up") return t("files.sync_backed_up_long");
+  if (state === "pending") return t("files.sync_pending_long");
+  if (state === "uploading") return t("files.sync_uploading_long");
+  if (state === "downloading") return t("files.sync_downloading_long");
+  if (state === "absent") return t("files.sync_absent_long");
+  return t("files.sync_remote_long");
 }
 
 /** The same state in two words, with how it reads at a glance. */
@@ -50,17 +50,17 @@ export function syncStateShort(state: FileSyncState): {
 } {
   switch (state) {
     case "backed-up":
-      return { label: "Backed up", tone: "ok" };
+      return { label: t("files.sync_backed_up"), tone: "ok" };
     case "pending":
     case "local-only":
-      return { label: "Waiting to back up", tone: "wait" };
+      return { label: t("files.sync_waiting"), tone: "wait" };
     case "uploading":
-      return { label: "Uploading", tone: "wait" };
+      return { label: t("files.sync_uploading"), tone: "wait" };
     case "downloading":
-      return { label: "Downloading", tone: "wait" };
+      return { label: t("files.sync_downloading"), tone: "wait" };
     case "absent":
-      return { label: "Missing", tone: "bad" };
+      return { label: t("files.sync_missing"), tone: "bad" };
     default:
-      return { label: "In backup only", tone: "away" };
+      return { label: t("files.sync_backup_only"), tone: "away" };
   }
 }

@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 /**
  * Whether this is a command that failed only because the silo locked.
  *
@@ -13,12 +15,15 @@ export function isLockedError(err: unknown): boolean {
 }
 
 /** Map raw Tauri errors to short human-readable copy. */
+/// The sentences written here are translated; whatever the backend sent and
+/// is passed through stays as it came.
 export function formatAppError(err: unknown): string {
-  const msg = String(err ?? "Unknown error");
+  if (err === null || err === undefined) return t("app.err_unknown");
+  const msg = String(err);
   const lower = msg.toLowerCase();
 
   if (msg.includes("CloudNotConfigured") || lower.includes("no backup storage is connected")) {
-    return "Not backed up. This silo is only on this computer.";
+    return t("app.err_not_backed_up");
   }
   // "Unlock the silo first", "enrol a key before unlocking" and friends
   // already say the right thing, so they go back unchanged. Checked before
@@ -40,14 +45,14 @@ export function formatAppError(err: unknown): string {
     : null;
   if (cloudName && lower.includes(" again")) {
     if (lower.includes("sign in to")) {
-      return `${cloudName} no longer accepts this computer's sign-in. Use Sign in again on this copy.`;
+      return t("app.err_cloud_sign_in_again", { cloud: cloudName });
     }
   }
   if (cloudName && lower.includes("is full")) {
-    return `${cloudName} is full. Free some space there, or keep this silo somewhere else too.`;
+    return t("app.err_cloud_full", { cloud: cloudName });
   }
   if (lower.includes("sign-in was cancelled")) {
-    return "The sign-in was cancelled in the browser.";
+    return t("app.err_sign_in_cancelled");
   }
   if (
     lower.includes("sign-in") ||
@@ -68,13 +73,13 @@ export function formatAppError(err: unknown): string {
     lower.includes("cancelled") || lower.includes("canceled") || lower.includes("user_cancelled");
   const timedOut = lower.includes("timeout") || lower.includes("timed out");
   if (fromKey && cancelled) {
-    return "The key prompt was cancelled.";
+    return t("app.err_key_cancelled");
   }
   if (fromKey && timedOut) {
-    return "The key prompt timed out. Try again.";
+    return t("app.err_key_timed_out");
   }
   if (timedOut) {
-    return "Your backup storage did not answer in time. Check your connection and try again.";
+    return t("app.err_storage_timed_out");
   }
   if (
     lower.includes("connection refused") ||
@@ -82,22 +87,22 @@ export function formatAppError(err: unknown): string {
     lower.includes("error sending request") ||
     lower.includes("tcp connect error")
   ) {
-    return "Cannot reach your backup storage. Check your connection and the address.";
+    return t("app.err_storage_unreachable");
   }
   // The bare numbers are matched as whole words. "401" as a substring
   // appears in file names, key ids and byte counts, and any of those turned
   // an unrelated failure into advice about storage credentials.
   if (lower.includes("unauthorized") || /\b(401|403)\b/.test(lower)) {
-    return "Your backup storage refused the sign-in. Check the username and password, or the access key.";
+    return t("app.err_storage_refused");
   }
   if (lower.includes("nosuchbucket") || lower.includes("bucket does not exist")) {
-    return "That bucket does not exist. Check its name and region.";
+    return t("app.err_no_bucket");
   }
   if (lower.includes("not enrolled") || lower.includes("no security key")) {
-    return "No key enrolled yet.";
+    return t("app.err_no_key");
   }
   if (lower.includes("already enrolled")) {
-    return "That key is already enrolled.";
+    return t("app.err_key_already_enrolled");
   }
   // Narrowed to the phrases this app writes, the current one and the older
   // "security key" wording. "at least one" alone matched sentences about
@@ -106,7 +111,7 @@ export function formatAppError(err: unknown): string {
     lower.includes("keep at least one key") ||
     lower.includes("keep at least one security key")
   ) {
-    return "Keep at least one key on the silo.";
+    return t("app.err_keep_one_key");
   }
 
   // Strip common Rust/Tauri wrappers
@@ -116,5 +121,5 @@ export function formatAppError(err: unknown): string {
     .replace(/^invoke\([^)]+\):\s*/i, "")
     .trim();
 
-  return cleaned || "Something went wrong.";
+  return cleaned || t("app.err_generic");
 }

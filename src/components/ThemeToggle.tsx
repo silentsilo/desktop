@@ -1,5 +1,6 @@
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "../lib/theme";
+import { t, useLocale } from "../i18n";
 
 /**
  * The theme switch for screens with no sidebar to put it in.
@@ -8,6 +9,7 @@ import { useTheme } from "../lib/theme";
  * outside the provider degrades to having no toggle rather than crashing.
  */
 export function ThemeToggle({ className = "" }: { className?: string }) {
+  useLocale();
   const control = useTheme();
   if (!control) return null;
 
@@ -17,8 +19,8 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
       type="button"
       className={`btn-theme ${className}`.trim()}
       onClick={toggle}
-      title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
-      aria-label="Toggle theme"
+      title={theme === "light" ? t("nav.dark") : t("nav.light")}
+      aria-label={t("start.toggle_theme")}
     >
       {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
     </button>
