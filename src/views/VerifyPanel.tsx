@@ -138,6 +138,7 @@ export function VerifyPanel({ busy, siloId }: Props) {
   };
 
   return (
+    <>
     <div className="panel-section">
       <h3>
         <SearchCheck size={16} />
@@ -291,7 +292,10 @@ export function VerifyPanel({ busy, siloId }: Props) {
         <p className="hint">{t("backup.verify_again_later")}</p>
       )}
 
-      <h3 className="verify-restore-head">
+    </div>
+
+    <div className="panel-section">
+      <h3>
         <LifeBuoy size={16} />
         {t("backup.restore_title")}
       </h3>
@@ -391,5 +395,6 @@ export function VerifyPanel({ busy, siloId }: Props) {
         </>
       )}
     </div>
+    </>
   );
 }

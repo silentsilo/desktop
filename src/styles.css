@@ -4778,6 +4778,12 @@ tr.is-moving {
   line-height: 1.25;
 }
 
+/* Wide enough for the longest single word a section name has in any
+   language, German "Wiederherstellungscode", which cannot wrap. */
+.settings-view .view-rail {
+  width: 200px;
+}
+
 .pw-rail-dot {
   width: 8px;
   height: 8px;
@@ -6521,9 +6527,12 @@ button.link.pw-history-clear {
   }
 }
 
+/* Wraps rather than cutting the name: "Folder pe disc sau NAS" is longer
+   than "Folder or NAS", and every button must say all of what it is. */
 .store-kind-grid button {
   justify-content: flex-start;
-  white-space: nowrap;
+  text-align: left;
+  line-height: 1.2;
 }
 
 .store-kind-group {
