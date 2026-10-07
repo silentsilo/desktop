@@ -96,6 +96,82 @@ export const en = {
     note: "Download progress, sizes like '3 MB of 12 MB'.",
   },
   "update.downloading": { text: "Downloading", note: "While the update downloads, size unknown." },
+  "unlock.subtitle_code": {
+    text: "Unlock with the code you wrote down.",
+    note: "Under the logo when unlocking with the recovery code instead of a key.",
+  },
+  "unlock.subtitle_rebuild": {
+    text: "Enter the code you wrote down to rebuild this silo from backup storage.",
+    note: "Under the logo when this computer's copy is damaged and is rebuilt from the backup copies.",
+  },
+  "unlock.recovery_code_title": {
+    text: "Recovery code",
+    note: "Card title. The code on paper that opens the silo when every key is lost.",
+  },
+  "unlock.recovery_code_hint": {
+    text: "The code you saved when you set this up. Paste the whole code into any box and the rest fill in.",
+    note: "Hint above the code boxes. 'Boxes': the separate input fields of the code.",
+  },
+  "unlock.code_label": {
+    text: "Code",
+    note: "Label of the recovery code input.",
+  },
+  "unlock.checking": {
+    text: "Checking…",
+    note: "Button text while the code or the key is being checked.",
+  },
+  "unlock.rebuild_and_unlock": {
+    text: "Rebuild and unlock",
+    note: "Button: rebuilds the damaged local copy from backup, then opens the silo.",
+  },
+  "unlock.unlock": {
+    text: "Unlock",
+    note: "Main button, verb: opens the silo.",
+  },
+  "unlock.back": {
+    text: "Back",
+    note: "Button: returns to the previous screen.",
+  },
+  "unlock.subtitle_builtin": {
+    text: "Confirm with {builtin} to unlock.",
+    note: "Under the logo when the only way in is the computer's own sign-in. {builtin} is Windows Hello or Touch ID.",
+  },
+  "unlock.subtitle_both": {
+    text: "Touch an enrolled security key, or confirm with {builtin}, to unlock.",
+    note: "Under the logo when both a security key and Windows Hello/Touch ID work. 'Touch': the gold disc on a YubiKey.",
+  },
+  "unlock.subtitle_key": {
+    text: "Insert an enrolled security key and touch it to unlock.",
+    note: "Under the logo when only a security key (hardware, like a YubiKey) opens the silo.",
+  },
+  "unlock.os_prompt": {
+    text: "{os} will show its own prompt.",
+    note: "Hint: the operating system ({os}: Windows, Linux, macOS) opens its own window asking for the key.",
+  },
+  "unlock.title_fallback": {
+    text: "Unlock silo",
+    note: "Card title when the silo has no name. Verb.",
+  },
+  "unlock.retry": {
+    text: "Retry detection",
+    note: "Button: looks again for a security key or Windows Hello.",
+  },
+  "unlock.waiting": {
+    text: "Waiting…",
+    note: "Button text while waiting for the key to be touched.",
+  },
+  "unlock.builtin_not_working": {
+    text: "{builtin} not working? Use your recovery code",
+    note: "Link under the button when Windows Hello/Touch ID is the only way in.",
+  },
+  "unlock.lost_key": {
+    text: "Lost your key? Use your recovery code",
+    note: "Link under the button. 'Key': the security key (hardware).",
+  },
+  "unlock.switch_silo": {
+    text: "Switch silo",
+    note: "Link: back to the list of silos, to open another one.",
+  },
 } satisfies Record<string, Entry>;
 
 export type Key = keyof typeof en;
