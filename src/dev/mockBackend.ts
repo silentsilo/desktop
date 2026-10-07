@@ -1142,6 +1142,10 @@ const handlers: Record<string, Handler> = {
     };
     return sshAgent;
   },
+  // Told on every load; nothing to keep in the mock.
+  app_set_auto_lock_default: () => null,
+  passwords_read_bitwarden_zip: () => ({ json: JSON.stringify({ items: [] }), files: [] }),
+  fido_pin_answer: () => null,
   ssh_key_check: (args) =>
     String(args.key).includes("ENCRYPTED-DEMO") ? "encrypted" : "ok",
   ssh_key_remove_passphrase: (args) => String(args.key).replace("ENCRYPTED-DEMO", ""),
@@ -1399,6 +1403,10 @@ export function installMockBackend() {
       (w as unknown as Record<string, unknown>)[`_${id}`] = cb;
       return id;
     },
+  };
+  // What `unlisten` calls when a component unmounts; nothing to remove here.
+  (w as unknown as Record<string, unknown>).__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+    unregisterListener: () => {},
   };
   console.info(`[mock] backend stubbed — scenario "${scenario()}"`);
 }

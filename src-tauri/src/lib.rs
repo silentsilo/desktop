@@ -180,6 +180,7 @@ pub fn run() {
                 state::DEFAULT_AUTO_LOCK_MINUTES,
             ),
             audit_page: Mutex::new(None),
+            audit_closes: std::sync::atomic::AtomicU64::new(0),
         })
         .manage(browser::BrowserBridge::default())
         .manage(ssh_agent::SshAgent::default())

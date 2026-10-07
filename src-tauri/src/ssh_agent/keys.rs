@@ -74,6 +74,9 @@ pub enum KeyError {
     Encrypted,
     /// Not a key format the agent reads.
     Unreadable,
+    /// A kind it reads but does not sign with: a security-key (`sk-`) key,
+    /// DSA, or ECDSA P-521.
+    Unsupported,
 }
 
 impl std::fmt::Display for KeyError {
@@ -82,6 +85,9 @@ impl std::fmt::Display for KeyError {
             KeyError::Encrypted => "This key has a passphrase.",
             KeyError::Unreadable => {
                 "This key is not in a format the SSH agent reads: OpenSSH, or an RSA key in PEM."
+            }
+            KeyError::Unsupported => {
+                "The SSH agent signs with Ed25519, ECDSA P-256 or P-384, and RSA keys only."
             }
         })
     }
@@ -96,6 +102,19 @@ pub fn private_key(text: &str) -> Result<PrivateKey, KeyError> {
         let key = PrivateKey::from_openssh(text).map_err(|_| KeyError::Unreadable)?;
         if key.is_encrypted() {
             return Err(KeyError::Encrypted);
+        }
+        // Offered only if it can sign: a key that cannot would be confirmed
+        // in the dialog and logged, then fail.
+        let signs = match key.key_data() {
+            KeypairData::Ed25519(_) | KeypairData::Rsa(_) => true,
+            KeypairData::Ecdsa(ecdsa) => matches!(
+                ecdsa.curve(),
+                ssh_key::EcdsaCurve::NistP256 | ssh_key::EcdsaCurve::NistP384
+            ),
+            _ => false,
+        };
+        if !signs {
+            return Err(KeyError::Unsupported);
         }
         return Ok(key);
     }

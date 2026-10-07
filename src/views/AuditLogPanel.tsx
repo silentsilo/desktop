@@ -79,7 +79,7 @@ export function AuditLogPanel({ busy, onChanged }: Props) {
       setNotice(
         removed === 0
           ? "Nothing in the log is past the retention."
-          : `Removed ${removed} ${removed === 1 ? "segment" : "segments"} past the retention.`,
+          : "Removed what was past the retention.",
       );
     } catch (e) {
       setError(formatAppError(e));
@@ -105,7 +105,9 @@ export function AuditLogPanel({ busy, onChanged }: Props) {
             value={retentionValue(status.retention_days)}
             disabled={disabled}
             onChange={(e) =>
-              void change("audit_org_retention", { retentionDays: retentionDays(e.target.value) })
+              void change("audit_org_retention", {
+                retentionDays: retentionDays(e.target.value),
+              })
             }
           >
             {RETENTION_CHOICES.map((c) => (
@@ -157,7 +159,9 @@ export function AuditLogPanel({ busy, onChanged }: Props) {
             type="button"
             disabled={disabled}
             onClick={() =>
-              void change("audit_org_start", { retentionDays: retentionDays(startRetention) })
+              void change("audit_org_start", {
+                retentionDays: retentionDays(startRetention),
+              })
             }
           >
             Start

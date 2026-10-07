@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { KeyRound } from "lucide-react";
 import { useEventSubscription } from "../hooks/useEventSubscription";
+import { useModal } from "../hooks/useModal";
 
 /** What the key asked, as core sends it. */
 type PinAsk = { kind: "enter" | "wrong"; retries: number | null };
@@ -24,15 +25,27 @@ export function SecurityKeyPinDialog() {
       }),
     [],
   );
-  useEventSubscription(() => listen("fido-pin-done", () => setAsk(null)), []);
-
-  if (!ask) return null;
+  // Answered, cancelled or timed out in Rust: a PIN typed and not sent
+  // goes too.
+  useEventSubscription(
+    () =>
+      listen("fido-pin-done", () => {
+        setAsk(null);
+        setPin("");
+      }),
+    [],
+  );
 
   const answer = (value: string | null) => {
     setAsk(null);
     setPin("");
     void invoke("fido_pin_answer", { pin: value }).catch(() => {});
   };
+  // Asked while another dialog is open (a signature, a fill): this one is
+  // on top, takes Escape and keeps Tab.
+  const cardRef = useModal(() => answer(null), ask !== null);
+
+  if (!ask) return null;
 
   const left =
     ask.retries === null
@@ -42,8 +55,9 @@ export function SecurityKeyPinDialog() {
         : ` ${ask.retries} tries left.`;
 
   return (
-    <div className="modal-overlay">
+    <div className="modal-overlay modal-overlay-top">
       <div
+        ref={cardRef}
         className="modal-card"
         role="alertdialog"
         aria-modal="true"

@@ -599,6 +599,7 @@ fn silo_forget_impl(app: &AppHandle, id: String, delete_files: bool) -> Result<(
     // index behind and a session still trying to sync a folder that no
     // longer exists.
     state.close_session(id)?;
+    crate::commands::cloud::forget_sign_ins_when_all_locked(&app);
     if active_silo(&app).is_ok_and(|s| s.id == id) {
         *state.active_silo.lock().map_err(|e| e.to_string())? = None;
     }

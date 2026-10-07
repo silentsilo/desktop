@@ -38,6 +38,14 @@ const COOLDOWN: Duration = Duration::from_secs(5);
 /// Requests one connection may make in a burst, and how fast they come back.
 const BURST: u32 = 30;
 const REFILL: Duration = Duration::from_millis(500);
+/// The same for every connection together: a new connection is no new ration.
+const AGENT_BURST: u32 = 60;
+/// Servers one connection may bind to, as OpenSSH's agent allows.
+const MAX_BINDS: usize = 16;
+/// After a locked silo was not unlocked for a request, later ones do not
+/// bring the window up again for this long: a tool that fetches in the
+/// background would otherwise raise it every time.
+const RAISE_QUIET: Duration = Duration::from_secs(10 * 60);
 
 const GONE: &str = "This SSH request is no longer waiting.";
 
@@ -92,6 +100,24 @@ pub struct SshAgent {
     allowances: Mutex<Allowances>,
     /// Set when a signature was declined or timed out.
     declined_at: Mutex<Option<Instant>>,
+    /// Every connection's requests together.
+    ration: Mutex<AgentRation>,
+    /// When the window was last brought up for a locked silo and nobody
+    /// unlocked it.
+    unanswered_raise: Mutex<Option<Instant>>,
+}
+
+/// [`Ration`] for the whole agent.
+struct AgentRation(Ration);
+
+impl Default for AgentRation {
+    fn default() -> Self {
+        Self(Ration {
+            left: AGENT_BURST,
+            since: Instant::now(),
+            burst: AGENT_BURST,
+        })
+    }
 }
 
 struct Server {
@@ -149,6 +175,7 @@ struct Binding {
 struct Ration {
     left: u32,
     since: Instant,
+    burst: u32,
 }
 
 impl Default for Ration {
@@ -156,6 +183,7 @@ impl Default for Ration {
         Self {
             left: BURST,
             since: Instant::now(),
+            burst: BURST,
         }
     }
 }
@@ -165,7 +193,7 @@ impl Ration {
         let refilled =
             (now.saturating_duration_since(self.since).as_millis() / REFILL.as_millis()) as u32;
         if refilled > 0 {
-            self.left = (self.left + refilled).min(BURST);
+            self.left = self.left.saturating_add(refilled).min(self.burst);
             self.since = now;
         }
         if self.left == 0 {
@@ -332,13 +360,15 @@ pub async fn ssh_agent_set(app: AppHandle, enabled: bool) -> Result<AgentStatus,
 }
 
 /// Whether an SSH key entry's text can be used by the agent: `ok`,
-/// `encrypted` (ask for the passphrase) or `unreadable`.
+/// `encrypted` (ask for the passphrase), `unsupported` (a kind it does not
+/// sign with) or `unreadable`.
 #[tauri::command(async)]
 pub fn ssh_key_check(key: String) -> String {
     match keys::private_key(&key) {
         Ok(_) => "ok".into(),
         Err(keys::KeyError::Encrypted) => "encrypted".into(),
         Err(keys::KeyError::Unreadable) => "unreadable".into(),
+        Err(keys::KeyError::Unsupported) => "unsupported".into(),
     }
 }
 
@@ -422,11 +452,12 @@ async fn answer(
     connection: &Connection,
     message: Vec<u8>,
 ) -> Vec<u8> {
-    if !lock(&connection.ration).take(Instant::now()) {
+    let now = Instant::now();
+    if !lock(&connection.ration).take(now) || !lock(&app.state::<SshAgent>().ration).0.take(now) {
         return proto::failure();
     }
     match proto::parse(&message) {
-        Request::Identities => identities(app).await,
+        Request::Identities => identities(app, connection).await,
         Request::Sign { key, data, flags } => sign(app, peer, connection, key, data, flags)
             .await
             .unwrap_or_else(|_| proto::failure()),
@@ -437,6 +468,9 @@ async fn answer(
             forwarding,
         } => {
             let mut binding = lock(&connection.binding);
+            if binding.sessions.len() >= MAX_BINDS {
+                return proto::failure();
+            }
             let repeat = binding.sessions.iter().any(|(id, _)| *id == session_id);
             match proto::verify_bind(&host_key, &session_id, &signature, forwarding) {
                 Some(bound) if !repeat => {
@@ -488,15 +522,21 @@ async fn open_or_wait(app: &AppHandle) -> Option<(Uuid, u64)> {
     if !any {
         return None;
     }
+    let agent = app.state::<SshAgent>();
+    if lock(&agent.unanswered_raise).is_some_and(|at| at.elapsed() < RAISE_QUIET) {
+        return None;
+    }
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || crate::commands::shell::show_main_window(&handle));
     let deadline = Instant::now() + UNLOCK_WAIT;
     while Instant::now() < deadline {
         tokio::time::sleep(Duration::from_millis(500)).await;
         if let Some(open) = check().await {
+            *lock(&agent.unanswered_raise) = None;
             return Some(open);
         }
     }
+    *lock(&agent.unanswered_raise) = Some(Instant::now());
     None
 }
 
@@ -518,7 +558,16 @@ async fn with_session<T: Send + 'static>(
     .map_err(|_| ())
 }
 
-async fn identities(app: &AppHandle) -> Vec<u8> {
+async fn identities(app: &AppHandle, connection: &Connection) -> Vec<u8> {
+    // A connection forwarded from a server, or one whose binding failed,
+    // learns nothing: not the keys, not their names, and it does not bring
+    // the window up.
+    {
+        let binding = lock(&connection.binding);
+        if binding.forwarded || binding.broken {
+            return proto::identities_answer(&[]);
+        }
+    }
     let Some((silo, _)) = open_or_wait(app).await else {
         return proto::identities_answer(&[]);
     };
@@ -596,6 +645,12 @@ async fn sign(
         (Purpose::Login { .. }, Some(host)) => Some(Destination::Host(host.clone())),
         _ => None,
     };
+
+    // An RSA request that does not ask for SHA-2 would be refused after the
+    // dialog and the log: refused now instead.
+    if proto::is_rsa(&key) && flags & (proto::RSA_SHA2_256 | proto::RSA_SHA2_512) == 0 {
+        return Err(());
+    }
 
     let scope = open_or_wait(app).await.ok_or(())?;
     let offered = with_session(app, scope.0, keys::offered).await?;
@@ -732,6 +787,7 @@ mod tests {
         let mut ration = Ration {
             left: BURST,
             since: start,
+            burst: BURST,
         };
         for _ in 0..BURST {
             assert!(ration.take(start));

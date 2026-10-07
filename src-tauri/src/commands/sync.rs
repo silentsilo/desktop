@@ -129,10 +129,6 @@ fn sync_status_impl(app: &AppHandle) -> Result<SyncStatus, String> {
     })
 }
 
-/// One full pass: operations out, operations in, then blob content.
-/// Operations before blobs: a visible file that cannot open yet
-/// self-corrects on the next pass, while unreferenced content looks like an
-/// orphan and may get cleaned up.
 /// The focused silo's activity log, from this computer and every copy.
 pub(crate) async fn read_audit_log(
     app: &AppHandle,
@@ -152,6 +148,10 @@ pub(crate) async fn expire_audit_segments(app: &AppHandle) -> Result<usize, Stri
         .await
 }
 
+/// One full pass: operations out, operations in, then blob content.
+/// Operations before blobs: a visible file that cannot open yet
+/// self-corrects on the next pass, while unreferenced content looks like an
+/// orphan and may get cleaned up.
 #[tauri::command]
 pub async fn sync_now(app: AppHandle) -> Result<SyncReport, String> {
     // The silo on screen: pressing Sync is about the one being looked at,

@@ -224,7 +224,7 @@ export function PasswordsPanel({
     (from: string, to: string) => {
       onSaveCategories(categories.map((c) => (c.name === from ? { ...c, name: to } : c)));
       for (const entry of entries) {
-        if (entry.category === from) onSaveEntry(withEdits(entry, { category: to }));
+        if (entry.category === from) onSaveEntry(withEdits(entry, { category: to }), "arranged");
       }
       if (selectedCategory === from) setSelectedCategory(to);
     },
@@ -242,7 +242,7 @@ export function PasswordsPanel({
       }
       onSaveCategories(next);
       for (const entry of orphans) {
-        onSaveEntry(withEdits(entry, { category: FALLBACK_CATEGORY }));
+        onSaveEntry(withEdits(entry, { category: FALLBACK_CATEGORY }), "arranged");
       }
       if (selectedCategory === name) setSelectedCategory(null);
     },
@@ -711,14 +711,14 @@ export function PasswordsPanel({
 
   const finishKdbxExport = useCallback(
     async (password: string) => {
-      const path = await saveFileDialog({
-        defaultPath: "silentsilo-passwords.kdbx",
-        filters: [{ name: "KeePass database", extensions: ["kdbx"] }],
-      });
-      if (!path) return;
-      setTransferBusy(true);
       setKdbxError(null);
       try {
+        const path = await saveFileDialog({
+          defaultPath: "silentsilo-passwords.kdbx",
+          filters: [{ name: "KeePass database", extensions: ["kdbx"] }],
+        });
+        if (!path) return;
+        setTransferBusy(true);
         await invoke("passwords_write_kdbx", { path, password, entries: JSON.stringify(entries) });
         setKdbx(null);
         setTransferNotice(
@@ -1089,7 +1089,9 @@ export function PasswordsPanel({
                 }
                 onOpenAttachment={(attachment) => void openAttachment(selected, attachment)}
                 onRequestReveal={requestReveal}
-                onToggleFavorite={(entry) => onSaveEntry(withEdits(entry, { favorite: !entry.favorite }))}
+                onToggleFavorite={(entry) =>
+                  onSaveEntry(withEdits(entry, { favorite: !entry.favorite }), "arranged")
+                }
                 onEdit={(entry) => void startEdit(entry)}
                 onDelete={() => setPendingDelete(selected)}
                 onRestoreVersion={(entry, version) => void restoreVersion(entry, version)}

@@ -63,6 +63,14 @@ export type DescribedEvent = {
   details: string[];
 };
 
+/** How a key's kind reads. A security key and Windows Hello are both
+ * `fido2`, so that one says nothing. */
+const KEY_KINDS: Record<string, string> = {
+  fido2: "",
+  "secure-enclave": "the Mac's built-in key",
+  "android-keystore": "the phone's built-in key",
+};
+
 function text(value: unknown): string {
   if (value === undefined || value === null) return "";
   return typeof value === "string" ? value : String(value);
@@ -78,6 +86,7 @@ function count(value: unknown, one: string, many: string): string {
 function rest(x: Record<string, unknown>, used: string[]): string[] {
   return Object.keys(x)
     .filter((k) => !used.includes(k) && x[k] !== undefined && x[k] !== "")
+    .filter((k) => !(k === "kind" && KEY_KINDS[text(x[k])] === ""))
     .map((k) => {
       const v = x[k];
       if (k === "site") return `on ${text(v)}`;
@@ -85,7 +94,7 @@ function rest(x: Record<string, unknown>, used: string[]): string[] {
       if (k === "program") return `by ${text(v)}`;
       if (k === "format") return `as ${text(v).toUpperCase()}`;
       if (k === "entry") return `in ${text(v)}`;
-      if (k === "kind") return text(v);
+      if (k === "kind") return KEY_KINDS[text(v)] ?? text(v);
       return typeof v === "object" ? `${k}: ${JSON.stringify(v)}` : `${k}: ${text(v)}`;
     });
 }
@@ -102,7 +111,14 @@ export function describe(entry: AuditEntry): DescribedEvent {
     after = "",
     used: string[] = [],
     tone: ActivityTone = "plain",
-  ): DescribedEvent => ({ icon, tone, before, object, after, details: rest(x, used) });
+  ): DescribedEvent => ({
+    icon,
+    tone,
+    before,
+    object,
+    after,
+    details: rest(x, used),
+  });
 
   switch (entry.c) {
     case 1: {
@@ -125,7 +141,13 @@ export function describe(entry: AuditEntry): DescribedEvent {
     case 14:
       return make("app", "Filled ", l, " in an app");
     case 15:
-      return make("ssh", "Signed with ", l, x.for === "git" ? " for Git" : "", ["for"]);
+      return make(
+        "ssh",
+        "Signed with ",
+        l,
+        x.for === "git" ? " for Git" : text(x.for) ? ` for ${text(x.for)}` : "",
+        ["for"],
+      );
     case 20:
       return make("create", "Created ", l);
     case 21:
@@ -155,8 +177,15 @@ export function describe(entry: AuditEntry): DescribedEvent {
       return l
         ? make("trash", "Deleted ", l, " for good", ["count"])
         : make("trash", "Deleted ", count(x.count, "item", "items"), " for good", ["count"]);
-    case 40:
-      return make("import", "Imported ", count(x.count, "password", "passwords"), "", ["count"]);
+    case 40: {
+      // What it came from, as the window named it: "KeePass", "Chrome/Edge".
+      const imported = make("import", "Imported ", count(x.count, "password", "passwords"), "", [
+        "count",
+        "format",
+      ]);
+      if (text(x.format)) imported.details.unshift(`from ${text(x.format)}`);
+      return imported;
+    }
     case 41:
       return make("export", "Exported ", count(x.count, "password", "passwords"), "", ["count"]);
     case 50:
@@ -172,13 +201,21 @@ export function describe(entry: AuditEntry): DescribedEvent {
     case 54:
       return make("rotate", "Replaced the encryption key", "", "", ["kept"], "notice");
     case 60:
-      return make("log", "Activity started");
+      return x.for === "organisation"
+        ? make("log", "The organisation's activity log started", "", "", ["for"], "notice")
+        : make("log", "Activity started", "", "", ["for"]);
     case 61:
-      return make("log", "Activity stopped", "", "", [], "notice");
-    case 62:
-      return make("log", "Changed how long activity is kept");
+      return x.for === "organisation"
+        ? make("log", "Activity moved to the organisation's log", "", "", ["for"], "notice")
+        : make("log", "Activity stopped", "", "", ["for"], "notice");
+    case 62: {
+      const days = Number(x.days);
+      return Number.isFinite(days) && days > 0
+        ? make("log", "Activity is now kept for ", count(days, "day", "days"), "", ["days"])
+        : make("log", "Activity is now kept with no time limit", "", "", ["days"]);
+    }
     case 63:
-      return make("log", "Removed old activity");
+      return make("log", "Removed old activity", "", "", ["count"]);
     case 70:
       return make("device", "A device joined", l ? ": " : "", l);
     case 71:

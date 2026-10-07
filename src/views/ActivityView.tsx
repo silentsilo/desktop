@@ -33,6 +33,12 @@ export function ActivityView({ status, devices, onOpenSettings }: Props) {
             needsKey={status.organisation}
             />
           </>
+        ) : status.enabled ? (
+          // On, with the key still on its way from another device.
+          <p className="hint">
+            Activity is on. This computer has not received what it needs to show it yet: sync, then
+            come back.
+          </p>
         ) : (
           <div className="panel-section">
             <p>Activity is off for this silo.</p>

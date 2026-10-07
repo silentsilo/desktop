@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   Contact,
@@ -347,11 +347,18 @@ export function EntryDetail({
 
         {/* After the kind's own fields: they are this entry's, named by the
             user. A hidden one is covered by the same reveal as the password. */}
-        {(entry.fields ?? []).map((field, i) =>
-          field.hidden
-            ? secretRow(field.name || "Hidden field", field.value, field.value, `f${i}-${entry.id}`)
-            : plainRow(field.name || "Field", field.value, `f${i}-${entry.id}`)
-        )}
+        {(entry.fields ?? []).map((field, i) => (
+          <Fragment key={`f${i}`}>
+            {field.hidden
+              ? secretRow(
+                  field.name || "Hidden field",
+                  field.value,
+                  field.value,
+                  `f${i}-${entry.id}`,
+                )
+              : plainRow(field.name || "Field", field.value, `f${i}-${entry.id}`)}
+          </Fragment>
+        ))}
 
         {entry.url &&
           (() => {
@@ -486,6 +493,7 @@ export function EntryDetail({
                           type="button"
                           className="secondary pw-history-restore"
                           disabled={busy}
+                          aria-label={`Restore the version of ${formatDate(version.saved_at)}`}
                           onClick={() => onRestoreVersion(entry, version)}
                         >
                           Restore

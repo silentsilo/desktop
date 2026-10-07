@@ -296,9 +296,6 @@ pub fn registers_for(
     }
 }
 
-/// [`registers_for`] with this build's lists: whether the installer points
-/// the named browser's key at the host. A browser with no allowed id gets
-/// no key.
 /// Where browsers on Linux read one user's native messaging manifests, with
 /// the list ([`registers`]) that decides each: Chromium and Brave install
 /// from the Chrome Web Store, so they follow Chrome's. Only browsers with a
@@ -344,6 +341,9 @@ pub fn user_manifest_places(home: &Path) -> Vec<(&'static str, PathBuf)> {
     places
 }
 
+/// [`registers_for`] with this build's lists: whether the installer points
+/// the named browser's key at the host. A browser with no allowed id gets
+/// no key.
 pub fn registers(key: &str) -> Option<bool> {
     let dev = if DEV_ALLOWED { dev_ids() } else { Vec::new() };
     registers_for(

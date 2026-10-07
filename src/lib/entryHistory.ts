@@ -56,10 +56,15 @@ function sameContent(a: Partial<PasswordEntry>, b: Partial<PasswordEntry>): bool
   return keys.every((key) => JSON.stringify(left[key]) === JSON.stringify(right[key]));
 }
 
+/** Bytes of `value` as the stored JSON, UTF-8, which is what core counts. */
+function jsonBytes(value: unknown): number {
+  return new TextEncoder().encode(JSON.stringify(value)).length;
+}
+
 /** Newest first, cut to the policy and then to the byte budget. */
 export function trimmed(history: HistoryVersion[], policy: HistoryPolicy): HistoryVersion[] {
   const kept = policy === "fit" ? [...history] : history.slice(0, Math.max(0, policy));
-  while (kept.length > 0 && JSON.stringify(kept).length > HISTORY_BYTES) kept.pop();
+  while (kept.length > 0 && jsonBytes(kept) > HISTORY_BYTES) kept.pop();
   return kept;
 }
 
@@ -81,7 +86,34 @@ export function withHistory(
     ...(contentOf(previous) as Partial<PasswordEntry>),
     saved_at: previous.updated_at,
   };
-  return { ...next, history: trimmed([version, ...(next.history ?? [])], policy) };
+  return {
+    ...next,
+    history: trimmed([version, ...(next.history ?? [])], policy),
+  };
+}
+
+/** The text fields every entry has. A version leaves out the empty ones, and
+ * every client, 1.0.0 on, reads these as strings. */
+const BASE_FIELDS = {
+  service: "",
+  username: "",
+  password: "",
+  url: "",
+  notes: "",
+};
+
+/** `entry` with each base text field present. For entries read from the
+ * store: one saved by a 1.4 build before restoring kept them is still read. */
+export function withBaseFields(entry: PasswordEntry): PasswordEntry {
+  const missing = Object.entries(BASE_FIELDS).some(
+    ([key]) => typeof (entry as Record<string, unknown>)[key] !== "string",
+  );
+  if (!missing) return entry;
+  const fixed: Record<string, unknown> = { ...entry };
+  for (const [key, empty] of Object.entries(BASE_FIELDS)) {
+    if (typeof fixed[key] !== "string") fixed[key] = empty;
+  }
+  return fixed as PasswordEntry;
 }
 
 /**
@@ -93,7 +125,7 @@ export function restoredFrom(
   version: HistoryVersion,
   now: number,
 ): PasswordEntry {
-  const kept: Record<string, unknown> = {};
+  const kept: Record<string, unknown> = { ...BASE_FIELDS };
   for (const [key, value] of Object.entries(entry)) {
     if (NOT_VERSIONED.has(key)) kept[key] = value;
   }

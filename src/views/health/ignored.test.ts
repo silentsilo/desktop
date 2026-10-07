@@ -21,10 +21,7 @@ describe("ignored health findings", () => {
   it("never sets aside a critical finding", () => {
     const weak = finding("weak", "high", ["a"]);
     expect(canIgnore(weak)).toBe(false);
-    const { active, ignored } = splitIgnored(
-      [weak],
-      new Set([fingerprint(weak)]),
-    );
+    const { active, ignored } = splitIgnored([weak], new Set([fingerprint(weak)]));
     expect(active).toEqual([weak]);
     expect(ignored).toEqual([]);
   });

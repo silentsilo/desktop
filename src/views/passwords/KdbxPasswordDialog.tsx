@@ -20,7 +20,10 @@ const MIN_EXPORT_LENGTH = 8;
  * typed twice. Nothing here is kept once the dialog closes.
  */
 export function KdbxPasswordDialog({ mode, busy, error, onSubmit, onCancel }: Props) {
-  const cardRef = useModal(onCancel);
+  // While it works the files are already being written into the silo:
+  // cancelling then would leave them with nothing to point at.
+  const cancel = busy ? undefined : onCancel;
+  const cardRef = useModal(cancel);
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
   const [keyFile, setKeyFile] = useState<string | null>(null);
@@ -47,11 +50,12 @@ export function KdbxPasswordDialog({ mode, busy, error, onSubmit, onCancel }: Pr
   };
 
   return (
-    <div className="modal-overlay" onClick={onCancel}>
+    <div className="modal-overlay" onClick={cancel}>
       <div
         ref={cardRef}
         className="modal-card"
         role="dialog"
+        aria-modal="true"
         aria-label={exporting ? "Password for the KeePass file" : "Open the KeePass database"}
         onClick={(e) => e.stopPropagation()}
       >
@@ -107,7 +111,7 @@ export function KdbxPasswordDialog({ mode, busy, error, onSubmit, onCancel }: Pr
           <p className="hint is-error">{error ?? problem}</p>
         )}
         <div className="modal-actions">
-          <button type="button" className="btn" onClick={onCancel}>
+          <button type="button" className="btn" onClick={onCancel} disabled={busy}>
             Cancel
           </button>
           <button

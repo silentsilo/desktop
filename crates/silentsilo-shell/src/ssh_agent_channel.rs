@@ -334,6 +334,9 @@ mod unix {
     pub struct AgentServer {
         listener: UnixListener,
         path: PathBuf,
+        /// The socket file this server made: on its way out it removes that
+        /// one only, never a newer server's at the same path.
+        inode: u64,
         stop: watch::Receiver<bool>,
     }
 
@@ -353,17 +356,30 @@ mod unix {
                 .parent()
                 .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "no directory"))?;
             private_dir(dir)?;
-            if std::fs::symlink_metadata(&path).is_ok() {
-                if UnixStream::connect(&path).await.is_ok() {
+            // A moment for this app's own previous server to let go, as on
+            // Windows: turned off and straight back on, it may still answer.
+            let mut tries = 0;
+            while std::fs::symlink_metadata(&path).is_ok() {
+                if UnixStream::connect(&path).await.is_err() {
+                    // Gone already if the old server was just leaving.
+                    match std::fs::remove_file(&path) {
+                        Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e.into()),
+                        _ => break,
+                    }
+                }
+                tries += 1;
+                if tries == 5 {
                     return Err(BindError::Taken { holder: None });
                 }
-                std::fs::remove_file(&path)?;
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
             let listener = UnixListener::bind(&path)?;
             std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+            let inode = std::fs::symlink_metadata(&path)?.ino();
             Ok(Self {
                 listener,
                 path,
+                inode,
                 stop,
             })
         }
@@ -379,6 +395,7 @@ mod unix {
             let Self {
                 listener,
                 path,
+                inode,
                 mut stop,
             } = self;
             let slots = Arc::new(Semaphore::new(MAX_CONNECTIONS));
@@ -409,7 +426,10 @@ mod unix {
                     drop(slot);
                 });
             }
-            let _ = std::fs::remove_file(&path);
+            drop(listener);
+            if std::fs::symlink_metadata(&path).is_ok_and(|m| m.ino() == inode) {
+                let _ = std::fs::remove_file(&path);
+            }
             Ok(())
         }
     }
@@ -461,6 +481,27 @@ mod unix {
                 Some(987)
             );
             assert_eq!(super::parent_from_stat("garbage"), None);
+        }
+
+        #[tokio::test]
+        async fn turned_off_and_straight_back_on_binds_again() {
+            let dir = std::env::temp_dir().join(format!("ss-agent-{}", std::process::id()));
+            let path = dir.join("ssh-agent.sock");
+            let (stop, stopped) = tokio::sync::watch::channel(false);
+            let server = super::AgentServer::bind_at(path.clone(), stopped)
+                .await
+                .unwrap();
+            let running =
+                tokio::spawn(server.run::<(), _, _, _>(|_, _, _| async { Vec::new() }, |_| {}));
+            stop.send(true).unwrap();
+            let (_again, quiet) = tokio::sync::watch::channel(false);
+            let rebound = super::AgentServer::bind_at(path, quiet).await;
+            assert!(rebound.is_ok(), "{:?}", rebound.as_ref().err());
+            let _ = running.await;
+            // The old server left the new one's socket where it was.
+            assert!(dir.join("ssh-agent.sock").exists());
+            drop(rebound);
+            let _ = std::fs::remove_dir_all(dir);
         }
     }
 }

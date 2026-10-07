@@ -37,7 +37,7 @@ import type {
   SyncProgress,
 } from "./lib/types";
 import { AUTO_LOCK_OPTIONS_MINUTES } from "./lib/types";
-import { withHistory } from "./lib/entryHistory";
+import { withBaseFields, withHistory } from "./lib/entryHistory";
 import { loadHistoryPolicy } from "./lib/historySetting";
 import { silosToLock } from "./lib/autoLock";
 import { decideConfirmSlot } from "./lib/confirmSlot";
@@ -3326,7 +3326,9 @@ export default function App() {
       const rows = JSON.parse(json) as unknown[];
       const meta_row = rows.find(isCategoriesRow);
       setPasswordCategories(meta_row ? meta_row.categories : null);
-      setPasswordEntries(rows.filter((r) => !isCategoriesRow(r)) as PasswordEntry[]);
+      setPasswordEntries(
+        (rows.filter((r) => !isCategoriesRow(r)) as PasswordEntry[]).map(withBaseFields),
+      );
       setPasswordsLoaded(true);
     } catch (e) {
       if (epoch !== sessionEpoch.current) return;
@@ -3944,7 +3946,7 @@ export default function App() {
               )
             }
             onUnstarCredential={(entry) =>
-              void savePasswordEntry({ ...entry, favorite: false })
+              void savePasswordEntry({ ...entry, favorite: false }, "arranged")
             }
           />
         )}

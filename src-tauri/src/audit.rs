@@ -56,6 +56,7 @@ pub fn record_in(app: &AppHandle, id: Uuid, event: Event) -> Result<(), String> 
     crate::diagnostics::warn("audit", format_args!("locking the silo: {e}"));
     crate::commands::vault::take_back_clipboard(app, Some(&[id]));
     let _ = state.close_session(id);
+    crate::commands::cloud::forget_sign_ins_when_all_locked(app);
     let _ = app.emit("silo-audit-locked", id.to_string());
     Err(UNRECORDED.into())
 }
@@ -251,6 +252,7 @@ pub async fn audit_read(
         };
     }
     let epoch = state.epoch();
+    let closes = state.audit_closes.load(std::sync::atomic::Ordering::SeqCst);
     let reader = reader_for(
         &app,
         "Touch the organisation's security key to read the activity log.",
@@ -265,10 +267,16 @@ pub async fn audit_read(
     };
     let page = page_of(&held, offset, limit, &search, kinds.as_deref());
     let state = app.state::<AppState>();
-    // Kept only if nothing closed or switched the silo meanwhile.
-    if state.epoch() == epoch {
-        *crate::state::lock_recovering(&state.audit_page) = Some(held);
+    // Kept only if nothing closed or switched the silo, and the page did
+    // not close, meanwhile. Checked under the lock both of those clear it
+    // under, after moving their counter, so neither slips between.
+    let mut slot = crate::state::lock_recovering(&state.audit_page);
+    if state.epoch() == epoch
+        && state.audit_closes.load(std::sync::atomic::Ordering::SeqCst) == closes
+    {
+        *slot = Some(held);
     }
+    drop(slot);
     Ok(page)
 }
 
@@ -277,7 +285,11 @@ const READ_AGAIN: &str = "The activity log needs reading again.";
 /// The Activity page closed: what it read goes.
 #[tauri::command(async)]
 pub fn audit_read_close(app: AppHandle) {
-    *crate::state::lock_recovering(&app.state::<AppState>().audit_page) = None;
+    let state = app.state::<AppState>();
+    state
+        .audit_closes
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    *crate::state::lock_recovering(&state.audit_page) = None;
 }
 
 /// Who reads: the silo's own key, or an organisation key touched now.
@@ -390,7 +402,7 @@ pub async fn audit_export(
     };
     let count = log.entries.len();
     crate::commands::fido::run_blocking(move || {
-        std::fs::write(&path, body).map_err(|e| e.to_string())
+        crate::commands::vault::write_owner_only(std::path::Path::new(&path), body.as_bytes())
     })
     .await?;
     Ok(count)

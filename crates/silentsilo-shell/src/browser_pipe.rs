@@ -523,6 +523,8 @@ mod unix {
     pub struct PipeServer {
         listener: UnixListener,
         path: PathBuf,
+        /// The socket file this server made, the only one it removes.
+        inode: u64,
         check: ClientCheck,
         stop: watch::Receiver<bool>,
     }
@@ -553,20 +555,33 @@ mod unix {
                 ));
             }
             std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
-            if std::fs::symlink_metadata(&path).is_ok() {
-                if UnixStream::connect(&path).await.is_ok() {
+            // A moment for this app's own previous server to let go: turned
+            // off and straight back on, it may still answer.
+            let mut tries = 0;
+            while std::fs::symlink_metadata(&path).is_ok() {
+                if UnixStream::connect(&path).await.is_err() {
+                    // Gone already if the old server was just leaving.
+                    match std::fs::remove_file(&path) {
+                        Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+                        _ => break,
+                    }
+                }
+                tries += 1;
+                if tries == 5 {
                     return Err(io::Error::new(
                         io::ErrorKind::AddrInUse,
                         "another SilentSilo is already serving the browser extension",
                     ));
                 }
-                std::fs::remove_file(&path)?;
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
             let listener = UnixListener::bind(&path)?;
             std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+            let inode = std::fs::symlink_metadata(&path)?.ino();
             Ok(Self {
                 listener,
                 path,
+                inode,
                 check,
                 stop,
             })
@@ -584,6 +599,7 @@ mod unix {
             let Self {
                 listener,
                 path,
+                inode,
                 check,
                 mut stop,
             } = self;
@@ -611,7 +627,11 @@ mod unix {
                     drop(slot);
                 });
             }
-            let _ = std::fs::remove_file(&path);
+            // Its own socket only: a newer server may already be at the path.
+            drop(listener);
+            if std::fs::symlink_metadata(&path).is_ok_and(|m| m.ino() == inode) {
+                let _ = std::fs::remove_file(&path);
+            }
             Ok(())
         }
     }
@@ -741,6 +761,28 @@ mod unix {
             stop.send(true).unwrap();
             serving.await.unwrap().unwrap();
             assert!(!path.exists(), "the socket goes with the server");
+        }
+
+        #[tokio::test]
+        async fn turned_off_and_straight_back_on_serves_again() {
+            let dir = private_dir();
+            let path = dir.0.join("ss").join("browser.sock");
+            let check = ClientCheck {
+                image: std::env::current_exe().unwrap(),
+            };
+            let (stop, rx) = watch::channel(false);
+            let server = PipeServer::bind_at(path.clone(), rx, check.clone())
+                .await
+                .unwrap();
+            let serving = tokio::spawn(
+                server.run::<(), _, _, _>(|_state, _frame| async { Vec::new() }, |_warning| {}),
+            );
+            stop.send(true).unwrap();
+            let (_again, quiet) = watch::channel(false);
+            let rebound = PipeServer::bind_at(path.clone(), quiet, check).await;
+            assert!(rebound.is_ok(), "{:?}", rebound.as_ref().err());
+            serving.await.unwrap().unwrap();
+            assert!(path.exists(), "the old server left the new one's socket");
         }
     }
 }

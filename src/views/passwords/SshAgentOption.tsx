@@ -34,6 +34,10 @@ export function SshAgentOption({
       const verdict = await invoke<string>("ssh_key_check", { key });
       if (verdict === "ok") onChange({ ssh_agent: true });
       else if (verdict === "encrypted") setAsking(true);
+      else if (verdict === "unsupported")
+        setError(
+          "The SSH agent signs with Ed25519, ECDSA P-256 or P-384, and RSA keys. This key is another kind.",
+        );
       else
         setError(
           "The SSH agent cannot read this key. It reads OpenSSH keys, and RSA keys in PEM. Convert others with ssh-keygen -p -f <file>.",
@@ -49,7 +53,10 @@ export function SshAgentOption({
     setError(null);
     setBusy(true);
     try {
-      const plain = await invoke<string>("ssh_key_remove_passphrase", { key, passphrase });
+      const plain = await invoke<string>("ssh_key_remove_passphrase", {
+        key,
+        passphrase,
+      });
       onChange({ ssh_private_key: plain, ssh_agent: true });
       setAsking(false);
     } catch (e) {

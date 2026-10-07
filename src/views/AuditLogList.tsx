@@ -84,7 +84,10 @@ const ICONS: Record<ActivityIcon, LucideIcon> = {
 const KINDS = Object.keys(KIND_LABELS) as ActivityKind[];
 
 function timeOf(ms: number): string {
-  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date(ms).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 /**
@@ -102,6 +105,18 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   // Answers for a search typed since are dropped.
   const asked = useRef(0);
+  // What the shown page was read with, and what is typed and chosen now:
+  // the debounce reads these when it fires, not what it saw when set.
+  const [shownFor, setShownFor] = useState<{
+    search: string;
+    kind: ActivityKind | null;
+  }>({
+    search: "",
+    kind: null,
+  });
+  const current = useRef({ search, kind });
+  current.current = { search, kind };
+  const debounce = useRef<number | undefined>(undefined);
 
   const nameOf = useCallback(
     (id: string) => {
@@ -124,28 +139,38 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
       const ticket = ++asked.current;
       setLoading(true);
       setError(null);
-      const ask = (again: boolean) =>
+      const ask = (again: boolean, from: number) =>
         invoke<AuditPage>("audit_read", {
           refresh: again,
-          offset,
+          offset: from,
           limit: PAGE,
           search: term,
           kinds: filter ? KIND_CODES[filter] : null,
         });
       try {
         let page: AuditPage;
+        let adding = append;
         try {
-          page = await ask(refresh);
+          page = await ask(refresh, offset);
         } catch (e) {
-          // The held read went with a lock or a switch: read it again,
-          // unless that takes a key, which needs the person's click.
-          if (refresh || needsKey) throw e;
-          page = await ask(true);
+          if (refresh) throw e;
+          // The held read went with a lock or a switch. An organisation's
+          // takes a key to read again, which needs the person's click: back
+          // to the button that asks for it.
+          if (needsKey) {
+            if (ticket === asked.current) setLog(null);
+            throw e;
+          }
+          // Read again from the top: events may have come in since, and
+          // what is shown would no longer line up with the new offsets.
+          page = await ask(true, 0);
+          adding = false;
         }
         if (ticket !== asked.current) return;
         setLog((prev) =>
-          append && prev ? { ...page, entries: [...prev.entries, ...page.entries] } : page,
+          adding && prev ? { ...page, entries: [...prev.entries, ...page.entries] } : page,
         );
+        setShownFor({ search: term, kind: filter });
       } catch (e) {
         if (ticket === asked.current) setError(formatAppError(e));
       } finally {
@@ -170,16 +195,22 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
   }, [needsKey]);
 
   // A search runs in Rust over the whole log, a moment after the typing
-  // stops; a filter at once.
+  // stops; a filter at once. Either one made while the first read was
+  // still running is applied when it lands.
   useEffect(() => {
-    if (!log) return;
-    const timer = window.setTimeout(() => void fetchPage(false, 0, search, kind, false), 250);
-    return () => window.clearTimeout(timer);
+    if (!log || (shownFor.search === search && shownFor.kind === kind)) return;
+    window.clearTimeout(debounce.current);
+    debounce.current = window.setTimeout(() => {
+      const now = current.current;
+      void fetchPage(false, 0, now.search, now.kind, false);
+    }, 250);
+    return () => window.clearTimeout(debounce.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [search, log === null]);
 
   const chooseKind = (next: ActivityKind | null) => {
     setKind(next);
+    window.clearTimeout(debounce.current);
     if (log) void fetchPage(false, 0, search, next, false);
   };
 
@@ -190,16 +221,16 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
 
   const exportAs = async (format: "csv" | "jsonl") => {
     setNotice(null);
-    const path = await saveFileDialog({
-      defaultPath: format === "csv" ? "activity-log.csv" : "activity-log.jsonl",
-      filters: [
-        format === "csv"
-          ? { name: "CSV", extensions: ["csv"] }
-          : { name: "JSON lines", extensions: ["jsonl"] },
-      ],
-    });
-    if (!path) return;
     try {
+      const path = await saveFileDialog({
+        defaultPath: format === "csv" ? "activity-log.csv" : "activity-log.jsonl",
+        filters: [
+          format === "csv"
+            ? { name: "CSV", extensions: ["csv"] }
+            : { name: "JSON lines", extensions: ["jsonl"] },
+        ],
+      });
+      if (!path) return;
       const count = await invoke<number>("audit_export", { path, format });
       setNotice(count === 1 ? "Exported 1 event." : `Exported ${count} events.`);
     } catch (e) {
@@ -348,6 +379,13 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
           <p>Reading it asks for one of the organisation&apos;s security keys.</p>
           <button type="button" onClick={() => void load()}>
             Read activity
+          </button>
+        </div>
+      )}
+      {!needsKey && !log && !loading && error && (
+        <div className="activity-empty">
+          <button type="button" onClick={() => void load()}>
+            Try again
           </button>
         </div>
       )}

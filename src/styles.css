@@ -3052,6 +3052,12 @@ ol.key-add-steps {
   animation: fade-in 0.2s ease;
 }
 
+/* A question asked on behalf of another dialog, such as a security key's
+   PIN during a signature: above whatever asked it. */
+.modal-overlay-top {
+  z-index: 125;
+}
+
 .modal-card {
   width: min(400px, 90vw);
   max-height: 90vh;

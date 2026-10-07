@@ -3,6 +3,7 @@ import {
   HISTORY_BYTES,
   changedLabels,
   restoredFrom,
+  withBaseFields,
   reusesOldPassword,
   withHistory,
   withoutHistory,
@@ -31,7 +32,10 @@ describe("withHistory", () => {
     const after = withHistory(before, withEdits(before, { password: "second", updated_at: 2000 }), 10);
     expect(after.password).toBe("second");
     expect(after.history).toHaveLength(1);
-    expect(after.history?.[0]).toMatchObject({ password: "first", saved_at: 1000 });
+    expect(after.history?.[0]).toMatchObject({
+      password: "first",
+      saved_at: 1000,
+    });
   });
 
   it("adds nothing for a star, a category or an attachment", () => {
@@ -39,7 +43,9 @@ describe("withHistory", () => {
     for (const change of [
       { favorite: true },
       { category: "Work" },
-      { attachments: [{ blob_id: "b", name: "a.pdf", size_bytes: 1, blob_key: "k" }] },
+      {
+        attachments: [{ blob_id: "b", name: "a.pdf", size_bytes: 1, blob_key: "k" }],
+      },
     ]) {
       const after = withHistory(before, withEdits(before, { ...change, updated_at: 2000 }), 10);
       expect(after.history).toBeUndefined();
@@ -56,7 +62,9 @@ describe("withHistory", () => {
     const before = entry();
     const after = withHistory(
       before,
-      withEdits(before, { fields: [{ name: "PIN", value: "1234", hidden: true }] }),
+      withEdits(before, {
+        fields: [{ name: "PIN", value: "1234", hidden: true }],
+      }),
       10,
     );
     expect(after.history).toHaveLength(1);
@@ -64,7 +72,9 @@ describe("withHistory", () => {
 
   it("never copies attachments, the passkey or the history into a version", () => {
     const before = {
-      ...entry({ attachments: [{ blob_id: "b", name: "a", size_bytes: 1, blob_key: "k" }] }),
+      ...entry({
+        attachments: [{ blob_id: "b", name: "a", size_bytes: 1, blob_key: "k" }],
+      }),
       passkey: { version: 1 },
       history: [{ saved_at: 500, password: "zero" }],
     } as PasswordEntry;
@@ -103,6 +113,16 @@ describe("withHistory", () => {
     expect(current.history!.length).toBeLessThan(60);
   });
 
+  it("counts the budget in bytes, as core does, not in characters", () => {
+    // Two bytes each in UTF-8: by characters this would fit twice over.
+    let current = entry({ notes: "ș".repeat(10_000) });
+    for (let i = 1; i <= 30; i += 1) {
+      current = withHistory(current, withEdits(current, { password: `p${i}` }), "fit");
+    }
+    const bytes = new TextEncoder().encode(JSON.stringify(current.history)).length;
+    expect(bytes).toBeLessThanOrEqual(HISTORY_BYTES);
+  });
+
   it("does not bring back a history that was cleared", () => {
     const before = withHistory(entry(), withEdits(entry(), { password: "second" }), 10);
     const cleared = withoutHistory(before);
@@ -125,6 +145,29 @@ describe("restoredFrom", () => {
     expect(saved.category).toBe("Money");
     expect(saved.updated_at).toBe(3000);
     expect(saved.history?.map((v) => v.password)).toEqual(["second", "first"]);
+  });
+
+  it("keeps every text field a string when the version had it empty", () => {
+    const first = entry({ notes: "", password: "" });
+    const second = withHistory(
+      first,
+      withEdits(first, { notes: "later", password: "set", updated_at: 2000 }),
+      10,
+    );
+    const restored = restoredFrom(second, second.history![0], 3000);
+    expect(restored.notes).toBe("");
+    expect(restored.password).toBe("");
+    expect(typeof restored.username).toBe("string");
+    expect(typeof restored.url).toBe("string");
+  });
+});
+
+describe("withBaseFields", () => {
+  it("fills in a text field an entry lacks and leaves a whole one alone", () => {
+    const whole = entry();
+    expect(withBaseFields(whole)).toBe(whole);
+    const { notes: _notes, ...rest } = whole;
+    expect(withBaseFields(rest as PasswordEntry).notes).toBe("");
   });
 });
 

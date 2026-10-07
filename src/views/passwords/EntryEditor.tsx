@@ -563,7 +563,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
                     type="button"
                     className="pw-inline-btn danger"
                     title="Remove field"
-                    aria-label="Remove field"
+                    aria-label={`Remove ${field.name || "this field"}`}
                     onClick={() =>
                       setDraft((d) => ({
                         ...d,

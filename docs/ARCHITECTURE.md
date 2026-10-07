@@ -300,8 +300,10 @@ only segments it has not opened since the silo was unlocked) and keeps the
 result in `AppState::audit_page`; "Show older" and the search, which runs
 here over the whole log, page through that without reading the copies
 again. What is held is the log in clear, for one silo and one unlock: the
-page closing (`audit_read_close`), a lock or a switch drops it, and every
-close path also calls core's `forget_audit_read`. Activity sits in the
+page closing (`audit_read_close`) drops it, and so does anything that moves
+the epoch (`bump_epoch`: a lock, a switch, an eviction), and a read still
+running when either happens keeps nothing. Every close path also calls
+core's `forget_audit_read`. Activity sits in the
 sidebar for every silo, an organisation's included, so whoever uses the
 silo sees that it is recorded; the window reads `audit_status` when a silo
 opens, after every pass and whenever the switch moves.
@@ -365,7 +367,8 @@ targets' tokens in core either way.
 A finished sign-in nothing saves is let go: the form's Cancel or Back, and
 signing in again in the same form, call `cloud_discard_sign_in` for the ones
 it held (`discardSignIns` in `StoreConfigForm`), and when the last silo
-locks every unsaved one goes (`forget_sign_ins_when_all_locked`). Not when
+closes, by a lock, a removal or an organisation's log that could not record,
+every unsaved one goes (`forget_sign_ins_when_all_locked`). Not when
 the form unmounts: a parent may swap it for a progress screen while the save
 it started is still adopting the sign-in. A discard after a save is harmless,
 since adoption already took the sign-in out of the list.
@@ -735,10 +738,12 @@ KeePassXC, RFC 9987 and OpenSSH's `PROTOCOL.agent`.
   see. Offering every key runs into the server's `MaxAuthTries` after a few
   (1Password needs an `agent.toml` for this). The setting is a new optional
   field in the entry, `ssh_agent: true`; an older client keeps it when it
-  saves the entry, as it keeps `fields` and `history` (FORMATS.md, with a
-  test on 1.0.0's code).
+  saves the entry, as it keeps `fields` and `history`: desktop and Android
+  edit a copy of the whole entry (FORMATS.md).
 - **Key types.** Ed25519, RSA with `rsa-sha2-256` and `rsa-sha2-512`
-  (SHA-1 `ssh-rsa` signatures are refused), ECDSA P-256 and P-384. The key
+  (SHA-1 `ssh-rsa` signatures are refused, before any dialog), ECDSA P-256
+  and P-384. Security-key (`sk-`) keys, DSA and ECDSA P-521 are refused when
+  the agent is turned on for the entry, and never offered. The key
   is read from the entry in OpenSSH's format, or as an RSA key in PKCS#1 or
   PKCS#8 PEM; `ssh-keygen -p -f <file>` turns any other into OpenSSH's, and
   the editor says so. The editor's "Use with the SSH agent" checks the key
@@ -763,19 +768,28 @@ KeePassXC, RFC 9987 and OpenSSH's `PROTOCOL.agent`.
   also runs the Windows Hello or security key
   check, as a fill does.
 - **Forwarding.** The agent verifies `session-bind@openssh.com` (the host
-  key's signature over the session id) and refuses a request on a forwarded
-  connection: a server you connected to could otherwise sign as you
-  elsewhere. A client that does not bind the session is treated as local,
-  and the dialog says the server is unknown.
+  key's signature over the session id; a host certificate's by the key it
+  certifies, which is the fingerprint shown and remembered) and on a
+  forwarded connection lists no keys and signs nothing: a server you
+  connected to could otherwise sign as you elsewhere. A connection binds to
+  16 servers at most, as OpenSSH's agent allows. This needs a client that
+  binds its sessions, OpenSSH 8.9 or later: an older one (the `ssh.exe` of
+  Windows 10, for one) looks local. Its logins are asked every time, since
+  the server is unknown, but a Git allowance holds for it too, forwarded or
+  not, because a Git signature names no server to tell them apart.
 - **Locked or no silo.** The agent lists nothing and signs nothing. A
   request while locked brings the window to its unlock screen and waits up
   to 60 seconds; after an unlock it answers, otherwise it answers with no
-  keys. Nothing of a key stays in memory while the silo is locked: the key
+  keys. When nobody unlocked it, later requests do not bring the window up
+  again for 10 minutes: an editor that fetches in the background would
+  otherwise raise it every time. Nothing of a key stays in memory while the silo is locked: the key
   is read from the entry for each signature and wiped after it.
 - **What it refuses.** Adding or removing keys, locking the agent,
   smartcard and PKCS#11 requests, constraints it does not know (RFC 9987
   says to refuse), and any other extension. A frame over 256 KB closes the
-  connection. Requests are rationed per connection as the browser's are.
+  connection. Requests are rationed per connection as the browser's are,
+  and across all connections together, so a new connection is no new
+  ration.
 - **The activity log** records each signature: the key, the program and
   the host when known.
 - **Built on** `ssh-key` (already in the tree, MIT/Apache-2.0) for keys and
@@ -785,8 +799,8 @@ KeePassXC, RFC 9987 and OpenSSH's `PROTOCOL.agent`.
   client; `ssh_agent/keys.rs` is the one module that reads the vault, through
   `list_passwords` like the browser's `logins.rs`; `ssh_agent/mod.rs` holds
   the dialog (`SshSignDialog`), the allowances and the rations (30 requests
-  per connection, one back every half second; after a declined signature
-  no dialog for 5 seconds). The window raising and handing back is
+  per connection and 60 for all of them, one back every half second; after
+  a declined signature no dialog for 5 seconds). The window raising and handing back is
   `front.rs`, shared with the browser's questions. macOS follows with its
   release, on `SSH_AUTH_SOCK` like Linux.
 

@@ -21,7 +21,8 @@ silo from opening needs a major version rather than a note.
   "Ignored" list on this computer and leave the count on the Health tab; one
   that changes, a new entry joining it, shows again.
 - The activity log opens quickly when it is large: records are opened on
-  every core and only once while the silo is open, and the Activity page
+  all of the computer's cores at once, and only once while the silo is
+  open, and the Activity page
   loads 100 at a time and searches the whole log on the app's side. A log
   of 100,000 events took 15 seconds on every visit; it now takes about half
   a second the first time and a moment after.
@@ -29,9 +30,11 @@ silo from opening needs a major version rather than a note.
   the silo, which never leave the app: turn it on under Settings, SSH agent,
   and mark each key "Use with the SSH agent". Every use is confirmed in the
   window, or allowed for one server (or for Git signatures) until the silo
-  locks. Requests forwarded from a server are refused, a locked silo offers
-  nothing, and each signature goes into the activity log. Windows (the pipe
-  Windows' own ssh uses) and Linux (`SSH_AUTH_SOCK`).
+  locks. A connection forwarded from a server gets no keys and no
+  signatures (with OpenSSH 8.9 or later, which says when it forwards), a
+  locked silo offers nothing, and each signature goes into the activity
+  log. Servers with a host certificate work. Windows (the pipe Windows' own
+  ssh uses) and Linux (`SSH_AUTH_SOCK`).
 - Bitwarden's ".zip (With Attachments)" export imports with its files:
   each one lands on its item, encrypted, and a file whose item cannot be
   told apart by name (two items with one name) goes on a note "Files from
@@ -42,15 +45,15 @@ silo from opening needs a major version rather than a note.
   KeePass history becomes its history here. Export writes every entry, of
   every kind, to a KDBX 4 file under a password you choose (Argon2id), which
   KeePassXC and KeePassDX open: the way out is as easy as the way in.
-
 - The activity log is written: unlocking and locking, showing or copying a
   secret, opening or saving a file outside the silo, filling a login in the
   browser, changes to entries and files, imports and exports, and changes
   to keys and the recovery code. It is on by default, and turned off per
   silo under Settings, Devices. It works with no copies at all and reaches
-  every copy and device at the next sync. Activity, in the sidebar, reads
-  it from this computer and every copy, says which records are missing from
-  a device or do not open, and exports it as CSV or JSON lines.
+  every copy and device at the next sync. Activity, in the sidebar, shows
+  it by day, one sentence per event, filtered by kind; it reads it from
+  this computer and every copy, says which records are missing from a
+  device or do not open, and exports it as CSV or JSON lines.
 - An organisation's silo keeps its own activity log, read only with an
   organisation key: started when the first key is enrolled (one year), or
   under Settings, Devices for a silo created earlier. A second organisation

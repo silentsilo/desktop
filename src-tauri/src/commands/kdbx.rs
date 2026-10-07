@@ -185,57 +185,76 @@ pub async fn passwords_read_kdbx(
         )?;
         let snapshot = crate::state::snapshot_focused_session(&app.state::<AppState>())?;
 
-        let bin = db.recycle_bin().map(|g| g.id());
-        let mut out = Vec::new();
-        for entry in db.iter_all_entries() {
-            let mut group = Vec::new();
-            let mut at = Some(entry.parent().id());
-            let mut binned = false;
-            while let Some(id) = at {
-                if Some(id) == bin {
-                    binned = true;
-                    break;
+        // What was encrypted before a failure is referred to by nothing:
+        // it goes again, as a Bitwarden zip's does.
+        let mut written: Vec<String> = Vec::new();
+        let result = read_entries(&db, &snapshot, &mut written);
+        if result.is_err() {
+            for blob in written {
+                if let Ok(id) = uuid::Uuid::parse_str(&blob) {
+                    let _ = silentsilo_vault::remove_blob_from_cache(&snapshot.root, id);
                 }
-                let Some(g) = db.group(id) else { break };
-                let parent = g.parent().map(|p| p.id());
-                if parent.is_some() {
-                    group.push(g.name.clone());
-                }
-                at = parent;
             }
-            if binned {
-                continue;
-            }
-            group.reverse();
-
-            let mut attachments = Vec::new();
-            for (name, attachment) in entry.attachments_named() {
-                attachments.push(encrypt_attachment_bytes(
-                    &snapshot,
-                    name,
-                    attachment.data.get(),
-                )?);
-            }
-
-            let mut history: Vec<KdbxVersion> = entry
-                .history
-                .as_ref()
-                .map(|h| h.get_entries().iter().map(version_of).collect())
-                .unwrap_or_default();
-            history.sort_by_key(|v| std::cmp::Reverse(v.modified));
-
-            out.push(KdbxEntry {
-                group,
-                tags: entry.tags.clone(),
-                created: millis(entry.times.creation),
-                current: version_of(&entry),
-                attachments,
-                history,
-            });
         }
-        Ok(out)
+        result
     })
     .await
+}
+
+/// The database's entries outside its recycle bin, each attachment
+/// encrypted into the silo as it is read; `written` names those blobs.
+fn read_entries(
+    db: &Database,
+    snapshot: &crate::state::SessionSnapshot,
+    written: &mut Vec<String>,
+) -> Result<Vec<KdbxEntry>, String> {
+    let bin = db.recycle_bin().map(|g| g.id());
+    let mut out = Vec::new();
+    for entry in db.iter_all_entries() {
+        let mut group = Vec::new();
+        let mut at = Some(entry.parent().id());
+        let mut binned = false;
+        while let Some(id) = at {
+            if Some(id) == bin {
+                binned = true;
+                break;
+            }
+            let Some(g) = db.group(id) else { break };
+            let parent = g.parent().map(|p| p.id());
+            if parent.is_some() {
+                group.push(g.name.clone());
+            }
+            at = parent;
+        }
+        if binned {
+            continue;
+        }
+        group.reverse();
+
+        let mut attachments = Vec::new();
+        for (name, attachment) in entry.attachments_named() {
+            let encrypted = encrypt_attachment_bytes(snapshot, name, attachment.data.get())?;
+            written.push(encrypted.blob_id().to_string());
+            attachments.push(encrypted);
+        }
+
+        let mut history: Vec<KdbxVersion> = entry
+            .history
+            .as_ref()
+            .map(|h| h.get_entries().iter().map(version_of).collect())
+            .unwrap_or_default();
+        history.sort_by_key(|v| std::cmp::Reverse(v.modified));
+
+        out.push(KdbxEntry {
+            group,
+            tags: entry.tags.clone(),
+            created: millis(entry.times.creation),
+            current: version_of(&entry),
+            attachments,
+            history,
+        });
+    }
+    Ok(out)
 }
 
 /// A string field of an entry's JSON.
@@ -451,6 +470,16 @@ fn build_database(
     Ok(db)
 }
 
+/// Overwrites every string in `value`: the entries arrive in clear.
+fn wipe(value: &mut Json) {
+    match value {
+        Json::String(s) => zeroize::Zeroize::zeroize(s),
+        Json::Array(items) => items.iter_mut().for_each(wipe),
+        Json::Object(fields) => fields.values_mut().for_each(wipe),
+        _ => {}
+    }
+}
+
 /// Writes `entries` (the silo's, as the window holds them) to `path` as a
 /// KDBX 4 database under `password`.
 #[tauri::command]
@@ -461,10 +490,12 @@ pub async fn passwords_write_kdbx(
     entries: String,
 ) -> Result<(), String> {
     let password = Zeroizing::new(password);
+    let text_in = Zeroizing::new(entries);
     if password.chars().count() < 8 {
         return Err("Use a password of at least 8 characters for the KeePass file.".into());
     }
-    let entries: Vec<Json> = serde_json::from_str(&entries).map_err(|e| e.to_string())?;
+    let mut entries: Vec<Json> = serde_json::from_str(&text_in).map_err(|e| e.to_string())?;
+    drop(text_in);
 
     // Every attached file has to be here before it can be written out.
     let blob_ids: Vec<Uuid> = entries
@@ -494,7 +525,10 @@ pub async fn passwords_write_kdbx(
         )?;
         let db = build_database(&entries, export_config(), &mut |att| {
             decrypt_attachment_bytes(&snapshot, text(att, "blob_id"), text(att, "blob_key"))
-        })?;
+        });
+        // The entries in clear, wiped once the database holds them.
+        entries.iter_mut().for_each(wipe);
+        let db = db?;
         let mut out = Zeroizing::new(Vec::new());
         db.save(&mut *out, DatabaseKey::new().with_password(&password))
             .map_err(|e| format!("The KeePass file could not be written: {e}"))?;

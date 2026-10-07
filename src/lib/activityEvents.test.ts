@@ -30,8 +30,27 @@ group("activity events", () => {
     expect(sentence(entry(34, { x: { what: "trash" } }))).toBe("Emptied the trash");
     expect(sentence(entry(34, { x: { count: 3 } }))).toBe("Deleted 3 items for good");
     expect(sentence(entry(40, { x: { count: 1, format: "kdbx" } }))).toBe("Imported 1 password");
-    expect(describe(entry(40, { x: { count: 1, format: "kdbx" } })).details).toEqual(["as KDBX"]);
+    expect(describe(entry(41, { x: { count: 1, format: "kdbx" } })).details).toEqual(["as KDBX"]);
     expect(sentence(entry(53, { x: { now: "off" } }))).toBe("Turned the recovery code off");
+  });
+
+  it("says what the window and core put in the details, never raw pairs", () => {
+    const imported = describe(entry(40, { x: { count: 3, format: "KeePass" } }));
+    expect(`${imported.before}${imported.object}`).toBe("Imported 3 passwords");
+    expect(imported.details).toEqual(["from KeePass"]);
+    expect(sentence(entry(60, { x: { for: "organisation" } }))).toBe(
+      "The organisation's activity log started",
+    );
+    expect(describe(entry(60, { x: { for: "organisation" } })).details).toEqual([]);
+    expect(sentence(entry(62, { x: { days: 90 } }))).toBe("Activity is now kept for 90 days");
+    expect(sentence(entry(62, { x: { days: "kept" } }))).toBe(
+      "Activity is now kept with no time limit",
+    );
+    expect(describe(entry(63, { x: { count: 3 } })).details).toEqual([]);
+    expect(describe(entry(50, { l: "YubiKey", x: { kind: "fido2" } })).details).toEqual([]);
+    expect(sentence(entry(15, { l: "Deploy", x: { for: "file" } }))).toBe(
+      "Signed with Deploy for file",
+    );
   });
 
   it("marks what deserves a second look", () => {

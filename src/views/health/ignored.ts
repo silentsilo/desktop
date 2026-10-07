@@ -22,9 +22,7 @@ export function loadIgnored(siloId: string): Set<string> {
   try {
     const raw = window.localStorage.getItem(KEY(siloId));
     const list = raw ? (JSON.parse(raw) as unknown) : [];
-    return new Set(
-      Array.isArray(list) ? list.filter((v) => typeof v === "string") : [],
-    );
+    return new Set(Array.isArray(list) ? list.filter((v) => typeof v === "string") : []);
   } catch {
     return new Set();
   }
@@ -47,8 +45,7 @@ export function splitIgnored(
   const active: HealthFinding[] = [];
   const aside: HealthFinding[] = [];
   for (const finding of findings) {
-    if (canIgnore(finding) && ignored.has(fingerprint(finding)))
-      aside.push(finding);
+    if (canIgnore(finding) && ignored.has(fingerprint(finding))) aside.push(finding);
     else active.push(finding);
   }
   return { active, ignored: aside };

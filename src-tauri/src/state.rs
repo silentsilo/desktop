@@ -44,8 +44,11 @@ pub struct AppState {
     /// The activity log the Activity page last read, which its "Show older"
     /// and its search page through without reading every copy again. The
     /// log in clear: for one silo and one unlock, dropped when the page
-    /// closes and by every path that closes the silo.
+    /// closes and whenever the epoch moves (a lock, a switch, an eviction).
     pub audit_page: Mutex<Option<crate::audit::HeldRead>>,
+    /// Counts the Activity page's closes, so a read still running when the
+    /// page closed keeps nothing.
+    pub audit_closes: AtomicU64,
 }
 
 /// What the window starts with until the user picks another.
@@ -361,6 +364,8 @@ impl AppState {
 
     pub fn bump_epoch(&self) {
         self.session_epoch.fetch_add(1, Ordering::SeqCst);
+        // Held for one unlock of one silo: whatever moved the epoch ended it.
+        *lock_recovering(&self.audit_page) = None;
     }
 
     /// Locks `active_silo` before `sessions`, and never the other way

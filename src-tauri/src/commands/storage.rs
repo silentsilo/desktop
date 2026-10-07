@@ -389,8 +389,23 @@ pub async fn backup_target_seed(app: AppHandle, from: String, to: String) -> Res
         .store(false, std::sync::atomic::Ordering::Relaxed);
     // Only the envelopes of keys still in use go across: a never-delete copy
     // keeps those of removed keys, and nothing would delete them again.
-    let keys = silentsilo_vault::load_fido_keys(&silo.path)
-        .unwrap_or(silentsilo_vault::StoredFidoKeys { keys: Vec::new() });
+    // A list that is not there, or holds no key, is a silo with none yet.
+    // One that cannot be read now is not: the copy would hold no envelope,
+    // so it is not made.
+    let keys = match silentsilo_vault::load_fido_keys(&silo.path) {
+        Ok(keys) => keys,
+        Err(silentsilo_vault::VaultError::InvalidCredentials) => {
+            silentsilo_vault::StoredFidoKeys { keys: Vec::new() }
+        }
+        Err(silentsilo_vault::VaultError::Io(e)) if e.kind() == std::io::ErrorKind::NotFound => {
+            silentsilo_vault::StoredFidoKeys { keys: Vec::new() }
+        }
+        Err(e) => {
+            return Err(format!(
+                "This silo's list of keys could not be read, so the copy was not made: {e}. Try again."
+            ));
+        }
+    };
     let outcome = silentsilo_sync::seed_target_checked(
         &*source,
         &*dest,

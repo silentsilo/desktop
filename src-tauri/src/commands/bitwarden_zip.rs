@@ -24,6 +24,15 @@ const MAX_ZIP_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_JSON_BYTES: u64 = 32 * 1024 * 1024;
 /// More entries than any export holds; a zip that says otherwise is not one.
 const MAX_ENTRIES: usize = 100_000;
+/// Most of a file's buffer set aside up front, from what the zip says it
+/// holds: growing it leaves copies of the plain bytes behind, unwiped.
+const PREALLOCATE: u64 = 32 * 1024 * 1024;
+
+/// What an export may unpack to, in all and for `data.json` alone.
+struct Limits {
+    total: u64,
+    json: u64,
+}
 
 const NOT_AN_EXPORT: &str = "This zip is not a Bitwarden export: it has no data.json. Export again with the .zip (With Attachments) format.";
 
@@ -50,6 +59,18 @@ fn parts(name: &str) -> Vec<&str> {
 /// keeping what it returns. Nothing is held beyond one file at a time.
 pub fn read_export<R: Read + Seek, T>(
     reader: R,
+    file: impl FnMut(&str, &str, &[u8]) -> Result<T, String>,
+) -> Result<(String, Vec<T>), String> {
+    let limits = Limits {
+        total: MAX_ZIP_BYTES,
+        json: MAX_JSON_BYTES,
+    };
+    read_export_within(reader, &limits, file)
+}
+
+fn read_export_within<R: Read + Seek, T>(
+    reader: R,
+    limits: &Limits,
     mut file: impl FnMut(&str, &str, &[u8]) -> Result<T, String>,
 ) -> Result<(String, Vec<T>), String> {
     let mut zip = zip::ZipArchive::new(reader)
@@ -109,21 +130,35 @@ pub fn read_export<R: Read + Seek, T>(
             continue;
         }
 
+        let is_json = rest == ["data.json"];
+        if is_json && json.is_some() {
+            return Err(
+                "This zip holds more than one data.json, so it is not one Bitwarden export.".into(),
+            );
+        }
         // Counted as it is read, not as the zip claims: a zip can lie.
-        let cap = if rest == ["data.json"] {
-            MAX_JSON_BYTES
-        } else {
-            MAX_ZIP_BYTES - unpacked
-        };
-        let mut bytes = Zeroizing::new(Vec::new());
+        // Everything counts against the whole, data.json included.
+        let left = limits.total.saturating_sub(unpacked);
+        let cap = if is_json { limits.json.min(left) } else { left };
+        let mut bytes = Zeroizing::new(Vec::with_capacity(
+            entry.size().min(cap).min(PREALLOCATE) as usize
+        ));
         (&mut entry)
-            .take(cap + 1)
+            .take(cap.saturating_add(1))
             .read_to_end(&mut bytes)
             .map_err(|e| format!("The zip could not be read: {e}"))?;
         if bytes.len() as u64 > cap {
-            return Err(
-                "That export unpacks to more than SilentSilo reads at once (512 MB).".into(),
-            );
+            return Err(if is_json && cap == limits.json {
+                format!(
+                    "The data.json in this zip is larger than SilentSilo reads ({} MB).",
+                    limits.json / (1024 * 1024)
+                )
+            } else {
+                format!(
+                    "That export unpacks to more than SilentSilo reads at once ({} MB).",
+                    limits.total / (1024 * 1024)
+                )
+            });
         }
         unpacked += bytes.len() as u64;
 
@@ -292,5 +327,48 @@ mod tests {
         );
         let err = read_export(zip, |_, _, _| Err::<(), _>("disk full".to_string())).unwrap_err();
         assert_eq!(err, "disk full");
+    }
+
+    fn read_within(zip: Cursor<Vec<u8>>, total: u64, json: u64) -> Result<(String, Files), String> {
+        read_export_within(zip, &Limits { total, json }, |folder, name, bytes| {
+            Ok((folder.to_string(), name.to_string(), bytes.to_vec()))
+        })
+    }
+
+    #[test]
+    fn data_json_counts_against_the_whole_and_nothing_wraps_past_it() {
+        // Files fill the budget, data.json takes it past, and a file after
+        // that must still be refused rather than read without a cap.
+        let zip = zip_of(
+            &[
+                ("attachments/A/a.bin", &[0u8; 60]),
+                ("data.json", &[b' '; 30]),
+                ("attachments/B/b.bin", &[0u8; 5]),
+            ],
+            zip::CompressionMethod::Deflated,
+        );
+        let err = read_within(zip, 80, 50).unwrap_err();
+        assert!(err.contains("unpacks to more"), "{err}");
+    }
+
+    #[test]
+    fn a_data_json_over_its_own_cap_says_so() {
+        let zip = zip_of(
+            &[("data.json", &[b' '; 30])],
+            zip::CompressionMethod::Stored,
+        );
+        let err = read_within(zip, 1000, 20).unwrap_err();
+        assert!(err.contains("data.json in this zip is larger"), "{err}");
+    }
+
+    #[test]
+    fn a_second_data_json_is_refused() {
+        // Two names that are one place once separators are dropped.
+        let zip = zip_of(
+            &[("data.json", b"{}"), ("/data.json", b"{\"x\":1}")],
+            zip::CompressionMethod::Stored,
+        );
+        let err = read(zip).unwrap_err();
+        assert!(err.contains("more than one data.json"), "{err}");
     }
 }

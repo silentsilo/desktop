@@ -1648,6 +1648,9 @@ pub enum EntryChange {
     HistoryCleared,
     /// One of many in an import, logged once for the whole import.
     Imported,
+    /// Starred, unstarred or moved to another category: what it says did
+    /// not change, so nothing is logged.
+    Arranged,
 }
 
 impl EntryChange {
@@ -1658,7 +1661,7 @@ impl EntryChange {
             EntryChange::Edited => Some(codes::ENTRY_EDITED),
             EntryChange::Restored => Some(codes::ENTRY_RESTORED),
             EntryChange::HistoryCleared => Some(codes::HISTORY_CLEARED),
-            EntryChange::Imported => None,
+            EntryChange::Imported | EntryChange::Arranged => None,
         }
     }
 }
@@ -2067,10 +2070,12 @@ pub async fn password_open_attachment(
 
         let dir = open_scratch_dir(&snapshot.root);
         silentsilo_vault::create_private_dir(&dir).map_err(|e| e.to_string())?;
-        // The name comes out of entry JSON, which is user data: joined
-        // through the same guard as every export, so a traversal-shaped
-        // name cannot walk out of the scratch directory.
-        let dest = safe_join(&dir, &name)?;
+        // The name comes out of entry JSON, which an import fills from a
+        // file someone else made: repaired as a file name in the silo is
+        // (a device name such as CON, a trailing dot), then joined through
+        // the same guard as every export, so it cannot walk out of the
+        // scratch directory.
+        let dest = safe_join(&dir, &silentsilo_vfs::sanitize_name(&name))?;
         let _ = std::fs::remove_file(&dest);
         crate::audit::record_in(
             &app2,
@@ -2176,27 +2181,7 @@ pub async fn passwords_write_export_csv(
         }
         crate::audit::record(&app, event)?;
 
-        let path = PathBuf::from(path);
-
-        #[cfg(unix)]
-        {
-            use std::io::Write;
-            use std::os::unix::fs::OpenOptionsExt;
-            let mut file = std::fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .mode(0o600)
-                .open(&path)
-                .map_err(|e| e.to_string())?;
-            file.write_all(contents.as_bytes())
-                .map_err(|e| e.to_string())?;
-        }
-
-        #[cfg(not(unix))]
-        std::fs::write(&path, contents.as_bytes()).map_err(|e| e.to_string())?;
-
-        Ok(())
+        write_owner_only(&PathBuf::from(path), contents.as_bytes())
     })
     .await
 }
@@ -2861,6 +2846,28 @@ mod unlock_rule_tests {
     }
 }
 
+/// Writes an export only its owner can read where the system has such a
+/// thing: it is in clear. A file already there is made so too.
+pub(crate) fn write_owner_only(path: &std::path::Path, bytes: &[u8]) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::io::Write;
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(path)
+            .map_err(|e| e.to_string())?;
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| e.to_string())?;
+        file.write_all(bytes).map_err(|e| e.to_string())
+    }
+    #[cfg(not(unix))]
+    std::fs::write(path, bytes).map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2917,5 +2924,6 @@ mod entry_change_tests {
         assert_eq!(code("restored"), Some(codes::ENTRY_RESTORED));
         assert_eq!(code("history_cleared"), Some(codes::HISTORY_CLEARED));
         assert_eq!(code("imported"), None);
+        assert_eq!(code("arranged"), None);
     }
 }

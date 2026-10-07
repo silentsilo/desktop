@@ -472,7 +472,7 @@ pub fn browser_save_cancel(app: AppHandle, request_id: String) -> Result<(), Str
 
 /// One request in, one answer out. Never logs what it was asked.
 async fn answer(app: &AppHandle, connection: &Connection, frame: Frame) -> Vec<u8> {
-    let bytes = match frame {
+    let mut bytes = match frame {
         Frame::Message(bytes) => bytes,
         Frame::TooLarge => {
             return protocol::error_answer(
@@ -481,7 +481,10 @@ async fn answer(app: &AppHandle, connection: &Connection, frame: Frame) -> Vec<u
             );
         }
     };
-    let (id, request) = match protocol::parse_request(&bytes) {
+    let parsed = protocol::parse_request(&bytes);
+    // A save carries a typed password: the frame goes as soon as it is read.
+    zeroize::Zeroize::zeroize(&mut bytes);
+    let (id, request) = match parsed {
         Ok(parsed) => parsed,
         Err((id, failure)) => return protocol::error_answer(&id, &failure),
     };
@@ -868,11 +871,11 @@ async fn save(
     let (reply, decided) = oneshot::channel();
     {
         let bridge = app.state::<BrowserBridge>();
-        if lock(&bridge.pending).is_some() {
-            return Err(Code::Busy.into());
-        }
+        // Both held, fill's first, as a fill takes them: checked apart, a
+        // fill and a save arriving together could each find the other free.
+        let filling = lock(&bridge.pending);
         let mut slot = lock(&bridge.saving);
-        if slot.is_some() {
+        if filling.is_some() || slot.is_some() {
             return Err(Code::Busy.into());
         }
         *slot = Some(PendingSave {
@@ -950,11 +953,9 @@ async fn fill(
     let (reply, decided) = oneshot::channel();
     {
         let bridge = app.state::<BrowserBridge>();
-        if lock(&bridge.saving).is_some() {
-            return Err(Code::Busy.into());
-        }
         let mut slot = lock(&bridge.pending);
-        if slot.is_some() {
+        let saving = lock(&bridge.saving);
+        if slot.is_some() || saving.is_some() {
             return Err(Code::Busy.into());
         }
         *slot = Some(Pending {

@@ -124,38 +124,54 @@ pub enum Request {
 /// Parses one request. On failure the id is whatever could be read, empty
 /// when none could, so the extension can still match the refusal.
 pub fn parse_request(bytes: &[u8]) -> Result<(String, Request), (String, Failure)> {
-    let value: serde_json::Value = serde_json::from_slice(bytes)
+    let mut value: serde_json::Value = serde_json::from_slice(bytes)
         .map_err(|_| (String::new(), Failure::new(Code::BadRequest)))?;
     let Some(id) = value.get("id").and_then(|v| v.as_str()) else {
         return Err((String::new(), Failure::new(Code::BadRequest)));
     };
     let id = id.to_string();
+    let kind = value
+        .get("type")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    // A login's strings are moved out of the parsed value, not copied, so
+    // the one copy is the wiped one.
+    let mut secret = |name: &str| match value.get_mut(name).map(serde_json::Value::take) {
+        Some(serde_json::Value::String(s)) => Some(Zeroizing::new(s)),
+        _ => None,
+    };
+    if kind.as_deref() == Some("save") {
+        let (username, password) = (secret("username"), secret("password"));
+        let origin = value
+            .get("origin")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        return match (origin, username, password) {
+            (Some(origin), Some(username), Some(password))
+                if !password.is_empty()
+                    && username.chars().count() <= SAVE_MAX_CHARS
+                    && password.chars().count() <= SAVE_MAX_CHARS =>
+            {
+                Ok((
+                    id,
+                    Request::Save {
+                        origin,
+                        username,
+                        password,
+                    },
+                ))
+            }
+            _ => Err((id, Failure::new(Code::BadRequest))),
+        };
+    }
     let text = |name: &str| value.get(name).and_then(|v| v.as_str()).map(str::to_string);
-    let request = match value.get("type").and_then(|v| v.as_str()) {
+    let request = match kind.as_deref() {
         Some("status") => Some(Request::Status),
         Some("show") => Some(Request::Show),
         Some("logins") => text("origin").map(|origin| Request::Logins { origin }),
         Some("search") => text("query").map(|query| Request::Search { query }),
         Some("fill") => match (text("origin"), text("ref")) {
             (Some(origin), Some(reference)) => Some(Request::Fill { origin, reference }),
-            _ => None,
-        },
-        Some("save") => match (
-            text("origin"),
-            text("username").map(Zeroizing::new),
-            text("password").map(Zeroizing::new),
-        ) {
-            (Some(origin), Some(username), Some(password))
-                if !password.is_empty()
-                    && username.chars().count() <= SAVE_MAX_CHARS
-                    && password.chars().count() <= SAVE_MAX_CHARS =>
-            {
-                Some(Request::Save {
-                    origin,
-                    username,
-                    password,
-                })
-            }
             _ => None,
         },
         _ => None,

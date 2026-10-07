@@ -3,6 +3,7 @@
 //! `PROTOCOL.agent` for `session-bind@openssh.com`.
 
 use signature::Verifier;
+use ssh_key::public::KeyData;
 use ssh_key::{PublicKey, Signature};
 
 pub const FAILURE: u8 = 5;
@@ -146,12 +147,26 @@ pub fn verify_bind(
     forwarding: bool,
 ) -> Option<Bound> {
     let key = PublicKey::from_bytes(host_key).ok()?;
+    // A host certificate signs with the key it certifies, as OpenSSH's own
+    // agent checks it. That key is what is remembered: it stays the same
+    // when the certificate is renewed.
+    let key: &KeyData = match key.key_data() {
+        KeyData::Certificate(certificate) => certificate.public_key(),
+        other => other,
+    };
     let signature = Signature::try_from(signature).ok()?;
-    Verifier::verify(&key, session_id, &signature).ok()?;
+    Verifier::verify(key, session_id, &signature).ok()?;
     Some(Bound {
         host_fingerprint: key.fingerprint(ssh_key::HashAlg::Sha256).to_string(),
         forwarding,
     })
+}
+
+/// Whether a public key blob is RSA's: the one kind whose signature depends
+/// on the request's flags.
+pub fn is_rsa(blob: &[u8]) -> bool {
+    let mut rest = blob;
+    string(&mut rest) == Some(b"ssh-rsa".as_slice())
 }
 
 /// What a sign request is for, read from its data. `ssh` signs a user
@@ -294,6 +309,52 @@ mod tests {
                 .to_string()
         );
         assert!(verify_bind(&host_key, b"another session", &signature, false).is_none());
+    }
+
+    #[test]
+    fn a_host_certificate_binds_by_the_key_it_certifies() {
+        let host = host();
+        let ca = PrivateKey::new(
+            KeypairData::Ed25519(Ed25519Keypair::from_seed(&[8; 32])),
+            "",
+        )
+        .unwrap();
+        let mut builder = ssh_key::certificate::Builder::new(
+            [1u8; 16],
+            host.public_key().key_data().clone(),
+            0,
+            u64::MAX,
+        )
+        .unwrap();
+        builder
+            .cert_type(ssh_key::certificate::CertType::Host)
+            .unwrap()
+            .valid_principal("example.org")
+            .unwrap();
+        let certificate = builder.sign(&ca).unwrap();
+        let blob = ssh_key::encoding::Encode::encode_vec(&KeyData::from(certificate)).unwrap();
+
+        let session = b"session-id-bytes";
+        let signature: Signature = host.try_sign(session).unwrap();
+        let mut sig_blob = Vec::new();
+        ssh_key::encoding::Encode::encode(&signature, &mut sig_blob).unwrap();
+
+        let bound = verify_bind(&blob, session, &sig_blob, false).unwrap();
+        assert_eq!(
+            bound.host_fingerprint,
+            host.public_key()
+                .fingerprint(ssh_key::HashAlg::Sha256)
+                .to_string()
+        );
+        assert!(verify_bind(&blob, b"another session", &sig_blob, false).is_none());
+    }
+
+    #[test]
+    fn rsa_is_told_from_its_blob() {
+        assert!(!is_rsa(&host().public_key().to_bytes().unwrap()));
+        let mut blob = Vec::new();
+        put_string(&mut blob, b"ssh-rsa");
+        assert!(is_rsa(&blob));
     }
 
     #[test]

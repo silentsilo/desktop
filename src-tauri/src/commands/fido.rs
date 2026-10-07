@@ -497,6 +497,9 @@ pub async fn fido_enroll_primary(
     .await
 }
 
+/// How long an organisation's log keeps its records unless it says otherwise.
+pub(crate) const DEFAULT_ORG_RETENTION_DAYS: u32 = 365;
+
 /// Add another FIDO2 security key (any vendor). Vault must be unlocked.
 ///
 /// `organisation` adds a second escrow key, which is what keeps a company from
@@ -504,9 +507,6 @@ pub async fn fido_enroll_primary(
 /// has to have been created as organisation-administered, so a personal silo
 /// can never acquire escrow it did not start with, and an existing
 /// organisation key has to be present to authorise the new one.
-/// How long an organisation's log keeps its records unless it says otherwise.
-pub(crate) const DEFAULT_ORG_RETENTION_DAYS: u32 = 365;
-
 #[tauri::command]
 pub async fn fido_add_key(
     app: AppHandle,

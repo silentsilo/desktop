@@ -328,7 +328,13 @@ export type AuditPage = AuditLog & {
 
 /** What a save was, for the silo's activity log. "imported" is logged once
  * for the whole import instead. */
-export type EntryChange = "created" | "edited" | "restored" | "history_cleared" | "imported";
+export type EntryChange =
+  | "created"
+  | "edited"
+  | "restored"
+  | "history_cleared"
+  | "imported"
+  | "arranged";
 
 /**
  * One credential, stored as a single sealed JSON object and synced whole.
