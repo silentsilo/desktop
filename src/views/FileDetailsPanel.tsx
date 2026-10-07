@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { MouseEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Calendar, Clock, Copy as CopyIcon, FolderOpen, MoreHorizontal } from "lucide-react";
+import { Calendar, Clock, Copy as CopyIcon, Files, FolderOpen, MoreHorizontal } from "lucide-react";
 import type { BackupTargetView } from "../lib/copies";
 import {
   copyLines,
@@ -17,13 +17,18 @@ import { IconClose, IconExternalLink, IconFolder } from "../ui/Icons";
 
 type Props = {
   entry: VaultEntry;
-  /** The folder it sits in. */
-  location: string;
+  /** The folder it sits in; none for the silo's root. */
+  location: string | null;
+  /** What to call it instead of its own name: the silo's, for its root. */
+  title?: string;
+  /** How many items a folder holds, when it is the one on screen. */
+  count?: number;
   syncState: FileSyncState | null;
   /** Backup storage is set up: the copies are worth naming. */
   syncConfigured: boolean;
   busy: boolean;
-  onOpen: () => void;
+  /** Absent for the folder on screen, which is already open. */
+  onOpen?: () => void;
   /** The same menu a right-click gives, at the button. */
   onMenu: (e: MouseEvent) => void;
   onClose: () => void;
@@ -45,6 +50,8 @@ const COPY_STATE: Record<"holds" | "owed" | "unknown", string> = {
 export function FileDetailsPanel({
   entry,
   location,
+  title,
+  count,
   syncState,
   syncConfigured,
   busy,
@@ -104,18 +111,24 @@ export function FileDetailsPanel({
         >
           {Icon ? <Icon size={36} strokeWidth={1.5} /> : <IconFolder size={38} />}
         </div>
-        <h3 className="details-name" title={entry.name}>
-          {entry.name}
+        <h3 className="details-name" title={title ?? entry.name}>
+          {title ?? entry.name}
         </h3>
         <p className="details-kind">
-          {isFile ? `${typeLabel(entry.name)} · ${formatBytes(entry.size_bytes)}` : "Folder"}
+          {isFile
+            ? `${typeLabel(entry.name)} · ${formatBytes(entry.size_bytes)}`
+            : count === undefined
+              ? "Folder"
+              : `Folder · ${count} ${count === 1 ? "item" : "items"}`}
         </p>
       </div>
 
       <dl className="details-rows">
-        <Row icon={<FolderOpen size={15} />} label="Location">
-          {location === "/" ? "Silo root" : location}
-        </Row>
+        {location !== null && (
+          <Row icon={<FolderOpen size={15} />} label="Location">
+            {location === "/" ? "Silo root" : location}
+          </Row>
+        )}
         <Row icon={<Calendar size={15} />} label="Created">
           {formatDate(entry.created_at)}
         </Row>
@@ -159,10 +172,14 @@ export function FileDetailsPanel({
       )}
 
       <div className="details-actions">
-        <button type="button" className="details-open" disabled={busy} onClick={onOpen}>
-          {isFile ? <IconExternalLink size={15} /> : <IconFolder size={15} />}
-          Open
-        </button>
+        {onOpen ? (
+          <button type="button" className="details-open" disabled={busy} onClick={onOpen}>
+            {isFile ? <IconExternalLink size={15} /> : <IconFolder size={15} />}
+            Open
+          </button>
+        ) : (
+          <span className="details-open-spacer" />
+        )}
         <button
           type="button"
           className="secondary details-more"
@@ -188,5 +205,59 @@ function Row({ icon, label, children }: { icon: ReactNode; label: string; childr
         <dd>{children}</dd>
       </div>
     </div>
+  );
+}
+
+/** Several items selected: how many, of what, how large, and their menu. */
+export function SelectionDetails({
+  entries,
+  onMenu,
+  onClose,
+}: {
+  entries: VaultEntry[];
+  onMenu: (e: MouseEvent) => void;
+  onClose: () => void;
+}) {
+  const files = entries.filter((e) => e.kind === "file");
+  const folders = entries.length - files.length;
+  const bytes = files.reduce((sum, f) => sum + (f.kind === "file" ? f.size_bytes : 0), 0);
+  const parts = [
+    files.length > 0 && `${files.length} ${files.length === 1 ? "file" : "files"}`,
+    folders > 0 && `${folders} ${folders === 1 ? "folder" : "folders"}`,
+  ].filter(Boolean);
+  return (
+    <aside className="details-panel" aria-label="Selection">
+      <button
+        type="button"
+        className="explorer-icon-btn details-close"
+        onClick={onClose}
+        title="Hide details"
+        aria-label="Hide details"
+      >
+        <IconClose size={14} />
+      </button>
+      <div className="details-head">
+        <div className="details-icon" aria-hidden>
+          <Files size={36} strokeWidth={1.5} />
+        </div>
+        <h3 className="details-name">{entries.length} items selected</h3>
+        <p className="details-kind">
+          {parts.join(" and ")}
+          {files.length > 0 && ` · ${formatBytes(bytes)}`}
+        </p>
+      </div>
+      <div className="details-actions">
+        <span className="details-open-spacer" />
+        <button
+          type="button"
+          className="secondary details-more"
+          onClick={onMenu}
+          title="Actions for these items"
+          aria-label="Actions for these items"
+        >
+          <MoreHorizontal size={17} />
+        </button>
+      </div>
+    </aside>
   );
 }

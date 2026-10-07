@@ -1494,6 +1494,10 @@ textarea:focus {
   height: 2.5rem;
 }
 
+.details-open-spacer {
+  flex: 1;
+}
+
 .details-more {
   width: 2.5rem;
   height: 2.5rem;

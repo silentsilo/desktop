@@ -33,7 +33,9 @@ silo from opening needs a major version rather than a note.
   the silo stays unlocked opens at once, without decrypting it again.
 - Details beside the file list: one selected file or folder shows its type,
   size, place, dates and backup state, and which copies hold the file, with
-  Open and the rest of its menu. It replaces the Info dialog; the button by
+  Open and the rest of its menu. With nothing selected it shows the folder
+  on screen, the silo itself at the top; with several, how many and how
+  large. It replaces the Info dialog; the button by
   the view switch hides it, and Info in the menu brings it back. A file only
   in backup storage says so, without guessing which copies hold it.
 - Health findings that are not critical can be ignored. They move to an

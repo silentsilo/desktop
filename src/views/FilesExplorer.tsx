@@ -15,7 +15,7 @@ import { computeMarqueeBox, rectIntersectsBox } from "../lib/marquee";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { SyncBadge } from "./SyncBadge";
 import { ArrowUpDown, Check, ChevronDown, Star } from "lucide-react";
-import { FileDetailsPanel } from "./FileDetailsPanel";
+import { FileDetailsPanel, SelectionDetails } from "./FileDetailsPanel";
 import { useModal } from "../hooks/useModal";
 import {
   IconBack,
@@ -116,6 +116,13 @@ type Props = {
   /** The step a running sync pass is on, to mark the file it moves. */
   syncProgress?: SyncProgress | null;
 };
+
+/** The folder `path` sits in, or null for the silo's root. */
+function parentPath(path: string): string | null {
+  if (path === "/" || path === "") return null;
+  const cut = path.lastIndexOf("/");
+  return cut <= 0 ? "/" : path.slice(0, cut);
+}
 
 export function FilesExplorer(props: Props) {
   const {
@@ -495,12 +502,19 @@ export function FilesExplorer(props: Props) {
     return [...folders, ...files];
   }, [entries, sortBy, sortOrder]);
 
-  // One item selected in the folder on screen: its details. A search shows
-  // results from all over the silo, which have their own rows.
+  // One item selected in the folder on screen: its details; several: what
+  // they add up to; none: the folder itself. A search shows results from all
+  // over the silo, which have their own rows.
   const detailsEntry =
     detailsShown && !searchActive && selectedIds.size === 1
       ? (sortedEntries.find((entry) => selectedIds.has(entry.id)) ?? null)
       : null;
+  const selectedEntries =
+    detailsShown && !searchActive && selectedIds.size > 1
+      ? sortedEntries.filter((entry) => selectedIds.has(entry.id))
+      : [];
+  const folderOnScreen =
+    detailsShown && !searchActive && selectedIds.size === 0 ? props.currentFolder : null;
 
   // Arrow keys move the selection, the way every file manager's do. In the
   // list, up and down step one row; in the grid, left and right step one
@@ -1152,6 +1166,30 @@ export function FilesExplorer(props: Props) {
             else onOpenFile(detailsEntry);
           }}
           onMenu={(e) => openEntryMenu(e, detailsEntry)}
+          onClose={() => setDetailsShown(false)}
+        />
+      )}
+      {selectedEntries.length > 1 && (
+        <SelectionDetails
+          entries={selectedEntries}
+          onMenu={(e) => openEntryMenu(e, selectedEntries[0]!)}
+          onClose={() => setDetailsShown(false)}
+        />
+      )}
+      {folderOnScreen && (
+        <FileDetailsPanel
+          entry={{ kind: "folder", ...folderOnScreen }}
+          location={parentPath(folderOnScreen.path)}
+          title={
+            parentPath(folderOnScreen.path) === null
+              ? crumbs[0]?.label || "Silo root"
+              : undefined
+          }
+          count={entries.length}
+          syncState={null}
+          syncConfigured={syncConfigured}
+          busy={busy}
+          onMenu={openBackgroundMenu}
           onClose={() => setDetailsShown(false)}
         />
       )}
