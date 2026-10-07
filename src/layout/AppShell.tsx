@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { t, useLocale, type Key } from "../i18n";
 import {
   ChevronsUpDown,
   FolderClosed,
@@ -111,17 +112,17 @@ const PANE_VIEWS = new Set<View>([
   "settings",
 ]);
 
-const NAV: { id: View; label: string; title: string; icon: typeof FolderClosed }[] = [
+const NAV: { id: View; label: Key; icon: typeof FolderClosed }[] = [
   // Favourites leads, the way Explorer and Finder put quick access above the
   // tree: it is the shortest path to what someone opens repeatedly, and the
   // two views below it are where everything else lives.
-  { id: "favorites", label: "Favourites", title: "Favourites", icon: Star },
-  { id: "files", label: "Files", title: "Files", icon: FolderClosed },
-  { id: "passwords", label: "Passwords", title: "Passwords", icon: KeyRound },
-  { id: "health", label: "Health", title: "Health", icon: HeartPulse },
-  { id: "trash", label: "Trash", title: "Trash", icon: Trash2 },
-  { id: "activity", label: "Activity", title: "Activity", icon: ScrollText },
-  { id: "settings", label: "Settings", title: "Settings", icon: Settings2 },
+  { id: "favorites", label: "nav.favorites", icon: Star },
+  { id: "files", label: "nav.files", icon: FolderClosed },
+  { id: "passwords", label: "nav.passwords", icon: KeyRound },
+  { id: "health", label: "nav.health", icon: HeartPulse },
+  { id: "trash", label: "nav.trash", icon: Trash2 },
+  { id: "activity", label: "nav.activity", icon: ScrollText },
+  { id: "settings", label: "nav.settings", icon: Settings2 },
 ];
 
 export function AppShell({
@@ -144,6 +145,7 @@ export function AppShell({
   onSwitchSilo,
   updateAvailable = null,
 }: Props) {
+  useLocale();
   const [preferCollapsed, setPreferCollapsed] = useState(
     () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true"
   );
@@ -173,7 +175,7 @@ export function AppShell({
           type="button"
           className="sidebar-silo"
           onClick={onSwitchSilo}
-          title={`${siloName}. Click to switch silo.`}
+          title={t("nav.switch_silo", { name: siloName })}
         >
           <HardDrive size={15} />
           {!collapsed && (
@@ -200,16 +202,17 @@ export function AppShell({
                   ? " tab-badge-warn"
                   : "";
             const updateDot = item.id === "settings" && updateAvailable !== null;
+            const name = t(item.label);
             const title =
               updateDot
-                ? `${item.title} (version ${updateAvailable} is available)`
+                ? t("nav.update_available", { item: name, version: updateAvailable })
                 : badgeCount === 0
-                ? item.title
+                ? name
                 : item.id === "health"
                   ? // "to look at", the Health page's own wording: the count
                     // mixes must-fix findings with worth-doing ones.
-                    `${item.title} (${badgeCount} to look at)`
-                  : `${item.title} (${badgeCount})`;
+                    t("nav.to_look_at", { item: name, count: badgeCount })
+                  : `${name} (${badgeCount})`;
             return (
               <button
                 key={item.id}
@@ -229,11 +232,11 @@ export function AppShell({
                     <span className="tab-badge tab-badge-dot tab-badge-update" aria-hidden />
                   )}
                 </span>
-                {!collapsed && <span className="tab-label">{item.label}</span>}
+                {!collapsed && <span className="tab-label">{name}</span>}
                 {!collapsed && badgeCount > 0 && (
                   <span className={`tab-badge${badgeTone}`}>{badgeLabel}</span>
                 )}
-                {!collapsed && updateDot && <span className="tab-badge tab-badge-update">Update</span>}
+                {!collapsed && updateDot && <span className="tab-badge tab-badge-update">{t("nav.update_badge")}</span>}
               </button>
             );
           })}
@@ -290,7 +293,7 @@ export function AppShell({
               type="button"
               className="btn-theme"
               onClick={onToggleTheme}
-              title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+              title={theme === "light" ? t("nav.dark") : t("nav.light")}
               aria-label="Toggle theme"
             >
               {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
@@ -304,7 +307,7 @@ export function AppShell({
                 type="button"
                 className="btn-collapse"
                 onClick={toggleCollapsed}
-                title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                title={collapsed ? t("nav.expand") : t("nav.collapse")}
                 aria-label="Toggle sidebar"
               >
                 {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
@@ -315,11 +318,11 @@ export function AppShell({
               type="button"
               className="btn-lock"
               onClick={onLock}
-              title="Lock silo"
-              aria-label="Lock silo"
+              title={t("nav.lock_silo")}
+              aria-label={t("nav.lock_silo")}
             >
               <Lock size={16} />
-              {!collapsed && <span className="lock-label">Lock</span>}
+              {!collapsed && <span className="lock-label">{t("nav.lock")}</span>}
             </button>
           </div>
         </div>

@@ -3,6 +3,7 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import { ArrowUpCircle } from "lucide-react";
 import { formatBytes } from "../lib/format";
 import { useUpdater } from "./settings/AppSettings";
+import { t, useLocale } from "../i18n";
 
 type Props = {
   version: string;
@@ -23,33 +24,37 @@ const RELEASES = "https://github.com/silentsilo/desktop/releases/tag/v";
  * installed, or until the next start after Later.
  */
 export function UpdateCard({ version, update, onLater, onFailedAfterLock, open = openUrl }: Props) {
+  useLocale();
   const updater = useUpdater({ version, update }, onFailedAfterLock);
   const { state } = updater;
   const installing = state.phase === "installing";
   const progress =
     state.phase === "installing"
       ? state.contentLength
-        ? `${formatBytes(state.downloaded)} of ${formatBytes(state.contentLength)}`
-        : "Downloading"
+        ? t("update.progress", {
+            done: formatBytes(state.downloaded),
+            total: formatBytes(state.contentLength),
+          })
+        : t("update.downloading")
       : null;
 
   return (
     <section className="update-card" aria-label="Update available">
       <ArrowUpCircle size={22} className="update-card-icon" aria-hidden />
       <div className="update-card-body">
-        <p className="update-card-title">SilentSilo {version} is available</p>
+        <p className="update-card-title">{t("update.available", { version })}</p>
         <p className="update-card-text">
           {progress ??
             (state.phase === "error"
-              ? `It did not install: ${state.message}`
-              : `You have ${__APP_VERSION__}. Installing locks any open silo and restarts SilentSilo.`)}
+              ? t("update.failed", { reason: state.message })
+              : t("update.you_have", { current: __APP_VERSION__ }))}
         </p>
         <button
           type="button"
           className="link"
           onClick={() => void open(`${RELEASES}${version}`).catch(() => {})}
         >
-          What's new
+          {t("update.whats_new")}
         </button>
       </div>
       <div className="update-card-actions">
@@ -58,10 +63,10 @@ export function UpdateCard({ version, update, onLater, onFailedAfterLock, open =
           disabled={installing}
           onClick={() => void updater.install(update, version)}
         >
-          {installing ? "Installing" : "Install and restart"}
+          {installing ? t("update.installing") : t("update.install")}
         </button>
         <button type="button" className="secondary" disabled={installing} onClick={onLater}>
-          Later
+          {t("update.later")}
         </button>
       </div>
     </section>

@@ -1,3 +1,4 @@
+import { dateLocale } from "../i18n";
 import type { BreadcrumbSeg } from "./types";
 
 export function formatBytes(n: number): string {
@@ -32,7 +33,9 @@ export function breadcrumbSegments(folderPath: string, rootLabel: string): Bread
  * One date shape everywhere, day first: "15 Nov 2023, 14:00". British, like
  * the spelling; the system locale answered "Nov 15, 2023" next to it.
  */
-const DATE_LOCALE = "en-GB";
+// The language's own shape once one is chosen; English keeps the British
+// day-first form.
+const DATE_LOCALE = () => dateLocale();
 
 /**
  * A timestamp, with the year shown only when it isn't this one.
@@ -46,7 +49,7 @@ export function formatDate(ts: number): string {
   const ms = ts > 1e12 ? ts : ts * 1000;
   const date = new Date(ms);
   const sameYear = date.getFullYear() === new Date().getFullYear();
-  return date.toLocaleString(DATE_LOCALE, {
+  return date.toLocaleString(DATE_LOCALE(), {
     year: sameYear ? undefined : "numeric",
     month: "short",
     day: "numeric",
@@ -69,7 +72,7 @@ export function formatDay(ts: number): string {
   const ms = ts > 1e12 ? ts : ts * 1000;
   const date = new Date(ms);
   const sameYear = date.getFullYear() === new Date().getFullYear();
-  return date.toLocaleDateString(DATE_LOCALE, {
+  return date.toLocaleDateString(DATE_LOCALE(), {
     year: sameYear ? undefined : "numeric",
     month: "short",
     day: "numeric",

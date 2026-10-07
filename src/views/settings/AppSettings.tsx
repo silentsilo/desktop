@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { LOCALES, languagePreference, setLanguage, systemLocale, t, useLocale } from "../../i18n";
 import { CheckCircle2, DownloadCloud, ExternalLink, Globe, Info, SlidersHorizontal } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Update } from "@tauri-apps/plugin-updater";
@@ -230,6 +231,8 @@ export function AppSettingsSection({
         {autostart && !autostart.supported && <p className="hint">Not available on this system.</p>}
         {autostartError && <p className="hint is-error">{autostartError}</p>}
         <p className="hint">{platform.autostartHint}</p>
+
+        <LanguagePicker />
 
         <div className="settings-row">
           <label className="settings-row-label" htmlFor="auto-lock-default">
@@ -513,6 +516,39 @@ export function AppSettingsSection({
           Hive S.R.L.
         </p>
       </div>
+    </>
+  );
+}
+
+/** Settings > General: the language, or the system's. */
+function LanguagePicker() {
+  useLocale();
+  const [preference, setPreference] = useState(languagePreference);
+  const systemName = LOCALES.find((l) => l.id === systemLocale())?.name ?? "English";
+  return (
+    <>
+      <div className="settings-row">
+        <label className="settings-row-label" htmlFor="language">
+          {t("settings.language")}
+        </label>
+        <select
+          id="language"
+          className="auto-lock-select"
+          value={preference}
+          onChange={(e) => {
+            setPreference(e.target.value);
+            setLanguage(e.target.value);
+          }}
+        >
+          <option value="system">{t("settings.language_system", { name: systemName })}</option>
+          {LOCALES.map((l) => (
+            <option key={l.id} value={l.id} lang={l.id}>
+              {l.reviewed ? l.name : t("settings.language_beta", { name: l.name })}
+            </option>
+          ))}
+        </select>
+      </div>
+      <p className="hint">{t("settings.language_hint")}</p>
     </>
   );
 }
