@@ -1,9 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { MouseEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Calendar, Clock, Copy as CopyIcon, FolderOpen, MoreHorizontal } from "lucide-react";
 import type { BackupTargetView } from "../lib/copies";
-import { copyLines, describeSyncState, typeLabel, type FileCopy } from "../lib/fileDetails";
+import {
+  copyLines,
+  describeSyncState,
+  syncStateShort,
+  typeLabel,
+  type FileCopy,
+} from "../lib/fileDetails";
 import { fileIconFor, fileKindOf } from "../lib/fileKinds";
 import { formatBytes, formatDate } from "../lib/format";
 import type { FileSyncState, VaultEntry } from "../lib/types";
@@ -96,7 +102,7 @@ export function FileDetailsPanel({
           className={`details-icon ${isFile ? `row-file kind-${fileKindOf(entry.name)}` : "row-folder"}`}
           aria-hidden
         >
-          {Icon ? <Icon size={40} strokeWidth={1.4} /> : <IconFolder size={42} />}
+          {Icon ? <Icon size={36} strokeWidth={1.5} /> : <IconFolder size={38} />}
         </div>
         <h3 className="details-name" title={entry.name}>
           {entry.name}
@@ -107,27 +113,24 @@ export function FileDetailsPanel({
       </div>
 
       <dl className="details-rows">
-        <div className="details-row">
-          <FolderOpen size={15} aria-hidden />
-          <dt>Location</dt>
-          <dd>{location === "/" ? "Silo root" : location}</dd>
-        </div>
-        <div className="details-row">
-          <Calendar size={15} aria-hidden />
-          <dt>Created</dt>
-          <dd>{formatDate(entry.created_at)}</dd>
-        </div>
-        <div className="details-row">
-          <Clock size={15} aria-hidden />
-          <dt>Modified</dt>
-          <dd>{formatDate(entry.updated_at)}</dd>
-        </div>
+        <Row icon={<FolderOpen size={15} />} label="Location">
+          {location === "/" ? "Silo root" : location}
+        </Row>
+        <Row icon={<Calendar size={15} />} label="Created">
+          {formatDate(entry.created_at)}
+        </Row>
+        <Row icon={<Clock size={15} />} label="Modified">
+          {formatDate(entry.updated_at)}
+        </Row>
         {isFile && syncState && (
-          <div className="details-row">
-            <CopyIcon size={15} aria-hidden />
-            <dt>Backup</dt>
-            <dd>{describeSyncState(syncState)}</dd>
-          </div>
+          <Row icon={<CopyIcon size={15} />} label="Backup">
+            <span
+              className={`details-status is-${syncStateShort(syncState).tone}`}
+              title={describeSyncState(syncState)}
+            >
+              {syncStateShort(syncState).label}
+            </span>
+          </Row>
         )}
       </dl>
 
@@ -135,14 +138,15 @@ export function FileDetailsPanel({
         <section className="details-copies" aria-label="Copies">
           <h4>Copies</h4>
           {onlyInBackup ? (
-            <p className="hint">
-              Another device put this file in backup storage. Which copies hold it shows here once
-              this computer has the file.
+            <p className="details-note">
+              Put in backup storage by another device. Which copies hold it shows here once this
+              computer has the file.
             </p>
           ) : (
             <ul>
               {lines.map((line) => (
                 <li key={line.id} className={`details-copy is-${line.state}`}>
+                  <span className="details-copy-dot" aria-hidden />
                   <span className="details-copy-name" title={line.name}>
                     {line.name}
                   </span>
@@ -155,8 +159,8 @@ export function FileDetailsPanel({
       )}
 
       <div className="details-actions">
-        <button type="button" disabled={busy} onClick={onOpen}>
-          {isFile ? <IconExternalLink size={14} /> : <IconFolder size={14} />}
+        <button type="button" className="details-open" disabled={busy} onClick={onOpen}>
+          {isFile ? <IconExternalLink size={15} /> : <IconFolder size={15} />}
           Open
         </button>
         <button
@@ -166,9 +170,23 @@ export function FileDetailsPanel({
           title="More actions"
           aria-label="More actions"
         >
-          <MoreHorizontal size={16} />
+          <MoreHorizontal size={17} />
         </button>
       </div>
     </aside>
+  );
+}
+
+function Row({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
+  return (
+    <div className="details-row">
+      <span className="details-row-icon" aria-hidden>
+        {icon}
+      </span>
+      <div>
+        <dt>{label}</dt>
+        <dd>{children}</dd>
+      </div>
+    </div>
   );
 }

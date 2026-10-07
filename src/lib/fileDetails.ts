@@ -42,3 +42,25 @@ export function describeSyncState(state: FileSyncState): string {
     return "Missing. Neither backup storage nor this computer has this file's content. If another device still has the file, open SilentSilo there and sync. Otherwise you can delete it.";
   return "In backup storage only. It downloads when opened.";
 }
+
+/** The same state in two words, with how it reads at a glance. */
+export function syncStateShort(state: FileSyncState): {
+  label: string;
+  tone: "ok" | "wait" | "away" | "bad";
+} {
+  switch (state) {
+    case "backed-up":
+      return { label: "Backed up", tone: "ok" };
+    case "pending":
+    case "local-only":
+      return { label: "Waiting to back up", tone: "wait" };
+    case "uploading":
+      return { label: "Uploading", tone: "wait" };
+    case "downloading":
+      return { label: "Downloading", tone: "wait" };
+    case "absent":
+      return { label: "Missing", tone: "bad" };
+    default:
+      return { label: "In backup only", tone: "away" };
+  }
+}
