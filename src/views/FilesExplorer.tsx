@@ -15,7 +15,7 @@ import { computeMarqueeBox, rectIntersectsBox } from "../lib/marquee";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { SyncBadge } from "./SyncBadge";
 import { ArrowUpDown, Check, ChevronDown, Star } from "lucide-react";
-import { FileInfoDialog } from "./FileInfoDialog";
+import { FileDetailsPanel } from "./FileDetailsPanel";
 import { useModal } from "../hooks/useModal";
 import {
   IconBack,
@@ -190,7 +190,18 @@ export function FilesExplorer(props: Props) {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(
     null,
   );
-  const [infoEntry, setInfoEntry] = useState<VaultEntry | null>(null);
+  // The details beside the list, for one selected item. On until the person
+  // closes it; Info in the menu brings it back.
+  const [detailsShown, setDetailsShown] = useState(
+    () => localStorage.getItem("explorer_details") !== "off",
+  );
+  useEffect(() => {
+    localStorage.setItem("explorer_details", detailsShown ? "on" : "off");
+  }, [detailsShown]);
+  const showDetails = (entry: VaultEntry) => {
+    setDetailsShown(true);
+    onSelectIds(new Set([entry.id]));
+  };
   const [sortBy, setSortBy] = useState<SortField | null>(null);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -412,7 +423,7 @@ export function FilesExplorer(props: Props) {
         });
       }
       items.push(
-        { kind: "action", label: "Info", icon: <IconInfo size={14} />, onClick: () => setInfoEntry(entry) },
+        { kind: "action", label: "Info", icon: <IconInfo size={14} />, onClick: () => showDetails(entry) },
         { kind: "divider" },
         {
           kind: "action",
@@ -430,7 +441,7 @@ export function FilesExplorer(props: Props) {
         { kind: "action", label: "Rename", icon: <IconEdit size={14} />, onClick: () => onRenameEntry(entry), disabled: busy },
         favoriteItem(entry),
         { kind: "divider" },
-        { kind: "action", label: "Info", icon: <IconInfo size={14} />, onClick: () => setInfoEntry(entry) },
+        { kind: "action", label: "Info", icon: <IconInfo size={14} />, onClick: () => showDetails(entry) },
         { kind: "divider" },
         {
           kind: "action",
@@ -483,6 +494,13 @@ export function FilesExplorer(props: Props) {
 
     return [...folders, ...files];
   }, [entries, sortBy, sortOrder]);
+
+  // One item selected in the folder on screen: its details. A search shows
+  // results from all over the silo, which have their own rows.
+  const detailsEntry =
+    detailsShown && !searchActive && selectedIds.size === 1
+      ? (sortedEntries.find((entry) => selectedIds.has(entry.id)) ?? null)
+      : null;
 
   // Arrow keys move the selection, the way every file manager's do. In the
   // list, up and down step one row; in the grid, left and right step one
@@ -732,6 +750,17 @@ export function FilesExplorer(props: Props) {
 
           <button
             type="button"
+            className={`view-toggle-btn${detailsShown ? " active" : ""}`}
+            onClick={() => setDetailsShown((v) => !v)}
+            aria-pressed={detailsShown}
+            title={detailsShown ? "Hide details" : "Show details"}
+            aria-label={detailsShown ? "Hide details" : "Show details"}
+          >
+            <IconInfo size={18} />
+          </button>
+
+          <button
+            type="button"
             className={`view-toggle-btn${viewType === "grid" ? " active" : ""}`}
             onClick={() => setViewType(viewType === "list" ? "grid" : "list")}
             title={viewType === "list" ? "Switch to grid view" : "Switch to list view"}
@@ -819,6 +848,7 @@ export function FilesExplorer(props: Props) {
         )}
       </div>
 
+      <div className="explorer-body">
       <section
         className={`file-list${selectedIds.size > 0 ? " has-selection" : ""}`}
         onContextMenu={searchActive ? undefined : openBackgroundMenu}
@@ -1110,6 +1140,22 @@ export function FilesExplorer(props: Props) {
           </table>
         )}
       </section>
+      {detailsEntry && (
+        <FileDetailsPanel
+          entry={detailsEntry}
+          location={props.currentFolder?.path ?? "/"}
+          syncState={syncStateOf(detailsEntry)}
+          syncConfigured={syncConfigured}
+          busy={busy}
+          onOpen={() => {
+            if (detailsEntry.kind === "folder") onOpenFolder(detailsEntry);
+            else onOpenFile(detailsEntry);
+          }}
+          onMenu={(e) => openEntryMenu(e, detailsEntry)}
+          onClose={() => setDetailsShown(false)}
+        />
+      )}
+      </div>
 
       {marquee && (
         <div
@@ -1249,14 +1295,6 @@ export function FilesExplorer(props: Props) {
         <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={ctxMenu.items} onClose={() => setCtxMenu(null)} />
       )}
 
-      {infoEntry && (
-        <FileInfoDialog
-          entry={infoEntry}
-          location={props.currentFolder?.path}
-          syncState={syncStateOf(infoEntry)}
-          onClose={() => setInfoEntry(null)}
-        />
-      )}
     </>
   );
 }

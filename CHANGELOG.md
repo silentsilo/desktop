@@ -28,6 +28,11 @@ silo from opening needs a major version rather than a note.
   or as many as fit (Settings, General). Restore puts an old version back and
   keeps the current one; Clear history removes old passwords for good.
 - Health points out an entry back on a password it had before.
+- Details beside the file list: one selected file or folder shows its type,
+  size, place, dates and backup state, and which copies hold the file, with
+  Open and the rest of its menu. It replaces the Info dialog; the button by
+  the view switch hides it, and Info in the menu brings it back. A file only
+  in backup storage says so, without guessing which copies hold it.
 - Health findings that are not critical can be ignored. They move to an
   "Ignored" list on this computer and leave the count on the Health tab; one
   that changes, a new entry joining it, shows again.

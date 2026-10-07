@@ -13,6 +13,7 @@ import {
   seedHeadline,
   seedLabel,
   seedPercent,
+  whereIs,
   type BackupTargetView,
   type Protection,
 } from "../lib/copies";
@@ -30,25 +31,8 @@ import {
   type CloudKind,
   type CloudSignIn,
   type SeedProgress,
-  type StoreConfigView,
 } from "../lib/types";
 import { CLOUD_NAME } from "../lib/cloud";
-
-/** A short phrase naming where a target points, for the row's title. */
-function whereIs(config: StoreConfigView): string {
-  switch (config.kind) {
-    case "s3":
-      return config.prefix ? `${config.bucket}/${config.prefix}` : config.bucket;
-    case "folder":
-      return config.path;
-    case "web-dav":
-      return config.url;
-    case "sftp":
-      return `${config.username}@${config.host}`;
-    default:
-      return CLOUD_NAME[config.kind];
-  }
-}
 
 type Props = {
   busy: boolean;

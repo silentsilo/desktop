@@ -351,6 +351,7 @@ pub fn run() {
             commands::storage::s3_test_config,
             commands::storage::s3_disconnect,
             commands::storage::backup_targets_list,
+            commands::storage::file_copies,
             commands::storage::backup_target_add,
             commands::storage::backup_target_remove,
             commands::storage::backup_target_protection,

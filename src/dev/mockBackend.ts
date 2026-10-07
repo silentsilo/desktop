@@ -786,6 +786,20 @@ const handlers: Record<string, Handler> = {
       },
     ];
   },
+  // Which copies hold one file: the waiting one is on the main folder only,
+  // anything local on all three, the rest was never seen here.
+  file_copies: (args) => {
+    const blob = String(args.blobId);
+    const local = ["33333333-3333-3333-3333-333333333333", "44444444-4444-4444-4444-444444444444"];
+    const ids = [
+      "11111111-1111-1111-1111-111111111111",
+      "22222222-2222-2222-2222-222222222222",
+      "33333333-3333-3333-3333-333333333333",
+    ];
+    if (!local.includes(blob)) return ids.map((id) => ({ id, held: null }));
+    const waiting = blob === "44444444-4444-4444-4444-444444444444";
+    return ids.map((id, i) => ({ id, held: waiting ? i === 0 : true }));
+  },
   backup_target_add: () => null,
   // A fill that reports as it goes, including a stretch in the middle where
   // one large blob is moving: the object count stands still there and only

@@ -1,5 +1,6 @@
 import { formatBytes } from "./format";
 import type { SeedProgress, StoreConfigView } from "./types";
+import { CLOUD_NAME } from "./cloud";
 
 /**
  * One place this silo backs up to, as the backend reports it.
@@ -219,4 +220,20 @@ export function seedPercent(p: SeedProgress): number {
   const total = bytes + p.objects_total * OBJECT_WEIGHT;
   if (total <= 0) return 0;
   return Math.min(100, Math.max(0, (done / total) * 100));
+}
+
+/** A short phrase naming where a target points, for the row's title. */
+export function whereIs(config: StoreConfigView): string {
+  switch (config.kind) {
+    case "s3":
+      return config.prefix ? `${config.bucket}/${config.prefix}` : config.bucket;
+    case "folder":
+      return config.path;
+    case "web-dav":
+      return config.url;
+    case "sftp":
+      return `${config.username}@${config.host}`;
+    default:
+      return CLOUD_NAME[config.kind];
+  }
 }

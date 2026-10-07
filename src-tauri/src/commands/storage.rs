@@ -225,6 +225,54 @@ pub async fn backup_targets_list(app: AppHandle) -> Result<Vec<BackupTargetView>
     crate::commands::fido::run_blocking(move || backup_targets_list_impl(&app)).await
 }
 
+/// One copy, as far as this computer knows whether it holds a file.
+#[derive(serde::Serialize)]
+pub struct FileCopy {
+    id: String,
+    /// `None` when the content is not on this computer: what is only in
+    /// backup storage was put there by another device, and which copies
+    /// hold it this one has not seen.
+    held: Option<bool>,
+}
+
+/// Which copies of the focused silo hold one file's content. A copy this
+/// computer sent it to, or fetched it from, holds it; any other is still
+/// owed it. Read from the content ledger beside the silo.
+#[tauri::command]
+pub async fn file_copies(app: AppHandle, blob_id: String) -> Result<Vec<FileCopy>, String> {
+    crate::commands::fido::run_blocking(move || {
+        let blob = uuid::Uuid::parse_str(&blob_id).map_err(|e| e.to_string())?;
+        let silo = crate::state::active_silo(&app)?;
+        let open = app
+            .state::<crate::state::AppState>()
+            .sessions
+            .lock()
+            .map_err(|e| e.to_string())?
+            .contains_key(&silo.id);
+        if !open {
+            return Err(silentsilo_core::CoreError::VaultLocked.to_string());
+        }
+        let here = silo
+            .path
+            .join("blobs")
+            .join(format!("{blob}.sslo"))
+            .is_file();
+        Ok(silentsilo_vault::load_targets(silo.id)
+            .into_iter()
+            .map(|target| {
+                let id = target.config.target_id();
+                FileCopy {
+                    id: id.to_string(),
+                    held: here.then(|| {
+                        !silentsilo_vault::list_undelivered_blob_ids(&silo.path, id).contains(&blob)
+                    }),
+                }
+            })
+            .collect())
+    })
+    .await
+}
+
 fn backup_targets_list_impl(app: &AppHandle) -> Result<Vec<BackupTargetView>, String> {
     let silo = crate::state::active_silo(app)?;
     let now = std::time::SystemTime::now()
