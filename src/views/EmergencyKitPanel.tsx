@@ -5,6 +5,7 @@ import { EmergencyKit } from "./EmergencyKit";
 import { fromGroups, isComplete, toGroups } from "../lib/recoveryCode";
 import { markDone } from "../lib/siloMemory";
 import { RecoveryCodeInput } from "../components/RecoveryCodeInput";
+import { t, tx, useLocale } from "../i18n";
 
 type Props = {
   busy: boolean;
@@ -39,6 +40,7 @@ export function EmergencyKitPanel({ busy, siloId, siloName, freshCode }: Props) 
   /// rules at their printed dimensions and they run off the edge. Rendering
   /// at full width and scaling the result keeps the preview a true picture of
   /// the paper, which is the only thing it is for.
+  const locale = useLocale();
   const previewRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
 
@@ -46,7 +48,9 @@ export function EmergencyKitPanel({ busy, siloId, siloName, freshCode }: Props) 
     const box = previewRef.current;
     if (!box) return;
     const probe = document.createElement("div");
-    probe.style.cssText = "position:absolute;visibility:hidden;width:194mm";
+    // 210mm for the languages printed at full width, as the stylesheet says.
+    const wide = locale !== "en" && locale !== "ro";
+    probe.style.cssText = `position:absolute;visibility:hidden;width:${wide ? 210 : 194}mm`;
     document.body.appendChild(probe);
     const sheetWidth = probe.getBoundingClientRect().width;
     probe.remove();
@@ -57,7 +61,7 @@ export function EmergencyKitPanel({ busy, siloId, siloName, freshCode }: Props) 
     const observer = new ResizeObserver(fit);
     observer.observe(box);
     return () => observer.disconnect();
-  }, []);
+  }, [locale]);
 
   const [mode, setMode] = useState<"blank" | "printed">("blank");
   const [typed, setTyped] = useState("");
@@ -77,60 +81,45 @@ export function EmergencyKitPanel({ busy, siloId, siloName, freshCode }: Props) 
     <div className="kit-block">
       <h4>
         <Printer size={16} />
-        Print an emergency kit
+        {t("kit.panel_title")}
       </h4>
-      <p>
-        One sheet with the recovery code and the steps to get this silo back on any computer. Keep
-        it with documents you cannot replace.
-      </p>
-      <p className="hint">
-        The page goes to your printer through the usual print dialog, and SilentSilo writes no
-        file. If you choose “Save as PDF” there, keep that file as safe as the sheet.
-      </p>
+      <p>{t("kit.panel_intro")}</p>
+      <p className="hint">{t("kit.panel_no_file")}</p>
 
       <div className="field">
-        <span>How should the code get onto the paper?</span>
+        <span>{t("kit.how_question")}</span>
         <div className="storage-choice kit-choice">
           <button
             type="button"
             className={`storage-option${mode === "blank" ? " is-chosen" : ""}`}
             onClick={() => setMode("blank")}
           >
-            <strong>Leave the boxes empty</strong>
-            <span>
-              You copy the code in by hand, so it does not go through the printer. Safer on a
-              shared or office printer.
-            </span>
+            <strong>{t("kit.blank_title")}</strong>
+            <span>{t("kit.blank_body")}</span>
           </button>
           <button
             type="button"
             className={`storage-option${mode === "printed" ? " is-chosen" : ""}`}
             onClick={() => setMode("printed")}
           >
-            <strong>Print the code too</strong>
-            <span>
-              Faster and less likely to be copied wrongly. Use it only on a printer you control.
-            </span>
+            <strong>{t("kit.printed_title")}</strong>
+            <span>{t("kit.printed_body")}</span>
           </button>
         </div>
       </div>
 
       {needsTyping && (
         <div className="field">
-          <span>Your recovery code, from your existing sheet</span>
+          <span>{t("kit.typed_label")}</span>
           <RecoveryCodeInput value={typed} disabled={busy} onChange={setTyped} />
-          <span className="hint">
-            SilentSilo does not keep your code, so it cannot fill this in. If you no longer have
-            it, make a new one under Recovery code first. The old one then stops working, except
-            on a never-delete copy.
-          </span>
+          <span className="hint">{t("kit.typed_hint")}</span>
         </div>
       )}
 
       {mode === "printed" && code.length > 0 && !looksComplete && (
         <p className="hint is-error" role="status">
           <AlertTriangle size={14} />
-          That is not a whole code. It has 32 letters and digits.
+          {t("kit.not_whole")}
         </p>
       )}
 
@@ -146,16 +135,15 @@ export function EmergencyKitPanel({ busy, siloId, siloName, freshCode }: Props) 
           }}
         >
           <Printer size={15} />
-          Print the kit
+          {t("kit.print")}
         </button>
       </div>
 
       <p className="hint">
-        In the print dialog, turn <strong>Headers and footers</strong> off, or the date and an
-        internal address are printed along the edges.
+        {tx("kit.headers_hint", { setting: <strong>{t("kit.headers_label")}</strong> })}
       </p>
 
-      <p className="hint">This is what will be printed.</p>
+      <p className="hint">{t("kit.preview_hint")}</p>
 
       <div className="kit-preview" ref={previewRef}>
         <div className="kit-preview-scale" style={{ zoom: scale }}>

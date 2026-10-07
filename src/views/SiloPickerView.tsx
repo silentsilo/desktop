@@ -18,6 +18,7 @@ import type { SiloReport } from "../lib/siloReport";
 import { formatAppError } from "../lib/errors";
 import { formatDay } from "../lib/format";
 import type { Silo } from "../lib/types";
+import { t, useLocale } from "../i18n";
 
 type Props = {
   silos: Silo[];
@@ -56,6 +57,7 @@ export function SiloPickerView({
   onAdded,
   onForget,
 }: Props) {
+  useLocale();
   const [mode, setMode] = useState<Mode>(silos.length === 0 ? "create" : "list");
   const [name, setName] = useState("Personal");
   const [location, setLocation] = useState("");
@@ -220,7 +222,7 @@ export function SiloPickerView({
               them here reads as a different pair of choices. */}
           {silos.length === 0 && (
             <div className="auth-alternatives">
-              <p className="hint">Already have one?</p>
+              <p className="hint">{t("welcome.already_have")}</p>
               <div className="actions">
                 <button
                   type="button"
@@ -229,11 +231,11 @@ export function SiloPickerView({
                   onClick={() => void addExisting()}
                 >
                   <FolderPlus size={15} />
-                  Add a folder from this computer
+                  {t("welcome.add_folder")}
                 </button>
                 <button type="button" className="secondary" disabled={busy} onClick={onJoin}>
                   <Cloud size={15} />
-                  Set up from backup storage
+                  {t("welcome.join")}
                 </button>
               </div>
             </div>
@@ -333,11 +335,11 @@ export function SiloPickerView({
             onClick={() => void addExisting()}
           >
             <FolderPlus size={16} />
-            <span>Add a folder from this computer</span>
+            <span>{t("welcome.add_folder")}</span>
           </button>
           <button type="button" className="secondary" disabled={busy} onClick={onJoin}>
             <Cloud size={16} />
-            <span>Set up from backup storage</span>
+            <span>{t("welcome.join")}</span>
           </button>
         </div>
       </section>

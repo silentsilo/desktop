@@ -7,6 +7,7 @@ import { open as openDialog } from "../lib/dialog";
 import { AuthShell } from "../layout/AuthShell";
 import { RecoveryCodeInput } from "../components/RecoveryCodeInput";
 import { formatAppError } from "../lib/errors";
+import { t, useLocale } from "../i18n";
 import { isCloudKind } from "../lib/types";
 import {
   discardSignIns,
@@ -65,6 +66,7 @@ type Props = {
  * being pointed at the wrong place costs nothing but a correction.
  */
 export function JoinView({ busy, onBack, onJoined }: Props) {
+  useLocale();
   const [draft, setDraft] = useState<StoreDraft>(EMPTY_STORE_DRAFT);
   const [preview, setPreview] = useState<JoinPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -137,7 +139,7 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
       subtitle="Bring a silo you already back up onto this computer."
     >
       <section className="card auth-card is-form">
-        <h2>Set up from backup storage</h2>
+        <h2>{t("welcome.join")}</h2>
         <p className="hint">
           Enter your silo&apos;s backup storage details. The silo is copied here and unlocked with
           a key you already have.

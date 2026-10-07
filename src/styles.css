@@ -7413,6 +7413,13 @@ button.storage-option:hover:where(:not(:disabled)) {
     border-radius: 0;
   }
 
+  /* Translations run up to a tenth longer than the English, and at 170mm
+     German and Portuguese spill onto a second page. A kit split across two
+     sheets is worse than a long line, so those get the full width. */
+  .kit-print:not(:lang(en)):not(:lang(ro)) {
+    width: 186mm;
+  }
+
   /* The rules and the boxes are the structure of this page, not decoration.
      Without this most browsers drop them to save ink and the boxes come out
      as nothing at all. */
@@ -7442,6 +7449,12 @@ button.storage-option:hover:where(:not(:disabled)) {
   width: 194mm;
   max-width: none;
   margin: 0;
+}
+
+/* The wider measure the printed copy takes for longer languages (see the
+   print rules), so the preview stays a true picture of the paper. */
+.kit-preview-scale .kit-sheet:not(:lang(en)):not(:lang(ro)) {
+  width: 210mm;
 }
 
 /* The chosen half of a two-way pick. The storage options elsewhere are a
