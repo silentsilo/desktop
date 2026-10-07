@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { KeyRound } from "lucide-react";
 import type { Os, SshSignPrompt } from "../lib/types";
-import { platformStrings } from "../lib/platformStrings";
+import { builtInOrKey, platformStrings } from "../lib/platformStrings";
 import { formatAppError } from "../lib/errors";
 import { useEventSubscription } from "../hooks/useEventSubscription";
 import { useModal } from "../hooks/useModal";
@@ -155,7 +155,7 @@ function SignCard({
             </label>
           )}
           {prompt.require_reauth && (
-            <p className="hint">You confirm with {platform.builtIn} or your security key next.</p>
+            <p className="hint">You confirm with {builtInOrKey(platform)} next.</p>
           )}
           {error && <p className="hint is-error">{error}</p>}
         </div>

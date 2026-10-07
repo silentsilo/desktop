@@ -37,8 +37,9 @@ export function EnrollView({
       <section className="card auth-card">
         <h2>Set up unlocking</h2>
         <p className="hint">
-          A security key (YubiKey, Nitrokey, SoloKeys) works on any computer. {platform.builtIn}{" "}
-          is quicker but works only on this one. You can add the other later in Settings.
+          A security key (YubiKey, Nitrokey, SoloKeys) works on any computer.
+          {platform.hasBuiltIn &&
+            ` ${platform.builtIn} is quicker but works only on this one. You can add the other later in Settings.`}
         </p>
         {bootstrap.fido_available ? (
           <>

@@ -366,8 +366,9 @@ export function SettingsPanel(props: Props) {
               Keys
             </h3>
             <p>
-              Most USB and NFC security keys work (YubiKey, Nitrokey, SoloKeys), and so does{" "}
-              {platform.builtIn} on this computer. Each one unlocks the silo on its own.
+              Most USB and NFC security keys work (YubiKey, Nitrokey, SoloKeys)
+              {platform.hasBuiltIn ? `, and so does ${platform.builtIn} on this computer` : ""}.
+              Each one unlocks the silo on its own.
             </p>
             {securityKeys.length === 0 ? (
               <p className="hint empty-state-row">
@@ -512,8 +513,9 @@ export function SettingsPanel(props: Props) {
                     Enrol as an organisation key
                     <span className="hint">
                       A spare to keep in the company safe. You will be asked for an existing
-                      organisation key first. {platform.builtIn} cannot be one, because it works
-                      only on this computer.
+                      organisation key first.
+                      {platform.hasBuiltIn &&
+                        ` ${platform.builtIn} cannot be one, because it works only on this computer.`}
                     </span>
                   </span>
                 </label>

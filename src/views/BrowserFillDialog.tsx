@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Globe } from "lucide-react";
 import type { BrowserFillPrompt, Os } from "../lib/types";
-import { platformStrings } from "../lib/platformStrings";
+import { builtInOrKey, platformStrings } from "../lib/platformStrings";
 import { formatAppError } from "../lib/errors";
 import { useEventSubscription } from "../hooks/useEventSubscription";
 import { useModal } from "../hooks/useModal";
@@ -149,7 +149,7 @@ function FillCard({
             </p>
           )}
           <p className="hint">
-            You confirm with {platform.builtIn} or your security key next. The browser receives
+            You confirm with {builtInOrKey(platform)} next. The browser receives
             the login only after that.
           </p>
           {busy && progress && (

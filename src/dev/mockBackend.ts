@@ -332,7 +332,8 @@ const handlers: Record<string, Handler> = {
         fido_key_present: true,
         fido_enrolled: enrolledAtRuntime,
         fido_backup_enrolled: false,
-        platform_authenticator: !flag("nohello"),
+        // Linux has none the app uses, as `ctap.rs` answers.
+        platform_authenticator: !flag("nohello") && os() !== "linux",
         portable_enrolled: !flag("helloonly"),
         platform_enrolled: flag("helloonly"),
         os: os(),
@@ -365,7 +366,8 @@ const handlers: Record<string, Handler> = {
       // is what `WebAuthNIsUserVerifyingPlatformAuthenticatorAvailable` answers
       // false to. The enrolment screen drops a button in that case, and that
       // branch had no way of being looked at.
-      platform_authenticator: !flag("nohello"),
+      // Linux has none the app uses, as `ctap.rs` answers.
+      platform_authenticator: !flag("nohello") && os() !== "linux",
       // `?helloonly` models a silo whose only way in is Windows Hello, which
       // is what changes the unlock screen's instruction: telling that user to
       // insert a key sends them looking for hardware they do not own.

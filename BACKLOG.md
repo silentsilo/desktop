@@ -18,13 +18,12 @@ specification in core names a tampered binary as the path nothing inside the
 program can defend against, and a reproducible build is the half of the
 answer still missing.
 
-### macOS is not packaged
+### macOS is not released
 
-The bundle targets Windows. A macOS build would need its own signing and
-notarisation before it could be opened at all, and neither is set up. The
-crates underneath already build and are tested on macOS in
-[silentsilo/core](https://github.com/silentsilo/core); what is missing is
-platform work in `silentsilo-shell` and the packaging.
+Windows and, from 1.4, Linux ship. The release workflow builds a macOS
+bundle, and signs and notarises it once the Developer ID secrets are set;
+no macOS build has been tested on a Mac yet, so none is released. The crates underneath build and are tested
+on macOS in [silentsilo/core](https://github.com/silentsilo/core).
 
 ## Housekeeping
 

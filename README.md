@@ -2,7 +2,8 @@
 
 End-to-end encrypted vault for files and passwords, unlocked by a FIDO2
 security key or Windows Hello, with a written-down recovery code as the
-fallback. AGPL-3.0.
+fallback. For Windows 10 and 11, and for Linux as a .deb or an AppImage
+(security keys only: Linux has no built-in key the app uses). AGPL-3.0.
 
 Everything runs locally: no SilentSilo account, no SilentSilo server. Backup
 is optional, to storage you choose: your OneDrive, Dropbox or Google Drive, an
@@ -57,7 +58,11 @@ crates.
 | Crate | Where | Role |
 |-------|-------|------|
 | `silentsilo` | here, `src-tauri/` | The app: commands, sessions, flows |
-| `silentsilo-shell` | here, `crates/` | Explorer context menu, clipboard, autostart, tray plumbing |
+| `silentsilo-shell` | here, `crates/` | Explorer context menu, clipboard, autostart, tray plumbing, the browser and SSH agent channels |
+| `silentsilo-browser-host` | here, `crates/` | The native messaging host the browser starts, which relays to the app |
+| `silentsilo-app` | core | Sessions, the sync pass, the activity log as the app uses it |
+| `silentsilo-audit` | core | The activity log: sealed events, segments, the queue on the device |
+| `silentsilo-cloud` | core | OneDrive, Dropbox and Google Drive: sign-in, tokens, stores |
 | `silentsilo-crypto` | core | AES-GCM streaming, envelope encryption |
 | `silentsilo-vault` | core | Silo provisioning; `vault.db` encrypted at rest (AES-256-GCM) |
 | `silentsilo-vfs` | core | Folder/file tree, operation log |
@@ -212,6 +217,26 @@ want them gone:
   Credentials* and remove the entries ending in `.com.silentsilo.desktop`.
   Removing them stops this computer opening a silo without a security key, so
   do it after the silo folders, not before.
+
+### On Linux
+
+Remove the .deb with your package manager, or delete the AppImage.
+Neither touches your silo folders or your backup storage. What the app
+leaves in your home, to remove by hand if you want it gone:
+
+- `~/.local/share/com.silentsilo.desktop`, the list of silos (names and
+  folder paths), and `~/.local/share/SilentSilo`, the encrypted working
+  copies, the cache and, for the AppImage, the copy of the browser host
+- `~/.config/autostart/com.silentsilo.desktop.desktop`, if it starts at
+  login
+- the browser extension's manifests, `com.silentsilo.desktop.json` under
+  each browser's `NativeMessagingHosts` (or Firefox's
+  `native-messaging-hosts`). Turning the extension off in Settings before
+  uninstalling removes them.
+- the device secret and storage credentials in your keyring (GNOME Keyring
+  or KWallet, through the Secret Service), under names ending in
+  `.com.silentsilo.desktop`. As on Windows, remove them after the silo
+  folders, not before.
 
 ## Dev
 

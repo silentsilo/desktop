@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { osOf, platformStrings } from "./platformStrings";
+import { builtInOrKey, osOf, platformStrings } from "./platformStrings";
 
 describe("platformStrings", () => {
   it("names the Windows pieces exactly as the screens always did", () => {
@@ -48,5 +48,12 @@ describe("platformStrings", () => {
     expect(osOf(undefined)).toBe("windows");
     expect(osOf({})).toBe("windows");
     expect(osOf({ os: "macos" })).toBe("macos");
+  });
+
+  it("offers no built-in key on Linux, which has none the app uses", () => {
+    expect(platformStrings("linux").hasBuiltIn).toBe(false);
+    expect(builtInOrKey(platformStrings("linux"))).toBe("your security key");
+    expect(builtInOrKey(platformStrings("windows"))).toBe("Windows Hello or your security key");
+    expect(platformStrings("macos").hasBuiltIn).toBe(true);
   });
 });

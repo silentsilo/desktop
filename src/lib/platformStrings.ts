@@ -18,6 +18,8 @@ export type PlatformStrings = {
   osName: string;
   /** The built-in authenticator: "Windows Hello" or "Touch ID". */
   builtIn: string;
+  /** Whether there is one the app uses. Linux has none: a security key only. */
+  hasBuiltIn: boolean;
   /** Where files live on this system: "Windows Explorer" or "Finder". */
   fileManager: string;
   /** Where the app sits while its window is closed. */
@@ -39,6 +41,7 @@ const WINDOWS: PlatformStrings = {
   os: "windows",
   osName: "Windows",
   builtIn: "Windows Hello",
+  hasBuiltIn: true,
   fileManager: "Windows Explorer",
   trayArea: "the notification area",
   signIn: "sign in to Windows",
@@ -59,6 +62,7 @@ const MACOS: PlatformStrings = {
   os: "macos",
   osName: "macOS",
   builtIn: "Touch ID",
+  hasBuiltIn: true,
   fileManager: "Finder",
   trayArea: "the menu bar",
   signIn: "log in to this Mac",
@@ -75,11 +79,12 @@ const MACOS: PlatformStrings = {
   offersPhone: false,
 };
 
-/** Not a shipping platform. Named honestly rather than pretending to be one. */
+/** No built-in authenticator the app uses: a security key opens a silo. */
 const LINUX: PlatformStrings = {
   os: "linux",
   osName: "Linux",
   builtIn: "the built-in key",
+  hasBuiltIn: false,
   fileManager: "the file manager",
   trayArea: "the system tray",
   signIn: "log in",
@@ -109,4 +114,9 @@ export function platformStrings(os: Os): PlatformStrings {
  */
 export function osOf(bootstrap: Pick<Bootstrap, "os"> | null | undefined): Os {
   return bootstrap?.os ?? "windows";
+}
+
+/** "Windows Hello or your security key", or on Linux "your security key". */
+export function builtInOrKey(platform: PlatformStrings): string {
+  return platform.hasBuiltIn ? `${platform.builtIn} or your security key` : "your security key";
 }

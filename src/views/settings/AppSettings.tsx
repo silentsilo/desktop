@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, DownloadCloud, ExternalLink, Globe, Info, SlidersHorizontal } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Update } from "@tauri-apps/plugin-updater";
-import { platformStrings, type Os } from "../../lib/platformStrings";
+import { builtInOrKey, type Os, platformStrings } from "../../lib/platformStrings";
 import { formatBytes } from "../../lib/format";
 import { formatAppError } from "../../lib/errors";
 import {
@@ -328,14 +328,15 @@ export function AppSettingsSection({
               <span>
                 Allow the SilentSilo browser extension
                 <span className="hint">
-                  You confirm every fill in this window with {platform.builtIn} or your security
-                  key. Turned off, the extension cannot reach SilentSilo.
+                  You confirm every fill in this window with {builtInOrKey(platform)}. Turned
+                  off, the extension cannot reach SilentSilo.
                 </span>
               </span>
             </label>
             {browserExtension?.supported && siloHasKeys === false && (
               <p className="hint is-error">
-                This silo has no security key or {platform.builtIn} set up, so the browser cannot
+                This silo has no security key
+                {platform.hasBuiltIn ? ` or ${platform.builtIn}` : ""} set up, so the browser cannot
                 fill anything from it. Add one under Unlocking first.
               </p>
             )}
@@ -476,7 +477,8 @@ export function AppSettingsSection({
         </h3>
         <p>
           Version {__APP_VERSION__}. An encrypted vault for files and passwords, unlocked by a
-          security key or {platform.builtIn}, backed up to storage you control.
+          security key{platform.hasBuiltIn ? ` or ${platform.builtIn}` : ""}, backed up to storage
+          you control.
         </p>
         <dl className="backup-config">
           <div className="backup-config-row">

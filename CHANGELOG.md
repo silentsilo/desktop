@@ -9,6 +9,17 @@ silo from opening needs a major version rather than a note.
 
 ### Added
 
+- Linux, as a .deb and an AppImage, the first release there. A silo opens
+  with a security key (Linux has no built-in one the app uses), and a key
+  with a PIN is asked for it in the app, as on Windows and Android, so a
+  silo opens the same way on every system. A key that is plugged in but
+  cannot be opened is said as such, with the udev rule it needs. The
+  browser extension works here too, over a Unix socket in your runtime
+  directory: turning it on in Settings writes the native messaging
+  manifests for Chrome, Chromium, Edge, Brave and Firefox in your home, and
+  turning it off removes them. The SSH agent listens on `SSH_AUTH_SOCK`.
+  Locking the screen does not lock a silo on Linux yet: the idle timeout
+  and Lock do.
 - Custom fields on every entry: a customer number, a PIN, a security
   question. A hidden one is masked and copied like a password. Bitwarden
   imports bring their custom fields here instead of into notes.
@@ -86,24 +97,9 @@ silo from opening needs a major version rather than a note.
   hung. The timer used to run only in the window, so a dead window left the
   silo open until the app quit. The app now checks from its own process too,
   two minutes after the window would have.
-- Linux: the AppImage no longer carries its own Wayland libraries, which
-  stopped it from starting on Fedora 44, and the window no longer stays
-  white on GPU stacks where WebKitGTK's DMA-BUF renderer fails.
-- Linux and macOS: a security key with a PIN is asked for it, in the app,
-  as Windows and Android do. Without the PIN these builds read the key's
-  other secret, so a silo made there did not open on Windows or the phone,
-  and the other way round. A silo made with an earlier Linux build on such a
-  key enrols the key again.
-- Linux: the browser extension works here too. The channel is a Unix socket
-  in your runtime directory, checked at both ends; turning the extension on
-  in Settings writes the native messaging manifests for Chrome, Chromium,
-  Edge, Brave and Firefox in your home, and turning it off removes them.
 - "Get it for Chrome / Edge / Brave / Firefox" under Settings, Browser
   extension also turns the extension's connection on. It stays off until
   then, so someone who never uses the extension has nothing listening.
-- Linux and macOS: the window uses those systems' words instead of
-  Windows'. A key that is plugged in but cannot be opened is said as such,
-  with the udev rule it needs, instead of as no key at all.
 
 ## [1.3.0] - OneDrive, Dropbox and Google Drive
 

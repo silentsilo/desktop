@@ -942,7 +942,10 @@ export function PasswordsPanel({
 
       {verifying && (
         <div className="pw-transfer-notice" role="status">
-          <span>Touch your security key, or confirm with {platform.builtIn}…</span>
+          <span>
+            Touch your security key
+            {platform.hasBuiltIn ? `, or confirm with ${platform.builtIn}` : ""}…
+          </span>
         </div>
       )}
 

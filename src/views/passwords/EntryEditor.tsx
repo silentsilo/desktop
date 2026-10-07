@@ -640,7 +640,11 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
                 setDraft({ ...draft, require_reauth: e.target.checked || undefined })
               }
             />
-            <span>Ask for my security key or {platformStrings(os).builtIn} before showing this entry</span>
+            <span>
+              Ask for my security key
+              {platformStrings(os).hasBuiltIn ? ` or ${platformStrings(os).builtIn}` : ""} before
+              showing this entry
+            </span>
           </label>
           <p className="hint">
             Applies to revealing or copying the password, the one-time code, and opening attached
