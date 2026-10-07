@@ -598,6 +598,10 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+      # Build provenance: a signed statement, in GitHub's attestation store,
+      # that these files came out of this workflow run.
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -650,6 +654,18 @@ jobs:
           fi
           ls -l ship
 
+      # What the release is made of: every crate in Cargo.lock and every
+      # package in package-lock.json, as CycloneDX, beside the files. Made
+      # before Sign, so it carries a minisign signature like the rest.
+      - name: Software bill of materials
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: ship/silentsilo-desktop-${{ github.ref_name }}.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
       # Everything the updater might download gets a signature, and the
       # extractors too: "is this the binary the project published" has to be
       # answerable without trusting GitHub. Verify with minisign against the
@@ -667,6 +683,15 @@ jobs:
             [ -f "$file.sig" ] || { echo "::error::no signature for $file"; exit 1; }
           done
           ls -l ship
+
+      # Provenance for what this run built: the extractors, the macOS and
+      # Linux apps and the SBOM. The Windows installer and extractor are built
+      # and signed on the release machine and have none; `gh attestation
+      # verify <file> --repo silentsilo/desktop` checks the others.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ship/*
 
       # `draft: true` is applied to an existing release too, so attaching to
       # a tag that has already been published would flip it back to draft and

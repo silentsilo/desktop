@@ -7,6 +7,14 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+### Added
+
+- Each release carries a software bill of materials (CycloneDX, every crate
+  and npm package it is built from), signed like the other files. The files
+  the release workflow builds (extractors, macOS and Linux apps, the SBOM)
+  have GitHub build provenance: `gh attestation verify <file> --repo
+  silentsilo/desktop`.
+
 ### Changed
 
 - An available update is shown on the screens before a silo opens, with
