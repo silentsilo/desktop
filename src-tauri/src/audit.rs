@@ -182,11 +182,17 @@ fn matches(
         })
 }
 
-fn page_of(held: &HeldRead, offset: usize, limit: usize, search: &str) -> AuditPage {
+fn page_of(
+    held: &HeldRead,
+    offset: usize,
+    limit: usize,
+    search: &str,
+    kinds: Option<&[u16]>,
+) -> AuditPage {
     let term = search.trim().to_lowercase();
     let limit = limit.clamp(1, MAX_PAGE);
     let read = &held.read;
-    let (entries, matched) = if term.is_empty() {
+    let (entries, matched) = if term.is_empty() && kinds.is_none() {
         let entries = read
             .entries
             .iter()
@@ -199,7 +205,8 @@ fn page_of(held: &HeldRead, offset: usize, limit: usize, search: &str) -> AuditP
         let hits: Vec<&silentsilo_app::audit_read::LogEntry> = read
             .entries
             .iter()
-            .filter(|e| matches(e, &held.names, &term))
+            .filter(|e| kinds.is_none_or(|k| k.contains(&e.event.c)))
+            .filter(|e| term.is_empty() || matches(e, &held.names, &term))
             .collect();
         let entries = hits
             .iter()
@@ -230,6 +237,7 @@ pub async fn audit_read(
     offset: usize,
     limit: usize,
     search: String,
+    kinds: Option<Vec<u16>>,
 ) -> Result<AuditPage, String> {
     let state = app.state::<AppState>();
     let silo = crate::state::focused_id(&state)?;
@@ -237,7 +245,7 @@ pub async fn audit_read(
         let held = crate::state::lock_recovering(&state.audit_page);
         return match held.as_ref() {
             Some(held) if held.silo == silo && held.epoch == state.epoch() => {
-                Ok(page_of(held, offset, limit, &search))
+                Ok(page_of(held, offset, limit, &search, kinds.as_deref()))
             }
             _ => Err(READ_AGAIN.into()),
         };
@@ -255,7 +263,7 @@ pub async fn audit_read(
         read: std::sync::Arc::new(read),
         names: device_names(&app).unwrap_or_default(),
     };
-    let page = page_of(&held, offset, limit, &search);
+    let page = page_of(&held, offset, limit, &search, kinds.as_deref());
     let state = app.state::<AppState>();
     // Kept only if nothing closed or switched the silo meanwhile.
     if state.epoch() == epoch {
@@ -491,16 +499,16 @@ mod tests {
     #[test]
     fn the_log_is_paged_and_searched_here() {
         let held = log_of(250);
-        let first = page_of(&held, 0, 100, "");
+        let first = page_of(&held, 0, 100, "", None);
         assert_eq!(
             (first.entries.len(), first.matched, first.total),
             (100, 250, 250)
         );
         assert_eq!(first.entries[0].event.i, 249, "newest first");
-        let last = page_of(&held, 200, 100, "");
+        let last = page_of(&held, 200, 100, "", None);
         assert_eq!(last.entries.len(), 50);
 
-        let mail = page_of(&held, 0, 30, " MAIL ");
+        let mail = page_of(&held, 0, 30, " MAIL ", None);
         assert_eq!(mail.matched, 84);
         assert_eq!(mail.entries.len(), 30);
         assert!(
@@ -509,14 +517,28 @@ mod tests {
                 .all(|e| e.event.l.as_deref() == Some("Mail"))
         );
         assert_eq!(
-            page_of(&held, 0, 10, "laptop").matched,
+            page_of(&held, 0, 10, "laptop", None).matched,
             250,
             "by device name"
         );
-        assert_eq!(page_of(&held, 0, 10, "password").matched, 250, "by detail");
-        assert_eq!(page_of(&held, 0, 10, "nothing").matched, 0);
         assert_eq!(
-            page_of(&log_of(600), 0, 100_000, "").entries.len(),
+            page_of(&held, 0, 10, "password", None).matched,
+            250,
+            "by detail"
+        );
+        assert_eq!(page_of(&held, 0, 10, "nothing", None).matched, 0);
+        let copies = page_of(
+            &held,
+            0,
+            10,
+            "",
+            Some(&[silentsilo_audit::codes::SECRET_COPIED]),
+        );
+        assert_eq!(copies.matched, 250, "every one is a copy");
+        assert_eq!(page_of(&held, 0, 10, "", Some(&[1, 2])).matched, 0);
+        assert_eq!(page_of(&held, 0, 10, "mail", Some(&[11])).matched, 84);
+        assert_eq!(
+            page_of(&log_of(600), 0, 100_000, "", None).entries.len(),
             MAX_PAGE
         );
     }

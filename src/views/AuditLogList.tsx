@@ -1,9 +1,45 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Download } from "lucide-react";
+import {
+  AppWindow,
+  CirclePlus,
+  Copy,
+  Dot,
+  Download,
+  ExternalLink,
+  Eye,
+  FileDown,
+  FilePlus,
+  FileText,
+  FileUp,
+  Globe,
+  History,
+  KeyRound,
+  Laptop,
+  LifeBuoy,
+  Lock,
+  LockOpen,
+  Pencil,
+  RefreshCw,
+  ScrollText,
+  ShieldAlert,
+  SquareTerminal,
+  Timer,
+  Trash,
+  Trash2,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
 import { save as saveFileDialog } from "../lib/dialog";
-import { formatDate } from "../lib/format";
 import { formatAppError } from "../lib/errors";
+import {
+  byDay,
+  describe,
+  KIND_CODES,
+  KIND_LABELS,
+  type ActivityIcon,
+  type ActivityKind,
+} from "../lib/activityEvents";
 import { IconSearch } from "../ui/Icons";
 import type { AuditEntry, AuditPage } from "../lib/types";
 
@@ -16,42 +52,53 @@ type Props = {
 /** Rows fetched at a time. */
 const PAGE = 100;
 
-/** What an event carries besides its name, in the order worth reading. */
-const DETAIL_KEYS = [
-  "field",
-  "site",
-  "entry",
-  "key",
-  "by",
-  "now",
-  "count",
-  "files",
-  "kept",
-  "format",
-  "what",
-];
+const ICONS: Record<ActivityIcon, LucideIcon> = {
+  unlock: LockOpen,
+  lock: Lock,
+  refused: ShieldAlert,
+  show: Eye,
+  copy: Copy,
+  code: Timer,
+  browser: Globe,
+  app: AppWindow,
+  ssh: SquareTerminal,
+  create: CirclePlus,
+  edit: Pencil,
+  delete: Trash2,
+  restore: History,
+  import: FileDown,
+  export: FileUp,
+  file: FileText,
+  "file-out": ExternalLink,
+  "file-add": FilePlus,
+  trash: Trash,
+  key: KeyRound,
+  recovery: LifeBuoy,
+  rotate: RefreshCw,
+  log: ScrollText,
+  device: Laptop,
+  repair: Wrench,
+  other: Dot,
+};
 
-function details(entry: AuditEntry): string[] {
-  const x = entry.x ?? {};
-  const known = DETAIL_KEYS.filter((k) => x[k] !== undefined && x[k] !== "").map((k) =>
-    k === "count" || k === "files" || k === "kept" ? `${k} ${String(x[k])}` : String(x[k]),
-  );
-  const other = Object.keys(x)
-    .filter((k) => !DETAIL_KEYS.includes(k))
-    .map((k) => `${k}: ${JSON.stringify(x[k])}`);
-  return [...known, ...other];
+const KINDS = Object.keys(KIND_LABELS) as ActivityKind[];
+
+function timeOf(ms: number): string {
+  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 /**
  * The silo's activity log, read from this computer and every copy, newest
- * first. Says what is missing rather than leaving it out silently: a hole
- * in a device's run is what a reader of a log most needs to see.
+ * first and by day. Says what is missing rather than leaving it out
+ * silently: a hole in a device's run is what a reader of a log most needs
+ * to see. Searching and filtering run in Rust, over the whole log.
  */
 export function AuditLogList({ devices, needsKey = false }: Props) {
   const [log, setLog] = useState<AuditPage | null>(null);
   const [loading, setLoading] = useState(!needsKey);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [kind, setKind] = useState<ActivityKind | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // Answers for a search typed since are dropped.
   const asked = useRef(0);
@@ -67,12 +114,24 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
   /** A page from Rust: the first one after reading every copy again
    * (`refresh`), or the next from the read already held. */
   const fetchPage = useCallback(
-    async (refresh: boolean, offset: number, term: string, append: boolean) => {
+    async (
+      refresh: boolean,
+      offset: number,
+      term: string,
+      filter: ActivityKind | null,
+      append: boolean,
+    ) => {
       const ticket = ++asked.current;
       setLoading(true);
       setError(null);
       const ask = (again: boolean) =>
-        invoke<AuditPage>("audit_read", { refresh: again, offset, limit: PAGE, search: term });
+        invoke<AuditPage>("audit_read", {
+          refresh: again,
+          offset,
+          limit: PAGE,
+          search: term,
+          kinds: filter ? KIND_CODES[filter] : null,
+        });
       try {
         let page: AuditPage;
         try {
@@ -96,10 +155,13 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
     [needsKey],
   );
 
-  const load = useCallback(() => fetchPage(true, 0, search, false), [fetchPage, search]);
+  const load = useCallback(
+    () => fetchPage(true, 0, search, kind, false),
+    [fetchPage, search, kind],
+  );
 
   useEffect(() => {
-    if (!needsKey) void fetchPage(true, 0, "", false);
+    if (!needsKey) void fetchPage(true, 0, "", null, false);
     // What was read stays in Rust only while the page is open.
     return () => {
       void invoke("audit_read_close").catch(() => {});
@@ -107,15 +169,25 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needsKey]);
 
-  // A search runs in Rust over the whole log, a moment after the typing stops.
+  // A search runs in Rust over the whole log, a moment after the typing
+  // stops; a filter at once.
   useEffect(() => {
     if (!log) return;
-    const timer = window.setTimeout(() => void fetchPage(false, 0, search, false), 250);
+    const timer = window.setTimeout(() => void fetchPage(false, 0, search, kind, false), 250);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  const entries = log?.entries ?? [];
+  const chooseKind = (next: ActivityKind | null) => {
+    setKind(next);
+    if (log) void fetchPage(false, 0, search, next, false);
+  };
+
+  const entries = useMemo(() => log?.entries ?? [], [log]);
+  const days = useMemo(() => byDay(entries), [entries]);
+  // One device in the whole log: its name on every row says nothing.
+  const severalDevices = (log?.devices.length ?? 0) > 1;
+
   const exportAs = async (format: "csv" | "jsonl") => {
     setNotice(null);
     const path = await saveFileDialog({
@@ -164,91 +236,146 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
     );
   }
 
-  return (
-    <div className="panel-section">
-
-      <div className="search-input-wrapper">
-        <span className="search-icon">
-          <IconSearch size={16} />
+  const row = (e: AuditEntry) => {
+    const d = describe(e);
+    const Icon = ICONS[d.icon];
+    const meta = [...(severalDevices ? [nameOf(e.device)] : []), ...d.details];
+    return (
+      <li key={`${e.device}-${e.i}`} className={`activity-row is-${d.tone}`}>
+        <span className="activity-icon" aria-hidden>
+          <Icon size={15} />
         </span>
-        <input
-          type="text"
-          placeholder="Search the log…"
-          aria-label="Search the activity log"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <span className="activity-body">
+          <span className="activity-summary">
+            {d.before}
+            {d.object && <strong>{d.object}</strong>}
+            {d.after}
+            {e.n && e.n > 1 ? <span className="activity-times"> ×{e.n}</span> : null}
+          </span>
+          {meta.length > 0 && <span className="activity-meta">{meta.join(" · ")}</span>}
+        </span>
+        <time className="activity-time" dateTime={new Date(e.t).toISOString()}>
+          {timeOf(e.t)}
+        </time>
+      </li>
+    );
+  };
+
+  return (
+    <div className="activity-log">
+      <div className="activity-toolbar">
+        <div className="search-input-wrapper">
+          <span className="search-icon">
+            <IconSearch size={16} />
+          </span>
+          <input
+            type="text"
+            placeholder="Search activity…"
+            aria-label="Search activity"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="activity-export">
+          <button
+            type="button"
+            className="secondary"
+            disabled={!log || log.total === 0}
+            onClick={() => void exportAs("csv")}
+            title="Export the whole log as CSV"
+          >
+            <Download size={14} />
+            CSV
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!log || log.total === 0}
+            onClick={() => void exportAs("jsonl")}
+            title="Export the whole log as JSON lines"
+          >
+            <Download size={14} />
+            JSON
+          </button>
+        </div>
       </div>
 
-      {warnings.map((w) => (
-        <p key={w} className="hint is-warning">
-          {w}
-        </p>
-      ))}
+      <div className="activity-filters" role="group" aria-label="Show">
+        <button
+          type="button"
+          className={`activity-chip${kind === null ? " is-on" : ""}`}
+          aria-pressed={kind === null}
+          onClick={() => chooseKind(null)}
+        >
+          All
+        </button>
+        {KINDS.map((k) => (
+          <button
+            key={k}
+            type="button"
+            className={`activity-chip${kind === k ? " is-on" : ""}`}
+            aria-pressed={kind === k}
+            onClick={() => chooseKind(k)}
+          >
+            {KIND_LABELS[k]}
+          </button>
+        ))}
+        {log && (
+          <span className="activity-count">
+            {search.trim() || kind
+              ? `${log.matched} of ${log.total}`
+              : `${log.total} ${log.total === 1 ? "event" : "events"}`}
+          </span>
+        )}
+      </div>
+
+      {warnings.length > 0 && (
+        <div className="activity-warnings" role="status">
+          {warnings.map((w) => (
+            <p key={w}>{w}</p>
+          ))}
+        </div>
+      )}
       {error && (
         <p className="hint is-error" role="status">
           {error}
         </p>
       )}
-      {loading && !log && <p className="hint">Reading the log…</p>}
+      {notice && <p className="hint">{notice}</p>}
+      {loading && !log && <p className="hint">Reading activity…</p>}
       {needsKey && !log && !loading && (
-        <div className="actions">
-          <button type="button" className="secondary" onClick={() => void load()}>
-            Read the log
+        <div className="activity-empty">
+          <p>Reading it asks for one of the organisation&apos;s security keys.</p>
+          <button type="button" onClick={() => void load()}>
+            Read activity
           </button>
         </div>
       )}
       {log && entries.length === 0 && !loading && (
-        <p className="hint">
-          {search.trim() ? "Nothing in the log matches." : "Nothing recorded yet."}
+        <p className="activity-empty">
+          {search.trim() || kind ? "Nothing matches." : "Nothing recorded yet."}
         </p>
       )}
 
-      {entries.length > 0 && (
-        <ul className="activity-list">
-          {entries.map((e) => (
-            <li key={`${e.device}-${e.i}`} className="activity-row">
-              <span className="activity-summary">{e.l ? `${e.what}: ${e.l}` : e.what}</span>
-              <span className="hint activity-meta">
-                {[nameOf(e.device), formatDate(e.t), ...details(e)].join(" · ")}
-                {e.n && e.n > 1 ? ` · ${e.n} times` : ""}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      {days.map((day) => (
+        <section key={day.label} className="activity-day">
+          <h4 className="activity-day-label">{day.label}</h4>
+          <ul className="activity-list">{day.events.map(row)}</ul>
+        </section>
+      ))}
 
-      <div className="actions">
-        {log && entries.length < log.matched && (
+      {log && entries.length < log.matched && (
+        <div className="activity-more">
           <button
             type="button"
             className="secondary"
             disabled={loading}
-            onClick={() => void fetchPage(false, entries.length, search, true)}
+            onClick={() => void fetchPage(false, entries.length, search, kind, true)}
           >
             Show older
           </button>
-        )}
-        <button
-          type="button"
-          className="secondary"
-          disabled={!log || log.total === 0}
-          onClick={() => void exportAs("csv")}
-        >
-          <Download size={14} />
-          Export CSV
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          disabled={!log || log.total === 0}
-          onClick={() => void exportAs("jsonl")}
-        >
-          <Download size={14} />
-          Export JSON lines
-        </button>
-      </div>
-      {notice && <p className="hint">{notice}</p>}
+        </div>
+      )}
     </div>
   );
 }

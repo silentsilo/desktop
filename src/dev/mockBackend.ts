@@ -1040,46 +1040,57 @@ const handlers: Record<string, Handler> = {
   copy_secret_to_clipboard: () => null,
   audit_note: () => null,
   audit_status: () => mockAudit,
-  /// `?mock=unlocked&biglog` holds 1,000 events, to page through.
+  /// `?mock=unlocked&biglog` holds 1,000 events of every kind over a few
+  /// weeks, from two devices, to page and filter through.
   audit_read: (args) => {
-    const big = flag("biglog");
-    const all = big
-      ? Array.from({ length: 1000 }, (_, k) => ({
-          device: "dev-1",
-          what: k % 2 ? "Secret copied" : "Unlocked",
-          i: 999 - k,
-          t: Date.now() - k * 60_000,
-          c: k % 2 ? 11 : 1,
-          o: "e1",
-          l: k % 3 ? "Bank" : "Mail",
-          x: k % 2 ? { field: "password" } : { key: "YubiKey" },
-        }))
+    const kinds: [number, string, string | undefined, Record<string, unknown>][] = [
+      [1, "Unlocked", undefined, { key: "YubiKey 5C" }],
+      [11, "Secret copied", "Bank", { field: "password" }],
+      [10, "Entry shown", "dash.cloudflare.com", {}],
+      [13, "Filled in the browser", "GitHub", { site: "github.com" }],
+      [30, "File opened", "dji_fly_20260901_164936_0042_video.mp4", {}],
+      [21, "Entry edited", "Mail", {}],
+      [15, "Signed with an SSH key", "Deploy key", { host: "SHA256:uNiV…tD2s", program: "ssh.exe" }],
+      [2, "Locked", undefined, {}],
+      [51, "Key removed", "Old YubiKey", {}],
+      [40, "Passwords imported", undefined, { count: 42, format: "kdbx" }],
+    ];
+    const all = flag("biglog")
+      ? Array.from({ length: 1000 }, (_, k) => {
+          const [c, what, l, x] = kinds[k % kinds.length]!;
+          return {
+            device: k % 7 === 0 ? "dev-2" : "dev-1",
+            what,
+            i: 999 - k,
+            t: Date.now() - k * 47 * 60_000,
+            c,
+            ...(l ? { o: "e1", l } : {}),
+            x,
+          };
+        })
       : [
-          {
-            device: "dev-1",
-            what: "Secret copied",
-            i: 2,
-            t: Date.now() - 60_000,
-            c: 11,
-            o: "e1",
-            l: "Bank",
-            x: { field: "password" },
-          },
+          { device: "dev-1", what: "Secret copied", i: 2, t: Date.now() - 60_000, c: 11, o: "e1", l: "Bank", x: { field: "password" } },
           { device: "dev-1", what: "Unlocked", i: 1, t: Date.now() - 120_000, c: 1, x: { key: "YubiKey" } },
           { device: "dev-1", what: "Activity log started", i: 0, t: Date.now() - 180_000, c: 60 },
         ];
     const term = String(args.search ?? "").trim().toLowerCase();
-    const hits = term
-      ? all.filter((e) => JSON.stringify(e).toLowerCase().includes(term))
-      : all;
+    const codes = (args.kinds as number[] | null) ?? null;
+    const hits = all
+      .filter((e) => !codes || codes.includes(e.c))
+      .filter((e) => !term || JSON.stringify(e).toLowerCase().includes(term));
     const offset = Number(args.offset ?? 0);
+    const deviceIds = [...new Set(all.map((e) => e.device))];
     return {
       entries: hits.slice(offset, offset + Number(args.limit ?? 100)),
       matched: hits.length,
       total: all.length,
-      devices: [
-        { device: "dev-1", events: all.length, missing_events: [], missing_segments: [], broken_segments: [] },
-      ],
+      devices: deviceIds.map((device) => ({
+        device,
+        events: all.filter((e) => e.device === device).length,
+        missing_events: [],
+        missing_segments: [],
+        broken_segments: [],
+      })),
       unreadable: 0,
       copies_unread: [],
     };
