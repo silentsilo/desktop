@@ -84,6 +84,7 @@ import { BrowserSaveDialog } from "./views/BrowserSaveDialog";
 import { SshSignDialog } from "./views/SshSignDialog";
 import { ShellDownloadDialog } from "./views/ShellDownloadDialog";
 import { TrashPanel } from "./views/TrashPanel";
+import { describeFidoPrompt, type FidoPrompt } from "./lib/fidoPrompt";
 import { t, translate, useLocale, type Key } from "./i18n";
 import { UnlockView } from "./views/UnlockView";
 import { AppSettingsView } from "./views/settings/AppSettingsView";
@@ -178,6 +179,13 @@ const OPEN_CANCELLED = "Cancelled.";
 export default function App() {
   // Re-renders on a language change, and keys the memos that hold text.
   const lang = useLocale();
+
+  // The tray menu is drawn by the OS from Rust, so it is relabelled here.
+  useEffect(() => {
+    void invoke("tray_set_labels", { open: t("app.tray_open"), quit: t("app.tray_quit") }).catch(
+      () => {},
+    );
+  }, [lang]);
   const { api: toasts, list: toastList } = useToasts();
   const [confirmDialog, setConfirmDialog] = useState<ConfirmState | null>(null);
   /// Copies the app never deletes from, so the delete-for-good dialogs can
@@ -350,6 +358,9 @@ export default function App() {
   /// steps come before the files.
   const [firstRun, setFirstRun] = useState(false);
   const [fidoProgress, setFidoProgress] = useState<string | null>(null);
+  /// For the live key instructions, which arrive outside any render.
+  const builtInRef = useRef("Windows Hello");
+  builtInRef.current = platformStrings(osOf(bootstrap)).builtIn;
   const [navHistory, setNavHistory] = useState<string[]>([]);
   const [navIndex, setNavIndex] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -441,8 +452,8 @@ export default function App() {
 
   useEventSubscription(
     () =>
-      listen<string>("fido-progress", (event) => {
-        setFidoProgress(event.payload);
+      listen<FidoPrompt>("fido-progress", (event) => {
+        setFidoProgress(describeFidoPrompt(event.payload, builtInRef.current));
       }),
     [],
   );

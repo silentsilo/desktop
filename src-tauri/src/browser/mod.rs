@@ -403,10 +403,13 @@ pub async fn browser_fill_confirm(app: AppHandle, request_id: String) -> Result<
         let bridge = app.state::<BrowserBridge>();
         let slot = lock(&bridge.pending);
         slot.as_ref()
-            .map(|p| format!("fill your {} login on {}", p.prompt.label, p.prompt.site))
-            .unwrap_or_else(|| "fill a login in your browser".into())
+            .map(|p| crate::commands::vault::Presence::FillLogin {
+                label: p.prompt.label.clone(),
+                site: p.prompt.site.clone(),
+            })
+            .unwrap_or(crate::commands::vault::Presence::FillAny)
     };
-    let verified = crate::commands::vault::verify_presence(&app, &purpose).await;
+    let verified = crate::commands::vault::verify_presence(&app, purpose).await;
     let bridge = app.state::<BrowserBridge>();
     let mut slot = lock(&bridge.pending);
     let Some(pending) = slot.as_mut().filter(|p| p.prompt.request_id == request_id) else {

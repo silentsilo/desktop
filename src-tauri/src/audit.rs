@@ -255,7 +255,10 @@ pub async fn audit_read(
     let closes = state.audit_closes.load(std::sync::atomic::Ordering::SeqCst);
     let reader = reader_for(
         &app,
-        "Touch the organisation's security key to read the activity log.",
+        crate::commands::fido::Prompt::new(
+            "org_read_log",
+            "Touch the organisation's security key to read the activity log.",
+        ),
     )
     .await?;
     let read = crate::commands::sync::read_audit_log(&app, reader).await?;
@@ -295,7 +298,7 @@ pub fn audit_read_close(app: AppHandle) {
 /// Who reads: the silo's own key, or an organisation key touched now.
 async fn reader_for(
     app: &AppHandle,
-    prompt: &str,
+    prompt: crate::commands::fido::Prompt,
 ) -> Result<silentsilo_app::audit_read::Reader, String> {
     use silentsilo_app::audit_read::Reader;
     let state = app.state::<AppState>();
@@ -312,7 +315,7 @@ async fn reader_for(
 
 async fn touch_org_key(
     app: &AppHandle,
-    prompt: &str,
+    prompt: crate::commands::fido::Prompt,
 ) -> Result<silentsilo_app::audit_admin::OrgKeyTouch, String> {
     let root = crate::state::vault_dir(app)?;
     let keys = silentsilo_vault::load_fido_keys(&root).map_err(|e| e.to_string())?;
@@ -330,7 +333,10 @@ pub async fn audit_org_start(
 ) -> Result<SiloAuditStatus, String> {
     let touch = touch_org_key(
         &app,
-        "Touch the organisation's security key to start its activity log.",
+        crate::commands::fido::Prompt::new(
+            "org_start_log",
+            "Touch the organisation's security key to start its activity log.",
+        ),
     )
     .await?;
     crate::commands::fido::run_blocking(move || {
@@ -350,7 +356,10 @@ pub async fn audit_org_retention(
 ) -> Result<SiloAuditStatus, String> {
     touch_org_key(
         &app,
-        "Touch the organisation's security key to change how long the log is kept.",
+        crate::commands::fido::Prompt::new(
+            "org_retention",
+            "Touch the organisation's security key to change how long the log is kept.",
+        ),
     )
     .await?;
     crate::commands::fido::run_blocking(move || {
@@ -368,7 +377,10 @@ pub async fn audit_org_retention(
 pub async fn audit_org_expire(app: AppHandle) -> Result<usize, String> {
     touch_org_key(
         &app,
-        "Touch the organisation's security key to remove records past the retention.",
+        crate::commands::fido::Prompt::new(
+            "org_prune",
+            "Touch the organisation's security key to remove records past the retention.",
+        ),
     )
     .await?;
     crate::commands::sync::expire_audit_segments(&app).await
@@ -391,7 +403,10 @@ pub async fn audit_export(
 ) -> Result<usize, String> {
     let reader = reader_for(
         &app,
-        "Touch the organisation's security key to export the activity log.",
+        crate::commands::fido::Prompt::new(
+            "org_export_log",
+            "Touch the organisation's security key to export the activity log.",
+        ),
     )
     .await?;
     let log = crate::commands::sync::read_audit_log(&app, reader).await?;

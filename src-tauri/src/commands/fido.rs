@@ -51,34 +51,75 @@ fn kind_and_derivation(authenticator: Authenticator) -> (&'static str, &'static 
     }
 }
 
-fn step_one_message(authenticator: Authenticator) -> &'static str {
-    match authenticator {
-        Authenticator::ThisDevice => {
-            if cfg!(target_os = "macos") {
-                "Confirm with Touch ID to secure the silo."
-            } else if cfg!(target_os = "linux") {
-                // Unreachable: nothing offers this authenticator on Linux.
-                "Confirm with the built-in key to secure the silo."
-            } else {
-                "Confirm with Windows Hello to secure the silo."
-            }
+/// A live instruction during a key ceremony. The frontend shows it in the
+/// user's language by `code`; `text` is the English, for a code it does not
+/// know.
+pub struct Prompt {
+    code: &'static str,
+    params: Vec<(&'static str, String)>,
+    text: String,
+}
+
+impl Prompt {
+    pub fn new(code: &'static str, text: impl Into<String>) -> Self {
+        Prompt {
+            code,
+            params: Vec::new(),
+            text: text.into(),
         }
-        Authenticator::SecurityKey => "Touch your security key to enrol it.",
+    }
+
+    pub fn with(mut self, name: &'static str, value: impl Into<String>) -> Self {
+        self.params.push((name, value.into()));
+        self
+    }
+}
+
+fn step_one_message(authenticator: Authenticator) -> Prompt {
+    match authenticator {
+        // Linux never offers this authenticator, so BUILT_IN's generic name
+        // does not reach this sentence.
+        Authenticator::ThisDevice => Prompt::new(
+            "enrol_built_in",
+            format!("Confirm with {BUILT_IN} to secure the silo."),
+        ),
+        Authenticator::SecurityKey => {
+            Prompt::new("enrol_key", "Touch your security key to enrol it.")
+        }
     }
 }
 
 /// Only emitted when the first ceremony did not produce the wrap key.
-fn step_two_message(authenticator: Authenticator) -> &'static str {
+fn step_two_message(authenticator: Authenticator) -> Prompt {
     match authenticator {
-        Authenticator::ThisDevice => "Confirm once more to secure the silo's encryption key.",
-        Authenticator::SecurityKey => {
-            "Touch the SAME key again to secure the silo's encryption key."
-        }
+        Authenticator::ThisDevice => Prompt::new(
+            "enrol_built_in_again",
+            "Confirm once more to secure the silo's encryption key.",
+        ),
+        Authenticator::SecurityKey => Prompt::new(
+            "enrol_key_again",
+            "Touch the SAME key again to secure the silo's encryption key.",
+        ),
     }
 }
 
-pub fn emit_fido_progress(app: &AppHandle, message: &str) {
-    let _ = app.emit("fido-progress", message);
+pub fn emit_fido_progress(app: &AppHandle, prompt: Prompt) {
+    let params: serde_json::Map<String, serde_json::Value> = prompt
+        .params
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), serde_json::Value::String(v)))
+        .collect();
+    let _ = app.emit(
+        "fido-progress",
+        serde_json::json!({ "code": prompt.code, "params": params, "text": prompt.text }),
+    );
+}
+
+fn org_confirm_prompt() -> Prompt {
+    Prompt::new(
+        "org_confirm_change",
+        "Touch the organisation's security key to confirm this change.",
+    )
 }
 
 /// Which kind of authenticator to ask Windows for when unlocking.
@@ -244,14 +285,9 @@ pub(crate) async fn prove_organisation_key(
     keys: &silentsilo_vault::StoredFidoKeys,
     what: &str,
 ) -> Result<silentsilo_vault::OrgProof, String> {
-    touch_organisation_key(
-        app,
-        keys,
-        what,
-        "Touch the organisation's security key to confirm this change.",
-    )
-    .await
-    .map(|(proof, _)| proof)
+    touch_organisation_key(app, keys, what, org_confirm_prompt())
+        .await
+        .map(|(proof, _)| proof)
 }
 
 /// [`prove_organisation_key`], keeping what the touch gave: the activity log
@@ -260,7 +296,7 @@ pub(crate) async fn touch_organisation_key(
     app: &AppHandle,
     keys: &silentsilo_vault::StoredFidoKeys,
     what: &str,
-    prompt: &str,
+    prompt: Prompt,
 ) -> Result<
     (
         silentsilo_vault::OrgProof,
@@ -556,13 +592,8 @@ pub async fn fido_add_key(
                     .into(),
             );
         }
-        let (_, by) = touch_organisation_key(
-            &app,
-            &keys,
-            "organisation keys",
-            "Touch the organisation's security key to confirm this change.",
-        )
-        .await?;
+        let (_, by) =
+            touch_organisation_key(&app, &keys, "organisation keys", org_confirm_prompt()).await?;
         settle_between_ceremonies().await;
         org_reader = Some(by);
         silentsilo_vault::POLICY_ORG.to_string()
@@ -1118,7 +1149,11 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
     let mut wrap_keys: Vec<(String, [u8; 32])> = Vec::new();
     for (nth, id) in keep.iter().enumerate() {
         let label = labelled.get(id).cloned().unwrap_or_default();
-        emit_fido_progress(&app, &format!("Use “{label}” to keep it working"));
+        emit_fido_progress(
+            &app,
+            Prompt::new("keep_key", format!("Use “{label}” to keep it working"))
+                .with("label", &label),
+        );
         // Same platform constraint as enrolment: one ceremony at a time, and
         // the next one has to wait for the last to be torn down. Rotating two
         // keys is two ceremonies back to back, so every touch after the first
@@ -1316,7 +1351,11 @@ pub async fn vault_rotate_resume(
     // exactly where it was rather than half further along.
     emit_fido_progress(
         &app,
-        &format!("Use “{label}” to finish replacing the encryption key"),
+        Prompt::new(
+            "finish_with_key",
+            format!("Use “{label}” to finish replacing the encryption key"),
+        )
+        .with("label", &label),
     );
     let raw = hex::decode(&credential).map_err(|_| "That key id is not readable.".to_string())?;
     let wanted = authenticator_of(&keys, &credential);

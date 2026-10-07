@@ -31,10 +31,26 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{Manager, RunEvent};
 
+/// The tray menu's items, kept so the window can relabel them in the
+/// language it shows. English until it does.
+#[derive(Default)]
+struct TrayItems(Mutex<Option<(MenuItem<tauri::Wry>, MenuItem<tauri::Wry>)>>);
+
+#[tauri::command]
+fn tray_set_labels(items: tauri::State<'_, TrayItems>, open: String, quit: String) {
+    if let Some((o, q)) = items.0.lock().ok().as_deref().and_then(Option::as_ref) {
+        let _ = o.set_text(open);
+        let _ = q.set_text(quit);
+    }
+}
+
 fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let open = MenuItem::with_id(app, "tray-open", "Open SilentSilo", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "tray-quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &quit])?;
+    if let Ok(mut slot) = app.state::<TrayItems>().0.lock() {
+        *slot = Some((open.clone(), quit.clone()));
+    }
 
     // Windows shows the coloured icon in the notification area. The macOS
     // menu bar wants a template instead: a black-on-transparent glyph the
@@ -185,6 +201,7 @@ pub fn run() {
             open_cancelled: Mutex::new(std::collections::HashSet::new()),
         })
         .manage(browser::BrowserBridge::default())
+        .manage(TrayItems::default())
         .manage(ssh_agent::SshAgent::default())
         .manage(commands::cloud::SignInSlot::default())
         .setup(move |app| {
@@ -253,6 +270,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            tray_set_labels,
             commands::silo::silo_list,
             commands::silo_report::silo_report,
             commands::silo::silo_create,

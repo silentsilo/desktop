@@ -482,7 +482,13 @@ pub async fn vault_join_from_storage(
     }
     let cred_ids = keys.credential_ids_bytes().map_err(|e| e.to_string())?;
 
-    emit_fido_progress(&app, "Touch a security key already enrolled on this silo.");
+    emit_fido_progress(
+        &app,
+        crate::commands::fido::Prompt::new(
+            "touch_enrolled",
+            "Touch a security key already enrolled on this silo.",
+        ),
+    );
     let vault_id_str = vault_id.to_string();
     let unlock = run_fido(&app, move || {
         silentsilo_fido::derive_unlock_material(&cred_ids, &vault_id_str, None)

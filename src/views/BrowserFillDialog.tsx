@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Globe } from "lucide-react";
 import type { BrowserFillPrompt, Os } from "../lib/types";
 import { builtInOrKey, platformStrings } from "../lib/platformStrings";
+import { describeFidoPrompt, type FidoPrompt } from "../lib/fidoPrompt";
 import { formatAppError } from "../lib/errors";
 import { useEventSubscription } from "../hooks/useEventSubscription";
 import { useModal } from "../hooks/useModal";
@@ -92,10 +93,10 @@ function FillCard({
 
   useEventSubscription(
     () =>
-      listen<string>("fido-progress", (event) => {
-        if (busy) setProgress(event.payload);
+      listen<FidoPrompt>("fido-progress", (event) => {
+        if (busy) setProgress(describeFidoPrompt(event.payload, platformStrings(os).builtIn));
       }),
-    [busy],
+    [busy, os],
   );
 
   const confirm = async () => {

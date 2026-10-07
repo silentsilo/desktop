@@ -1,13 +1,14 @@
-/** The languages the app speaks, in the order the picker lists them. */
+/** The languages the app speaks, in the picker's order: alphabetical by
+ * each language's own name. */
 export const LOCALES = [
-  { id: "en", name: "English", date: "en-GB", reviewed: true },
-  { id: "ro", name: "Română", date: "ro-RO", reviewed: false },
   { id: "de", name: "Deutsch", date: "de-DE", reviewed: false },
-  { id: "fr", name: "Français", date: "fr-FR", reviewed: false },
+  { id: "en", name: "English", date: "en-GB", reviewed: true },
   { id: "es", name: "Español", date: "es-ES", reviewed: false },
+  { id: "fr", name: "Français", date: "fr-FR", reviewed: false },
   { id: "it", name: "Italiano", date: "it-IT", reviewed: false },
-  { id: "pt-BR", name: "Português (Brasil)", date: "pt-BR", reviewed: false },
   { id: "pl", name: "Polski", date: "pl-PL", reviewed: false },
+  { id: "pt-BR", name: "Português (Brasil)", date: "pt-BR", reviewed: false },
+  { id: "ro", name: "Română", date: "ro-RO", reviewed: false },
 ] as const;
 
 export type Locale = (typeof LOCALES)[number]["id"];

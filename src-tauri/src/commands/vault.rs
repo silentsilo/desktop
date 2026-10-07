@@ -13,7 +13,7 @@ use silentsilo_vfs::Vfs;
 use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
 
-use crate::commands::fido::{emit_fido_progress, run_blocking, run_fido};
+use crate::commands::fido::{Prompt, emit_fido_progress, run_blocking, run_fido};
 use crate::state::{AppState, vault_dir, with_vfs};
 
 #[derive(serde::Serialize)]
@@ -574,16 +574,63 @@ fn wrapped_dek_for(
 /// What to tell the user to do, matching what was actually asked of the
 /// platform: naming a security key to a Hello-only silo sends its owner
 /// looking for hardware they do not have.
-fn unlock_prompt(wanted: Option<silentsilo_fido::Authenticator>) -> String {
+fn unlock_prompt(wanted: Option<silentsilo_fido::Authenticator>) -> Prompt {
     let built_in = crate::commands::fido::BUILT_IN;
     match wanted {
-        Some(silentsilo_fido::Authenticator::ThisDevice) => {
-            format!("Confirm with {built_in} to unlock the silo.")
-        }
+        Some(silentsilo_fido::Authenticator::ThisDevice) => Prompt::new(
+            "unlock_built_in",
+            format!("Confirm with {built_in} to unlock the silo."),
+        ),
         Some(silentsilo_fido::Authenticator::SecurityKey) => {
-            "Touch your security key to unlock the silo.".to_string()
+            Prompt::new("unlock_key", "Touch your security key to unlock the silo.")
         }
-        None => format!("Touch an enrolled security key, or confirm with {built_in}, to unlock."),
+        None => Prompt::new(
+            "unlock_any",
+            format!("Touch an enrolled security key, or confirm with {built_in}, to unlock."),
+        ),
+    }
+}
+
+/// What a presence check is for, said in the prompt that asks for it.
+pub(crate) enum Presence {
+    ShowEntry,
+    ExportLogins,
+    FillLogin { label: String, site: String },
+    FillAny,
+    SshSign { key: String },
+}
+
+impl Presence {
+    fn prompt(&self, built_in: bool) -> Prompt {
+        let (code, purpose) = match self {
+            Presence::ShowEntry => ("show_entry", "show this entry".to_string()),
+            Presence::ExportLogins => ("export", "export your logins".to_string()),
+            Presence::FillLogin { label, site } => {
+                ("fill", format!("fill your {label} login on {site}"))
+            }
+            Presence::FillAny => ("fill_any", "fill a login in your browser".to_string()),
+            Presence::SshSign { key } => ("ssh", format!("sign with your {key} SSH key")),
+        };
+        let prompt = if built_in {
+            Prompt::new(
+                "verify_built_in",
+                format!(
+                    "Confirm with {} to {purpose}.",
+                    crate::commands::fido::BUILT_IN
+                ),
+            )
+        } else {
+            Prompt::new(
+                "verify_key",
+                format!("Touch your security key to {purpose}."),
+            )
+        };
+        let prompt = prompt.with("purpose", code);
+        match self {
+            Presence::FillLogin { label, site } => prompt.with("label", label).with("site", site),
+            Presence::SshSign { key } => prompt.with("key", key),
+            _ => prompt,
+        }
     }
 }
 
@@ -606,7 +653,7 @@ pub async fn vault_unlock(
     // Asked for by kind, so a silo whose only key is Windows Hello opens
     // with Hello rather than through the whole passkey menu.
     let wanted = crate::commands::fido::preferred_authenticator(&keys);
-    emit_fido_progress(&app, &unlock_prompt(wanted));
+    emit_fido_progress(&app, unlock_prompt(wanted));
     let unlock = run_fido(&app, move || {
         silentsilo_fido::derive_unlock_material(&cred_ids, &vault_id, wanted)
     })
@@ -1988,8 +2035,8 @@ pub fn vault_delete_password(
 #[tauri::command]
 pub async fn fido_reverify(app: AppHandle, purpose: Option<String>) -> Result<(), String> {
     let why = match purpose.as_deref() {
-        Some("export") => "export your logins",
-        _ => "show this entry",
+        Some("export") => Presence::ExportLogins,
+        _ => Presence::ShowEntry,
     };
     verify_presence(&app, why).await
 }
@@ -2003,7 +2050,7 @@ pub(crate) fn presence_check_enrolled(app: &AppHandle) -> bool {
 /// The ceremony behind `fido_reverify`, shared with the browser fill so both
 /// ask the same thing before a secret leaves the app. `purpose` completes
 /// "Confirm with Windows Hello to …".
-pub(crate) async fn verify_presence(app: &AppHandle, purpose: &str) -> Result<(), String> {
+pub(crate) async fn verify_presence(app: &AppHandle, purpose: Presence) -> Result<(), String> {
     let root = vault_dir(app)?;
     let creds = crate::state::silo_credentials(app)?;
 
@@ -2018,15 +2065,10 @@ pub(crate) async fn verify_presence(app: &AppHandle, purpose: &str) -> Result<()
     let wanted = crate::commands::fido::preferred_authenticator(&keys);
     emit_fido_progress(
         app,
-        &match wanted {
-            Some(silentsilo_fido::Authenticator::ThisDevice) => {
-                format!(
-                    "Confirm with {} to {purpose}.",
-                    crate::commands::fido::BUILT_IN
-                )
-            }
-            _ => format!("Touch your security key to {purpose}."),
-        },
+        purpose.prompt(matches!(
+            wanted,
+            Some(silentsilo_fido::Authenticator::ThisDevice)
+        )),
     );
     let unlock = run_fido(app, move || {
         silentsilo_fido::derive_unlock_material(&cred_ids, &vault_id, wanted)

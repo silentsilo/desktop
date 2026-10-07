@@ -407,13 +407,15 @@ pub async fn ssh_sign_confirm(
                 }
                 p.verifying = p.require_reauth;
                 p.require_reauth
-                    .then(|| format!("sign with your {} SSH key", p.prompt.key))
+                    .then(|| crate::commands::vault::Presence::SshSign {
+                        key: p.prompt.key.clone(),
+                    })
             }
             _ => return Err(GONE.into()),
         }
     };
     if let Some(purpose) = reauth {
-        let verified = crate::commands::vault::verify_presence(&app, &purpose).await;
+        let verified = crate::commands::vault::verify_presence(&app, purpose).await;
         let agent = app.state::<SshAgent>();
         if let Some(p) = lock(&agent.pending).as_mut() {
             p.verifying = false;
