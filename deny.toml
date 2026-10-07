@@ -1,0 +1,44 @@
+# cargo-deny, run in CI as `cargo deny check licenses sources`. Advisories
+# stay with `cargo audit` (.cargo/audit.toml), which has its own ignores and
+# reasons.
+
+[graph]
+all-features = true
+
+[licenses]
+# Every license here can be combined with AGPL-3.0-or-later in one binary.
+# A dependency under anything else fails the check, so a new license is a
+# decision, made here with its reason, not something that slips in.
+allow = [
+    "0BSD",
+    "AGPL-3.0-or-later",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-1-Clause",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    # webpki-root-certs: Mozilla's root certificates, data rather than code.
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    # MPL-2.0 names the GPL as a secondary license, which covers the AGPL.
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.9
+# One file for core, desktop and mobile: a license only one of them uses is
+# not a warning in the others.
+unused-allowed-license = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# Core's own tags: desktop and mobile pin one, and core's compatibility
+# tests build earlier releases of itself.
+allow-git = ["https://github.com/silentsilo/core"]

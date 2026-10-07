@@ -72,6 +72,8 @@ jobs:
         with:
           node-version: "22"
       - run: node scripts/check-lockfile.mjs
+      # High and critical npm advisories, with reasoned ignores in the script.
+      - run: node scripts/npm-audit.mjs
 
   # Known advisories against what the lockfile actually pins. Warnings for
   # unsound and yanked crates only print. Ignores sit in .cargo/audit.toml,
@@ -90,6 +92,11 @@ jobs:
           key: audit
       - run: cargo install cargo-audit --locked --version 0.22.2
       - run: cargo audit
+      # Licenses and sources: every dependency's license is one deny.toml
+      # allows next to the AGPL, and every crate comes from crates.io or
+      # silentsilo/core. Pinned like cargo-audit.
+      - run: cargo install cargo-deny --locked --version 0.20.2
+      - run: cargo deny check licenses sources
 
   # Evidence that the app still compiles off Windows. Not packaging, and not
   # a promise of a Linux or macOS build.
