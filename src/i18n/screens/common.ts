@@ -35,4 +35,15 @@ export const common = {
     "pt-BR": "Tem certeza?",
     pl: "Czy na pewno?",
   },
+  "common.copy": {
+    note: "Button, verb: puts something on the clipboard. Not a backup copy.",
+    en: "Copy",
+    ro: "Copiază",
+    de: "Kopieren",
+    fr: "Copier",
+    es: "Copiar",
+    it: "Copia",
+    "pt-BR": "Copiar",
+    pl: "Kopiuj",
+  },
 } satisfies Screen;

@@ -167,9 +167,9 @@ function archiveNote(archiveTargets: number): string {
 /// Added to anything that retires a way in (a recovery code, a key): a
 /// never-delete copy keeps the old one, and it still opens what is stored
 /// there. Said before the click.
-function neverDeleteKeyNote(archiveTargets: number, what: string): string {
+function neverDeleteKeyNote(archiveTargets: number, what: "code" | "key"): string {
   if (archiveTargets === 0) return "";
-  return ` A never-delete copy keeps the old ${what}, and it still opens what is stored there.`;
+  return " " + t(what === "code" ? "recovery.never_delete_code" : "recovery.never_delete_key");
 }
 
 /** What `vault_open_file` answers when the person cancelled it. */
@@ -2857,18 +2857,18 @@ export default function App() {
   const copyRecoveryCode = async (code: string) => {
     try {
       await invoke("copy_secret_to_clipboard", { text: code });
-      toasts.success("Copied to the clipboard. Write it down as well.");
+      toasts.success(t("recovery.copied"));
     } catch (e) {
-      toasts.errorText(`The code was not copied: ${formatAppError(e)}`);
+      toasts.errorText(t("recovery.not_copied", { error: formatAppError(e) }));
     }
   };
 
   const generateRecoveryCode = async () => {
     if (recovery.enabled) {
       const ok = await askConfirm(
-        "Replace the recovery code?",
-        `The code you wrote down stops working, on every device.${neverDeleteKeyNote(archiveTargets, "code")}`,
-        { confirmLabel: "Replace the code" },
+        t("recovery.replace_confirm_title"),
+        `${t("recovery.replace_confirm")}${neverDeleteKeyNote(archiveTargets, "code")}`,
+        { confirmLabel: t("recovery.replace") },
       );
       if (!ok) return;
     }
@@ -2894,7 +2894,7 @@ export default function App() {
         // the silo, and someone about to throw away the old piece of paper
         // needs to hear that before they do.
         toasts.info(
-          `${generated.unchanged_targets.join(", ")} still has the previous recovery code, so the old code opens what is stored there until the next sync replaces it.`,
+          t("recovery.unchanged", { names: generated.unchanged_targets.join(", ") }),
         );
       }
     } catch (e) {
@@ -2906,9 +2906,9 @@ export default function App() {
 
   const disableRecovery = async () => {
     const ok = await askConfirm(
-      "Turn off the recovery code?",
-      `The code you wrote down stops working on every device, leaving your keys as the only way in.${neverDeleteKeyNote(archiveTargets, "code")}`,
-      { confirmLabel: "Turn off recovery", danger: true },
+      t("recovery.off_confirm_title"),
+      `${t("recovery.off_confirm")}${neverDeleteKeyNote(archiveTargets, "code")}`,
+      { confirmLabel: t("recovery.off_confirm_button"), danger: true },
     );
     if (!ok) return;
     begin("keys");
@@ -2920,11 +2920,9 @@ export default function App() {
         // still readable on the ones it never deletes from. Someone turning
         // recovery off is doing it because a piece of paper is somewhere it
         // should not be, so this is the moment to be exact.
-        toasts.info(
-          `Recovery code turned off. ${withheld.join(", ")} is a never-delete copy, so the old code still opens the silo for anyone who can read that storage. To stop that, replace the encryption key.`,
-        );
+        toasts.info(t("recovery.off_withheld", { names: withheld.join(", ") }));
       } else {
-        toasts.success("Recovery code turned off.");
+        toasts.success(t("recovery.off_done"));
       }
     } catch (e) {
       toasts.error(e);

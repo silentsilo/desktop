@@ -4566,6 +4566,13 @@ tr.is-moving {
   white-space: nowrap;
 }
 
+/* Section names in Settings are the app's own words, and a translation can
+   run longer than the rail. Two lines read better than a cut word. */
+.settings-view .view-rail-label {
+  white-space: normal;
+  line-height: 1.25;
+}
+
 .pw-rail-dot {
   width: 8px;
   height: 8px;

@@ -40,6 +40,7 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import type { SyncIndicator } from "../layout/AppShell";
 import { AppSettingsSection, formatMinutes, useUpdater } from "./settings/AppSettings";
 import { OverviewPanel } from "./settings/OverviewPanel";
+import { t, useLocale } from "../i18n";
 
 type Props = {
   /** Whether the open silo keeps an activity log, for the overview. */
@@ -116,23 +117,24 @@ type Props = {
  * sections are the same for every silo and also open from the picker.
  */
 const SECTIONS = [
-  { id: "overview", group: "silo", label: "Overview", icon: LayoutDashboard },
-  { id: "backup", group: "silo", label: "Backup", icon: CloudUpload },
-  { id: "verify", group: "silo", label: "Test backup", icon: SearchCheck },
-  { id: "recovery", group: "silo", label: "Recovery code", icon: LifeBuoy },
-  { id: "keys", group: "silo", label: "Unlocking", icon: KeyRound },
-  { id: "devices", group: "silo", label: "Devices", icon: Laptop },
-  { id: "protected", group: "silo", label: "Auto-import folders", icon: FolderHeart },
-  { id: "advanced", group: "silo", label: "Advanced", icon: Wrench },
-  { id: "general", group: "app", label: "General", icon: SlidersHorizontal },
-  { id: "browser", group: "app", label: "Browser extension", icon: Globe },
-  { id: "ssh", group: "app", label: "SSH agent", icon: SquareTerminal },
-  { id: "updates", group: "app", label: "Updates and about", icon: DownloadCloud },
+  { id: "overview", group: "silo", label: "settings.overview", icon: LayoutDashboard },
+  { id: "backup", group: "silo", label: "settings.backup", icon: CloudUpload },
+  { id: "verify", group: "silo", label: "settings.verify", icon: SearchCheck },
+  { id: "recovery", group: "silo", label: "settings.recovery", icon: LifeBuoy },
+  { id: "keys", group: "silo", label: "settings.keys", icon: KeyRound },
+  { id: "devices", group: "silo", label: "settings.devices", icon: Laptop },
+  { id: "protected", group: "silo", label: "settings.protected", icon: FolderHeart },
+  { id: "advanced", group: "silo", label: "settings.advanced", icon: Wrench },
+  { id: "general", group: "app", label: "settings.general", icon: SlidersHorizontal },
+  { id: "browser", group: "app", label: "settings.browser", icon: Globe },
+  { id: "ssh", group: "app", label: "settings.ssh", icon: SquareTerminal },
+  { id: "updates", group: "app", label: "settings.updates", icon: DownloadCloud },
 ] as const;
 
 export type SettingsSectionId = (typeof SECTIONS)[number]["id"];
 
 export function SettingsPanel(props: Props) {
+  useLocale();
   const platform = platformStrings(props.os);
   const {
     busy,
@@ -212,9 +214,13 @@ export function SettingsPanel(props: Props) {
 
   return (
     <div className="settings-view">
-      <ViewHeader icon={Settings2} title="Settings" subtitle={`${silo.name}, and the app itself`} />
+      <ViewHeader
+        icon={Settings2}
+        title={t("nav.settings")}
+        subtitle={t("settings.subtitle", { name: silo.name })}
+      />
       <div className="settings-body">
-        <nav className="view-rail" aria-label="Settings sections">
+        <nav className="view-rail" aria-label={t("settings.sections")}>
           {SECTIONS.map((item) => {
             const Icon = item.icon;
             const heading = item.group === lastGroup ? null : (lastGroup = item.group);
@@ -222,7 +228,7 @@ export function SettingsPanel(props: Props) {
               <div key={item.id}>
                 {heading && (
                   <div className="view-rail-heading">
-                    {heading === "silo" ? silo.name : "App, every silo"}
+                    {heading === "silo" ? silo.name : t("settings.app_heading")}
                   </div>
                 )}
                 <button
@@ -232,9 +238,11 @@ export function SettingsPanel(props: Props) {
                   onClick={() => onSection(item.id)}
                 >
                   <Icon size={14} aria-hidden className="settings-rail-icon" />
-                  <span className="view-rail-label">{item.label}</span>
+                  <span className="view-rail-label">{t(item.label)}</span>
                   {item.id === "updates" && updater.state.phase === "available" && (
-                    <span className="tab-badge tab-badge-update rail-update-badge">New</span>
+                    <span className="tab-badge tab-badge-update rail-update-badge">
+                      {t("settings.update_badge")}
+                    </span>
                   )}
                 </button>
               </div>
@@ -269,18 +277,14 @@ export function SettingsPanel(props: Props) {
           <div className="panel-section">
             <h3>
               <LifeBuoy size={16} />
-              Recovery code
+              {t("settings.recovery")}
             </h3>
-            <p>
-              A long code that opens the silo on any computer when every key is lost. Write it down
-              and keep it safe: anyone who has it can open the silo.
-            </p>
+            <p>{t("recovery.intro")}</p>
             {recoveryCode ? (
               <div className="recovery-reveal">
                 <p className="hint is-error">
                   <AlertTriangle size={14} />
-                  Shown once. After you close this, the only way to get a code is to make a new
-                  one.
+                  {t("recovery.shown_once")}
                 </p>
                 <code className="recovery-code">{recoveryCode}</code>
                 {/* The consequence belongs next to the code itself, where
@@ -289,21 +293,17 @@ export function SettingsPanel(props: Props) {
                 <div className="consequence">
                   <h3>
                     <AlertTriangle size={15} />
-                    This code and your keys are the only way in
+                    {t("recovery.only_way_title")}
                   </h3>
-                  <p>
-                    If you lose all of them, the files are lost for good. We
-                    keep no copy of your key and cannot open the silo for you.
-                    Keep this where you keep your passport.
-                  </p>
+                  <p>{t("recovery.only_way_body")}</p>
                 </div>
                 <div className="actions">
                   <button type="button" onClick={onCopyRecoveryCode}>
                     <Copy size={15} />
-                    Copy
+                    {t("common.copy")}
                   </button>
                   <button type="button" className="secondary" onClick={onDismissRecoveryCode}>
-                    I&apos;ve written it down
+                    {t("recovery_new.done")}
                   </button>
                 </div>
               </div>
@@ -313,24 +313,21 @@ export function SettingsPanel(props: Props) {
                   {recovery.enabled ? (
                     <>
                       <CheckCircle2 size={14} />
-                      A recovery code is active
-                      {recovery.created_at ? `, created ${formatDay(recovery.created_at)}` : ""}
-                      .
+                      {recovery.created_at
+                        ? t("recovery.active_since", { date: formatDay(recovery.created_at) })
+                        : t("recovery.active")}
                     </>
                   ) : (
-                    "No recovery code yet. Losing every key would mean losing the silo."
+                    t("recovery.none")
                   )}
                 </p>
                 <div className="actions">
                   <button type="button" disabled={busy} onClick={onGenerateRecovery}>
-                    {recovery.enabled ? "Replace the code" : "Create a recovery code"}
+                    {recovery.enabled ? t("recovery.replace") : t("first.create_code")}
                   </button>
                 </div>
                 {recovery.enabled && (
-                  <p className="hint">
-                    Replace it if you think someone has seen the paper copy. The old code stops
-                    working, except on a never-delete copy, which keeps it.
-                  </p>
+                  <p className="hint">{t("recovery.replace_hint")}</p>
                 )}
               </>
             )}
@@ -702,9 +699,9 @@ export function SettingsPanel(props: Props) {
               <div className="panel-section">
                 <h3>
                   <LifeBuoy size={16} />
-                  Turn off the recovery code
+                  {t("recovery.off_title")}
                 </h3>
-                <p>The code you wrote down stops working, and only your keys open this silo.</p>
+                <p>{t("recovery.off_body")}</p>
                 <div className="actions">
                   <button
                     type="button"
@@ -712,7 +709,7 @@ export function SettingsPanel(props: Props) {
                     disabled={busy}
                     onClick={onDisableRecovery}
                   >
-                    Turn off the recovery code
+                    {t("recovery.off_title")}
                   </button>
                 </div>
               </div>
