@@ -227,10 +227,12 @@ fn page_of(
     }
 }
 
-/// A page of the focused silo's log. `refresh` reads it again from this
-/// computer and every copy (an organisation's log asks for one of its keys
-/// first); otherwise the page comes from the last read, which must be of
-/// this silo and this unlock. Only what is shown crosses to the window.
+/// A page of the focused silo's log. `refresh` reads it again (an
+/// organisation's log asks for one of its keys first): what this computer
+/// holds at once, then every copy in the background, announced with
+/// `audit-copies-read` so the window asks for the page again. Otherwise the
+/// page comes from the last read, which must be of this silo and this
+/// unlock. Only what is shown crosses to the window.
 #[tauri::command]
 pub async fn audit_read(
     app: AppHandle,
@@ -252,7 +254,11 @@ pub async fn audit_read(
         };
     }
     let epoch = state.epoch();
-    let closes = state.audit_closes.load(std::sync::atomic::Ordering::SeqCst);
+    // A newer read supersedes one still out on the copies.
+    let closes = state
+        .audit_closes
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        + 1;
     let reader = reader_for(
         &app,
         crate::commands::fido::Prompt::new(
@@ -261,7 +267,7 @@ pub async fn audit_read(
         ),
     )
     .await?;
-    let read = crate::commands::sync::read_audit_log(&app, reader).await?;
+    let read = crate::commands::sync::read_audit_log_local(&app, &reader)?;
     let held = HeldRead {
         silo,
         epoch,
@@ -269,18 +275,49 @@ pub async fn audit_read(
         names: device_names(&app).unwrap_or_default(),
     };
     let page = page_of(&held, offset, limit, &search, kinds.as_deref());
+    keep_read(&app, held, closes);
+
+    // The copies after: a slow or unreachable one no longer holds the page.
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let result = crate::commands::sync::read_audit_log(&app, &reader).await;
+        let current = match result {
+            Ok(read) => {
+                let held = HeldRead {
+                    silo,
+                    epoch,
+                    read: std::sync::Arc::new(read),
+                    names: device_names(&app).unwrap_or_default(),
+                };
+                keep_read(&app, held, closes)
+            }
+            Err(_) => is_current(&app, epoch, closes),
+        };
+        if current {
+            let _ = app.emit("audit-copies-read", ());
+        }
+    });
+    Ok(page)
+}
+
+/// Whether nothing closed or switched the silo, and the page did not close
+/// or read again, since `epoch` and `closes` were taken.
+fn is_current(app: &AppHandle, epoch: u64, closes: u64) -> bool {
     let state = app.state::<AppState>();
-    // Kept only if nothing closed or switched the silo, and the page did
-    // not close, meanwhile. Checked under the lock both of those clear it
-    // under, after moving their counter, so neither slips between.
+    state.epoch() == epoch && state.audit_closes.load(std::sync::atomic::Ordering::SeqCst) == closes
+}
+
+/// Holds a read for the next pages, if it is still current. Checked under
+/// the lock a close and a switch clear it under, after moving their
+/// counter, so neither slips between.
+fn keep_read(app: &AppHandle, held: HeldRead, closes: u64) -> bool {
+    let state = app.state::<AppState>();
     let mut slot = crate::state::lock_recovering(&state.audit_page);
-    if state.epoch() == epoch
-        && state.audit_closes.load(std::sync::atomic::Ordering::SeqCst) == closes
-    {
+    let current = is_current(app, held.epoch, closes);
+    if current {
         *slot = Some(held);
     }
-    drop(slot);
-    Ok(page)
+    current
 }
 
 const READ_AGAIN: &str = "The activity log needs reading again.";
@@ -409,7 +446,7 @@ pub async fn audit_export(
         ),
     )
     .await?;
-    let log = crate::commands::sync::read_audit_log(&app, reader).await?;
+    let log = crate::commands::sync::read_audit_log(&app, &reader).await?;
     let names = device_names(&app)?;
     let body = match format {
         ExportFormat::Csv => silentsilo_audit::reading::to_csv(&log.entries, &names),

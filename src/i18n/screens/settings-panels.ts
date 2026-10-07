@@ -2174,4 +2174,15 @@ export const settingsPanels = {
     "pt-BR": "Segurança",
     pl: "Bezpieczeństwo",
   },
+  "set.log_checking_copies": {
+    note: "Activity: shown above the list while the backup copies are still being read; the list may grow when they answer.",
+    en: "Checking the backup copies…",
+    ro: "Se verifică copiile de backup…",
+    de: "Die Sicherungskopien werden geprüft…",
+    fr: "Vérification des copies de sauvegarde…",
+    es: "Comprobando las copias de seguridad…",
+    it: "Controllo delle copie di backup…",
+    "pt-BR": "Verificando as cópias de backup…",
+    pl: "Sprawdzanie kopii zapasowych…",
+  },
 } satisfies Screen;

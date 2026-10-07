@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import {
   AppWindow,
   CirclePlus,
@@ -105,6 +106,8 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState<ActivityKind | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // The copies are still being read after a page from this computer.
+  const [checking, setChecking] = useState(false);
   // Answers for a search typed since are dropped.
   const asked = useRef(0);
   // What the shown page was read with, and what is typed and chosen now:
@@ -173,6 +176,7 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
           adding && prev ? { ...page, entries: [...prev.entries, ...page.entries] } : page,
         );
         setShownFor({ search: term, kind: filter });
+        if (refresh) setChecking(true);
       } catch (e) {
         if (ticket === asked.current) setError(formatAppError(e));
       } finally {
@@ -195,6 +199,18 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needsKey]);
+
+  // The copies answered: the same view again, from the fuller read.
+  useEffect(() => {
+    const unlisten = listen("audit-copies-read", () => {
+      setChecking(false);
+      const now = current.current;
+      void fetchPage(false, 0, now.search, now.kind, false);
+    });
+    return () => {
+      void unlisten.then((stop) => stop());
+    };
+  }, [fetchPage]);
 
   // A search runs in Rust over the whole log, a moment after the typing
   // stops; a filter at once. Either one made while the first read was
@@ -357,7 +373,13 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
         )}
       </div>
 
-      {warnings.length > 0 && (
+      {checking && (
+        <p className="hint activity-checking" role="status">
+          <span className="spinner" aria-hidden />
+          {t("set.log_checking_copies")}
+        </p>
+      )}
+      {!checking && warnings.length > 0 && (
         <div className="activity-warnings" role="status">
           {warnings.map((w) => (
             <p key={w}>{w}</p>

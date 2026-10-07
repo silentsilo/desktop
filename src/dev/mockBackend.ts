@@ -1108,6 +1108,10 @@ const handlers: Record<string, Handler> = {
   /// `?mock=unlocked&biglog` holds 1,000 events of every kind over a few
   /// weeks, from two devices, to page and filter through.
   audit_read: (args) => {
+    // The copies answer a moment after the page from this computer.
+    if ((args as { refresh?: boolean } | undefined)?.refresh) {
+      setTimeout(() => emit("audit-copies-read", null), 1200);
+    }
     const kinds: [number, string, string | undefined, Record<string, unknown>][] = [
       [1, "Unlocked", undefined, { key: "YubiKey 5C" }],
       [11, "Secret copied", "Bank", { field: "password" }],

@@ -132,12 +132,22 @@ fn sync_status_impl(app: &AppHandle) -> Result<SyncStatus, String> {
 /// The focused silo's activity log, from this computer and every copy.
 pub(crate) async fn read_audit_log(
     app: &AppHandle,
-    reader: silentsilo_app::audit_read::Reader,
+    reader: &silentsilo_app::audit_read::Reader,
 ) -> Result<silentsilo_app::audit_read::LogRead, String> {
     let silo = crate::state::active_silo(app)?;
     let state = app.state::<AppState>();
     silentsilo_app::audit_read::read_audit_log(&state.core, &DesktopHost { app }, &silo, reader)
         .await
+}
+
+/// The focused silo's log from this computer only, without touching storage.
+pub(crate) fn read_audit_log_local(
+    app: &AppHandle,
+    reader: &silentsilo_app::audit_read::Reader,
+) -> Result<silentsilo_app::audit_read::LogRead, String> {
+    let silo = crate::state::active_silo(app)?;
+    let state = app.state::<AppState>();
+    silentsilo_app::audit_read::read_audit_log_local(&state.core, &silo, reader)
 }
 
 /// Removes the focused silo's log segments past its retention.

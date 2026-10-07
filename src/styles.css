@@ -7174,6 +7174,12 @@ button.storage-option:hover:where(:not(:disabled)) {
   color: var(--text-dim);
 }
 
+.activity-checking {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .activity-warnings {
   padding: 0.6rem 0.8rem;
   border-radius: var(--radius-sm);

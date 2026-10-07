@@ -33,6 +33,12 @@ silo from opening needs a major version rather than a note.
   closed unread. The Settings badge no longer disappears after a restart on
   the same day.
 
+### Fixed
+
+- Activity opens at once with what this computer holds, and fills in from
+  the backup copies as they answer. A copy that does not answer no longer
+  keeps the page on "Reading activity…".
+
 ## [1.4.0] - Linux, Activity, the SSH agent and KeePass
 
 The first release for Linux. Custom fields and earlier versions of an entry
