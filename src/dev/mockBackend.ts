@@ -1298,6 +1298,10 @@ const handlers: Record<string, Handler> = {
       missing: 0,
       damaged: [],
       unreferenced: 2,
+      repaired: flag("rotten") && args.deep
+        ? ["blobs/4e01.sslo: put back from External disk, office"]
+        : [],
+      never_delete: false,
       failed: null,
     },
     {
@@ -1311,6 +1315,8 @@ const handlers: Record<string, Handler> = {
         ? ["blobs/9f2c.sslo: content does not match the hash recorded for it"]
         : [],
       unreferenced: 0,
+      repaired: [],
+      never_delete: false,
       failed: null,
     },
   ],

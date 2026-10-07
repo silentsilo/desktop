@@ -19,6 +19,10 @@ type Result = {
   missing: number;
   damaged: string[];
   unreferenced: number;
+  /** Put back from another copy or this computer, each with where from. */
+  repaired: string[];
+  /** Never rewritten: what is wrong there is only reported. */
+  never_delete: boolean;
   failed: string | null;
 };
 
@@ -241,6 +245,36 @@ export function VerifyPanel({ busy, siloId }: Props) {
                         <span className="hint">and {r.damaged.length - 5} more.</span>
                       )}
                     </>
+                  )}
+                  {r.repaired.length > 0 && (
+                    <>
+                      <span className="hint success-msg">
+                        <CheckCircle2 size={14} />
+                        {r.repaired.length === 1
+                          ? "Repaired 1 file from a good copy."
+                          : `Repaired ${r.repaired.length} files from good copies.`}
+                      </span>
+                      {r.repaired.slice(0, 5).map((d) => (
+                        <span key={d} className="hint">
+                          {d}
+                        </span>
+                      ))}
+                      {r.repaired.length > 5 && (
+                        <span className="hint">and {r.repaired.length - 5} more.</span>
+                      )}
+                    </>
+                  )}
+                  {state === "broken" && r.never_delete && (
+                    <span className="hint">
+                      This is a never-delete copy, so nothing on it is rewritten. Add a new
+                      never-delete copy to have one that is whole.
+                    </span>
+                  )}
+                  {state === "broken" && !r.never_delete && (
+                    <span className="hint">
+                      No other copy, and not this computer, holds these whole, so they could not
+                      be repaired.
+                    </span>
                   )}
                   {r.unreferenced > 0 && (
                     <span className="hint">

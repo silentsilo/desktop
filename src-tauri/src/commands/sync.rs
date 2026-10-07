@@ -755,6 +755,11 @@ pub struct VerifyTargetResult {
     /// Content nothing references. Normal, and counted so a number that keeps
     /// climbing can be noticed.
     pub unreferenced: usize,
+    /// Put back from another copy or from this computer, each with where
+    /// from. What is still in `missing` and `damaged` had no good source.
+    pub repaired: Vec<String>,
+    /// A never-delete copy is reported, never rewritten.
+    pub never_delete: bool,
     /// Set when the target could not be read at all.
     pub failed: Option<String>,
 }
@@ -809,8 +814,17 @@ pub async fn vault_verify(app: AppHandle, deep: bool) -> Result<Vec<VerifyTarget
             .store(false, std::sync::atomic::Ordering::Relaxed);
     }
 
+    // Every copy opened once: each one is also a source for repairing the
+    // others, and the blobs on this computer are the first source of all.
+    let configured_targets = silentsilo_vault::load_targets(silo.id);
+    let opened: Vec<Option<Box<dyn ObjectStore>>> = configured_targets
+        .iter()
+        .map(|t| t.config.open().ok())
+        .collect();
+    let local = silentsilo_store::FolderStore::new(silo.path.clone());
+
     let mut out = Vec::new();
-    for configured in silentsilo_vault::load_targets(silo.id) {
+    for (index, configured) in configured_targets.into_iter().enumerate() {
         // A copy whose settings will not open is reported as not reached.
         // Left out, the report read as if the silo had one copy fewer.
         let store = match configured.config.open() {
@@ -865,6 +879,59 @@ pub async fn vault_verify(app: AppHandle, deep: bool) -> Result<Vec<VerifyTarget
             return Err("cancelled".into());
         }
 
+        // What a content check found wrong on a working copy is put back
+        // from a source that proves it holds the object whole (core
+        // `repair_from`). Never-delete copies are only reported.
+        let never_delete = !configured.role.allows_delete();
+        let mut repaired = Vec::new();
+        let mut fixed: std::collections::HashSet<String> = std::collections::HashSet::new();
+        if let Ok(report) = &result
+            && depth == sync::VerifyDepth::Content
+            && !report.is_sound()
+            && !never_delete
+        {
+            let mut sources: Vec<(&str, &dyn ObjectStore)> = vec![("this computer", &local)];
+            let labels: Vec<String> = silentsilo_vault::load_targets(silo.id)
+                .iter()
+                .map(|t| {
+                    if t.label.is_empty() {
+                        "another copy".to_string()
+                    } else {
+                        t.label.clone()
+                    }
+                })
+                .collect();
+            for (other, store) in opened.iter().enumerate() {
+                if other != index
+                    && let Some(store) = store
+                {
+                    sources.push((labels[other].as_str(), &**store));
+                }
+            }
+            let mut open = |blob_id: uuid::Uuid| {
+                keys.get(&blob_id)
+                    .and_then(|wrapped| silentsilo_crypto::unwrap_content_key(wrapped, &kek).ok())
+            };
+            let state = app.state::<AppState>();
+            match sync::repair_from(&*store, report, &sources, &dek, &mut open, &|| {
+                state
+                    .verify_cancelled
+                    .load(std::sync::atomic::Ordering::Relaxed)
+            })
+            .await
+            {
+                Ok(done) => {
+                    for (key, from) in done.repaired {
+                        repaired.push(format!("{key}: put back from {from}"));
+                        fixed.insert(key);
+                    }
+                    fixed.extend(done.already_sound);
+                }
+                Err(sync::SyncError::Cancelled) => return Err("cancelled".into()),
+                Err(e) => crate::diagnostics::warn("verify", format_args!("repair: {e}")),
+            }
+        }
+
         out.push(match result {
             Ok(report) => VerifyTargetResult {
                 id,
@@ -872,13 +939,20 @@ pub async fn vault_verify(app: AppHandle, deep: bool) -> Result<Vec<VerifyTarget
                 records_read: report.records_read,
                 blobs_checked: report.blobs_checked,
                 bytes_read: report.bytes_read,
-                missing: report.missing.len(),
+                missing: report
+                    .missing
+                    .iter()
+                    .filter(|blob| !fixed.contains(&format!("{}{blob}.sslo", sync::BLOBS_PREFIX)))
+                    .count(),
                 damaged: report
                     .damaged
                     .iter()
+                    .filter(|(key, _)| !fixed.contains(key))
                     .map(|(key, why)| format!("{key}: {why}"))
                     .collect(),
                 unreferenced: report.unreferenced,
+                repaired,
+                never_delete,
                 failed: None,
             },
             // A target that cannot be reached is reported as unchecked rather
@@ -905,6 +979,8 @@ fn not_checked(id: String, label: String, why: String) -> VerifyTargetResult {
         missing: 0,
         damaged: Vec::new(),
         unreferenced: 0,
+        repaired: Vec::new(),
+        never_delete: false,
         failed: Some(why),
     }
 }

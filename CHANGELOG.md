@@ -9,6 +9,10 @@ silo from opening needs a major version rather than a note.
 
 ### Added
 
+- Test backup repairs what it finds: a file that rotted, was cut short or
+  went missing on a working copy is put back from this computer or another
+  copy that holds it whole, and the report says from where. Never-delete
+  copies are only reported, and nothing is deleted.
 - Moving files and folders to another folder: drag them onto a folder, or
   onto a part of the path at the top; Cut and Paste (Ctrl+X, Ctrl+V, also in
   the menu and the details); or "Move to…", which lists every folder. A name
