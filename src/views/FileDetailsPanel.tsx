@@ -23,6 +23,9 @@ type Props = {
   title?: string;
   /** How many items a folder holds, when it is the one on screen. */
   count?: number;
+  /** The newest change among those items. A folder's own date moves only
+   * when it is renamed or moved, never when what is in it changes. */
+  lastChange?: number;
   syncState: FileSyncState | null;
   /** Backup storage is set up: the copies are worth naming. */
   syncConfigured: boolean;
@@ -52,6 +55,7 @@ export function FileDetailsPanel({
   location,
   title,
   count,
+  lastChange,
   syncState,
   syncConfigured,
   busy,
@@ -132,9 +136,17 @@ export function FileDetailsPanel({
         <Row icon={<Calendar size={15} />} label="Created">
           {formatDate(entry.created_at)}
         </Row>
-        <Row icon={<Clock size={15} />} label="Modified">
-          {formatDate(entry.updated_at)}
-        </Row>
+        {isFile ? (
+          <Row icon={<Clock size={15} />} label="Modified">
+            {formatDate(entry.updated_at)}
+          </Row>
+        ) : (
+          lastChange !== undefined && (
+            <Row icon={<Clock size={15} />} label="Last change inside">
+              {formatDate(lastChange)}
+            </Row>
+          )
+        )}
         {isFile && syncState && (
           <Row icon={<CopyIcon size={15} />} label="Backup">
             <span

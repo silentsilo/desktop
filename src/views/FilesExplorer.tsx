@@ -1186,6 +1186,9 @@ export function FilesExplorer(props: Props) {
               : undefined
           }
           count={entries.length}
+          lastChange={
+            entries.length > 0 ? Math.max(...entries.map((entry) => entry.updated_at)) : undefined
+          }
           syncState={null}
           syncConfigured={syncConfigured}
           busy={busy}
