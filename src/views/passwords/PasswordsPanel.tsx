@@ -1144,9 +1144,31 @@ export function PasswordsPanel({
                 onClearHistory={(entry) => setPendingClearHistory(entry)}
               />
             ) : filtered.length > 0 ? (
+              // Something to do, not only something to read: adding the
+              // kind in view, or bringing a list in from another manager.
               <div className="pw-detail-placeholder">
                 <MousePointerClick size={32} className="empty-icon" />
-                <p className="hint">{t("pw.select_hint")}</p>
+                <p className="empty-title">{t("pw.select_hint")}</p>
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={busy}
+                    onClick={() => startCreate(selectedType ?? "login")}
+                  >
+                    <IconPlus size={15} />
+                    {t(TYPE_TEXTS[selectedType ?? "login"].add)}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={busy || transferBusy}
+                    onClick={() => void handleImport()}
+                  >
+                    <Upload size={15} />
+                    {t("pw.import")}
+                  </button>
+                </div>
               </div>
             ) : // An empty list already says everything; a second pane
             // repeating "select something" would be advice about nothing.

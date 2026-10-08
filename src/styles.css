@@ -996,6 +996,13 @@ input[type="range"] {
   font-size: var(--fs-14);
 }
 
+/* The one line while the app starts, where the subtitle would be. */
+.auth-loading {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+}
+
 .card.auth-card {
   position: relative;
   z-index: 1;
@@ -1049,6 +1056,16 @@ input[type="range"] {
    room than a card that only asks a question. */
 .card.auth-card.is-wide {
   width: min(500px, 100%);
+}
+
+/* The first key: two choices side by side need the room. */
+.card.auth-card.is-choice {
+  width: min(600px, 100%);
+}
+
+/* The silo list: room for a whole path under each name. */
+.card.auth-card.is-picker {
+  width: min(600px, 100%);
 }
 
 /* The one pre-unlock screen that is a form rather than a choice: wide enough
@@ -1418,6 +1435,7 @@ input[type="range"] {
 .main-area[data-view="files"],
 .main-area[data-view="passwords"],
 .main-area[data-view="trash"],
+.main-area[data-view="activity"],
 .main-area[data-view="settings"] {
   --content-max: none;
   --content-pad: 1rem;
@@ -1648,14 +1666,14 @@ input[type="range"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  border-radius: var(--r-sm);
   background: transparent;
-  color: var(--text);
-  border: 1px solid transparent;
+  color: var(--text-secondary);
 }
 
 .explorer-icon-btn:hover:not(:disabled) {
   background: var(--row-hover);
-  border-color: var(--border-subtle);
+  color: var(--text);
 }
 
 .explorer-address {
@@ -1674,9 +1692,11 @@ input[type="range"] {
   padding: 0 0.55rem;
   height: 36px;
   box-sizing: border-box;
-  background: var(--surface-sunken);
+  /* A path of places to click, not a field to type in: no well, no
+     border. */
+  background: transparent;
   border-radius: var(--r-sm);
-  border: 1px solid var(--border-subtle);
+  border: 0;
   font-size: var(--fs-13);
   overflow-x: auto;
   overflow-y: hidden;
@@ -1701,11 +1721,11 @@ input[type="range"] {
 }
 
 .explorer-crumb-btn {
-  background: none;
-  color: var(--accent-text);
-  padding: 0.1rem 0.25rem;
-  font-weight: 600;
-  border: none;
+  min-height: 28px;
+  padding: 0 6px;
+  border-radius: var(--r-xs);
+  color: var(--text-secondary);
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1713,15 +1733,16 @@ input[type="range"] {
 
 .explorer-crumb-btn:hover:not(:disabled) {
   background: var(--row-hover);
+  color: var(--text);
 }
 
 .explorer-crumb-current {
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding: 0.1rem 0.25rem;
+  padding: 0 6px;
 }
 
 .explorer-commands {
@@ -2511,7 +2532,7 @@ input[type="range"] {
 .view-header-text h2 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: var(--fs-16);
+  font-size: var(--fs-20);
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.2;
@@ -3101,16 +3122,6 @@ input[type="range"] {
   color: var(--text);
 }
 
-/* The one thing the collapsed form cannot spell out: that something is
-   still owed to the backup. */
-.sidebar-storage-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: var(--r-full);
-  background: var(--warning-solid);
-  flex-shrink: 0;
-}
-
 .sidebar-storage-line {
   display: flex;
   flex-wrap: wrap;
@@ -3129,10 +3140,6 @@ input[type="range"] {
 
 .sidebar-storage-limit {
   color: var(--text-tertiary);
-}
-
-.sidebar-storage-note {
-  color: var(--warning-text);
 }
 
 .storage-bar {
@@ -3189,6 +3196,76 @@ input[type="range"] {
   vertical-align: -2px;
   margin-right: 0.25rem;
   color: var(--text-secondary);
+}
+
+/* The first key, as two cards: what each is good for and what it costs. */
+.enroll-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 12px;
+}
+
+.enroll-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 6px;
+  min-height: 132px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-raised);
+  color: var(--text);
+  text-align: left;
+  transition:
+    background-color var(--dur-1) ease,
+    border-color var(--dur-1) ease;
+}
+
+.enroll-choice:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--surface-raised);
+}
+
+.enroll-choice:active:not(:disabled) {
+  background: linear-gradient(var(--row-active), var(--row-active)), var(--surface-raised);
+}
+
+.enroll-choice-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 4px;
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.enroll-choice strong {
+  font-size: var(--fs-14);
+  font-weight: 600;
+}
+
+.enroll-choice-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: var(--fs-12);
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.enroll-choice-line > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--text-tertiary);
+}
+
+.enroll-choice-line.is-plus > svg {
+  color: var(--success-text);
 }
 
 /* The pre-unlock screens on a short window. The enrolment card in
@@ -4103,9 +4180,9 @@ tr.is-moving {
 /* ── Grid View Card Layout ── */
 .grid-container {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 1rem;
-  padding: 1.25rem;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 12px;
+  padding: 16px;
   margin-bottom: 4rem;
 }
 
@@ -4115,13 +4192,15 @@ tr.is-moving {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 1.25rem 0.85rem;
+  min-height: 132px;
+  padding: 16px 12px 12px;
   background: transparent;
   border: 1px solid var(--border-subtle);
   border-radius: var(--r-md);
-  transition: background-color var(--dur-1) ease, border-color var(--dur-1) ease;
+  transition:
+    background-color var(--dur-1) ease,
+    border-color var(--dur-1) ease;
   cursor: default;
-  position: relative;
   text-align: center;
   user-select: none;
 }
@@ -4137,11 +4216,17 @@ tr.is-moving {
 
 .grid-card-icon {
   position: relative;
-  margin-bottom: 0.65rem;
+  margin-bottom: 10px;
   color: var(--accent-text);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Large enough to tell a folder from a file at a glance. */
+.grid-card-icon svg {
+  width: 48px;
+  height: 48px;
 }
 
 .grid-card-icon.row-file {
@@ -4149,18 +4234,18 @@ tr.is-moving {
 }
 
 .grid-card-name {
-  font-size: var(--fs-13);
+  font-size: var(--fs-12);
   font-weight: 500;
   color: var(--text);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-bottom: 0.25rem;
+  margin-bottom: 2px;
 }
 
 .grid-card-meta {
-  font-size: var(--fs-12);
+  font-size: var(--fs-11);
   color: var(--text-secondary);
   /* One line, elided if it must be: a meta line that wraps makes that one
      card taller than its neighbours, and the full date is in Info and in
@@ -5668,9 +5753,7 @@ button.link.pw-history-clear {
 .pw-card-fields {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
-  border-top: 1px solid var(--border-subtle);
-  padding-top: 0.5rem;
+  gap: 12px;
 }
 
 .pw-field-row {
@@ -5713,6 +5796,67 @@ button.link.pw-history-clear {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ── The detail, grouped like the phone ──
+ * Each group is a card; inside it, the label sits above its value and the
+ * row's buttons line up on the right, centred on the pair. */
+.pw-group {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.pw-group:empty {
+  display: none;
+}
+
+.pw-group > * + * {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.pw-group .pw-field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-columns: auto;
+  align-items: center;
+  column-gap: 4px;
+  row-gap: 2px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 0;
+}
+
+.pw-group .pw-field-row.pw-field-notes {
+  align-items: start;
+}
+
+.pw-group .pw-field-label {
+  grid-column: 1;
+  grid-row: 1;
+  width: auto;
+  font-size: var(--fs-12);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.pw-group .pw-field-value,
+.pw-group .pw-attachments,
+.pw-group .pw-history {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.pw-group .pw-field-value {
+  font-size: var(--fs-14);
+}
+
+.pw-group .pw-field-row > :not(.pw-field-label, .pw-field-value, .pw-attachments, .pw-history) {
+  grid-row: 1 / span 2;
 }
 
 .pw-mask {
@@ -6227,23 +6371,39 @@ button.link.pw-history-clear {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .silo-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-start;
-  gap: 0.75rem;
+  gap: 12px;
   width: 100%;
   min-width: 0;
-  padding: 0.75rem 0.9rem;
-  border: none;
+  padding: 12px 14px;
   border-radius: 0;
-  background: transparent;
-  color: inherit;
   text-align: left;
-  cursor: pointer;
+}
+
+/* The drive, in a tile; green while the silo is already open. */
+.silo-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-md);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.silo-item-icon.is-open {
+  background: var(--success-soft);
+  color: var(--success-text);
+  box-shadow: inset 0 0 0 1px var(--success-border);
 }
 
 /* Dimmed rather than hidden: the silo still exists, the drive just isn't
@@ -6258,7 +6418,6 @@ button.link.pw-history-clear {
   flex-direction: column;
   min-width: 0;
   gap: 2px;
-  overflow: hidden;
 }
 
 /* Quiet: it marks a shortcut, not a warning. */
@@ -6271,12 +6430,29 @@ button.link.pw-history-clear {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: var(--fs-14);
+  font-weight: 600;
 }
 
 .silo-item-text .hint {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.silo-item-meta {
+  font-size: var(--fs-12);
+  color: var(--text-secondary);
+}
+
+/* Whole, wrapping at any character: a path cut short does not say where
+   the silo is. */
+.silo-item-path {
+  font-family: var(--font-mono);
+  font-size: var(--fs-11);
+  line-height: 1.45;
+  color: var(--text-tertiary);
+  overflow-wrap: anywhere;
 }
 
 .path-picker {
@@ -6330,13 +6506,15 @@ button.link.pw-history-clear {
   border-radius: var(--r-md);
   background: var(--surface-sunken);
   overflow: hidden;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color var(--dur-1) ease,
+    background-color var(--dur-1) ease;
 }
 
 .silo-row:has(.silo-item:hover:not(:disabled)),
 .silo-row:has(.silo-item:focus-visible:not(:disabled)) {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--border-field);
+  background: linear-gradient(var(--row-hover), var(--row-hover)), var(--surface-sunken);
 }
 
 .silo-row .silo-item {
@@ -6387,6 +6565,13 @@ button.link.pw-history-clear {
   color: var(--text-secondary);
   cursor: pointer;
   margin-right: 6px;
+}
+
+/* Inside a clipped row, so the ring sits inside the button. */
+.silo-item:focus-visible,
+.silo-info:focus-visible,
+.silo-remove:focus-visible {
+  outline-offset: -2px;
 }
 
 .silo-info:hover:not(:disabled),
@@ -6568,29 +6753,82 @@ button.link.pw-history-clear {
   min-height: 0;
 }
 
-.health-counters {
+/* The summary: how many entries need nothing, then the three counts. */
+.health-summary {
   display: flex;
-  gap: 0.5rem;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 24px;
+  padding: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+  background: var(--surface);
 }
 
-.health-counter {
-  padding: 0.3rem 0.7rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--r-full);
+.health-score {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 9rem;
+}
+
+.health-score-number {
+  margin: 0;
+  font-size: var(--fs-20);
+  line-height: 1.1;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.health-score-number strong {
+  font-size: var(--fs-28);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.health-score-label {
+  margin: 0;
   font-size: var(--fs-12);
-  font-weight: 600;
   color: var(--text-secondary);
 }
 
-.health-counters .health-high {
-  border-color: var(--danger-border);
-  color: var(--danger-text);
+.health-counters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  flex: 1 1 24rem;
 }
 
-.health-counters .health-medium {
-  border-color: var(--warning-border);
-  color: var(--warning-text);
+.health-counter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  background: var(--surface-sunken);
+  font-size: var(--fs-13);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* The tone is the dot; the count stays plain text. */
+.health-counter::before {
+  content: "";
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+
+.health-counter.health-high::before {
+  background: var(--danger-solid);
+}
+
+.health-counter.health-medium::before {
+  background: var(--warning-solid);
 }
 
 /* The list owns the scrolling, so the counters above it stay put. */
@@ -6977,11 +7215,11 @@ button.link.pw-history-clear {
    window edge and only the content is centred. Favourites is a card grid
    below, which fills the width instead. */
 .health-view .view-header,
-.health-counters,
-.health-list,
-.health-empty-state {
+.health-summary,
+.health-pane > * {
   width: 100%;
   max-width: var(--content-max);
+  margin-inline: auto;
 }
 
 /* ── Activity ──
@@ -6992,7 +7230,6 @@ button.link.pw-history-clear {
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
-  max-width: 920px;
 }
 
 .activity-toolbar {

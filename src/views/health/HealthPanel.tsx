@@ -69,6 +69,12 @@ export function HealthPanel({
   const [showIgnored, setShowIgnored] = useState(false);
   const [breaches, setBreaches] = useState<BreachState>({ kind: "idle" });
   const entryCount = entries.length;
+  // Entries no finding names: the one number that says how the silo is doing.
+  const fineCount = useMemo(() => {
+    const named = new Set<string>();
+    for (const finding of findings) for (const entry of finding.entries) named.add(entry.id);
+    return entries.filter((entry) => !named.has(entry.id)).length;
+  }, [findings, entries]);
 
   const toggle = (id: string) =>
     setExpanded((prev) => {
@@ -109,16 +115,26 @@ export function HealthPanel({
       <ViewHeader icon={HeartPulse} title={t("nav.health")} subtitle={subtitle} />
 
       {findings.length > 0 && (
-        <div className="health-counters">
-          <span className="health-counter health-high">
-            {t("dlg.health_to_fix", { count: counts.high })}
-          </span>
-          <span className="health-counter health-medium">
-            {t("dlg.health_worth_doing", { count: counts.medium })}
-          </span>
-          <span className="health-counter health-info">
-            {t("dlg.health_to_know", { count: counts.info })}
-          </span>
+        <div className="health-summary">
+          {entryCount > 0 && (
+            <div className="health-score">
+              <p className="health-score-number">
+                <strong>{fineCount}</strong> / {entryCount}
+              </p>
+              <p className="health-score-label">{t("dlg.health_score_label")}</p>
+            </div>
+          )}
+          <div className="health-counters">
+            <span className="health-counter health-high">
+              {t("dlg.health_to_fix", { count: counts.high })}
+            </span>
+            <span className="health-counter health-medium">
+              {t("dlg.health_worth_doing", { count: counts.medium })}
+            </span>
+            <span className="health-counter health-info">
+              {t("dlg.health_to_know", { count: counts.info })}
+            </span>
+          </div>
         </div>
       )}
 

@@ -809,6 +809,17 @@ export const dialogs = {
     "pt-BR": "{count} para saber",
     pl: "{count} do wiadomości",
   },
+  "dlg.health_score_label": {
+    note: "On Health, under a large '11 / 14': how many entries under Passwords have no finding at all, out of how many there are.",
+    en: "entries with nothing to fix",
+    ro: "intrări fără nimic de rezolvat",
+    de: "Einträge ohne Handlungsbedarf",
+    fr: "entrées sans rien à corriger",
+    es: "entradas sin nada que corregir",
+    it: "voci senza nulla da sistemare",
+    "pt-BR": "itens sem nada a corrigir",
+    pl: "wpisów bez niczego do poprawy",
+  },
   "dlg.health_nothing_else": {
     note: "Health's empty state when the only findings left were ignored by the user.",
     en: "Nothing else to look at.",

@@ -7,6 +7,7 @@ import { type Os, platformStrings } from "../../lib/platformStrings";
 import { formatBytes } from "../../lib/format";
 import { formatAppError } from "../../lib/errors";
 import { SettingGroupTitle, SettingList, SettingRow, Toggle } from "../../components/Setting";
+import { Segmented } from "../../components/Segmented";
 import {
   checkForUpdate,
   installUpdateAndRelaunch,
@@ -244,16 +245,17 @@ export function AppSettingsSection({
           <LanguagePicker />
 
           {themeControl && (
-            <SettingRow label={t("set.gen_theme")} htmlFor="theme-choice">
-              <select
-                id="theme-choice"
+            <SettingRow label={t("set.gen_theme")}>
+              <Segmented<ThemeChoice>
+                label={t("set.gen_theme")}
                 value={themeControl.choice}
-                onChange={(e) => themeControl.choose(e.target.value as ThemeChoice)}
-              >
-                <option value="system">{t("set.theme_system")}</option>
-                <option value="light">{t("set.theme_light")}</option>
-                <option value="dark">{t("set.theme_dark")}</option>
-              </select>
+                onChange={themeControl.choose}
+                options={[
+                  { value: "system", label: t("set.theme_system") },
+                  { value: "light", label: t("set.theme_light") },
+                  { value: "dark", label: t("set.theme_dark") },
+                ]}
+              />
             </SettingRow>
           )}
 

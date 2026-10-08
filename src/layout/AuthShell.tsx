@@ -14,7 +14,9 @@ type AuthShellProps = {
    * third copy costs a line and tells nobody anything.
    */
   title?: string;
-  subtitle: string;
+  /** Left out while the app starts: the one line under the mark is the
+   * spinner's. */
+  subtitle?: string;
   children: ReactNode;
 };
 
@@ -49,7 +51,7 @@ export function AuthShell({ title, subtitle, children }: AuthShellProps) {
       <div className="brand">
         <BrandLogo showWordmark={false} size={56} />
         {title && <h1 className="brand-title">{title}</h1>}
-        <p className="brand-sub">{subtitle}</p>
+        {subtitle && <p className="brand-sub">{subtitle}</p>}
       </div>
       {updateCard}
       {children}

@@ -211,7 +211,11 @@ export function EntryDetail({
         <div className="pw-card-title">
           <span className="pw-detail-service">{entry.service || t("pw.untitled")}</span>
           <span className="pw-card-category">
-            <span className="pw-rail-dot" style={{ background: colorFor(entry.category) }} aria-hidden />
+            <span
+              className="pw-rail-dot"
+              style={{ background: colorFor(entry.category) }}
+              aria-hidden
+            />
             {entry.category}
           </span>
         </div>
@@ -258,221 +262,229 @@ export function EntryDetail({
           clickable meant any stray click put a password on the clipboard,
           with a 12px badge as the only sign it had happened. Copying is what
           the copy button is for. */}
+      {/* Grouped like the phone: the entry's own fields in one card, then
+          files, notes and history each in their own. An empty group is
+          hidden by CSS. */}
       <div className="pw-card-fields">
-        {type === "login" && (
-          <>
-            <div className="pw-field-row">
-              <span className="pw-field-label">{t("pw.field_username_or_email")}</span>
-              <span className="pw-field-value">{entry.username || "-"}</span>
-              <button
-                type="button"
-                className="pw-inline-btn"
-                data-tooltip={t("pw.copy_username")}
-                aria-label={t("pw.copy_username")}
-                onClick={() => onCopyUsername(entry)}
-              >
-                {copyBadge(`u-${entry.id}`)}
-              </button>
-            </div>
-            {secretRow(
-              t("pw.field_password"),
-              entry.password,
-              entry.password,
-              entry.id,
-              t("pw.copy_password"),
-              "password",
-            )}
-            {entry.totp_secret && (
-              <TotpDisplay
-                entry={entry}
-                now={now}
-                hidden={entry.require_reauth === true && !revealed}
-                copied={copiedId === `t-${entry.id}`}
-                onCopy={(code) => onCopyTotp(entry, code)}
-              />
-            )}
-          </>
-        )}
-
-        {type === "card" && (
-          <>
-            {plainRow(
-              t("pw.field_cardholder"),
-              entry.card_holder,
-              `h-${entry.id}`,
-              t("pw.copy_cardholder"),
-            )}
-            {plainRow(t("pw.field_brand"), entry.card_brand)}
-            {secretRow(
-              t("pw.field_number"),
-              cardDigits(entry),
-              groupCardNumber(cardDigits(entry)),
-              entry.id,
-              t("pw.copy_number"),
-              "number",
-            )}
-            {(entry.card_exp_month || entry.card_exp_year) && (
+        <div className="pw-group">
+          {type === "login" && (
+            <>
               <div className="pw-field-row">
-                <span className="pw-field-label">{t("pw.field_expiry")}</span>
-                <span className="pw-field-value">
-                  {entry.card_exp_month || "??"}/{entry.card_exp_year || "??"}
-                </span>
-              </div>
-            )}
-            {entry.card_code &&
-              secretRow(
-                t("pw.field_security_code"),
-                entry.card_code,
-                entry.card_code,
-                `c-${entry.id}`,
-                t("pw.copy_security_code"),
-                "security code",
-              )}
-          </>
-        )}
-
-        {type === "identity" && (
-          <>
-            {plainRow(
-              t("pw.field_person_name"),
-              entry.id_full_name,
-              `n-${entry.id}`,
-              t("pw.copy_person_name"),
-            )}
-            {plainRow(t("pw.field_company"), entry.id_company)}
-            {plainRow(t("pw.field_email"), entry.id_email, `e-${entry.id}`, t("pw.copy_email"))}
-            {plainRow(t("pw.field_phone"), entry.id_phone, `p-${entry.id}`, t("pw.copy_phone"))}
-            {plainRow(
-              t("pw.field_address"),
-              [entry.id_address, entry.id_city, entry.id_state, entry.id_zip, entry.id_country]
-                .filter(Boolean)
-                .join(", "),
-              `a-${entry.id}`,
-              t("pw.copy_address"),
-            )}
-          </>
-        )}
-
-        {type === "ssh_key" && (
-          <>
-            {plainRow(
-              t("pw.field_fingerprint"),
-              entry.ssh_fingerprint,
-              `f-${entry.id}`,
-              t("pw.copy_fingerprint"),
-            )}
-            {entry.ssh_public_key && (
-              <div className="pw-field-row">
-                <span className="pw-field-label">{t("pw.field_public_key")}</span>
-                <span className="pw-field-value pw-pubkey">{entry.ssh_public_key}</span>
+                <span className="pw-field-label">{t("pw.field_username_or_email")}</span>
+                <span className="pw-field-value">{entry.username || "-"}</span>
                 <button
                   type="button"
                   className="pw-inline-btn"
-                  data-tooltip={t("pw.copy_public_key")}
-                  aria-label={t("pw.copy_public_key")}
-                  onClick={() => onCopyPlain(`k-${entry.id}`, entry.ssh_public_key ?? "")}
+                  data-tooltip={t("pw.copy_username")}
+                  aria-label={t("pw.copy_username")}
+                  onClick={() => onCopyUsername(entry)}
                 >
-                  {copyBadge(`k-${entry.id}`)}
+                  {copyBadge(`u-${entry.id}`)}
                 </button>
               </div>
-            )}
-            {/* No reveal for a private key: a multi-line PEM block cannot
-                usefully show in a row, and everything that needs it (an
-                ssh config, an agent) takes a paste. Copy is gated the same
-                as a password. */}
-            <div className="pw-field-row">
-              <span className="pw-field-label">{t("pw.field_private_key")}</span>
-              <span className="pw-field-value pw-mask">••••••••••••</span>
-              <button
-                type="button"
-                className="pw-inline-btn"
-                data-tooltip={t("pw.copy_private_key")}
-                aria-label={t("pw.copy_private_key")}
-                onClick={() =>
-                  onCopySecretField(entry, entry.id, entry.ssh_private_key ?? "", "private key")
-                }
-              >
-                {copyBadge(entry.id)}
-              </button>
-            </div>
-          </>
-        )}
+              {secretRow(
+                t("pw.field_password"),
+                entry.password,
+                entry.password,
+                entry.id,
+                t("pw.copy_password"),
+                "password",
+              )}
+              {entry.totp_secret && (
+                <TotpDisplay
+                  entry={entry}
+                  now={now}
+                  hidden={entry.require_reauth === true && !revealed}
+                  copied={copiedId === `t-${entry.id}`}
+                  onCopy={(code) => onCopyTotp(entry, code)}
+                />
+              )}
+            </>
+          )}
 
-        {/* After the kind's own fields: they are this entry's, named by the
-            user. A hidden one is covered by the same reveal as the password. */}
-        {(entry.fields ?? []).map((field, i) => (
-          <Fragment key={`f${i}`}>
-            {field.hidden
-              ? secretRow(
-                  field.name || t("pw.hidden_field"),
-                  field.value,
-                  field.value,
-                  `f${i}-${entry.id}`,
-                  field.name
-                    ? t("pw.copy_named", { name: field.name.toLowerCase() })
-                    : t("pw.copy_hidden_field"),
-                  (field.name || "Hidden field").toLowerCase(),
-                )
-              : plainRow(
-                  field.name || t("pw.field"),
-                  field.value,
-                  `f${i}-${entry.id}`,
-                  field.name
-                    ? t("pw.copy_named", { name: field.name.toLowerCase() })
-                    : t("pw.copy_field"),
-                )}
-          </Fragment>
-        ))}
-
-        {entry.url &&
-          (() => {
-            // Not a website: shown as it was saved, but not turned into
-            // something clickable. See normalizeUrl.
-            const href = normalizeUrl(entry.url);
-            if (!href) {
-              return (
+          {type === "card" && (
+            <>
+              {plainRow(
+                t("pw.field_cardholder"),
+                entry.card_holder,
+                `h-${entry.id}`,
+                t("pw.copy_cardholder"),
+              )}
+              {plainRow(t("pw.field_brand"), entry.card_brand)}
+              {secretRow(
+                t("pw.field_number"),
+                cardDigits(entry),
+                groupCardNumber(cardDigits(entry)),
+                entry.id,
+                t("pw.copy_number"),
+                "number",
+              )}
+              {(entry.card_exp_month || entry.card_exp_year) && (
                 <div className="pw-field-row">
+                  <span className="pw-field-label">{t("pw.field_expiry")}</span>
+                  <span className="pw-field-value">
+                    {entry.card_exp_month || "??"}/{entry.card_exp_year || "??"}
+                  </span>
+                </div>
+              )}
+              {entry.card_code &&
+                secretRow(
+                  t("pw.field_security_code"),
+                  entry.card_code,
+                  entry.card_code,
+                  `c-${entry.id}`,
+                  t("pw.copy_security_code"),
+                  "security code",
+                )}
+            </>
+          )}
+
+          {type === "identity" && (
+            <>
+              {plainRow(
+                t("pw.field_person_name"),
+                entry.id_full_name,
+                `n-${entry.id}`,
+                t("pw.copy_person_name"),
+              )}
+              {plainRow(t("pw.field_company"), entry.id_company)}
+              {plainRow(t("pw.field_email"), entry.id_email, `e-${entry.id}`, t("pw.copy_email"))}
+              {plainRow(t("pw.field_phone"), entry.id_phone, `p-${entry.id}`, t("pw.copy_phone"))}
+              {plainRow(
+                t("pw.field_address"),
+                [entry.id_address, entry.id_city, entry.id_state, entry.id_zip, entry.id_country]
+                  .filter(Boolean)
+                  .join(", "),
+                `a-${entry.id}`,
+                t("pw.copy_address"),
+              )}
+            </>
+          )}
+
+          {type === "ssh_key" && (
+            <>
+              {plainRow(
+                t("pw.field_fingerprint"),
+                entry.ssh_fingerprint,
+                `f-${entry.id}`,
+                t("pw.copy_fingerprint"),
+              )}
+              {entry.ssh_public_key && (
+                <div className="pw-field-row">
+                  <span className="pw-field-label">{t("pw.field_public_key")}</span>
+                  <span className="pw-field-value pw-pubkey">{entry.ssh_public_key}</span>
+                  <button
+                    type="button"
+                    className="pw-inline-btn"
+                    data-tooltip={t("pw.copy_public_key")}
+                    aria-label={t("pw.copy_public_key")}
+                    onClick={() => onCopyPlain(`k-${entry.id}`, entry.ssh_public_key ?? "")}
+                  >
+                    {copyBadge(`k-${entry.id}`)}
+                  </button>
+                </div>
+              )}
+              {/* No reveal for a private key: a multi-line PEM block cannot
+                  usefully show in a row, and everything that needs it (an
+                  ssh config, an agent) takes a paste. Copy is gated the same
+                  as a password. */}
+              <div className="pw-field-row">
+                <span className="pw-field-label">{t("pw.field_private_key")}</span>
+                <span className="pw-field-value pw-mask">••••••••••••</span>
+                <button
+                  type="button"
+                  className="pw-inline-btn"
+                  data-tooltip={t("pw.copy_private_key")}
+                  aria-label={t("pw.copy_private_key")}
+                  onClick={() =>
+                    onCopySecretField(entry, entry.id, entry.ssh_private_key ?? "", "private key")
+                  }
+                >
+                  {copyBadge(entry.id)}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* After the kind's own fields: they are this entry's, named by the
+              user. A hidden one is covered by the same reveal as the password. */}
+          {(entry.fields ?? []).map((field, i) => (
+            <Fragment key={`f${i}`}>
+              {field.hidden
+                ? secretRow(
+                    field.name || t("pw.hidden_field"),
+                    field.value,
+                    field.value,
+                    `f${i}-${entry.id}`,
+                    field.name
+                      ? t("pw.copy_named", { name: field.name.toLowerCase() })
+                      : t("pw.copy_hidden_field"),
+                    (field.name || "Hidden field").toLowerCase(),
+                  )
+                : plainRow(
+                    field.name || t("pw.field"),
+                    field.value,
+                    `f${i}-${entry.id}`,
+                    field.name
+                      ? t("pw.copy_named", { name: field.name.toLowerCase() })
+                      : t("pw.copy_field"),
+                  )}
+            </Fragment>
+          ))}
+
+          {entry.url &&
+            (() => {
+              // Not a website: shown as it was saved, but not turned into
+              // something clickable. See normalizeUrl.
+              const href = normalizeUrl(entry.url);
+              if (!href) {
+                return (
+                  <div className="pw-field-row">
+                    <span className="pw-field-label">{t("pw.field_website")}</span>
+                    <span className="pw-field-value">{entry.url}</span>
+                  </div>
+                );
+              }
+              return (
+                <div
+                  className="pw-field-row is-clickable"
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => void openUrl(href)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      void openUrl(href);
+                    }
+                  }}
+                >
                   <span className="pw-field-label">{t("pw.field_website")}</span>
-                  <span className="pw-field-value">{entry.url}</span>
+                  <span className="pw-field-value pw-link">{entry.url}</span>
                 </div>
               );
-            }
-            return (
-              <div
-                className="pw-field-row is-clickable"
-                role="link"
-                tabIndex={0}
-                onClick={() => void openUrl(href)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    void openUrl(href);
-                  }
-                }}
-              >
-                <span className="pw-field-label">{t("pw.field_website")}</span>
-                <span className="pw-field-value pw-link">{entry.url}</span>
-              </div>
-            );
-          })()}
+            })()}
+
+        </div>
 
         {(entry.attachments ?? []).length > 0 && (
-          <div className="pw-field-row pw-field-notes">
-            <span className="pw-field-label">{t("pw.field_attached_files")}</span>
-            <div className="pw-attachments">
-              {entry.attachments!.map((a) => (
-                <button
-                  key={a.blob_id}
-                  type="button"
-                  className="pw-attachment-row is-clickable"
-                  data-tooltip={t("pw.open_attachment")}
-                  onClick={() => onOpenAttachment(a)}
-                >
-                  <Paperclip size={14} aria-hidden />
-                  <span className="pw-attachment-name">{a.name}</span>
-                  <span className="pw-attachment-size">{formatBytes(a.size_bytes)}</span>
-                </button>
-              ))}
+          <div className="pw-group">
+            <div className="pw-field-row pw-field-notes">
+              <span className="pw-field-label">{t("pw.field_attached_files")}</span>
+              <div className="pw-attachments">
+                {entry.attachments!.map((a) => (
+                  <button
+                    key={a.blob_id}
+                    type="button"
+                    className="pw-attachment-row is-clickable"
+                    data-tooltip={t("pw.open_attachment")}
+                    onClick={() => onOpenAttachment(a)}
+                  >
+                    <Paperclip size={14} aria-hidden />
+                    <span className="pw-attachment-name">{a.name}</span>
+                    <span className="pw-attachment-size">{formatBytes(a.size_bytes)}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -484,101 +496,105 @@ export function EntryDetail({
             password is usually where the recovery codes went. A note-type
             entry is nothing but its note, so the rule matters most there. */}
         {entry.notes && (
-          <div className="pw-field-row pw-field-notes">
-            <span className="pw-field-label">{t("pw.field_notes")}</span>
-            <span className="pw-field-value pw-notes-value">
-              {notesAreSecret(entry) && !revealed
-                ? "••••••••••••"
-                : entry.notes}
-            </span>
-            {notesAreSecret(entry) && revealButton}
-            <button
-              type="button"
-              className="pw-inline-btn"
-              data-tooltip={t("pw.copy_notes")}
-              aria-label={t("pw.copy_notes")}
-              onClick={() => onCopySecretField(entry, `notes-${entry.id}`, entry.notes, "notes")}
-            >
-              {copyBadge(`notes-${entry.id}`)}
-            </button>
+          <div className="pw-group">
+            <div className="pw-field-row pw-field-notes">
+              <span className="pw-field-label">{t("pw.field_notes")}</span>
+              <span className="pw-field-value pw-notes-value">
+                {notesAreSecret(entry) && !revealed
+                  ? "••••••••••••"
+                  : entry.notes}
+              </span>
+              {notesAreSecret(entry) && revealButton}
+              <button
+                type="button"
+                className="pw-inline-btn"
+                data-tooltip={t("pw.copy_notes")}
+                aria-label={t("pw.copy_notes")}
+                onClick={() => onCopySecretField(entry, `notes-${entry.id}`, entry.notes, "notes")}
+              >
+                {copyBadge(`notes-${entry.id}`)}
+              </button>
+            </div>
           </div>
         )}
 
         {/* Closed until asked for: old passwords are secrets too, and the
             list is about recovering something, not reading it every time. */}
         {history.length > 0 && (
-          <div className="pw-field-row pw-field-notes">
-            <span className="pw-field-label">{t("pw.history_label")}</span>
-            <div className="pw-history">
-              <button
-                type="button"
-                className="pw-history-toggle"
-                aria-expanded={historyOpen}
-                onClick={() => setHistoryOpen((open) => !open)}
-              >
-                <History size={14} aria-hidden />
-                {t("pw.history_versions", { count: history.length })}
-              </button>
-              {historyOpen && (
-                <>
-                  {history.map((version, i) => {
-                    const newer = i === 0 ? entry : history[i - 1];
-                    const changed = changedLabels(version, newer);
-                    return (
-                      <div key={`${version.saved_at}-${i}`} className="pw-history-row">
-                        <span className="pw-history-date">{formatDate(version.saved_at)}</span>
-                        <span className="pw-history-what">
-                          {changed.length > 0
-                            ? t("pw.history_next_change", { changes: changed.join(", ") })
-                            : t("pw.history_no_change")}
-                        </span>
-                        {version.password && (
-                          <>
-                            <span className="pw-field-value pw-mask">
-                              {revealed ? version.password : "••••••••"}
-                            </span>
-                            <button
-                              type="button"
-                              className="pw-inline-btn"
-                              data-tooltip={t("pw.copy_this_password")}
-                              aria-label={t("pw.copy_this_password")}
-                              onClick={() =>
-                                onCopySecretField(
-                                  entry,
-                                  `h${i}-${entry.id}`,
-                                  version.password ?? "",
-                                  "earlier password",
-                                )
-                              }
-                            >
-                              {copyBadge(`h${i}-${entry.id}`)}
-                            </button>
-                          </>
-                        )}
-                        <button
-                          type="button"
-                          className="btn-secondary btn-sm pw-history-restore"
-                          disabled={busy}
-                          aria-label={t("pw.history_restore_label", {
-                            date: formatDate(version.saved_at),
-                          })}
-                          onClick={() => onRestoreVersion(entry, version)}
-                        >
-                          {t("pw.history_restore")}
-                        </button>
-                      </div>
-                    );
-                  })}
-                  <button
-                    type="button"
-                    className="link danger pw-history-clear"
-                    disabled={busy}
-                    onClick={() => onClearHistory(entry)}
-                  >
-                    {t("pw.clear_history")}
-                  </button>
-                </>
-              )}
+          <div className="pw-group">
+            <div className="pw-field-row pw-field-notes">
+              <span className="pw-field-label">{t("pw.history_label")}</span>
+              <div className="pw-history">
+                <button
+                  type="button"
+                  className="pw-history-toggle"
+                  aria-expanded={historyOpen}
+                  onClick={() => setHistoryOpen((open) => !open)}
+                >
+                  <History size={14} aria-hidden />
+                  {t("pw.history_versions", { count: history.length })}
+                </button>
+                {historyOpen && (
+                  <>
+                    {history.map((version, i) => {
+                      const newer = i === 0 ? entry : history[i - 1];
+                      const changed = changedLabels(version, newer);
+                      return (
+                        <div key={`${version.saved_at}-${i}`} className="pw-history-row">
+                          <span className="pw-history-date">{formatDate(version.saved_at)}</span>
+                          <span className="pw-history-what">
+                            {changed.length > 0
+                              ? t("pw.history_next_change", { changes: changed.join(", ") })
+                              : t("pw.history_no_change")}
+                          </span>
+                          {version.password && (
+                            <>
+                              <span className="pw-field-value pw-mask">
+                                {revealed ? version.password : "••••••••"}
+                              </span>
+                              <button
+                                type="button"
+                                className="pw-inline-btn"
+                                data-tooltip={t("pw.copy_this_password")}
+                                aria-label={t("pw.copy_this_password")}
+                                onClick={() =>
+                                  onCopySecretField(
+                                    entry,
+                                    `h${i}-${entry.id}`,
+                                    version.password ?? "",
+                                    "earlier password",
+                                  )
+                                }
+                              >
+                                {copyBadge(`h${i}-${entry.id}`)}
+                              </button>
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            className="btn-secondary btn-sm pw-history-restore"
+                            disabled={busy}
+                            aria-label={t("pw.history_restore_label", {
+                              date: formatDate(version.saved_at),
+                            })}
+                            onClick={() => onRestoreVersion(entry, version)}
+                          >
+                            {t("pw.history_restore")}
+                          </button>
+                        </div>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      className="link danger pw-history-clear"
+                      disabled={busy}
+                      onClick={() => onClearHistory(entry)}
+                    >
+                      {t("pw.clear_history")}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         )}

@@ -1345,17 +1345,6 @@ export const appMessages = {
     "pt-BR": "Agora não",
     pl: "Nie teraz",
   },
-  "app.loading": {
-    note: "Subtitle of the first screen while the app reads its state at start.",
-    en: "Loading…",
-    ro: "Se încarcă…",
-    de: "Wird geladen…",
-    fr: "Chargement…",
-    es: "Cargando…",
-    it: "Caricamento…",
-    "pt-BR": "Carregando…",
-    pl: "Ładowanie…",
-  },
   "app.starting": {
     note: "Line with a spinner on the first screen while the app starts.",
     en: "Starting…",

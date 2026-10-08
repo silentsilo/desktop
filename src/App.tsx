@@ -3689,12 +3689,12 @@ export default function App() {
 
   if (!bootstrap) {
     return (
-      <AuthShell title="SilentSilo" subtitle={t("app.loading")}>
+      <AuthShell title="SilentSilo">
         {toastHost}
         {confirmHost}
         {mintedCodeHost}
         {rebuildHost}
-        <p className="hint">
+        <p className="hint auth-loading" role="status">
           <span className="spinner" aria-hidden /> {t("app.starting")}
         </p>
       </AuthShell>

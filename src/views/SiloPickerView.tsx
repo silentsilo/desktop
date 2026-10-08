@@ -250,7 +250,7 @@ export function SiloPickerView({
 
   return (
     <AuthShell title="SilentSilo" subtitle={t("start.picker_subtitle")}>
-      <section className="card auth-card">
+      <section className="card auth-card is-picker">
         <h2>{t("start.your_silos")}</h2>
         <ul className="silo-list">
           {silos.map((silo) => (
@@ -264,7 +264,12 @@ export function SiloPickerView({
                   silo.present ? silo.path : t("start.path_not_reachable", { path: silo.path })
                 }
               >
-                <HardDrive size={18} />
+                <span
+                  className={`silo-item-icon${silo.unlocked ? " is-open" : ""}`}
+                  aria-hidden
+                >
+                  <HardDrive size={20} />
+                </span>
                 <span className="silo-item-text">
                   <strong>
                     {silo.name}
@@ -272,12 +277,16 @@ export function SiloPickerView({
                         an unlocked silo opens on click, a locked one asks
                         for a key first, and that is the difference worth
                         knowing before clicking. */}
-                    {silo.unlocked && <span className="silo-open-badge">{t("start.unlocked_badge")}</span>}
+                    {silo.unlocked && (
+                      <span className="silo-open-badge">{t("start.unlocked_badge")}</span>
+                    )}
                   </strong>
-                  <span className="hint">
-                    {silo.present ? describeLastOpened(silo.last_opened) : t("start.not_reachable")} ·{" "}
-                    {silo.path}
+                  <span className="silo-item-meta">
+                    {silo.present ? describeLastOpened(silo.last_opened) : t("start.not_reachable")}
                   </span>
+                  {/* Whole, on its own line: a path cut in the middle of a
+                      folder name does not say where the silo is. */}
+                  <span className="silo-item-path">{silo.path}</span>
                 </span>
               </button>
               <button

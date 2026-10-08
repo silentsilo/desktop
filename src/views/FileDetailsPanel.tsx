@@ -175,10 +175,7 @@ export function FileDetailsPanel({
         <section className="details-copies" aria-label={t("files.copies")}>
           <h4>{t("files.copies")}</h4>
           {onlyInBackup ? (
-            <p className="details-note">
-              Put in backup storage by another device. Which copies hold it shows here once this
-              computer has the file.
-            </p>
+            <p className="details-note">{t("files.only_in_backup_note")}</p>
           ) : (
             <ul>
               {lines.map((line) => (

@@ -252,8 +252,8 @@ export function AppShell({
         <div className="sidebar-spacer" />
 
         {/* What this silo occupies here. Content arrives only when a file is
-            opened, so this grows with use rather than with the silo, and the
-            second line is the part that can need acting on. */}
+            opened, so this grows with use rather than with the silo. Only
+            the size: whether it is backed up is the status bar's to say. */}
         {storage &&
           (collapsed ? (
             /* Turned on its side rather than dropped: a collapsed sidebar is
@@ -264,18 +264,10 @@ export function AppShell({
               type="button"
               className="sidebar-storage sidebar-storage-vertical"
               onClick={onOpenBackup}
-              data-tooltip={
-                storage.unsyncedBytes > 0
-                  ? t("start.storage_title_unsynced", {
-                      size: formatBytes(storage.localBytes),
-                      unsynced: formatBytes(storage.unsyncedBytes),
-                    })
-                  : t("start.storage_title_local", { size: formatBytes(storage.localBytes) })
-              }
+              data-tooltip={t("start.storage_title_local", {
+                size: formatBytes(storage.localBytes),
+              })}
             >
-              {storage.unsyncedBytes > 0 && (
-                <span className="sidebar-storage-dot" aria-hidden />
-              )}
               <span>{formatBytes(storage.localBytes)}</span>
             </button>
           ) : (
@@ -289,11 +281,6 @@ export function AppShell({
                 <span>{formatBytes(storage.localBytes)}</span>
                 <span className="sidebar-storage-limit">{t("start.on_this_computer")}</span>
               </span>
-              {storage.unsyncedBytes > 0 && (
-                <span className="sidebar-storage-note">
-                  {t("start.waiting_to_sync", { size: formatBytes(storage.unsyncedBytes) })}
-                </span>
-              )}
             </button>
           ))}
 

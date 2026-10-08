@@ -1,6 +1,14 @@
 import { useState } from "react";
 import { osOf, platformStrings } from "../lib/platformStrings";
-import { AlertTriangle, ArrowLeft, Building2, Fingerprint, KeyRound } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Building2,
+  Check,
+  Fingerprint,
+  KeyRound,
+  Minus,
+} from "lucide-react";
 import type { Authenticator, Bootstrap } from "../lib/types";
 import { AuthShell } from "../layout/AuthShell";
 import { t, tx, useLocale } from "../i18n";
@@ -40,12 +48,58 @@ export function EnrollView({
           : t("start.enroll_subtitle_this")
       }
     >
-      <section className="card auth-card">
+      <section className="card auth-card is-choice">
         <h2>{t("start.enroll_title")}</h2>
-        <p className="hint">
-          {t("start.enroll_security_key")}
-          {platform.hasBuiltIn && ` ${t("start.enroll_built_in", { builtIn: platform.builtIn })}`}
-        </p>
+        <p className="hint">{t("start.enroll_lead")}</p>
+        {/* The choice itself, as two cards side by side: what each is good
+            for and what it costs, so the decision is made on the screen
+            rather than in the paragraph above it. */}
+        <div className="enroll-choices">
+          <button
+            type="button"
+            className="enroll-choice"
+            disabled={busy || !bootstrap.fido_available}
+            onClick={() => onEnroll("security-key", organisation)}
+          >
+            <span className="enroll-choice-icon" aria-hidden>
+              {busy ? <span className="spinner" /> : <KeyRound size={20} />}
+            </span>
+            <strong>{busy ? t("start.waiting") : t("start.enroll_use_key")}</strong>
+            <span className="enroll-choice-line is-plus">
+              <Check size={13} aria-hidden />
+              {t("start.enroll_key_plus")}
+            </span>
+            <span className="enroll-choice-line">
+              <Minus size={13} aria-hidden />
+              {t("start.enroll_key_minus")}
+            </span>
+          </button>
+          {/* Hidden rather than disabled once the organisation box is
+              ticked: Hello is sealed to this machine, and an organisation
+              key has to open the silo from anywhere. The backend refuses
+              the combination too. */}
+          {bootstrap.platform_authenticator && !organisation && (
+            <button
+              type="button"
+              className="enroll-choice"
+              disabled={busy}
+              onClick={() => onEnroll("this-device", false)}
+            >
+              <span className="enroll-choice-icon" aria-hidden>
+                <Fingerprint size={20} />
+              </span>
+              <strong>{t("start.enroll_use_built_in", { builtIn: platform.builtIn })}</strong>
+              <span className="enroll-choice-line is-plus">
+                <Check size={13} aria-hidden />
+                {t("start.enroll_builtin_plus")}
+              </span>
+              <span className="enroll-choice-line">
+                <Minus size={13} aria-hidden />
+                {t("start.enroll_builtin_minus")}
+              </span>
+            </button>
+          )}
+        </div>
         {bootstrap.fido_available ? (
           <>
             <p className="hint">
@@ -59,17 +113,22 @@ export function EnrollView({
         ) : (
           <p className="error">{platform.fidoUnavailable}</p>
         )}
-        {/* Said before the choice, not after it. Whichever way in they pick,
-            this is the part that decides whether the silo survives a bad
-            day, and it is the one thing about the design that cannot be
-            fixed later by us. */}
+        {fidoProgress && <p className="fido-live">{fidoProgress}</p>}
+        {!bootstrap.fido_available && (
+          <div className="actions">
+            <button type="button" className="btn-secondary" disabled={busy} onClick={onRetry}>
+              {busy ? t("start.checking") : t("start.enroll_retry")}
+            </button>
+          </div>
+        )}
+        {/* Under the choice, and short: whichever way in they pick, this is
+            the part that decides whether the silo survives a bad day. */}
         <div className="consequence">
           <h3>
             <AlertTriangle size={15} />
             {t("start.enroll_lose_title")}
           </h3>
-          <p>{t("start.enroll_lose_body")}</p>
-          <p>{t("start.enroll_lose_code")}</p>
+          <p>{t("start.enroll_lose_short")}</p>
         </div>
         {/* The one moment this can be chosen, so it is asked here rather than
             offered as a setting later. Unticked is the ordinary case and the
@@ -83,48 +142,13 @@ export function EnrollView({
           />
           <span>
             <Building2 size={14} aria-hidden /> {t("start.enroll_org")}
-            {/* The details show once the box is ticked. Almost every silo is
-                personal, and three sentences about escrow on every first run
-                made the screen longer than a short window, for a choice most
-                people rightly skip. The one-line label is enough to find; the
-                consequences appear before the enrolment they apply to. */}
+            {/* The details show once the box is ticked: almost every silo
+                is personal. */}
             {organisation && (
               <span className="hint">{t("start.enroll_org_detail")}</span>
             )}
           </span>
         </label>
-        {fidoProgress && <p className="fido-live">{fidoProgress}</p>}
-        <div className="actions">
-          {!bootstrap.fido_available && (
-            <button type="button" className="btn-secondary" disabled={busy} onClick={onRetry}>
-              {busy ? t("start.checking") : t("start.enroll_retry")}
-            </button>
-          )}
-          <button
-            className="btn-primary"
-            type="button"
-            disabled={busy || !bootstrap.fido_available}
-            onClick={() => onEnroll("security-key", organisation)}
-          >
-            <KeyRound size={15} />
-            {busy ? t("start.waiting") : t("start.enroll_use_key")}
-          </button>
-          {/* Hidden rather than disabled once the organisation box is
-              ticked: Hello is sealed to this machine, and an organisation
-              key has to open the silo from anywhere. The backend refuses
-              the combination too. */}
-          {bootstrap.platform_authenticator && !organisation && (
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={busy}
-              onClick={() => onEnroll("this-device", false)}
-            >
-              <Fingerprint size={15} />
-              {t("start.enroll_use_built_in", { builtIn: platform.builtIn })}
-            </button>
-          )}
-        </div>
         <div className="auth-alternatives">
           <button type="button" className="btn-secondary" disabled={busy} onClick={onBack}>
             <ArrowLeft size={15} />
