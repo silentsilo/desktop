@@ -1469,7 +1469,7 @@ input[type="range"] {
 
 .drawer-tabs {
   padding: 0 2rem;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border);
 }
 
 /* Underlined tabs along the panel's edge, the way a sheet's sections read,
@@ -1527,7 +1527,7 @@ input[type="range"] {
 /* Room to read: the rows in here are the whole page, not a card among
    others, so they get the space a page would give them. */
 .drawer-body .lead {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
   line-height: 1.6;
 }
 
@@ -1554,6 +1554,52 @@ input[type="range"] {
   margin-top: 1rem;
 }
 
+/* The general rules tighten a list's first and last rows to sit inside a
+   card; here the list is the page, and every row keeps its room. */
+.drawer-body .setting-list > .setting-row:first-child,
+.drawer-body .setting-list > .setting-row:last-child {
+  padding-block: 1.15rem;
+}
+
+.drawer-body .panel-section > .setting-list-separated {
+  margin-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.drawer-body .panel-section > .actions {
+  margin-top: 1.25rem;
+}
+
+.drawer-body .panel-section > .setting-list + .actions {
+  margin-top: 0.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+/* A second section in a tab (Updates, then About) starts on its own. */
+.drawer-body .panel-section + .panel-section {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--border);
+}
+
+.drawer-body .setting-row + .setting-row {
+  border-top-color: var(--border);
+}
+
+.drawer-body .about-meta {
+  padding: 0.85rem 1rem;
+}
+
+.drawer-body .about-meta .backup-config-row + .backup-config-row {
+  margin-top: 0.45rem;
+}
+
+.drawer-body .panel-section > .hint:last-child {
+  margin-top: 1rem;
+  margin-bottom: 0;
+}
+
 /* The tab above already names the section. */
 .drawer-body > .panel-section:first-child > h3:first-child {
   display: none;
@@ -1565,7 +1611,7 @@ input[type="range"] {
 
 .drawer-foot {
   padding: 0.75rem 2rem;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--border);
   font-size: var(--fs-12);
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
