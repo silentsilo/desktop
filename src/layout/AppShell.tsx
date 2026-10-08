@@ -17,6 +17,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { BrandLogo } from "../components/BrandLogo";
+import { SidebarTasks } from "./SidebarTasks";
+import type { BackgroundTask, TaskPlace } from "../lib/backgroundTasks";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { formatAge, formatBytes } from "../lib/format";
 import type { SyncProgress, View } from "../lib/types";
@@ -106,6 +108,9 @@ type Props = {
   onSwitchSilo: () => void;
   /** The version an update check found and nobody has installed yet. */
   updateAvailable?: string | null;
+  /** What runs in the background, listed under the storage figure. */
+  tasks?: BackgroundTask[];
+  onOpenTask?: (place: TaskPlace) => void;
 };
 
 /** Views that lay out their own panes rather than scrolling as a page. */
@@ -158,6 +163,8 @@ export function AppShell({
   siloName,
   onSwitchSilo,
   updateAvailable = null,
+  tasks = [],
+  onOpenTask = () => {},
 }: Props) {
   useLocale();
   const [preferCollapsed, setPreferCollapsed] = useState(
@@ -293,6 +300,8 @@ export function AppShell({
               </span>
             </button>
           ))}
+
+        <SidebarTasks tasks={tasks} collapsed={collapsed} onOpen={onOpenTask} />
 
         <div className="sidebar-footer">
           <div className="sidebar-actions">

@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useSyncExternalStore,
   type Dispatch,
@@ -28,6 +29,11 @@ const listeners = new Map<string, Set<() => void>>();
 const mounts = new Map<string, number>();
 /** Outcomes written with no component mounted: shown once, then dropped. */
 const unseen = new Set<string>();
+/** What counts as running for each key, from the component that last used it. */
+const runningOf = new Map<string, (value: unknown) => boolean>();
+/** For the list of what runs: told about every change, whatever the key. */
+const anyListeners = new Set<() => void>();
+let version = 0;
 
 /** Which silo the state belongs to. Empty before one is open. */
 export const LastingScope = createContext("");
@@ -42,6 +48,8 @@ export function lastingKey(scope: string, name: string): string {
 
 function notify(key: string) {
   for (const listener of listeners.get(key) ?? []) listener();
+  version += 1;
+  for (const listener of anyListeners) listener();
 }
 
 export function readLasting<T>(key: string, initial: T): T {
@@ -57,7 +65,8 @@ export function writeLasting<T>(key: string, initial: T, next: SetStateAction<T>
   notify(key);
 }
 
-export function mountLasting(key: string) {
+export function mountLasting(key: string, running?: (value: unknown) => boolean) {
+  if (running) runningOf.set(key, running);
   mounts.set(key, (mounts.get(key) ?? 0) + 1);
   // On screen now, so an outcome from while it was away has been seen.
   unseen.delete(key);
@@ -69,7 +78,10 @@ export function unmountLasting(key: string, running: (value: unknown) => boolean
   mounts.set(key, Math.max(0, (mounts.get(key) ?? 1) - 1));
   setTimeout(() => {
     if ((mounts.get(key) ?? 0) > 0 || unseen.has(key)) return;
-    if (values.has(key) && !running(values.get(key))) values.delete(key);
+    if (values.has(key) && !running(values.get(key))) {
+      values.delete(key);
+      notify(key);
+    }
   }, 0);
 }
 
@@ -89,6 +101,33 @@ export function resetLasting() {
   values.clear();
   unseen.clear();
   mounts.clear();
+  runningOf.clear();
+}
+
+/** The values still running for a silo and for the app, by name. */
+export function runningLasting(scope: string): Map<string, unknown> {
+  const found = new Map<string, unknown>();
+  for (const [key, value] of values) {
+    const at = key.indexOf(SEP);
+    const owner = key.slice(0, at);
+    if (owner !== scope && owner !== APP_SCOPE) continue;
+    if (runningOf.get(key)?.(value)) found.set(key.slice(at + 1), value);
+  }
+  return found;
+}
+
+/** [`runningLasting`], kept current. */
+export function useRunningLasting(scope: string): Map<string, unknown> {
+  const at = useSyncExternalStore(
+    (listener) => {
+      anyListeners.add(listener);
+      return () => anyListeners.delete(listener);
+    },
+    () => version,
+    () => version,
+  );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => runningLasting(scope), [scope, at]);
 }
 
 /** `useState`, kept while `running` holds and for one unseen outcome.
@@ -126,8 +165,9 @@ export function useLasting<T>(
   );
 
   useEffect(() => {
-    mountLasting(key);
-    return () => unmountLasting(key, (v) => runningRef.current(v as T));
+    const running = (v: unknown) => runningRef.current(v as T);
+    mountLasting(key, running);
+    return () => unmountLasting(key, running);
   }, [key]);
 
   return [value, set];

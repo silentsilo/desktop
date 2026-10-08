@@ -3157,6 +3157,121 @@ input[type="range"] {
   color: var(--text-tertiary);
 }
 
+/* ── Background work, under the storage figure ── */
+/* Pulled up into the sidebar's gap: it belongs to the figure above, not to
+   the footer below. */
+.sidebar-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: -1.3rem;
+}
+
+.sidebar-task {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  min-height: 32px;
+  padding: 0.35rem 0.65rem;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  text-align: left;
+  font-size: var(--fs-12);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.sidebar-task:hover {
+  background: var(--row-hover);
+  color: var(--text);
+}
+
+.sidebar-task .spinner {
+  color: var(--accent-text);
+}
+
+.sidebar-task > svg {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+.sidebar-task-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sidebar-task-label,
+.sidebar-task-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-task-label {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.sidebar-task-detail {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Centred like the storage figure above; the list below it reads left. */
+.sidebar-tasks > .sidebar-task {
+  justify-content: center;
+  text-align: center;
+}
+
+.sidebar-tasks > .sidebar-task > svg {
+  margin-left: 0;
+}
+
+.sidebar-tasks-list {
+  list-style: none;
+  margin: 0 0 0 1.05rem;
+  padding: 0 0 0 0.4rem;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.sidebar-tasks-collapsed {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: -1.3rem auto 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--accent-text);
+  cursor: pointer;
+}
+
+.sidebar-tasks-collapsed:hover {
+  background: var(--row-hover);
+}
+
+.sidebar-tasks-count {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: var(--r-full);
+  background: var(--accent-solid);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+}
+
 .storage-bar {
   display: block;
   height: 4px;

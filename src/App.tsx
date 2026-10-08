@@ -93,7 +93,8 @@ import { lastDone } from "./lib/siloMemory";
 import { formatAppError } from "./lib/errors";
 import { AppSettingsContext, UpdateCardContext } from "./lib/appSettings";
 import { UpdateCard } from "./views/UpdateCard";
-import { forgetLasting, LastingScope } from "./lib/lasting";
+import { forgetLasting, LastingScope, useRunningLasting } from "./lib/lasting";
+import { lastingTasks, syncTask, type BackgroundTask, type TaskPlace } from "./lib/backgroundTasks";
 
 const AUTO_LOCK_KEY = "silentsilo.autoLockMinutes";
 const DEFAULT_AUTO_LOCK_MINUTES = 30;
@@ -482,6 +483,8 @@ export default function App() {
   // the window spending its frames on a line of text. Only the newest
   // counts, since every earlier one is already wrong.
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+  /// Work the pages keep in lib/lasting, for the sidebar's list of what runs.
+  const lastingRunning = useRunningLasting(bootstrap?.silo?.id ?? "");
   const syncTicker = useMemo(() => coalesceLatest<SyncProgress>(setSyncProgress), []);
   useEffect(() => syncTicker.stop, [syncTicker]);
   useEventSubscription(
@@ -1476,6 +1479,37 @@ export default function App() {
   const drainShellQueues = async () => {
     await checkPendingShellUploads();
     await checkPendingShellDownloads();
+  };
+
+  /// Everything running in the background, for the sidebar: what this
+  /// component drives itself, then what the pages keep in lib/lasting.
+  const backgroundTasks = (): BackgroundTask[] => {
+    const tasks: BackgroundTask[] = [];
+    const syncing = syncTask(syncProgress, sync.state === "syncing");
+    if (syncing) tasks.push(syncing);
+    if (contentFetch) {
+      tasks.push({
+        id: "fetch",
+        label: t("nav.task_download_all"),
+        detail: `${contentFetch.done} / ${contentFetch.total}`,
+        place: { section: "backup" },
+      });
+    }
+    if (uploadProgress) {
+      tasks.push({ id: "transfer", label: uploadProgress, detail: null, place: { view: "files" } });
+    }
+    if (opening) {
+      tasks.push({
+        id: "open",
+        label: t("nav.task_opening", { name: opening.name }),
+        detail: opening.total > 0 ? `${Math.floor((opening.done / opening.total) * 100)}%` : null,
+        place: { view: "files" },
+      });
+    }
+    const kept = lastingTasks(lastingRunning);
+    // A sync started on the Backup page is the same pass: listed once.
+    const shown = syncing ? kept.filter((task) => task.id !== "backup") : kept;
+    return [...tasks, ...shown];
   };
 
   const lockSilo = useCallback(async () => {
@@ -3920,6 +3954,15 @@ export default function App() {
               }
             : null
         }
+        tasks={backgroundTasks()}
+        onOpenTask={(place: TaskPlace) => {
+          if ("section" in place) {
+            setSettingsSection(place.section as SettingsSectionId);
+            setView("settings");
+          } else {
+            setView(place.view);
+          }
+        }}
         trashCount={trashEntries.length}
         healthCount={healthCount}
         healthUrgent={health.active.some((f) => f.severity === "high")}
