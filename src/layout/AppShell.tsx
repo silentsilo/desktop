@@ -119,17 +119,24 @@ const PANE_VIEWS = new Set<View>([
   "settings",
 ]);
 
-const NAV: { id: View; label: Key; icon: typeof FolderClosed }[] = [
+type NavItem = { id: View; label: Key; icon: typeof FolderClosed };
+
+// What the silo holds, then what looks after it, then Settings.
+const NAV: NavItem[][] = [
   // Favourites leads, the way Explorer and Finder put quick access above the
   // tree: it is the shortest path to what someone opens repeatedly, and the
   // two views below it are where everything else lives.
-  { id: "favorites", label: "nav.favorites", icon: Star },
-  { id: "files", label: "nav.files", icon: FolderClosed },
-  { id: "passwords", label: "nav.passwords", icon: KeyRound },
-  { id: "health", label: "nav.health", icon: HeartPulse },
-  { id: "trash", label: "nav.trash", icon: Trash2 },
-  { id: "activity", label: "nav.activity", icon: ScrollText },
-  { id: "settings", label: "nav.settings", icon: Settings2 },
+  [
+    { id: "favorites", label: "nav.favorites", icon: Star },
+    { id: "files", label: "nav.files", icon: FolderClosed },
+    { id: "passwords", label: "nav.passwords", icon: KeyRound },
+  ],
+  [
+    { id: "health", label: "nav.health", icon: HeartPulse },
+    { id: "trash", label: "nav.trash", icon: Trash2 },
+    { id: "activity", label: "nav.activity", icon: ScrollText },
+  ],
+  [{ id: "settings", label: "nav.settings", icon: Settings2 }],
 ];
 
 export function AppShell({
@@ -154,7 +161,7 @@ export function AppShell({
 }: Props) {
   useLocale();
   const [preferCollapsed, setPreferCollapsed] = useState(
-    () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true"
+    () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true",
   );
   const narrow = useMediaQuery(NARROW_WINDOW);
   const collapsed = preferCollapsed || narrow;
@@ -194,62 +201,65 @@ export function AppShell({
         </button>
 
         <nav className="sidebar-nav" aria-label={t("start.main_nav")}>
-          {NAV.map((item) => {
-            const Icon = item.icon;
-            const active = view === item.id;
-            const badgeCount =
-              item.id === "trash" ? trashCount : item.id === "health" ? healthCount : 0;
-            const badgeLabel = badgeCount > 99 ? "99+" : String(badgeCount);
-            // Red is for something broken. Items in the trash are not, and
-            // Health is amber unless one of its findings is serious.
-            const badgeTone =
-              item.id === "trash"
-                ? " tab-badge-neutral"
-                : item.id === "health" && !healthUrgent
-                  ? " tab-badge-warn"
-                  : "";
-            const updateDot = item.id === "settings" && updateAvailable !== null;
-            const name = t(item.label);
-            const title =
-              updateDot
-                ? t("nav.update_available", { item: name, version: updateAvailable })
-                : badgeCount === 0
-                ? name
-                : item.id === "health"
-                  ? // "to look at", the Health page's own wording: the count
-                    // mixes must-fix findings with worth-doing ones.
-                    t("nav.to_look_at", { item: name, count: badgeCount })
-                  : `${name} (${badgeCount})`;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                className={`tab-item${active ? " active" : ""}`}
-                onClick={() => onView(item.id)}
-                data-tooltip={title}
-                aria-label={title}
-                aria-current={active ? "page" : undefined}
-              >
-                <span className="tab-icon-wrap">
-                  <Icon size={18} />
-                  {collapsed && badgeCount > 0 && (
-                    <span className={`tab-badge tab-badge-dot${badgeTone}`} aria-hidden />
-                  )}
-                  {collapsed && updateDot && (
-                    <span className="tab-badge tab-badge-dot tab-badge-update" aria-hidden />
-                  )}
-                </span>
-                {!collapsed && <span className="tab-label">{name}</span>}
-                {!collapsed && badgeCount > 0 && (
-                  <span className={`tab-badge${badgeTone}`}>{badgeLabel}</span>
-                )}
-                {!collapsed && updateDot && <span className="tab-badge tab-badge-update">{t("nav.update_badge")}</span>}
-              </button>
-            );
-          })}
+          {NAV.map((group, g) => (
+            <div key={g} className="sidebar-nav-group">
+              {group.map((item) => {
+                const Icon = item.icon;
+                const active = view === item.id;
+                const badgeCount =
+                  item.id === "trash" ? trashCount : item.id === "health" ? healthCount : 0;
+                const badgeLabel = badgeCount > 99 ? "99+" : String(badgeCount);
+                // Red is for something broken. Items in the trash are not, and
+                // Health is amber unless one of its findings is serious.
+                const badgeTone =
+                  item.id === "trash"
+                    ? " tab-badge-neutral"
+                    : item.id === "health" && !healthUrgent
+                      ? " tab-badge-warn"
+                      : "";
+                const updateDot = item.id === "settings" && updateAvailable !== null;
+                const name = t(item.label);
+                const title = updateDot
+                  ? t("nav.update_available", { item: name, version: updateAvailable })
+                  : badgeCount === 0
+                    ? name
+                    : item.id === "health"
+                      ? // "to look at", the Health page's own wording: the count
+                        // mixes must-fix findings with worth-doing ones.
+                        t("nav.to_look_at", { item: name, count: badgeCount })
+                      : `${name} (${badgeCount})`;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`tab-item${active ? " active" : ""}`}
+                    onClick={() => onView(item.id)}
+                    data-tooltip={title}
+                    aria-label={title}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    <span className="tab-icon-wrap">
+                      <Icon size={18} />
+                      {collapsed && badgeCount > 0 && (
+                        <span className={`tab-badge tab-badge-dot${badgeTone}`} aria-hidden />
+                      )}
+                      {collapsed && updateDot && (
+                        <span className="tab-badge tab-badge-dot tab-badge-update" aria-hidden />
+                      )}
+                    </span>
+                    {!collapsed && <span className="tab-label">{name}</span>}
+                    {!collapsed && badgeCount > 0 && (
+                      <span className={`tab-badge${badgeTone}`}>{badgeLabel}</span>
+                    )}
+                    {!collapsed && updateDot && (
+                      <span className="tab-badge tab-badge-update">{t("nav.update_badge")}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
-
-        <div className="sidebar-spacer" />
 
         {/* What this silo occupies here. Content arrives only when a file is
             opened, so this grows with use rather than with the silo. Only
@@ -341,50 +351,50 @@ export function AppShell({
         </div>
         <footer className="status-bar">
           <div className="status-bar-inner">
-          {sync.configured ? (
-            <button
-              type="button"
-              className="status-sync"
-              // A failure is explained on the Backup page, with the reason
-              // and what to do; retrying from here repeated it without a word.
-              onClick={sync.state === "error" ? onOpenBackup : onSyncNow}
-              disabled={sync.state === "syncing"}
-              data-tooltip={sync.lastError ?? t("start.sync_now")}
-            >
-              <span
-                className={`dot ${
-                  sync.state === "error"
-                    ? "warn"
-                    : sync.state === "syncing" || sync.progress
-                      ? "busy"
-                      : "ok"
-                }`}
-              />
-              {sync.progress
-                ? describeProgress(sync.progress)
-                : sync.state === "syncing"
-                ? t("start.syncing")
-                : sync.state === "error"
-                  ? t("start.sync_failed")
-                  : sync.pending > 0
-                    ? t("start.changes_waiting", { count: sync.pending })
-                    : sync.lastSyncAt
-                      ? t("start.synced_ago", { age: formatAge(sync.lastSyncAt) })
-                      : t("start.storage_connected")}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="status-sync"
-              onClick={onOpenBackup}
-              data-tooltip={t("start.open_backup_title")}
-            >
-              {/* Neutral, not green: a silo with no backup is not a state
+            {sync.configured ? (
+              <button
+                type="button"
+                className="status-sync"
+                // A failure is explained on the Backup page, with the reason
+                // and what to do; retrying from here repeated it without a word.
+                onClick={sync.state === "error" ? onOpenBackup : onSyncNow}
+                disabled={sync.state === "syncing"}
+                data-tooltip={sync.lastError ?? t("start.sync_now")}
+              >
+                <span
+                  className={`dot ${
+                    sync.state === "error"
+                      ? "warn"
+                      : sync.state === "syncing" || sync.progress
+                        ? "busy"
+                        : "ok"
+                  }`}
+                />
+                {sync.progress
+                  ? describeProgress(sync.progress)
+                  : sync.state === "syncing"
+                    ? t("start.syncing")
+                    : sync.state === "error"
+                      ? t("start.sync_failed")
+                      : sync.pending > 0
+                        ? t("start.changes_waiting", { count: sync.pending })
+                        : sync.lastSyncAt
+                          ? t("start.synced_ago", { age: formatAge(sync.lastSyncAt) })
+                          : t("start.storage_connected")}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="status-sync"
+                onClick={onOpenBackup}
+                data-tooltip={t("start.open_backup_title")}
+              >
+                {/* Neutral, not green: a silo with no backup is not a state
                   worth a reassuring colour, it is the one Health flags. */}
-              <span className="dot neutral" />
-              {t("start.not_backed_up")}
-            </button>
-          )}
+                <span className="dot neutral" />
+                {t("start.not_backed_up")}
+              </button>
+            )}
             {statusSummary && <span className="status-summary">{statusSummary}</span>}
           </div>
         </footer>
@@ -392,4 +402,3 @@ export function AppShell({
     </div>
   );
 }
-
