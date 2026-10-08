@@ -12,6 +12,9 @@
  *   npm run dev
  *   node scripts/screenshots.mjs
  *
+ * SILENTSILO_SCHEME=light takes them in the light theme (the site shows
+ * both), and SILENTSILO_ONLY=activity,files takes only those.
+ *
  * Override the address with SILENTSILO_URL when the dev server is not on
  * http://localhost:1420 (Vite binds to ::1 on some Windows machines, where
  * Chromium resolves localhost to 127.0.0.1 and cannot reach it).
@@ -36,7 +39,18 @@ async function settle(page, url, anchor) {
   await page.waitForTimeout(150);
 }
 
+const scheme = process.env.SILENTSILO_SCHEME === "light" ? "light" : "dark";
+const only = (process.env.SILENTSILO_ONLY ?? "").split(",").filter(Boolean);
+
 const shots = [
+  {
+    name: "activity",
+    async take(page) {
+      await settle(page, "/?mock=unlocked", "Passport scan.pdf");
+      await page.getByRole("button", { name: "Activity", exact: true }).click();
+      await page.getByText("Copied the password of").first().waitFor({ state: "visible" });
+    },
+  },
   {
     name: "unlock",
     async take(page) {
@@ -109,7 +123,7 @@ const shots = [
 const browser = await chromium.launch();
 const page = await browser.newPage({
   viewport: { width: 1200, height: 800 },
-  colorScheme: "dark",
+  colorScheme: scheme,
   deviceScaleFactor: 2,
 });
 
@@ -119,7 +133,7 @@ const page = await browser.newPage({
 page.setDefaultNavigationTimeout(120_000);
 
 await mkdir(out, { recursive: true });
-for (const shot of shots) {
+for (const shot of shots.filter((s) => only.length === 0 || only.includes(s.name))) {
   await shot.take(page);
   await page.evaluate(fontsReady);
   // Panels fade in. Catching one halfway leaves half the screen greyed, which
