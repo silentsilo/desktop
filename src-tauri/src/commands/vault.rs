@@ -462,7 +462,7 @@ fn import_folder_impl(app: &AppHandle, folder_id: Uuid, source: &Path) -> Result
         &state.import_cancelled,
     );
     // Cancelled or not, what landed is in the silo.
-    log_added(app, snapshot.id, counters.added);
+    log_added(app, snapshot.id, top_folder.id, &[], counters.added);
     walked?;
 
     emit_import_progress(
@@ -519,12 +519,16 @@ pub(crate) fn process_shell_upload_queue(app: &AppHandle) -> Result<u32, String>
     };
 
     let mut imported = 0u32;
+    let mut added = Vec::new();
     let mut failed = Vec::new();
     let mut requeue = Vec::new();
     for path in paths {
         let source = PathBuf::from(&path);
         match import_one(app, &snapshot, inbox_id, &source) {
-            Ok(_) => imported += 1,
+            Ok(file) => {
+                imported += 1;
+                added.push(file);
+            }
             Err(e) => {
                 let name = source
                     .file_name()
@@ -540,7 +544,7 @@ pub(crate) fn process_shell_upload_queue(app: &AppHandle) -> Result<u32, String>
         requeue_uploads(&requeue);
         let _ = app.emit("shell-upload-failed", &failed);
     }
-    log_added(app, snapshot.id, imported);
+    log_added(app, snapshot.id, inbox_id, &added, imported);
     Ok(imported)
 }
 
@@ -954,12 +958,24 @@ pub async fn vault_import_files_to_folder(
             match import_one(&app, &snapshot, folder_id, &source) {
                 Ok(file) => imported.push(file),
                 Err(e) => {
-                    log_added(&app, snapshot.id, imported.len() as u32);
+                    log_added(
+                        &app,
+                        snapshot.id,
+                        folder_id,
+                        &imported,
+                        imported.len() as u32,
+                    );
                     return Err(e);
                 }
             }
         }
-        log_added(&app, snapshot.id, imported.len() as u32);
+        log_added(
+            &app,
+            snapshot.id,
+            folder_id,
+            &imported,
+            imported.len() as u32,
+        );
         Ok(imported)
     })
     .await
@@ -994,6 +1010,7 @@ pub async fn vault_paste_paths(
             imported_folders: 0,
             failed: Vec::new(),
         };
+        let mut pasted = Vec::new();
 
         for path in paths {
             if state.import_cancelled.load(Ordering::Relaxed) {
@@ -1032,7 +1049,10 @@ pub async fn vault_paste_paths(
                 }
             } else if source.is_file() {
                 match import_one(&app, &snapshot, folder_uuid, &source) {
-                    Ok(_) => result.imported_files += 1,
+                    Ok(file) => {
+                        result.imported_files += 1;
+                        pasted.push(file);
+                    }
                     Err(e) => result.failed.push(format!("{name}: {e}")),
                 }
             }
@@ -1040,7 +1060,13 @@ pub async fn vault_paste_paths(
             // it was copied) — silently skipped, same as a no-op paste of it.
         }
 
-        log_added(&app, snapshot.id, result.imported_files);
+        log_added(
+            &app,
+            snapshot.id,
+            folder_uuid,
+            &pasted,
+            result.imported_files,
+        );
         Ok(result)
     })
     .await
@@ -1048,31 +1074,63 @@ pub async fn vault_paste_paths(
 
 #[tauri::command(async)]
 pub fn vault_create_folder(
+    app: AppHandle,
     parent_id: String,
     name: String,
     state: State<AppState>,
 ) -> Result<FolderEntry, String> {
     let parent_id = Uuid::parse_str(&parent_id).map_err(|e| e.to_string())?;
-    with_vfs(&state, |_session, vfs| vfs.create_folder(parent_id, &name))
+    let folder = with_vfs(&state, |_session, vfs| vfs.create_folder(parent_id, &name))?;
+    let _ = crate::audit::record(
+        &app,
+        crate::audit::event(crate::audit::codes::FOLDER_CREATED)
+            .on(folder.id.to_string(), folder.path.clone()),
+    );
+    Ok(folder)
 }
 
 #[tauri::command(async)]
 pub fn vault_rename_file(
+    app: AppHandle,
     file_id: String,
     new_name: String,
     state: State<AppState>,
 ) -> Result<FileEntry, String> {
     let file_id = Uuid::parse_str(&file_id).map_err(|e| e.to_string())?;
+    let old = with_vfs(&state, |_session, vfs| {
+        vfs.get_file(file_id).map(|f| f.name)
+    })?;
+    if old != new_name {
+        crate::audit::record(
+            &app,
+            crate::audit::event(crate::audit::codes::FILE_RENAMED)
+                .on(file_id.to_string(), new_name.clone())
+                .with("from", old),
+        )?;
+    }
     with_vfs(&state, |_session, vfs| vfs.rename_file(file_id, &new_name))
 }
 
 #[tauri::command(async)]
 pub fn vault_rename_folder(
+    app: AppHandle,
     folder_id: String,
     new_name: String,
     state: State<AppState>,
 ) -> Result<FolderEntry, String> {
     let folder_id = Uuid::parse_str(&folder_id).map_err(|e| e.to_string())?;
+    let old = with_vfs(&state, |_session, vfs| {
+        vfs.get_folder(folder_id).map(|f| f.name)
+    })?;
+    if old != new_name {
+        crate::audit::record(
+            &app,
+            crate::audit::event(crate::audit::codes::FILE_RENAMED)
+                .on(folder_id.to_string(), new_name.clone())
+                .with("from", old)
+                .with("folder", true),
+        )?;
+    }
     with_vfs(&state, |_session, vfs| {
         vfs.rename_folder(folder_id, &new_name)
     })
@@ -1118,18 +1176,35 @@ pub fn vault_list_trash(state: State<AppState>) -> Result<Vec<TrashItem>, String
 }
 
 #[tauri::command(async)]
-pub fn vault_restore_file(file_id: String, state: State<AppState>) -> Result<FileEntry, String> {
+pub fn vault_restore_file(
+    app: AppHandle,
+    file_id: String,
+    state: State<AppState>,
+) -> Result<FileEntry, String> {
     let file_id = Uuid::parse_str(&file_id).map_err(|e| e.to_string())?;
-    with_vfs(&state, |_session, vfs| vfs.restore_file(file_id))
+    let file = with_vfs(&state, |_session, vfs| vfs.restore_file(file_id))?;
+    let _ = crate::audit::record(
+        &app,
+        crate::audit::event(crate::audit::codes::FILE_RESTORED)
+            .on(file.id.to_string(), file.name.clone()),
+    );
+    Ok(file)
 }
 
 #[tauri::command(async)]
 pub fn vault_restore_folder(
+    app: AppHandle,
     folder_id: String,
     state: State<AppState>,
 ) -> Result<FolderEntry, String> {
     let folder_id = Uuid::parse_str(&folder_id).map_err(|e| e.to_string())?;
-    with_vfs(&state, |_session, vfs| vfs.restore_folder(folder_id))
+    let folder = with_vfs(&state, |_session, vfs| vfs.restore_folder(folder_id))?;
+    let _ = crate::audit::record(
+        &app,
+        crate::audit::event(crate::audit::codes::FILE_RESTORED)
+            .on(folder.id.to_string(), folder.path.clone()),
+    );
+    Ok(folder)
 }
 
 /// Permanently removes trashed items from the local index, and their blobs
@@ -1223,22 +1298,46 @@ pub async fn vault_import_file(
     run_blocking(move || {
         let snapshot = crate::state::snapshot_focused_session(&app.state::<AppState>())?;
         let file = import_one(&app, &snapshot, folder_id, &source)?;
-        log_added(&app, snapshot.id, 1);
+        log_added(&app, snapshot.id, folder_id, std::slice::from_ref(&file), 1);
         Ok(file)
     })
     .await
 }
 
-/// Files added, logged once per import rather than once per file. After
-/// the fact and never refused: the files are already in the silo.
-fn log_added(app: &AppHandle, silo_id: Uuid, count: u32) {
-    if count > 0 {
-        let _ = crate::audit::record_in(
-            app,
-            silo_id,
-            crate::audit::event(crate::audit::codes::FILE_ADDED).with("count", count),
-        );
+/// How many names an event about several files carries.
+const LOGGED_NAMES: usize = 10;
+
+/// Files added, logged once per import rather than once per file: by name
+/// when it is one, otherwise the count and the first names, with the folder
+/// they went into. After the fact and never refused: the files are already
+/// in the silo.
+fn log_added(app: &AppHandle, silo_id: Uuid, folder_id: Uuid, files: &[FileEntry], count: u32) {
+    if count == 0 {
+        return;
     }
+    let mut event = crate::audit::event(crate::audit::codes::FILE_ADDED);
+    match files {
+        [one] if count == 1 => event = event.on(one.id.to_string(), one.name.clone()),
+        _ => {
+            event = event.with("count", count);
+            let names: Vec<String> = files
+                .iter()
+                .take(LOGGED_NAMES)
+                .map(|f| f.name.clone())
+                .collect();
+            if !names.is_empty() {
+                event = event.with("names", names);
+            }
+        }
+    }
+    if let Ok(folder) =
+        crate::state::with_session_id(&app.state::<AppState>(), silo_id, |_session, vfs| {
+            vfs.get_folder(folder_id).map(|f| f.path)
+        })
+    {
+        event = event.with("folder", folder);
+    }
+    let _ = crate::audit::record_in(app, silo_id, event);
 }
 
 /// A purge about to happen, in the focused silo's log.

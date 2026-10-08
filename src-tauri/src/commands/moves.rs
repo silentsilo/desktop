@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use silentsilo_core::{CoreResult, VaultEntry};
 use silentsilo_vfs::Vfs;
 use silentsilo_vfs::names::fold;
-use tauri::State;
+use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use crate::state::{AppState, with_vfs};
@@ -28,6 +28,9 @@ pub struct MoveItem {
 #[derive(Serialize, Default, Debug, PartialEq)]
 pub struct MoveReport {
     pub moved: u32,
+    /// What moved, for the activity log; the window has the names already.
+    #[serde(skip)]
+    pub moved_names: Vec<String>,
     /// Names left where they were because the destination had one already.
     pub skipped: Vec<String>,
     pub failed: Vec<MoveFailure>,
@@ -53,15 +56,42 @@ pub fn vault_move_clashes(
 
 #[tauri::command(async)]
 pub fn vault_move_entries(
+    app: AppHandle,
     items: Vec<MoveItem>,
     folder_id: String,
     skip_clashes: bool,
     state: State<AppState>,
 ) -> Result<MoveReport, String> {
     let dest = Uuid::parse_str(&folder_id).map_err(|e| e.to_string())?;
-    with_vfs(&state, |_session, vfs| {
-        move_entries(vfs, &items, dest, skip_clashes)
-    })
+    let (report, to) = with_vfs(&state, |_session, vfs| {
+        let report = move_entries(vfs, &items, dest, skip_clashes)?;
+        Ok((report, vfs.get_folder(dest)?.path))
+    })?;
+    log_moved(&app, &report, &to);
+    Ok(report)
+}
+
+/// One event per move, after it: by name when it is one item, otherwise the
+/// count and the first names. Never refused, since the move is done.
+fn log_moved(app: &AppHandle, report: &MoveReport, to: &str) {
+    if report.moved == 0 {
+        return;
+    }
+    let mut event = crate::audit::event(crate::audit::codes::FILE_MOVED).with("to", to);
+    if let [one] = report.moved_names.as_slice() {
+        event = event.with("name", one.clone());
+    } else {
+        event = event.with("count", report.moved).with(
+            "names",
+            report
+                .moved_names
+                .iter()
+                .take(10)
+                .cloned()
+                .collect::<Vec<_>>(),
+        );
+    }
+    let _ = crate::audit::record(app, event);
 }
 
 /// What an item is called and where it is now.
@@ -156,6 +186,7 @@ fn move_entries(
         match moved {
             Ok(()) => {
                 report.moved += 1;
+                report.moved_names.push(found.name);
                 taken.insert(key);
             }
             Err(e) => report.failed.push(MoveFailure {
