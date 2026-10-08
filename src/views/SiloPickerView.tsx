@@ -71,7 +71,7 @@ export function SiloPickerView({
     try {
       setReport(await invoke<SiloReport>("silo_report", { id }));
     } catch (e) {
-      setError(String(e));
+      setError(formatAppError(e));
     }
   };
 

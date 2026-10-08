@@ -142,14 +142,27 @@ fn open_database(
         key = key.with_password(password);
     }
     if let Some(path) = key_file.filter(|p| !p.is_empty()) {
-        let mut file = std::fs::File::open(path)
-            .map_err(|e| format!("The key file could not be read: {e}"))?;
-        key = key
-            .with_keyfile(&mut file)
-            .map_err(|e| format!("The key file could not be read: {e}"))?;
+        let mut file = std::fs::File::open(path).map_err(|e| {
+            crate::err::coded_with(
+                "err.kdbx_keyfile_unreadable",
+                format!("The key file could not be read: {e}"),
+                &[("detail", &e)],
+            )
+        })?;
+        key = key.with_keyfile(&mut file).map_err(|e| {
+            crate::err::coded_with(
+                "err.kdbx_keyfile_unreadable",
+                format!("The key file could not be read: {e}"),
+                &[("detail", &e)],
+            )
+        })?;
     }
     if key.is_empty() {
-        return Err("Enter the database's password, or choose its key file.".into());
+        return Err(crate::err::coded!(
+            "err.kdbx_needs_secret",
+            "Enter the database's password, or choose its key file."
+        )
+        .into());
     }
     Database::open(&mut Cursor::new(bytes), key).map_err(|e| match e {
         keepass::db::DatabaseOpenError::Key(_) => {
@@ -175,7 +188,11 @@ pub async fn passwords_read_kdbx(
     run_blocking(move || {
         let size = std::fs::metadata(&path).map_err(|e| e.to_string())?.len();
         if size > MAX_KDBX_BYTES {
-            return Err("That database is larger than 512 MB.".into());
+            return Err(crate::err::coded!(
+                "err.kdbx_too_large",
+                "That database is larger than 512 MB."
+            )
+            .into());
         }
         let bytes = Zeroizing::new(std::fs::read(&path).map_err(|e| e.to_string())?);
         let db = open_database(
@@ -492,7 +509,11 @@ pub async fn passwords_write_kdbx(
     let password = Zeroizing::new(password);
     let text_in = Zeroizing::new(entries);
     if password.chars().count() < 8 {
-        return Err("Use a password of at least 8 characters for the KeePass file.".into());
+        return Err(crate::err::coded!(
+            "err.kdbx_password_short",
+            "Use a password of at least 8 characters for the KeePass file."
+        )
+        .into());
     }
     let mut entries: Vec<Json> = serde_json::from_str(&text_in).map_err(|e| e.to_string())?;
     drop(text_in);
@@ -531,7 +552,13 @@ pub async fn passwords_write_kdbx(
         let db = db?;
         let mut out = Zeroizing::new(Vec::new());
         db.save(&mut *out, DatabaseKey::new().with_password(&password))
-            .map_err(|e| format!("The KeePass file could not be written: {e}"))?;
+            .map_err(|e| {
+                crate::err::coded_with(
+                    "err.kdbx_write_failed",
+                    format!("The KeePass file could not be written: {e}"),
+                    &[("detail", &e)],
+                )
+            })?;
         std::fs::write(&path, &*out).map_err(|e| e.to_string())
     })
     .await

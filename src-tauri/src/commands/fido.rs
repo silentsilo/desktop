@@ -323,7 +323,13 @@ pub(crate) async fn touch_organisation_key(
     // proof's own constructor, so this and the write path cannot drift apart
     // about what counts as proof.
     let proof = silentsilo_vault::OrgProof::verify(keys, &unlock.credential_id, &unlock.wrap_key)
-        .map_err(|_| "That is not one of this silo's organisation keys.".to_string())?;
+        .map_err(|_| {
+        crate::err::coded!(
+            "err.not_org_key",
+            "That is not one of this silo's organisation keys."
+        )
+        .to_string()
+    })?;
     Ok((proof, org_touch(&unlock)))
 }
 
@@ -373,7 +379,11 @@ async fn ensure_session_for_enrollment(
     let creds = crate::state::silo_credentials(app)?;
     let root = vault_dir(app)?;
     if is_fido_enrolled(&root) {
-        return Err("A key is already enrolled on this silo.".into());
+        return Err(crate::err::coded!(
+            "err.key_already_enrolled_silo",
+            "A key is already enrolled on this silo."
+        )
+        .into());
     }
     // The device secret goes through Argon2id: blocking pool.
     let app = app.clone();
@@ -421,16 +431,24 @@ pub async fn fido_enroll_primary(
 
     let root = vault_dir(&app)?;
     if is_fido_enrolled(&root) {
-        return Err("A key is already enrolled on this silo.".into());
+        return Err(crate::err::coded!(
+            "err.key_already_enrolled_silo",
+            "A key is already enrolled on this silo."
+        )
+        .into());
     }
 
     ensure_session_for_enrollment(&app, &state).await?;
 
     let (vault_id, dek) = {
         let session_guard = state.focused_session()?;
-        let session = session_guard
-            .as_ref()
-            .ok_or_else(|| "Open a silo first, then enrol a key.".to_string())?;
+        let session = session_guard.as_ref().ok_or_else(|| {
+            crate::err::coded!(
+                "err.open_silo_first_enrol",
+                "Open a silo first, then enrol a key."
+            )
+            .to_string()
+        })?;
         (session.vault_id.to_string(), session.dek.clone())
     };
 
@@ -559,7 +577,7 @@ pub async fn fido_add_key(
         .as_ref()
         .is_some_and(|l| l.chars().count() > MAX_KEY_LABEL)
     {
-        return Err("That name is too long.".into());
+        return Err(crate::err::coded!("err.name_too_long", "That name is too long.").into());
     }
     let _sync = crate::commands::sync::hold_sync(&app).await?;
     let authenticator = authenticator.unwrap_or(Authenticator::SecurityKey);
@@ -568,7 +586,11 @@ pub async fn fido_add_key(
     let root = vault_dir(&app)?;
     let silo_id = crate::state::focused_id(&state)?;
     if !is_fido_enrolled(&root) {
-        return Err("Enrol the first key before adding more.".into());
+        return Err(crate::err::coded!(
+            "err.enrol_first_key",
+            "Enrol the first key before adding more."
+        )
+        .into());
     }
 
     let mut keys = load_fido_keys(&root).map_err(|e| e.to_string())?;
@@ -602,9 +624,13 @@ pub async fn fido_add_key(
     };
     let (vault_id, dek) = {
         let session_guard = state.focused_session()?;
-        let session = session_guard
-            .as_ref()
-            .ok_or_else(|| "Unlock the silo first to add a key.".to_string())?;
+        let session = session_guard.as_ref().ok_or_else(|| {
+            crate::err::coded!(
+                "err.unlock_before_add_key",
+                "Unlock the silo first to add a key."
+            )
+            .to_string()
+        })?;
         (session.vault_id.to_string(), session.dek.clone())
     };
 
@@ -620,7 +646,11 @@ pub async fn fido_add_key(
 
     let new_id_hex = hex_encode(&cred.credential_id);
     if keys.active().any(|k| k.credential_id == new_id_hex) {
-        return Err("This key is already enrolled.".into());
+        return Err(crate::err::coded!(
+            "err.key_already_enrolled",
+            "This key is already enrolled."
+        )
+        .into());
     }
     // Re-enrolling a key that was removed while offline: drop the tombstone,
     // or the pass that publishes the new envelope would delete it again in
@@ -740,17 +770,19 @@ pub fn fido_rename_key(app: AppHandle, credential_id: String, label: String) -> 
     let mut keys = load_fido_keys(&root).map_err(|e| e.to_string())?;
     let label = label.trim();
     if label.is_empty() {
-        return Err("Give the key a name.".into());
+        return Err(crate::err::coded!("err.key_name_needed", "Give the key a name.").into());
     }
     if label.chars().count() > MAX_KEY_LABEL {
-        return Err("That name is too long.".into());
+        return Err(crate::err::coded!("err.name_too_long", "That name is too long.").into());
     }
 
     let key = keys
         .keys
         .iter_mut()
         .find(|k| k.credential_id == credential_id.trim())
-        .ok_or_else(|| "That key was not found.".to_string())?;
+        .ok_or_else(|| {
+            crate::err::coded!("err.key_not_found", "That key was not found.").to_string()
+        })?;
     key.label = label.to_string();
     // A label, so the set of keys that open the silo is unchanged.
     save_fido_keys(&root, &keys, silentsilo_vault::Authority::Machine)
@@ -790,7 +822,9 @@ pub async fn fido_remove_key(
     // unusable one would stand in for the key this machine needs.
     let removing_usable = keys.usable().any(|k| k.credential_id == credential_id);
     if removing_usable && keys.usable().count() <= 1 {
-        return Err("Keep at least one key enrolled.".into());
+        return Err(
+            crate::err::coded!("err.keep_one_key", "Keep at least one key enrolled.").into(),
+        );
     }
 
     // An organisation's key is the company's way back into a silo it
@@ -824,7 +858,7 @@ pub async fn fido_remove_key(
         .iter_mut()
         .find(|k| !k.revoked && k.credential_id == credential_id)
     else {
-        return Err("That key was not found.".into());
+        return Err(crate::err::coded!("err.key_not_found", "That key was not found.").into());
     };
 
     // Marked rather than dropped, so a delete that never reaches storage is
@@ -1067,7 +1101,11 @@ fn unfinished(target: &str, why: &str) -> String {
 #[tauri::command]
 pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<RotateOutcome, String> {
     if keep.is_empty() {
-        return Err("Choose at least one key to keep, or nothing would open this silo.".into());
+        return Err(crate::err::coded!(
+            "err.keep_one_key_choose",
+            "Choose at least one key to keep, or nothing would open this silo."
+        )
+        .into());
     }
     let _sync = crate::commands::sync::hold_sync(&app).await?;
 
@@ -1075,9 +1113,13 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
         let silo = crate::state::active_silo(&app)?;
         let state = app.state::<AppState>();
         let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
-        let session = sessions
-            .get(&silo.id)
-            .ok_or_else(|| "Unlock the silo before replacing the encryption key.".to_string())?;
+        let session = sessions.get(&silo.id).ok_or_else(|| {
+            crate::err::coded!(
+                "err.unlock_before_rotate",
+                "Unlock the silo before replacing the encryption key."
+            )
+            .to_string()
+        })?;
         (
             session.dek.clone(),
             session.kek.clone(),
@@ -1327,7 +1369,11 @@ pub async fn vault_rotate_resume(
     };
 
     if !silentsilo_vault::rotation::rotation_pending(&root) {
-        return Err("There is nothing to finish: the encryption key is not being replaced.".into());
+        return Err(crate::err::coded!(
+            "err.rotation_nothing_to_finish",
+            "There is nothing to finish: the encryption key is not being replaced."
+        )
+        .into());
     }
     let new_dek = silentsilo_vault::rotation::load_staged_dek(&root, &old_dek).map_err(|_| {
         "The new encryption key cannot be read with this silo's current key.".to_string()
@@ -1338,7 +1384,13 @@ pub async fn vault_rotate_resume(
         .active()
         .find(|k| k.credential_id == credential)
         .map(|k| k.label.clone())
-        .ok_or_else(|| "That key is not enrolled on this silo.".to_string())?;
+        .ok_or_else(|| {
+            crate::err::coded!(
+                "err.key_not_enrolled",
+                "That key is not enrolled on this silo."
+            )
+            .to_string()
+        })?;
 
     // Finishing drops every key but the chosen one, so on an administered
     // silo it is the same operation as starting and answers to the same

@@ -18,6 +18,7 @@ import { trash } from "./trash";
 import { unlock } from "./unlock";
 import { welcome } from "./welcome";
 import { updateCard } from "./update-card";
+import { errors } from "./errors";
 
 /** Every screen's texts. A new screen file is added here. */
 export const SCREENS = [
@@ -41,4 +42,5 @@ export const SCREENS = [
   start,
   dialogs,
   appMessages,
+  errors,
 ] as const;

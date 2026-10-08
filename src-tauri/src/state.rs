@@ -139,7 +139,7 @@ pub fn unlocked_silo(app: &AppHandle) -> Result<SiloEntry, String> {
         .map_err(|e| e.to_string())?
         .contains_key(&silo.id);
     if !open {
-        return Err("Unlock the silo first.".into());
+        return Err(crate::err::coded!("err.unlock_first", "Unlock the silo first.").into());
     }
     Ok(silo)
 }
@@ -158,7 +158,9 @@ pub fn unlocked_silo_with_kek(
     let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
     let kek = sessions
         .get(&silo.id)
-        .ok_or_else(|| "Unlock the silo first.".to_string())?
+        .ok_or_else(|| {
+            crate::err::coded!("err.unlock_first", "Unlock the silo first.").to_string()
+        })?
         .kek
         .clone();
     Ok((silo, kek))
@@ -170,7 +172,7 @@ pub fn active_silo(app: &AppHandle) -> Result<SiloEntry, String> {
         .lock()
         .map_err(|e| e.to_string())?
         .clone()
-        .ok_or_else(|| "No silo is open.".to_string())
+        .ok_or_else(|| crate::err::coded!("err.no_silo_open", "No silo is open.").to_string())
 }
 
 /// The path a silo would get by default, before the user picks somewhere
@@ -235,7 +237,9 @@ pub fn silo_by_id(app: &AppHandle, id: Uuid) -> Result<SiloEntry, String> {
     load_registry(&app_data_dir(app)?)
         .get(id)
         .cloned()
-        .ok_or_else(|| "That silo is no longer in the list.".to_string())
+        .ok_or_else(|| {
+            crate::err::coded!("err.silo_gone", "That silo is no longer in the list.").to_string()
+        })
 }
 
 /// Whether a named silo is still unlocked.
@@ -520,7 +524,11 @@ pub fn open_focused_session(app: &AppHandle, session: VaultSession) -> Result<()
     // end, silo A's session sat under silo B's id, and a sync pass then
     // paired A's database with B's folder and B's storage.
     if session.vault_id != id {
-        return Err("The silo on screen changed while this one was opening. Open it again.".into());
+        return Err(crate::err::coded!(
+            "err.focus_changed",
+            "The silo on screen changed while this one was opening. Open it again."
+        )
+        .into());
     }
     if let Some((evicted, scratch_left)) = state.open_session(id, session)? {
         crate::audit::set_unlocked_with(evicted, None);
@@ -570,7 +578,7 @@ pub fn focused_id(state: &State<AppState>) -> Result<Uuid, String> {
         .map_err(|e| e.to_string())?
         .as_ref()
         .map(|s| s.id)
-        .ok_or_else(|| "No silo is open.".to_string())
+        .ok_or_else(|| crate::err::coded!("err.no_silo_open", "No silo is open.").to_string())
 }
 
 /// Records that a silo was used just now.

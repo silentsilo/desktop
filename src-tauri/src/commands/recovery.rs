@@ -100,9 +100,13 @@ pub async fn recovery_generate(app: AppHandle) -> Result<GeneratedRecovery, Stri
     let (dek, kek, root, silo_id) = {
         let state = app.state::<AppState>();
         let guard = state.focused_session()?;
-        let session = guard
-            .as_ref()
-            .ok_or_else(|| "Unlock the silo before creating a recovery code.".to_string())?;
+        let session = guard.as_ref().ok_or_else(|| {
+            crate::err::coded!(
+                "err.unlock_before_code",
+                "Unlock the silo before creating a recovery code."
+            )
+            .to_string()
+        })?;
         (
             session.dek.clone(),
             session.kek.clone(),
@@ -215,8 +219,14 @@ pub async fn recovery_disable(app: AppHandle) -> Result<Vec<String>, String> {
     Ok(withheld)
 }
 
-const WRONG_CODE: &str = "That recovery code does not match this silo.";
-const NEEDS_UPDATE: &str = "This recovery code was set up with a newer version of SilentSilo. Update SilentSilo, then try again.";
+const WRONG_CODE: &str = crate::err::coded!(
+    "err.code_wrong",
+    "That recovery code does not match this silo."
+);
+const NEEDS_UPDATE: &str = crate::err::coded!(
+    "err.code_needs_update",
+    "This recovery code was set up with a newer version of SilentSilo. Update SilentSilo, then try again."
+);
 
 /// Why a code did not open an envelope.
 enum CodeRefused {
@@ -285,7 +295,13 @@ pub async fn vault_unlock_with_recovery(
                     Err(CodeRefused::Wrong) => return Err(WRONG_CODE.into()),
                 },
                 (None, true) => return Err(WRONG_CODE.into()),
-                (None, false) => return Err("No recovery code is set up for this silo.".into()),
+                (None, false) => {
+                    return Err(crate::err::coded!(
+                        "err.no_recovery_code",
+                        "No recovery code is set up for this silo."
+                    )
+                    .into());
+                }
             }
         }
     };
@@ -297,7 +313,11 @@ pub async fn vault_unlock_with_recovery(
         let _opening = crate::state::opening(&app, &root);
         let session = VaultSession::open_with_dek(root, dek).map_err(|e| e.to_string())?;
         if session.vault_id != creds.vault_id {
-            return Err("That recovery code opens a different silo.".into());
+            return Err(crate::err::coded!(
+                "err.code_other_silo",
+                "That recovery code opens a different silo."
+            )
+            .into());
         }
 
         let vfs = Vfs::new(&session);
@@ -353,14 +373,22 @@ pub async fn vault_repair_from_storage(
     for target in &targets {
         if let Ok(Some(manifest)) = sync::read_manifest(&*target.store).await {
             if manifest.vault_id != silo.id {
-                return Err("That backup storage holds a different silo.".into());
+                return Err(crate::err::coded!(
+                    "err.storage_other_silo",
+                    "That backup storage holds a different silo."
+                )
+                .into());
             }
             store = Some(&*target.store);
             break;
         }
     }
     let Some(store) = store else {
-        return Err("No backup storage for this silo could be reached.".into());
+        return Err(crate::err::coded!(
+            "err.no_storage_reached",
+            "No backup storage for this silo could be reached."
+        )
+        .into());
     };
 
     // The code has to open the silo before anything local is touched.

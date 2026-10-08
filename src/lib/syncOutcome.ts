@@ -1,3 +1,4 @@
+import { formatAppError } from "./errors";
 /// Turning a sync pass into the line the user reads.
 ///
 /// Kept out of the panel so it can be tested. The counters alone do not say
@@ -155,8 +156,8 @@ export function syncOutcome(r: SyncReport, renamed: string): Status {
     // target someone is looking at reads as bureaucracy.
     const detail =
       failed.length === 1 && targets.length === 1
-        ? failed[0]!.failed
-        : failed.map((t) => `${t.label}: ${t.failed}`).join(" ");
+        ? formatAppError(failed[0]!.failed)
+        : failed.map((t) => `${t.label}: ${formatAppError(t.failed)}`).join(" ");
     const partial = r.ops_pushed > 0 ? `${describeSync(r)} ` : "";
     return { kind: "error", message: `${partial}${detail}` };
   }

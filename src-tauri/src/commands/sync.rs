@@ -226,7 +226,11 @@ pub(crate) async fn hold_sync(app: &AppHandle) -> Result<SyncGuard, String> {
             return Ok(guard);
         }
         if std::time::Instant::now() >= deadline {
-            return Err("A sync is still running. Try again in a moment.".into());
+            return Err(crate::err::coded!(
+                "err.sync_running",
+                "A sync is still running. Try again in a moment."
+            )
+            .into());
         }
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     }
@@ -303,7 +307,11 @@ pub async fn vault_rebuild_from_snapshot(app: AppHandle, silo_id: String) -> Res
     let _sync = hold_sync(&app).await?;
     let targets = crate::state::targets_for(silo.id);
     if targets.is_empty() {
-        return Err("This silo has no backup storage configured.".into());
+        return Err(crate::err::coded!(
+            "err.no_storage",
+            "This silo has no backup storage configured."
+        )
+        .into());
     }
 
     let dek = {
@@ -311,7 +319,10 @@ pub async fn vault_rebuild_from_snapshot(app: AppHandle, silo_id: String) -> Res
         let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
         sessions
             .get(&silo.id)
-            .ok_or("Unlock the silo first.")?
+            .ok_or(crate::err::coded!(
+                "err.unlock_first",
+                "Unlock the silo first."
+            ))?
             .dek
             .clone()
     };
@@ -334,8 +345,10 @@ pub async fn vault_rebuild_from_snapshot(app: AppHandle, silo_id: String) -> Res
             }
         }
     }
-    let (snapshot, incoming) =
-        plan.ok_or("Backup storage holds nothing to rebuild this silo from.")?;
+    let (snapshot, incoming) = plan.ok_or(crate::err::coded!(
+        "err.nothing_to_rebuild",
+        "Backup storage holds nothing to rebuild this silo from."
+    ))?;
 
     // The one long operation that has to hold the sessions lock: a
     // half-rebuilt tree must not answer queries. Blocking pool regardless,
@@ -343,9 +356,10 @@ pub async fn vault_rebuild_from_snapshot(app: AppHandle, silo_id: String) -> Res
     let applied = crate::commands::fido::run_blocking(move || {
         let state = app.state::<AppState>();
         let mut sessions = state.sessions.lock().map_err(|e| e.to_string())?;
-        let session = sessions
-            .get_mut(&silo.id)
-            .ok_or("The silo was locked during the rebuild.")?;
+        let session = sessions.get_mut(&silo.id).ok_or(crate::err::coded!(
+            "err.locked_during_rebuild",
+            "The silo was locked during the rebuild."
+        ))?;
         let applied = sync::apply_rebuild(&mut session.conn, &snapshot, incoming)
             .map_err(|e| e.to_string())?
             .replay
@@ -795,9 +809,13 @@ pub async fn vault_verify(app: AppHandle, deep: bool) -> Result<Vec<VerifyTarget
     let (dek, kek, expected, keys) = {
         let state = app.state::<AppState>();
         let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
-        let session = sessions
-            .get(&silo.id)
-            .ok_or_else(|| "Unlock the silo before checking it.".to_string())?;
+        let session = sessions.get(&silo.id).ok_or_else(|| {
+            crate::err::coded!(
+                "err.unlock_before_check",
+                "Unlock the silo before checking it."
+            )
+            .to_string()
+        })?;
         let vfs = Vfs::new(session);
         // Attachments count: the silo believes it holds them, so a check
         // that skipped them would call a copy sound while they rotted.
@@ -979,7 +997,11 @@ pub async fn vault_verify(app: AppHandle, deep: bool) -> Result<Vec<VerifyTarget
     }
 
     if out.is_empty() {
-        return Err("This silo has no backup storage to check.".into());
+        return Err(crate::err::coded!(
+            "err.no_storage_to_check",
+            "This silo has no backup storage to check."
+        )
+        .into());
     }
     Ok(out)
 }
@@ -1044,19 +1066,34 @@ pub async fn vault_test_restore(app: AppHandle, code: String) -> Result<RestoreT
     let live = {
         let state = app.state::<AppState>();
         let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
-        let session = sessions
-            .get(&silo.id)
-            .ok_or_else(|| "Unlock the silo before testing a recovery.".to_string())?;
+        let session = sessions.get(&silo.id).ok_or_else(|| {
+            crate::err::coded!(
+                "err.unlock_before_restore_test",
+                "Unlock the silo before testing a recovery."
+            )
+            .to_string()
+        })?;
         silentsilo_vfs::digest(&session.conn).map_err(|e| e.to_string())?
     };
 
-    let store = crate::state::silo_store(&app)
-        .ok_or_else(|| "This silo has no backup storage to restore from.".to_string())?;
+    let store = crate::state::silo_store(&app).ok_or_else(|| {
+        crate::err::coded!(
+            "err.no_storage_to_restore",
+            "This silo has no backup storage to restore from."
+        )
+        .to_string()
+    })?;
 
     let manifest = sync::read_manifest(&*store)
         .await
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| "That backup storage does not hold a silo.".to_string())?;
+        .ok_or_else(|| {
+            crate::err::coded!(
+                "err.storage_no_silo",
+                "That backup storage does not hold a silo."
+            )
+            .to_string()
+        })?;
 
     let envelope = sync::fetch_recovery_envelope(&*store)
         .await
@@ -1069,8 +1106,13 @@ pub async fn vault_test_restore(app: AppHandle, code: String) -> Result<RestoreT
 
     // Argon2id: on the blocking pool, not an async worker.
     let dek = crate::commands::fido::run_blocking(move || {
-        silentsilo_vault::unwrap_with_code(&envelope, &code)
-            .map_err(|_| "That recovery code does not open this backup storage.".to_string())
+        silentsilo_vault::unwrap_with_code(&envelope, &code).map_err(|_| {
+            crate::err::coded!(
+                "err.code_not_for_storage",
+                "That recovery code does not open this backup storage."
+            )
+            .to_string()
+        })
     })
     .await?;
 

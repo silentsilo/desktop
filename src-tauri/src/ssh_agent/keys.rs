@@ -133,11 +133,20 @@ pub fn private_key(text: &str) -> Result<PrivateKey, KeyError> {
 /// A private key with its passphrase taken off, in OpenSSH's format, for
 /// the editor to store. The passphrase is never kept.
 pub fn without_passphrase(text: &str, passphrase: &str) -> Result<Zeroizing<String>, String> {
-    let key = PrivateKey::from_openssh(text.trim())
-        .map_err(|_| "This is not a key in OpenSSH's format.".to_string())?;
-    let open = key
-        .decrypt(passphrase)
-        .map_err(|_| "That passphrase does not open this key.".to_string())?;
+    let key = PrivateKey::from_openssh(text.trim()).map_err(|_| {
+        crate::err::coded!(
+            "err.ssh_not_openssh",
+            "This is not a key in OpenSSH's format."
+        )
+        .to_string()
+    })?;
+    let open = key.decrypt(passphrase).map_err(|_| {
+        crate::err::coded!(
+            "err.ssh_passphrase_wrong",
+            "That passphrase does not open this key."
+        )
+        .to_string()
+    })?;
     let pem = open
         .to_openssh(ssh_key::LineEnding::LF)
         .map_err(|e| e.to_string())?;

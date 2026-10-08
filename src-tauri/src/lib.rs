@@ -4,6 +4,7 @@ mod commands;
 mod diagnostics;
 #[cfg(feature = "e2e")]
 mod e2e;
+mod err;
 mod front;
 mod pin;
 mod ssh_agent;

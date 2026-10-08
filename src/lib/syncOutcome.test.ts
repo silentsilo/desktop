@@ -117,7 +117,7 @@ describe("the pass as a status", () => {
       ops_pushed: 2,
       targets: [target({ failed: "timed out" }), target({ id: "t2", label: "S3" })],
     });
-    expect(line(r)).toBe("2 changes sent SFTP: timed out");
+    expect(line(r)).toBe("2 changes sent SFTP: Your backup storage did not answer in time. Check your connection and try again.");
   });
 
   it("says when a target is deliberately being left alone", () => {

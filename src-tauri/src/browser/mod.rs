@@ -38,7 +38,10 @@ const FILL_TIMEOUT: Duration = Duration::from_secs(90);
 /// How long a save waits: the person may fix the label or the username.
 const SAVE_TIMEOUT: Duration = Duration::from_secs(120);
 
-const GONE: &str = "This browser request is no longer waiting.";
+const GONE: &str = crate::err::coded!(
+    "err.browser_request_gone",
+    "This browser request is no longer waiting."
+);
 const TOO_MANY: &str = "Too many requests from the browser. Wait a moment.";
 const COOLING_DOWN: &str = "A fill was just declined. Wait a few seconds before asking again.";
 const SHOWN_JUST_NOW: &str = "The window was just brought forward. Wait a few seconds.";
@@ -194,7 +197,10 @@ impl BrowserBridge {
     }
 }
 
-const NOT_BUNDLED: &str = "The browser extension is not part of this build.";
+const NOT_BUNDLED: &str = crate::err::coded!(
+    "err.browser_not_bundled",
+    "The browser extension is not part of this build."
+);
 
 /// Whether the host sits beside this executable. Without it nothing could
 /// reach the channel, so it is never opened.
@@ -215,7 +221,10 @@ fn host_bundled() -> bool {
 
 /// Where the extension's channel exists.
 const SUPPORTED: bool = cfg!(any(windows, target_os = "linux", target_os = "macos"));
-const NOT_SUPPORTED: &str = "The browser extension is not available on this system.";
+const NOT_SUPPORTED: &str = crate::err::coded!(
+    "err.browser_not_supported",
+    "The browser extension is not available on this system."
+);
 
 /// On Linux and macOS the browsers find the host through manifests in this
 /// user's home, written by the host itself so its lists stay in one place.
@@ -231,7 +240,11 @@ fn install_manifests() -> Result<(), String> {
         .status()
         .map_err(|e| format!("the browser host could not run: {e}"))?;
     if !status.success() {
-        return Err("The browsers could not be told where SilentSilo is.".into());
+        return Err(crate::err::coded!(
+            "err.browser_register_failed",
+            "The browsers could not be told where SilentSilo is."
+        )
+        .into());
     }
     Ok(())
 }

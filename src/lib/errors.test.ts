@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { formatAppError } from "./errors";
+import fs from "node:fs";
+import path from "node:path";
+import { hasKey } from "../i18n";
+import { decodeAppError, formatAppError, plainError } from "./errors";
 
 describe("formatAppError", () => {
   it("recognizes an unconfigured bucket as a benign local-only notice", () => {
@@ -118,5 +121,55 @@ describe("rules that used to match too much", () => {
     expect(formatAppError("Enroll a security key before unlocking")).toBe(
       "Enroll a security key before unlocking",
     );
+  });
+});
+
+describe("coded backend errors", () => {
+  const SEP = "\u001f";
+
+  it("are said by their key, with their values", () => {
+    expect(formatAppError(`That key was not found.${SEP}err.key_not_found`)).toBe(
+      "That key was not found.",
+    );
+    const taken = `You already have a silo called “Work”.${SEP}err.silo_name_taken${SEP}{"name":"Work"}`;
+    expect(decodeAppError(taken)).toEqual({
+      message: "You already have a silo called “Work”.",
+      code: "err.silo_name_taken",
+      params: { name: "Work" },
+    });
+    expect(formatAppError(taken)).toBe("You already have a silo called “Work”.");
+  });
+
+  it("fall back to their English when this build has no text for the key", () => {
+    expect(formatAppError(`Something new.${SEP}err.not_in_this_build`)).toBe("Something new.");
+  });
+
+  it("leave plain strings as they were", () => {
+    expect(decodeAppError("cancelled")).toEqual({ message: "cancelled", code: null, params: {} });
+  });
+
+  it("lose their keys inside a list the backend built", () => {
+    expect(plainError(`a.txt: Not a file.${SEP}err.not_a_file; b: x${SEP}err.y${SEP}{"p":"1"}`)).toBe(
+      "a.txt: Not a file.; b: x",
+    );
+  });
+
+  it("have a text for every key the backend sends", () => {
+    const root = path.resolve(__dirname, "../../src-tauri/src");
+    const codes = new Set<string>();
+    const walk = (dir: string) => {
+      for (const name of fs.readdirSync(dir)) {
+        const full = path.join(dir, name);
+        if (fs.statSync(full).isDirectory()) walk(full);
+        else if (full.endsWith(".rs")) {
+          const text = fs.readFileSync(full, "utf8");
+          for (const m of text.matchAll(/coded!\(\s*"(err\.[\w.]+)"/g)) codes.add(m[1]!);
+          for (const m of text.matchAll(/coded_with\(\s*"(err\.[\w.]+)"/g)) codes.add(m[1]!);
+        }
+      }
+    };
+    walk(root);
+    expect(codes.size).toBeGreaterThan(50);
+    expect([...codes].filter((code) => !hasKey(code))).toEqual([]);
   });
 });

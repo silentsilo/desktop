@@ -166,10 +166,14 @@ fn plan_new_silo(
     default_parent: &std::path::Path,
 ) -> Result<PathBuf, String> {
     if name.is_empty() {
-        return Err("Give the silo a name.".into());
+        return Err(crate::err::coded!("err.silo_name_needed", "Give the silo a name.").into());
     }
     if registry.name_taken(name, None) {
-        return Err(format!("You already have a silo called “{name}”."));
+        return Err(crate::err::coded_with(
+            "err.silo_name_taken",
+            format!("You already have a silo called “{name}”."),
+            &[("name", &name)],
+        ));
     }
 
     let path = match location {
@@ -412,10 +416,9 @@ pub async fn silo_open(
 ) -> Result<SiloView, String> {
     let id = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
     let registry = load_registry(&app_data_dir(&app)?);
-    let entry = registry
-        .get(id)
-        .cloned()
-        .ok_or_else(|| "That silo is no longer in the list.".to_string())?;
+    let entry = registry.get(id).cloned().ok_or_else(|| {
+        crate::err::coded!("err.silo_gone", "That silo is no longer in the list.").to_string()
+    })?;
 
     if !entry.is_present() {
         return Err(format!(
@@ -503,10 +506,9 @@ pub fn silo_set_auto_lock(app: AppHandle, id: String, minutes: Option<u32>) -> R
     let id = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
     let app_data = app_data_dir(&app)?;
     let mut registry = load_registry(&app_data);
-    let mut entry = registry
-        .get(id)
-        .cloned()
-        .ok_or_else(|| "That silo is no longer in the list.".to_string())?;
+    let mut entry = registry.get(id).cloned().ok_or_else(|| {
+        crate::err::coded!("err.silo_gone", "That silo is no longer in the list.").to_string()
+    })?;
     entry.auto_lock_minutes = minutes.filter(|m| *m > 0);
     registry.upsert(entry);
     save_registry(&app_data, &registry).map_err(|e| e.to_string())
@@ -538,18 +540,21 @@ pub fn silo_rename(app: AppHandle, id: String, name: String) -> Result<(), Strin
     let id = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
     let name = name.trim().to_string();
     if name.is_empty() {
-        return Err("Give the silo a name.".into());
+        return Err(crate::err::coded!("err.silo_name_needed", "Give the silo a name.").into());
     }
 
     let app_data = app_data_dir(&app)?;
     let mut registry = load_registry(&app_data);
     if registry.name_taken(&name, Some(id)) {
-        return Err(format!("You already have a silo called “{name}”."));
+        return Err(crate::err::coded_with(
+            "err.silo_name_taken",
+            format!("You already have a silo called “{name}”."),
+            &[("name", &name)],
+        ));
     }
-    let mut entry = registry
-        .get(id)
-        .cloned()
-        .ok_or_else(|| "That silo is no longer in the list.".to_string())?;
+    let mut entry = registry.get(id).cloned().ok_or_else(|| {
+        crate::err::coded!("err.silo_gone", "That silo is no longer in the list.").to_string()
+    })?;
     // The folder keeps its original name. Renaming it would break the path
     // every backup and shortcut already points at, to fix nothing.
     entry.name = name;
@@ -582,10 +587,9 @@ fn silo_forget_impl(app: &AppHandle, id: String, delete_files: bool) -> Result<(
     let id = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
     let app_data = app_data_dir(&app)?;
     let mut registry = load_registry(&app_data);
-    let entry = registry
-        .get(id)
-        .cloned()
-        .ok_or_else(|| "That silo is no longer in the list.".to_string())?;
+    let entry = registry.get(id).cloned().ok_or_else(|| {
+        crate::err::coded!("err.silo_gone", "That silo is no longer in the list.").to_string()
+    })?;
 
     // Closed first: deleting the files of a silo whose database is open
     // would fail on Windows and corrupt it everywhere else.
@@ -668,7 +672,11 @@ pub fn silo_add_existing(
 ) -> Result<SiloView, String> {
     let path = PathBuf::from(path);
     if !VaultPaths::new(path.clone()).exists() {
-        return Err(format!("{} does not look like a silo.", path.display()));
+        return Err(crate::err::coded_with(
+            "err.not_a_silo",
+            format!("{} does not look like a silo.", path.display()),
+            &[("path", &path.display())],
+        ));
     }
 
     let app_data = app_data_dir(&app)?;
@@ -780,16 +788,24 @@ pub(crate) fn register_joined_silo(
 ) -> Result<JoinedFolder, String> {
     let name = name.trim();
     if name.is_empty() {
-        return Err("Give the silo a name.".into());
+        return Err(crate::err::coded!("err.silo_name_needed", "Give the silo a name.").into());
     }
 
     let app_data = app_data_dir(app)?;
     let registry = load_registry(&app_data);
     if registry.silos.iter().any(|s| s.id == vault_id) {
-        return Err("That silo is already on this computer.".into());
+        return Err(crate::err::coded!(
+            "err.silo_already_here",
+            "That silo is already on this computer."
+        )
+        .into());
     }
     if registry.name_taken(name, None) {
-        return Err(format!("You already have a silo called “{name}”."));
+        return Err(crate::err::coded_with(
+            "err.silo_name_taken",
+            format!("You already have a silo called “{name}”."),
+            &[("name", &name)],
+        ));
     }
 
     let chosen = location.is_some();
@@ -802,8 +818,13 @@ pub(crate) fn register_joined_silo(
     // touch anything it did not write.
     refuse_unusable_folder(&path, chosen)?;
     let made_folder = !path.exists();
-    std::fs::create_dir_all(&path)
-        .map_err(|e| format!("Could not create {}: {e}", path.display()))?;
+    std::fs::create_dir_all(&path).map_err(|e| {
+        crate::err::coded_with(
+            "err.create_folder_failed",
+            format!("Could not create {}: {e}", path.display()),
+            &[("path", &path.display()), ("detail", &e)],
+        )
+    })?;
     let joined = JoinedFolder {
         entry: SiloEntry {
             id: vault_id,

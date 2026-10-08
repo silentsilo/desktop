@@ -19,7 +19,10 @@ use uuid::Uuid;
 
 use crate::state::AppState;
 
-const UNRECORDED: &str = "This silo's activity log could not be written on this computer, so the silo was locked. Your organisation requires the log. Check that the disk has space, then unlock again.";
+const UNRECORDED: &str = crate::err::coded!(
+    "err.audit_unrecorded",
+    "This silo's activity log could not be written on this computer, so the silo was locked. Your organisation requires the log. Check that the disk has space, then unlock again."
+);
 
 /// An event of `code`, happening now.
 pub fn event(code: u16) -> Event {
@@ -373,7 +376,10 @@ fn keep_read(app: &AppHandle, held: HeldRead, closes: u64) -> bool {
     current
 }
 
-const READ_AGAIN: &str = "The activity log needs reading again.";
+const READ_AGAIN: &str = crate::err::coded!(
+    "err.audit_read_again",
+    "The activity log needs reading again."
+);
 
 /// The Activity page closed: what it read goes.
 #[tauri::command(async)]

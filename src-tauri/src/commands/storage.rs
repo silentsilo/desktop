@@ -65,7 +65,9 @@ async fn refuse_foreign_vault(
         let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
         sessions
             .get(&silo.id)
-            .ok_or_else(|| "The silo is locked.".to_string())?
+            .ok_or_else(|| {
+                crate::err::coded!("err.silo_locked", "The silo is locked.").to_string()
+            })?
             .vault_id
     };
     silentsilo_sync::refuse_foreign_vault(store, vault_id)
@@ -120,7 +122,11 @@ pub async fn s3_save_config(
         .skip(1)
         .any(|t| t.config.target_id() == config.target_id())
     {
-        return Err("This silo already backs up there as a second copy.".into());
+        return Err(crate::err::coded!(
+            "err.copy_exists_second",
+            "This silo already backs up there as a second copy."
+        )
+        .into());
     }
     match targets.first_mut() {
         // The place changes, the role does not: a never-delete copy that
@@ -152,7 +158,7 @@ pub async fn s3_test_config(app: AppHandle, config: StoreConfigInput) -> Result<
         let state = app.state::<crate::state::AppState>();
         let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
         if !sessions.contains_key(&silo.id) {
-            return Err("The silo is locked.".into());
+            return Err(crate::err::coded!("err.silo_locked", "The silo is locked.").into());
         }
     }
     let store = describe(config, crate::state::silo_store_config(&app))?.store;
@@ -375,7 +381,9 @@ pub async fn backup_target_add(
         .iter()
         .any(|t| t.config.target_id() == config.target_id())
     {
-        return Err("This silo already backs up there.".into());
+        return Err(
+            crate::err::coded!("err.copy_exists", "This silo already backs up there.").into(),
+        );
     }
     targets.push(silentsilo_vault::BackupTarget {
         config,
@@ -398,7 +406,7 @@ pub async fn backup_target_add(
 #[tauri::command]
 pub async fn backup_target_seed(app: AppHandle, from: String, to: String) -> Result<usize, String> {
     if from == to {
-        return Err("Choose two different copies.".into());
+        return Err(crate::err::coded!("err.copies_same", "Choose two different copies.").into());
     }
     // Only for the silo on screen, unlocked: this rewrites a copy's records
     // and key files, which is not something a locked silo should be doing.
@@ -412,7 +420,13 @@ pub async fn backup_target_seed(app: AppHandle, from: String, to: String) -> Res
         targets
             .iter()
             .find(|t| t.config.target_id().to_string() == id)
-            .ok_or_else(|| "That copy is not set up for this silo.".to_string())
+            .ok_or_else(|| {
+                crate::err::coded!(
+                    "err.copy_not_found",
+                    "That copy is not set up for this silo."
+                )
+                .to_string()
+            })
     };
     let source = find(&from)?.config.open().map_err(|e| e.to_string())?;
     let dest = find(&to)?.config.open().map_err(|e| e.to_string())?;
@@ -424,7 +438,9 @@ pub async fn backup_target_seed(app: AppHandle, from: String, to: String) -> Res
         sessions
             .get(&silo.id)
             .map(|s| s.dek.clone())
-            .ok_or_else(|| "Unlock the silo first.".to_string())?
+            .ok_or_else(|| {
+                crate::err::coded!("err.unlock_first", "Unlock the silo first.").to_string()
+            })?
     };
 
     // Progress goes out as an event rather than a return value: this runs for

@@ -1,4 +1,43 @@
-import { t } from "../i18n";
+import { hasKey, t } from "../i18n";
+
+/** What separates a backend error's English from its code (`err.rs`). */
+const SEP = "\u001f";
+
+export type DecodedError = {
+  /** The English the backend wrote, as a log shows it. */
+  message: string;
+  /** The catalog key it is translated by, when the backend gave one. */
+  code: string | null;
+  params: Record<string, string>;
+};
+
+/** Text the backend built around errors (a list of failed items, "name:
+ * reason"), with each coded error's key taken out so only the English
+ * shows. Whole errors go through `formatAppError`, which translates. */
+export function plainError(text: string): string {
+  return text.replace(CODE_TAIL, "");
+}
+
+/** A key and, when it has values, their JSON, each after the separator. */
+const CODE_TAIL = new RegExp(String.raw`${SEP}[\w.]+(${SEP}\{[^}]*\})?`, "g");
+
+/** Splits a backend error into its English and its code. A plain string
+ * comes back as the message alone. */
+export function decodeAppError(err: unknown): DecodedError {
+  const raw = String(err ?? "");
+  const at = raw.indexOf(SEP);
+  if (at < 0) return { message: raw, code: null, params: {} };
+  const [code = "", json = ""] = raw.slice(at + 1).split(SEP);
+  let params: Record<string, string> = {};
+  if (json) {
+    try {
+      params = JSON.parse(json) as Record<string, string>;
+    } catch {
+      params = {};
+    }
+  }
+  return { message: raw.slice(0, at), code: code || null, params };
+}
 
 /**
  * Whether this is a command that failed only because the silo locked.
@@ -9,9 +48,7 @@ import { t } from "../i18n";
  * several of them at once.
  */
 export function isLockedError(err: unknown): boolean {
-  return String(err ?? "")
-    .toLowerCase()
-    .includes("vault is locked");
+  return decodeAppError(err).message.toLowerCase().includes("vault is locked");
 }
 
 /** Map raw Tauri errors to short human-readable copy. */
@@ -19,7 +56,11 @@ export function isLockedError(err: unknown): boolean {
 /// is passed through stays as it came.
 export function formatAppError(err: unknown): string {
   if (err === null || err === undefined) return t("app.err_unknown");
-  const msg = String(err);
+  const decoded = decodeAppError(err);
+  // A coded error says it in the language in use. A code this build has no
+  // text for falls through to the English, read like any other.
+  if (decoded.code && hasKey(decoded.code)) return t(decoded.code, decoded.params);
+  const msg = decoded.message;
   const lower = msg.toLowerCase();
 
   if (msg.includes("CloudNotConfigured") || lower.includes("no backup storage is connected")) {

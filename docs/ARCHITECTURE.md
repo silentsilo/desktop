@@ -50,6 +50,16 @@ parameter names, their event names and payload shapes, and the error strings
 `src/lib/errors.ts` matches on. None of those may change without changing
 the frontend in the same commit.
 
+Errors stay strings, so everything that compares or logs one keeps working.
+One the window should translate carries its key after its English and a
+unit separator (`err.rs`: `coded!` for a fixed text, `coded_with` for one
+with values); `decodeAppError` splits it and `formatAppError` says it from
+`src/i18n/screens/errors.ts`. The English comes first, so a log, a test or an
+older reader sees a sentence. Rewording the English in Rust does not lose the
+translation; a new key needs its text, and `errors.test.ts` fails on a key
+the catalog lacks. Strings meant for the browser extension or an SSH client
+are never coded, since nothing there decodes them.
+
 **No command runs on the main thread.** Tauri puts a plain
 `#[tauri::command] fn` on the thread that owns the window and pumps its
 messages, so anything that command waits for is a window that stops

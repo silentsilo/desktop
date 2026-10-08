@@ -90,7 +90,7 @@ import { UnlockView } from "./views/UnlockView";
 import { AppSettingsView } from "./views/settings/AppSettingsView";
 import { FirstRunView } from "./views/FirstRunView";
 import { lastDone } from "./lib/siloMemory";
-import { formatAppError } from "./lib/errors";
+import { decodeAppError, formatAppError, plainError } from "./lib/errors";
 import { AppSettingsContext, UpdateCardContext } from "./lib/appSettings";
 import { UpdateCard } from "./views/UpdateCard";
 import { forgetLasting, LastingScope, useRunningLasting } from "./lib/lasting";
@@ -1427,7 +1427,7 @@ export default function App() {
       // this disk opens, and the way back is rebuilding from the backup.
       // The rebuild needs the recovery code, so after a key the user is
       // asked for it; with the code already in hand it runs at once.
-      const corrupted = String(e).includes("database corrupted");
+      const corrupted = decodeAppError(e).message.includes("database corrupted");
       if (corrupted && !recoveryCodeUsed && bootstrap?.silo?.id) {
         const rebuild = await askConfirm(
           t("app.repair_title"),
@@ -1857,7 +1857,7 @@ export default function App() {
           refreshProgress();
         } catch (e) {
           counters.failed += 1;
-          failed.push(`${name}: ${String(e)}`);
+          failed.push(`${name}: ${formatAppError(e)}`);
           refreshProgress();
         }
         },
@@ -2105,7 +2105,8 @@ export default function App() {
       const totalImported = result.imported_files + result.imported_folders;
       if (result.failed.length > 0) {
         const failures =
-          result.failed.slice(0, 3).join("; ") + (result.failed.length > 3 ? "…" : "");
+          result.failed.slice(0, 3).map(plainError).join("; ") +
+          (result.failed.length > 3 ? "…" : "");
         toasts.errorText(
           t(verb === "Pasted" ? "app.pasted_some_failed" : "app.added_items_some_failed", {
             count: totalImported,
@@ -2165,7 +2166,7 @@ export default function App() {
       // is the one thing the user needs to know about. Only the first few,
       // because fifty of them are one problem, not fifty.
       if (result.failed.length > 0) {
-        const named = result.failed.slice(0, 3).join(", ");
+        const named = result.failed.slice(0, 3).map(plainError).join(", ");
         toasts.errorText(
           result.failed.length > 3
             ? t("app.not_added_many", { count: result.failed.length, names: named })
@@ -2250,7 +2251,7 @@ export default function App() {
             count += 1;
           }
         } catch (e) {
-          failed.push(`${entry.name}: ${String(e)}`);
+          failed.push(`${entry.name}: ${formatAppError(e)}`);
         }
       }
       setPendingShellDownloadTarget(null);
@@ -2903,7 +2904,7 @@ export default function App() {
       await refreshSync();
       await refreshCurrentFolder();
     } catch (e) {
-      setSync((prev) => ({ ...prev, state: "error", lastError: String(e) }));
+      setSync((prev) => ({ ...prev, state: "error", lastError: formatAppError(e) }));
       toasts.error(e);
     }
   };

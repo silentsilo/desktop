@@ -77,6 +77,12 @@ type Params = Record<string, string | number>;
  * `params`. A text with plural forms is chosen by `params.count`. A key not
  * translated yet falls back to English.
  */
+/** Whether `key` is in the catalog: for keys that arrive at run time, as
+ * an error's code does. */
+export function hasKey(key: string): key is Key {
+  return Object.prototype.hasOwnProperty.call(en, key);
+}
+
 export function t(key: Key, params: Params = {}): string {
   return translate(current, key, params);
 }

@@ -58,7 +58,7 @@ pub async fn cloud_sign_in(app: AppHandle, kind: String) -> Result<CloudSignIn, 
     tokio::select! {
         result = signing_in => result.map_err(|e| e.to_string()),
         // Not "cancelled": the error mapping reads that word as a key prompt.
-        _ = stopped => Err("The sign-in was stopped.".into()),
+        _ = stopped => Err(crate::err::coded!("err.sign_in_stopped", "The sign-in was stopped.").into()),
     }
 }
 
@@ -95,7 +95,8 @@ pub fn forget_sign_ins_when_all_locked(app: &AppHandle) {
 /// The silo folders a sign-in can see, for setting up from backup storage.
 #[tauri::command]
 pub async fn cloud_list_silos(sign_in: String) -> Result<Vec<String>, String> {
-    let id = uuid::Uuid::parse_str(sign_in.trim()).map_err(|_| "Sign in again.".to_string())?;
+    let id = uuid::Uuid::parse_str(sign_in.trim())
+        .map_err(|_| crate::err::coded!("err.sign_in_again", "Sign in again.").to_string())?;
     silentsilo_vault::cloud_silo_folders(id)
         .await
         .map_err(|e| e.to_string())
@@ -113,9 +114,15 @@ pub async fn backup_target_reconnect(
     let target = silentsilo_vault::load_targets(silo.id)
         .into_iter()
         .find(|t| t.config.target_id().to_string() == id)
-        .ok_or_else(|| "That copy is not set up for this silo.".to_string())?;
-    let sign_in =
-        uuid::Uuid::parse_str(sign_in.trim()).map_err(|_| "Sign in again.".to_string())?;
+        .ok_or_else(|| {
+            crate::err::coded!(
+                "err.copy_not_found",
+                "That copy is not set up for this silo."
+            )
+            .to_string()
+        })?;
+    let sign_in = uuid::Uuid::parse_str(sign_in.trim())
+        .map_err(|_| crate::err::coded!("err.sign_in_again", "Sign in again.").to_string())?;
     silentsilo_vault::adopt_cloud_sign_in(sign_in, &target.config)
         .await
         .map_err(|e| e.to_string())

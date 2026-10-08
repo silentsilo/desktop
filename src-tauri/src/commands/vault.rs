@@ -128,13 +128,20 @@ fn encrypt_import(
     source: &Path,
 ) -> Result<EncryptedImport, String> {
     if !source.is_file() {
-        return Err(format!("Not a file: {}", source.display()));
+        return Err(crate::err::coded_with(
+            "err.not_a_file_path",
+            format!("Not a file: {}", source.display()),
+            &[("path", &source.display())],
+        ));
     }
 
     let file_name = source
         .file_name()
         .and_then(|n| n.to_str())
-        .ok_or_else(|| "That file name cannot be read.".to_string())?
+        .ok_or_else(|| {
+            crate::err::coded!("err.file_name_unreadable", "That file name cannot be read.")
+                .to_string()
+        })?
         .to_string();
 
     let file_id = Uuid::now_v7();
@@ -283,7 +290,10 @@ const IMPORT_CANCELLED: &str = "cancelled";
 /// then reported as "Folder imported." Locking the workstation mid-import is
 /// an ordinary thing to do, so this was an ordinary way to lose half a
 /// folder without being told.
-const SILO_CLOSED: &str = "The silo was locked before the import finished.";
+const SILO_CLOSED: &str = crate::err::coded!(
+    "err.locked_during_import",
+    "The silo was locked before the import finished."
+);
 
 fn import_folder_recursive(
     app: &AppHandle,
@@ -413,7 +423,11 @@ fn import_folder_recursive(
 /// Returns how many files and folders could not be read or imported.
 fn import_folder_impl(app: &AppHandle, folder_id: Uuid, source: &Path) -> Result<u32, String> {
     if !source.is_dir() {
-        return Err(format!("Not a folder: {}", source.display()));
+        return Err(crate::err::coded_with(
+            "err.not_a_folder_path",
+            format!("Not a folder: {}", source.display()),
+            &[("path", &source.display())],
+        ));
     }
 
     let total_files = count_importable_files(source);
@@ -435,10 +449,13 @@ fn import_folder_impl(app: &AppHandle, folder_id: Uuid, source: &Path) -> Result
     let state = app.state::<AppState>();
     let snapshot = crate::state::snapshot_focused_session(&state)?;
 
-    let dir_name = source
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| "That folder name cannot be read.".to_string())?;
+    let dir_name = source.file_name().and_then(|n| n.to_str()).ok_or_else(|| {
+        crate::err::coded!(
+            "err.folder_name_unreadable",
+            "That folder name cannot be read."
+        )
+        .to_string()
+    })?;
 
     // Merged into a folder already carrying the name, as a drop onto an
     // existing tree means; uploading the same folder twice used to fail
@@ -572,7 +589,13 @@ fn wrapped_dek_for(
         .or_else(|| keys.primary())
         .map(|key| key.wrapped_dek.clone())
         .filter(|wrapped| !wrapped.is_empty())
-        .ok_or_else(|| "That key is not enrolled on this silo.".to_string())
+        .ok_or_else(|| {
+            crate::err::coded!(
+                "err.key_not_enrolled",
+                "That key is not enrolled on this silo."
+            )
+            .to_string()
+        })
 }
 
 /// What to tell the user to do, matching what was actually asked of the
@@ -647,7 +670,9 @@ pub async fn vault_unlock(
     let root = vault_dir(&app)?;
 
     if !is_fido_enrolled(&root) {
-        return Err("Enrol a key before unlocking.".into());
+        return Err(
+            crate::err::coded!("err.enrol_before_unlock", "Enrol a key before unlocking.").into(),
+        );
     }
 
     let keys = silentsilo_vault::load_fido_keys(&root).map_err(|e| e.to_string())?;
@@ -676,7 +701,11 @@ pub async fn vault_unlock(
                 .map_err(|e| e.to_string())?;
 
         if session.vault_id != creds.vault_id {
-            return Err("This key opens a different silo.".into());
+            return Err(crate::err::coded!(
+                "err.key_other_silo",
+                "This key opens a different silo."
+            )
+            .into());
         }
 
         let vfs = Vfs::new(&session);
@@ -1394,7 +1423,13 @@ pub(crate) async fn ensure_blobs_local(app: &AppHandle, blob_ids: &[Uuid]) -> Re
     for id in missing {
         silentsilo_sync::fetch_blob_from_targets(&stores, &root, id, every_copy)
             .await
-            .map_err(|e| format!("Could not download the file: {e}"))?;
+            .map_err(|e| {
+                crate::err::coded_with(
+                    "err.download_failed",
+                    format!("Could not download the file: {e}"),
+                    &[("detail", &e)],
+                )
+            })?;
     }
     // On the copy it came from, so no longer waiting to back up there.
     if let Ok(silo) = crate::state::active_silo(app) {
@@ -1461,10 +1496,19 @@ fn unwrap_export_key(
     kek: &silentsilo_crypto::ContentKek,
 ) -> Result<silentsilo_crypto::ContentKey, String> {
     if wrapped.is_empty() {
-        return Err("This file has no key recorded, so it cannot be opened.".into());
+        return Err(crate::err::coded!(
+            "err.file_no_key",
+            "This file has no key recorded, so it cannot be opened."
+        )
+        .into());
     }
-    silentsilo_crypto::unwrap_content_key(wrapped, kek)
-        .map_err(|_| "This file's key could not be read, so it cannot be opened.".to_string())
+    silentsilo_crypto::unwrap_content_key(wrapped, kek).map_err(|_| {
+        crate::err::coded!(
+            "err.file_key_unreadable",
+            "This file's key could not be read, so it cannot be opened."
+        )
+        .to_string()
+    })
 }
 
 /// Which of `names` are already in `dest_dir`.
@@ -1813,7 +1857,13 @@ pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), Stri
             let snapshot = crate::state::snapshot_focused_session(&app2.state::<AppState>())?;
             remove_opened(&target);
             let key = silentsilo_crypto::unwrap_content_key(&wrapped_key, &snapshot.kek).map_err(
-                |_| "This file's key could not be read, so it cannot be opened.".to_string(),
+                |_| {
+                    crate::err::coded!(
+                        "err.file_key_unreadable",
+                        "This file's key could not be read, so it cannot be opened."
+                    )
+                    .to_string()
+                },
             )?;
             let blob_path =
                 silentsilo_vault::VaultPaths::new(snapshot.root.clone()).blob_path(blob_id);
@@ -2170,7 +2220,9 @@ pub(crate) async fn verify_presence(app: &AppHandle, purpose: Presence) -> Resul
     let creds = crate::state::silo_credentials(app)?;
 
     if !is_fido_enrolled(&root) {
-        return Err("No key is enrolled on this silo.".into());
+        return Err(
+            crate::err::coded!("err.no_key_enrolled", "No key is enrolled on this silo.").into(),
+        );
     }
 
     let keys = silentsilo_vault::load_fido_keys(&root).map_err(|e| e.to_string())?;
@@ -2193,11 +2245,23 @@ pub(crate) async fn verify_presence(app: &AppHandle, purpose: Presence) -> Resul
     let stored = keys
         .find_by_credential_id(&unlock.credential_id)
         .or_else(|| keys.primary())
-        .ok_or_else(|| "That key is not enrolled on this silo.".to_string())?;
+        .ok_or_else(|| {
+            crate::err::coded!(
+                "err.key_not_enrolled",
+                "That key is not enrolled on this silo."
+            )
+            .to_string()
+        })?;
 
     silentsilo_vault::unwrap_dek_hex(&stored.wrapped_dek, &unlock.wrap_key)
         .map(|_| ())
-        .map_err(|_| "That key could not verify this silo.".to_string())
+        .map_err(|_| {
+            crate::err::coded!(
+                "err.key_cannot_verify",
+                "That key could not verify this silo."
+            )
+            .to_string()
+        })
 }
 
 #[derive(serde::Serialize)]
@@ -2264,7 +2328,7 @@ pub async fn password_attach_file(
 ) -> Result<PasswordAttachment, String> {
     let source = PathBuf::from(&path);
     if !source.is_file() {
-        return Err("Not a file.".into());
+        return Err(crate::err::coded!("err.not_a_file", "Not a file.").into());
     }
 
     // The keys under a lock held for the copy; the encryption of an
@@ -2277,7 +2341,10 @@ pub async fn password_attach_file(
         let name = source
             .file_name()
             .and_then(|n| n.to_str())
-            .ok_or_else(|| "That file name cannot be read.".to_string())?
+            .ok_or_else(|| {
+                crate::err::coded!("err.file_name_unreadable", "That file name cannot be read.")
+                    .to_string()
+            })?
             .to_string();
 
         let blob_id = Uuid::new_v4();
@@ -2347,8 +2414,13 @@ pub(crate) fn decrypt_attachment_bytes(
     blob_key: &str,
 ) -> Result<zeroize::Zeroizing<Vec<u8>>, String> {
     let blob_id = Uuid::parse_str(blob_id).map_err(|e| e.to_string())?;
-    let key = silentsilo_crypto::unwrap_content_key(blob_key, &snapshot.kek)
-        .map_err(|_| "An attached file's key could not be read.".to_string())?;
+    let key = silentsilo_crypto::unwrap_content_key(blob_key, &snapshot.kek).map_err(|_| {
+        crate::err::coded!(
+            "err.attachment_key_unreadable",
+            "An attached file's key could not be read."
+        )
+        .to_string()
+    })?;
     let dir = open_scratch_dir(&snapshot.root);
     silentsilo_vault::create_private_dir(&dir).map_err(|e| e.to_string())?;
     let dest = dir.join(format!("export-{}", Uuid::new_v4()));
@@ -2400,7 +2472,11 @@ pub async fn password_open_attachment(
 
         let key =
             silentsilo_crypto::unwrap_content_key(&blob_key, &snapshot.kek).map_err(|_| {
-                "This file's key could not be read, so it cannot be opened.".to_string()
+                crate::err::coded!(
+                    "err.file_key_unreadable",
+                    "This file's key could not be read, so it cannot be opened."
+                )
+                .to_string()
             })?;
         let blob_path = silentsilo_vault::VaultPaths::new(snapshot.root.clone()).blob_path(blob_id);
         decrypt_blob(&blob_path, &dest, &key, blob_id).map_err(|e| e.to_string())?;
@@ -2453,10 +2529,14 @@ pub async fn passwords_read_import_csv(app: AppHandle, path: String) -> Result<S
         let path = PathBuf::from(path);
         let meta = std::fs::metadata(&path).map_err(|e| e.to_string())?;
         if !meta.is_file() {
-            return Err("Not a file.".into());
+            return Err(crate::err::coded!("err.not_a_file", "Not a file.").into());
         }
         if meta.len() > MAX_IMPORT_CSV_BYTES {
-            return Err("That file is too large to be a password export.".into());
+            return Err(crate::err::coded!(
+                "err.export_file_too_large",
+                "That file is too large to be a password export."
+            )
+            .into());
         }
 
         std::fs::read_to_string(&path).map_err(|_| {
@@ -2682,7 +2762,11 @@ pub fn protected_folders_add(app: AppHandle, path: String) -> Result<(), String>
     let (silo, kek) = crate::state::unlocked_silo_with_kek(&app)?;
     let source = PathBuf::from(&path);
     if !source.is_dir() {
-        return Err("That is not a folder on this computer.".into());
+        return Err(crate::err::coded!(
+            "err.not_a_folder_here",
+            "That is not a folder on this computer."
+        )
+        .into());
     }
 
     let mut list = silentsilo_vault::load_protected(&silo.path, &kek).map_err(|e| e.to_string())?;
@@ -2746,7 +2830,11 @@ pub async fn protected_folders_scan(app: AppHandle) -> Result<ProtectedScanRepor
         )
         .is_err()
     {
-        return Err("A check of the auto-import folders is already running.".into());
+        return Err(crate::err::coded!(
+            "err.scan_running",
+            "A check of the auto-import folders is already running."
+        )
+        .into());
     }
     let _scanning = Scanning;
 

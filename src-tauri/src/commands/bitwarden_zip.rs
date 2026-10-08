@@ -34,7 +34,10 @@ struct Limits {
     json: u64,
 }
 
-const NOT_AN_EXPORT: &str = "This zip is not a Bitwarden export: it has no data.json. Export again with the .zip (With Attachments) format.";
+const NOT_AN_EXPORT: &str = crate::err::coded!(
+    "err.bitwarden_not_export",
+    "This zip is not a Bitwarden export: it has no data.json. Export again with the .zip (With Attachments) format."
+);
 
 #[derive(Serialize)]
 pub struct ZipFile {
@@ -73,8 +76,13 @@ fn read_export_within<R: Read + Seek, T>(
     limits: &Limits,
     mut file: impl FnMut(&str, &str, &[u8]) -> Result<T, String>,
 ) -> Result<(String, Vec<T>), String> {
-    let mut zip = zip::ZipArchive::new(reader)
-        .map_err(|_| "That file is not a zip archive SilentSilo can read.".to_string())?;
+    let mut zip = zip::ZipArchive::new(reader).map_err(|_| {
+        crate::err::coded!(
+            "err.zip_unreadable",
+            "That file is not a zip archive SilentSilo can read."
+        )
+        .to_string()
+    })?;
     if zip.len() > MAX_ENTRIES {
         return Err(NOT_AN_EXPORT.into());
     }
@@ -112,7 +120,11 @@ fn read_export_within<R: Read + Seek, T>(
             zip::result::ZipError::UnsupportedArchive(_) => {
                 "This zip is protected with a password or packed in a way SilentSilo cannot read. Export again from Bitwarden.".to_string()
             }
-            other => format!("The zip could not be read: {other}"),
+            other => crate::err::coded_with(
+                "err.zip_read_failed",
+                format!("The zip could not be read: {other}"),
+                &[("detail", &other)],
+            ),
         })?;
         if entry.is_dir() {
             continue;
@@ -146,7 +158,13 @@ fn read_export_within<R: Read + Seek, T>(
         (&mut entry)
             .take(cap.saturating_add(1))
             .read_to_end(&mut bytes)
-            .map_err(|e| format!("The zip could not be read: {e}"))?;
+            .map_err(|e| {
+                crate::err::coded_with(
+                    "err.zip_read_failed",
+                    format!("The zip could not be read: {e}"),
+                    &[("detail", &e)],
+                )
+            })?;
         if bytes.len() as u64 > cap {
             return Err(if is_json && cap == limits.json {
                 format!(
@@ -164,8 +182,13 @@ fn read_export_within<R: Read + Seek, T>(
 
         match rest {
             ["data.json"] => {
-                let text = String::from_utf8(std::mem::take(&mut *bytes))
-                    .map_err(|_| "The data.json in this zip is not text.".to_string())?;
+                let text = String::from_utf8(std::mem::take(&mut *bytes)).map_err(|_| {
+                    crate::err::coded!(
+                        "err.bitwarden_data_not_text",
+                        "The data.json in this zip is not text."
+                    )
+                    .to_string()
+                })?;
                 json = Some(text);
             }
             ["attachments", folder, name] => kept.push(file(folder, name, &bytes)?),
@@ -186,10 +209,14 @@ pub async fn passwords_read_bitwarden_zip(
     run_blocking(move || {
         let meta = std::fs::metadata(&path).map_err(|e| e.to_string())?;
         if !meta.is_file() {
-            return Err("Not a file.".into());
+            return Err(crate::err::coded!("err.not_a_file", "Not a file.").into());
         }
         if meta.len() > MAX_ZIP_BYTES {
-            return Err("That export is larger than 512 MB.".into());
+            return Err(crate::err::coded!(
+                "err.export_too_large",
+                "That export is larger than 512 MB."
+            )
+            .into());
         }
         let snapshot = crate::state::snapshot_focused_session(&app.state::<AppState>())?;
         let reader =

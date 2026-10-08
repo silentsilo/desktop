@@ -1,3 +1,4 @@
+import { formatAppError } from "./errors";
 import { t } from "../i18n";
 import type { VaultEntry } from "./types";
 
@@ -50,7 +51,7 @@ export function moveSummary(report: MoveReport, destination: string): { text: st
   }
   if (report.failed.length > 0) {
     const first = report.failed[0]!;
-    const reason = first.reason.replace(/\.$/, "");
+    const reason = formatAppError(first.reason).replace(/\.$/, "");
     parts.push(
       report.failed.length === 1
         ? t("files.failed_one", { name: first.name, reason })
