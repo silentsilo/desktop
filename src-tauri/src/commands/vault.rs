@@ -1256,11 +1256,26 @@ pub async fn vault_purge_items(app: AppHandle, ids: Vec<String>) -> Result<u64, 
         .iter()
         .map(|id| Uuid::parse_str(id).map_err(|e| e.to_string()))
         .collect::<Result<_, _>>()?;
-    log_purge(
-        &app,
-        crate::audit::event(crate::audit::codes::FILE_PURGED).with("count", ids.len()),
-    )
-    .await?;
+    // Named while they still exist: once purged there is nothing to ask.
+    let names: Vec<String> = with_vfs(&app.state::<AppState>(), |_session, vfs| {
+        Ok(ids
+            .iter()
+            .take(LOGGED_NAMES)
+            .filter_map(|id| {
+                vfs.get_file(*id)
+                    .map(|f| f.name)
+                    .or_else(|_| vfs.get_folder(*id).map(|f| f.name))
+                    .ok()
+            })
+            .collect())
+    })
+    .unwrap_or_default();
+    let mut event = crate::audit::event(crate::audit::codes::FILE_PURGED);
+    event = match (ids.len(), names.as_slice()) {
+        (1, [one]) => event.on(ids[0].to_string(), one.clone()),
+        _ => event.with("count", ids.len()).with("names", names),
+    };
+    log_purge(&app, event).await?;
 
     let app2 = app.clone();
     let (removed, blob_ids, root, silo_id) = run_blocking(move || {
