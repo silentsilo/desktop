@@ -59,7 +59,7 @@ export function lastingTasks(running: Map<string, unknown>): BackgroundTask[] {
       id: "check",
       label: t("nav.task_check"),
       detail: p ? percent(p[1], p[2]) : null,
-      place: { section: "verify" },
+      place: { section: "backup" },
     });
   }
   if (has("restore.running")) {
@@ -68,7 +68,7 @@ export function lastingTasks(running: Map<string, unknown>): BackgroundTask[] {
       id: "restore",
       label: t("nav.task_restore_test"),
       detail: p ? percent(p[0], p[1]) : null,
-      place: { section: "verify" },
+      place: { section: "recovery" },
     });
   }
   if ((running.get("health.breaches") as { kind: string } | undefined)?.kind === "busy") {

@@ -13,7 +13,6 @@ import {
   LayoutDashboard,
   Laptop,
   LifeBuoy,
-  SearchCheck,
   SlidersHorizontal,
   SquareTerminal,
   Timer,
@@ -42,6 +41,7 @@ import { AppSettingsSection, formatMinutes, useUpdater } from "./settings/AppSet
 import { OverviewPanel } from "./settings/OverviewPanel";
 import { SettingList, SettingRow } from "../components/Setting";
 import { t, tx, useLocale } from "../i18n";
+import { showBackupCheck } from "./VerifyPanel";
 
 type Props = {
   /** Whether the open silo keeps an activity log, for the overview. */
@@ -110,7 +110,8 @@ type Props = {
    * than configured here: what it needs comes from the app shell. */
   backupPanel: ReactNode;
   /** The backup test page, same arrangement as the backup page. */
-  verifyPanel: ReactNode;
+  /** The trial recovery, shown under Recovery code. */
+  restoreTestPanel: ReactNode;
 };
 
 /**
@@ -120,7 +121,6 @@ type Props = {
 const SECTIONS = [
   { id: "overview", group: "silo", label: "settings.overview", icon: LayoutDashboard },
   { id: "backup", group: "silo", label: "settings.backup", icon: CloudUpload },
-  { id: "verify", group: "silo", label: "settings.verify", icon: SearchCheck },
   { id: "recovery", group: "silo", label: "settings.recovery", icon: LifeBuoy },
   { id: "keys", group: "silo", label: "settings.keys", icon: KeyRound },
   { id: "devices", group: "silo", label: "settings.devices", icon: Laptop },
@@ -178,7 +178,7 @@ export function SettingsPanel(props: Props) {
     section,
     onSection,
     backupPanel,
-    verifyPanel,
+    restoreTestPanel,
   } = props;
 
   // A silo whose only way in is sealed to this machine is one dead
@@ -262,17 +262,20 @@ export function SettingsPanel(props: Props) {
             hasPortableKey={hasPortableKey}
             fullCopy={fullCopy}
             auditLog={auditLog}
-            onGo={(target) =>
-              target === "activity" ? props.onOpenActivity() : onSection(target)
-            }
+            onGo={(target) => {
+              if (target === "activity") return props.onOpenActivity();
+              if (target === "verify") {
+                showBackupCheck();
+                return onSection("backup");
+              }
+              onSection(target);
+            }}
             onRenameSilo={onRenameSilo}
             onSwitchSilo={onSwitchSilo}
           />
         )}
 
         {section === "backup" && backupPanel}
-
-        {section === "verify" && verifyPanel}
 
         {section === "recovery" && (
           <div className="panel-section">
@@ -339,6 +342,7 @@ export function SettingsPanel(props: Props) {
             )}
           </div>
         )}
+        {section === "recovery" && restoreTestPanel}
         {section === "recovery" && (
           <div className="panel-section">
             <EmergencyKitPanel

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AlertTriangle, CheckCircle2, LifeBuoy, SearchCheck, X } from "lucide-react";
@@ -44,6 +44,9 @@ type RestoreTest = {
 };
 
 type Props = {
+  /** The storage check, on the Backup page, or the trial recovery, on the
+   * Recovery code page: each sits beside what it tests. */
+  part: "check" | "restore";
   busy: boolean;
   /** For remembering when the backup was last tested, for the overview. */
   siloId: string;
@@ -59,7 +62,18 @@ type Props = {
  */
 const never = () => false;
 
-export function VerifyPanel({ busy, siloId }: Props) {
+const CHECK_ID = "backup-check";
+let checkWanted = false;
+
+/** Brings the storage check into view: now if the Backup page is open,
+ * otherwise once it opens. */
+export function showBackupCheck() {
+  const here = document.getElementById(CHECK_ID);
+  if (here) here.scrollIntoView({ block: "start" });
+  else checkWanted = true;
+}
+
+export function VerifyPanel({ part, busy, siloId }: Props) {
   useLocale();
   // Lasting: a deep check runs for hours, and leaving the page must not
   // lose it or its answer. See lib/lasting.
@@ -150,9 +164,17 @@ export function VerifyPanel({ busy, siloId }: Props) {
     void invoke("cancel_verify").catch(() => {});
   };
 
+  useEffect(() => {
+    if (part === "check" && checkWanted) {
+      checkWanted = false;
+      document.getElementById(CHECK_ID)?.scrollIntoView({ block: "start" });
+    }
+  }, [part]);
+
   return (
     <>
-    <div className="panel-section">
+    {part === "check" && (
+    <div className="panel-section" id={CHECK_ID}>
       <h3>
         <SearchCheck size={16} />
         {t("backup.verify_title")}
@@ -311,7 +333,9 @@ export function VerifyPanel({ busy, siloId }: Props) {
       )}
 
     </div>
+    )}
 
+    {part === "restore" && (
     <div className="panel-section">
       <h3>
         <LifeBuoy size={16} />
@@ -414,6 +438,7 @@ export function VerifyPanel({ busy, siloId }: Props) {
         </>
       )}
     </div>
+    )}
     </>
   );
 }

@@ -72,7 +72,7 @@ import { CATEGORIES_ROW_ID, isCategoriesRow } from "./views/passwords/util";
 import { SettingsPanel, type SettingsSectionId } from "./views/SettingsPanel";
 import { BackupPanel } from "./views/BackupPanel";
 import { CopiesPanel } from "./views/CopiesPanel";
-import { VerifyPanel } from "./views/VerifyPanel";
+import { showBackupCheck, VerifyPanel } from "./views/VerifyPanel";
 import { ConfirmDialog } from "./views/ConfirmDialog";
 import { RecoveryCodeDialog } from "./views/RecoveryCodeDialog";
 import { explorerKeysBlocked } from "./lib/explorerKeys";
@@ -4144,7 +4144,8 @@ export default function App() {
               setView("passwords");
             }}
             onOpenFix={(fix) => {
-              setSettingsSection(fix);
+              if (fix === "verify") showBackupCheck();
+              setSettingsSection(fix === "verify" ? "backup" : fix);
               setView("settings");
             }}
           />
@@ -4187,7 +4188,7 @@ export default function App() {
                 syncError={
                   sync.state === "error" ? (sync.lastError ?? t("app.unknown_error")) : null
                 }
-                onTestBackup={() => setSettingsSection("verify")}
+                onTestBackup={showBackupCheck}
                 lastTestedAt={
                   Math.max(
                     lastDone(bootstrap.silo.id, "verified") ?? 0,
@@ -4206,6 +4207,9 @@ export default function App() {
                 contentFetch={contentFetch}
                 onFetchAllContent={() => void fetchAllContent()}
                 onCancelFetchContent={cancelFetchAllContent}
+                check={
+                  <VerifyPanel part="check" busy={busy("transfer", "silo")} siloId={bootstrap.silo.id} />
+                }
                 copies={
                   <CopiesPanel
                     busy={busy("transfer", "silo")}
@@ -4215,15 +4219,10 @@ export default function App() {
                 }
               />
             }
-            verifyPanel={
+            restoreTestPanel={
               sync.configured ? (
-                <VerifyPanel busy={busy("transfer", "silo")} siloId={bootstrap.silo.id} />
-              ) : (
-                <div className="panel-section">
-                  <h3>{t("settings.verify")}</h3>
-                  <p className="hint">{t("app.verify_needs_backup")}</p>
-                </div>
-              )
+                <VerifyPanel part="restore" busy={busy("transfer", "silo")} siloId={bootstrap.silo.id} />
+              ) : null
             }
             busy={busy("keys", "silo")}
             autoUpdateEnabled={autoUpdateEnabled}

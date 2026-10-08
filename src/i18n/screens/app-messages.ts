@@ -1461,17 +1461,6 @@ export const appMessages = {
     "pt-BR": "erro desconhecido",
     pl: "nieznany błąd",
   },
-  "app.verify_needs_backup": {
-    note: "Settings, Test backup, when no backup storage is connected. 'Backup page' is the Settings section named Backup.",
-    en: "Connect backup storage on the Backup page first. Then you can check it and test a recovery here.",
-    ro: "Conectează mai întâi stocarea pentru backup în pagina Backup. Apoi o poți verifica și poți testa o recuperare aici.",
-    de: "Verbinde zuerst auf der Seite „Sicherung“ einen Sicherungsspeicher. Dann kannst du ihn hier prüfen und eine Wiederherstellung testen.",
-    fr: "Connectez d’abord un stockage de sauvegarde sur la page Sauvegarde. Vous pourrez ensuite le vérifier et tester une récupération ici.",
-    es: "Conecta primero un almacenamiento de copias en la página Copia de seguridad. Después podrás comprobarlo y probar una recuperación aquí.",
-    it: "Collega prima uno spazio di backup nella pagina Backup. Poi potrai verificarlo e provare un recupero qui.",
-    "pt-BR": "Conecte primeiro um armazenamento de backup na página Backup. Depois você pode verificá-lo e testar uma recuperação aqui.",
-    pl: "Najpierw podłącz magazyn kopii na stronie Kopia zapasowa. Potem możesz go tutaj sprawdzić i przetestować odzyskiwanie.",
-  },
   "app.platform_tray_windows": {
     note: "Windows: where the app sits while its window is closed. Fills {tray} after a preposition ('hides SilentSilo in {tray}', 'It starts in {tray}'): de needs the dative with its article, pl the locative; it and pt-BR put it in parentheses, so a bare noun phrase.",
     en: "the notification area",

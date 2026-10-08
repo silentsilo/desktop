@@ -143,6 +143,8 @@ type Props = {
   onCancelFetchContent: () => void;
   /** The list of copies, shown under the status once storage is connected. */
   copies?: ReactNode;
+  /** The storage check, above the explainer. */
+  check?: ReactNode;
   /** Why the last background pass failed, or null when it did not. */
   syncError?: string | null;
   /** Opens the backup test, which has a page of its own. */
@@ -178,6 +180,7 @@ export function BackupPanel({
   onFetchAllContent,
   onCancelFetchContent,
   copies,
+  check,
   syncError = null,
   onTestBackup,
   lastTestedAt = null,
@@ -620,6 +623,8 @@ export function BackupPanel({
           </div>
         </div>
       )}
+
+      {!expanded && connected && check}
 
       {/* Hidden once someone is mid-task: prose beside a form is noise. */}
       {!expanded && (
