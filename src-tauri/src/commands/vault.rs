@@ -802,17 +802,93 @@ pub fn lock_all_silos(app: &AppHandle) {
 }
 
 /// How far past its limit an idle silo is locked from here rather than by
-/// the window. The window's own sweep locks first, every 15 seconds; this
+/// the window. The window's own sweep locks first, every 5 seconds; this
 /// is for a window that has crashed or hung, which left the silo open until
 /// the app quit, and for one throttled while hidden.
 const IDLE_BACKSTOP_MARGIN_SECS: u64 = 120;
-const IDLE_BACKSTOP_TICK: std::time::Duration = std::time::Duration::from_secs(30);
+/// Short enough for the minute's warning below to come close to a minute.
+const IDLE_BACKSTOP_TICK: std::time::Duration = std::time::Duration::from_secs(10);
+/// How long before a silo locks the system notification comes.
+const LOCK_NOTICE_SECS: u64 = 60;
 
-/// Whether a silo idle for `idle_secs` is past the backstop: its own limit
-/// if it has one, else the app-wide one, plus the margin.
-fn past_idle_backstop(idle_secs: u64, own: Option<u32>, default_minutes: u32) -> bool {
+/// A silo's idle limit in seconds: its own if it has one, else the
+/// app-wide one. `None` when it never locks by itself.
+fn idle_limit_secs(own: Option<u32>, default_minutes: u32) -> Option<u64> {
     let limit = own.filter(|m| *m > 0).unwrap_or(default_minutes);
-    limit > 0 && idle_secs >= u64::from(limit) * 60 + IDLE_BACKSTOP_MARGIN_SECS
+    (limit > 0).then(|| u64::from(limit) * 60)
+}
+
+/// Whether a silo idle for `idle_secs` is past the backstop: its limit plus
+/// the margin.
+fn past_idle_backstop(idle_secs: u64, own: Option<u32>, default_minutes: u32) -> bool {
+    idle_limit_secs(own, default_minutes)
+        .is_some_and(|limit| idle_secs >= limit + IDLE_BACKSTOP_MARGIN_SECS)
+}
+
+/// Whether a silo idle for `idle_secs` locks within the notice's minute.
+fn locks_within_notice(idle_secs: u64, own: Option<u32>, default_minutes: u32) -> bool {
+    idle_limit_secs(own, default_minutes)
+        .is_some_and(|limit| idle_secs < limit && limit - idle_secs <= LOCK_NOTICE_SECS)
+}
+
+/// The notification's words, set by the window in the language in use:
+/// a title and a body where `{name}` is the silo's. `None` when the user
+/// turned the notice off, and until the window has said.
+static LOCK_NOTICE: std::sync::Mutex<Option<(String, String)>> = std::sync::Mutex::new(None);
+/// Silos already told about, so a minute's countdown is one notification.
+static LOCK_NOTICED: std::sync::Mutex<Vec<Uuid>> = std::sync::Mutex::new(Vec::new());
+
+#[tauri::command(async)]
+pub fn app_set_lock_notice(title: Option<String>, body: Option<String>) {
+    if let Ok(mut notice) = LOCK_NOTICE.lock() {
+        *notice = title.zip(body);
+    }
+}
+
+/// A minute before the silo on screen locks, says so in a system
+/// notification, but only when the window is not in front: there the window
+/// counts down itself. The window cannot do this part: hidden in the tray,
+/// its timers run late.
+fn notify_before_lock(app: &AppHandle, registry: &silentsilo_vault::SiloRegistry) {
+    let state = app.state::<AppState>();
+    let Ok(focused) = crate::state::focused_id(&state) else {
+        return;
+    };
+    let default_minutes = state.auto_lock_default_minutes.load(Ordering::Relaxed);
+    let soon = crate::state::idle_seconds(&state)
+        .into_iter()
+        .any(|(id, idle)| {
+            id == focused
+                && locks_within_notice(
+                    idle,
+                    registry.get(id).and_then(|e| e.auto_lock_minutes),
+                    default_minutes,
+                )
+        });
+    let Ok(mut noticed) = LOCK_NOTICED.lock() else {
+        return;
+    };
+    if !soon {
+        noticed.retain(|id| *id != focused);
+        return;
+    }
+    if noticed.contains(&focused) {
+        return;
+    }
+    noticed.push(focused);
+    let in_front = app.get_webview_window("main").is_some_and(|w| {
+        w.is_visible().unwrap_or(false)
+            && !w.is_minimized().unwrap_or(false)
+            && w.is_focused().unwrap_or(false)
+    });
+    let notice = LOCK_NOTICE.lock().ok().and_then(|n| n.clone());
+    if let (false, Some((title, body))) = (in_front, notice) {
+        let name = registry
+            .get(focused)
+            .map(|e| e.name.clone())
+            .unwrap_or_default();
+        let _ = crate::commands::silo::notify(app, &title, &body.replace("{name}", &name));
+    }
 }
 
 /// Locks idle silos from Rust, for as long as the app runs. On its own task
@@ -832,6 +908,7 @@ fn lock_idle_silos(app: &AppHandle) {
         return;
     };
     let registry = silentsilo_vault::load_registry(&app_data);
+    notify_before_lock(app, &registry);
     let state = app.state::<AppState>();
     let default_minutes = state.auto_lock_default_minutes.load(Ordering::Relaxed);
     let due: Vec<Uuid> = crate::state::idle_seconds(&state)
@@ -3308,6 +3385,21 @@ mod tests {
             None,
             30
         ));
+    }
+
+    #[test]
+    fn the_notice_comes_in_the_last_minute_only() {
+        assert!(!locks_within_notice(1739, None, 30));
+        assert!(locks_within_notice(1740, None, 30));
+        assert!(locks_within_notice(1799, None, 30));
+        assert!(
+            !locks_within_notice(1800, None, 30),
+            "past the limit it is locking, not about to"
+        );
+        assert!(
+            !locks_within_notice(1790, None, 0),
+            "a silo that never locks gives no notice"
+        );
     }
 
     #[test]

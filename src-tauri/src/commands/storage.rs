@@ -414,6 +414,7 @@ pub async fn backup_target_seed(app: AppHandle, from: String, to: String) -> Res
     // No pass alongside: one pushing into the copy being filled would
     // interleave its writes with the seed's.
     let sync_off = crate::commands::sync::hold_sync(&app).await?;
+    let _open = crate::state::hold_open(&app, silo.id);
     let seeding = Seeding::start(&app);
     let targets = silentsilo_vault::load_targets(silo.id);
     let find = |id: &str| {

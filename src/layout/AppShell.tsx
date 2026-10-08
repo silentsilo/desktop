@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { BrandLogo } from "../components/BrandLogo";
 import { SidebarTasks } from "./SidebarTasks";
+import { formatMinutes } from "../views/settings/AppSettings";
 import type { BackgroundTask, TaskPlace } from "../lib/backgroundTasks";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { formatAge, formatBytes } from "../lib/format";
@@ -85,6 +86,9 @@ type Props = {
   view: View;
   onView: (v: View) => void;
   onLock: () => void;
+  /** How long the silo on screen may sit unused before it locks itself;
+   * 0 for never. */
+  lockAfterMinutes?: number;
   storage: StorageUsage | null;
   trashCount?: number;
   /** Findings worth acting on, badged on the Health tab. Excludes the
@@ -148,6 +152,7 @@ export function AppShell({
   view,
   onView,
   onLock,
+  lockAfterMinutes = 0,
   storage,
   trashCount = 0,
   healthCount = 0,
@@ -337,7 +342,11 @@ export function AppShell({
               type="button"
               className="btn-lock"
               onClick={onLock}
-              data-tooltip={t("nav.lock_silo")}
+              data-tooltip={
+                lockAfterMinutes > 0
+                  ? t("nav.lock_silo_after", { time: formatMinutes(lockAfterMinutes) })
+                  : t("nav.lock_silo")
+              }
               aria-label={t("nav.lock_silo")}
             >
               <Lock size={16} />

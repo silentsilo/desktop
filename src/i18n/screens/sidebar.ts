@@ -331,4 +331,15 @@ export const sidebar = {
     "pt-BR": "Baixando a atualização",
     pl: "Pobieranie aktualizacji",
   },
+  "nav.lock_silo_after": {
+    note: "Tooltip on the Lock button when the silo locks itself after a while unused. {time} is that while, e.g. '30 min' or '6 hours'.",
+    en: "Lock silo. It also locks by itself after {time} unused.",
+    ro: "Blochează silozul. Se blochează și singur după {time} fără activitate.",
+    de: "Silo sperren. Es sperrt sich auch selbst nach {time} ohne Nutzung.",
+    fr: "Verrouiller le silo. Il se verrouille aussi tout seul après {time} sans activité.",
+    es: "Bloquear el silo. También se bloquea solo tras {time} sin uso.",
+    it: "Blocca il silo. Si blocca anche da solo dopo {time} di inattività.",
+    "pt-BR": "Bloquear o silo. Ele também se bloqueia sozinho após {time} sem uso.",
+    pl: "Zablokuj silos. Blokuje się też sam po {time} bezczynności.",
+  },
 } satisfies Screen;

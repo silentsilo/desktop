@@ -94,6 +94,8 @@ import { decodeAppError, formatAppError, plainError } from "./lib/errors";
 import { AppSettingsContext, UpdateCardContext } from "./lib/appSettings";
 import { UpdateCard } from "./views/UpdateCard";
 import { forgetLasting, LastingScope, useRunningLasting } from "./lib/lasting";
+import { secondsToLock, useLockNotice } from "./lib/lockNotice";
+import { LockSoonBar } from "./views/LockSoonBar";
 import { lastingTasks, syncTask, type BackgroundTask, type TaskPlace } from "./lib/backgroundTasks";
 
 const AUTO_LOCK_KEY = "silentsilo.autoLockMinutes";
@@ -349,6 +351,20 @@ export default function App() {
   /// The focused silo's own timeout. Null means it follows the default,
   /// which is a different statement from "never".
   const [siloAutoLockMinutes, setSiloAutoLockMinutes] = useState<number | null>(null);
+  /// When the silo on screen locks, once that is under a minute away and the
+  /// window shows it. See LockSoonBar.
+  const [lockSoon, setLockSoon] = useState<{ deadline: number } | null>(null);
+  const lockSoonRef = useRef(lockSoon);
+  lockSoonRef.current = lockSoon;
+  /// Rust sends the system notification a minute before, when the window is
+  /// not in front (hidden, its timers run late); it gets the words from here.
+  const lockNotice = useLockNotice();
+  useEffect(() => {
+    const words = lockNotice
+      ? { title: t("app.lock_notice_title"), body: t("app.lock_notice_body", { name: "{name}" }) }
+      : { title: null, body: null };
+    void invoke("app_set_lock_notice", words).catch(() => {});
+  }, [lockNotice, lang]);
 
 
   const [view, setView] = useState<View>("files");
@@ -1580,8 +1596,11 @@ export default function App() {
     let lastTouch = 0;
     const touch = () => {
       const now = Date.now();
-      if (now - lastTouch < 10_000) return;
+      // With the countdown up, at once: that use is what it asks for.
+      const warned = lockSoonRef.current !== null;
+      if (!warned && now - lastTouch < 10_000) return;
       lastTouch = now;
+      if (warned) setLockSoon(null);
       void invoke("silo_touch").catch(() => {});
     };
     window.addEventListener("mousemove", touch);
@@ -1595,6 +1614,16 @@ export default function App() {
       } catch {
         return;
       }
+      const focused = focusedSiloRef.current;
+      const mine = focused ? idle.find((silo) => silo.id === focused) : undefined;
+      const left = mine
+        ? secondsToLock(mine.idle_seconds, mine.auto_lock_minutes, autoLockMinutes)
+        : null;
+      setLockSoon(
+        left !== null && left > 0 && left <= 60 && !document.hidden
+          ? { deadline: Date.now() + left * 1000 }
+          : null,
+      );
       let lockedAny = false;
       for (const silo of silosToLock(idle, autoLockMinutes)) {
         try {
@@ -1618,7 +1647,9 @@ export default function App() {
         await refreshSilos();
       }
     };
-    const interval = window.setInterval(() => void sweep(), 15_000);
+    // Every five seconds, so the last minute's countdown starts on time and
+    // a silo locks within seconds of its limit. The call reads a timer.
+    const interval = window.setInterval(() => void sweep(), 5_000);
 
     return () => {
       window.clearInterval(interval);
@@ -3894,6 +3925,9 @@ export default function App() {
       {confirmHost}
       {mintedCodeHost}
       {rebuildHost}
+      {lockSoon && bootstrap.silo && (
+        <LockSoonBar name={bootstrap.silo.name} deadline={lockSoon.deadline} />
+      )}
       {dropActive && (
         <div className="drop-overlay" aria-hidden>
           <div className="drop-overlay-card">
@@ -3943,6 +3977,7 @@ export default function App() {
         }}
         updateAvailable={pendingUpdate}
         onLock={() => void lockSilo()}
+        lockAfterMinutes={siloAutoLockMinutes ?? autoLockMinutes}
         storage={
           blobStatus
             ? {

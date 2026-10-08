@@ -802,6 +802,7 @@ pub struct VerifyTargetResult {
 #[tauri::command]
 pub async fn vault_verify(app: AppHandle, deep: bool) -> Result<Vec<VerifyTargetResult>, String> {
     let silo = crate::state::active_silo(&app)?;
+    let _open = crate::state::hold_open(&app, silo.id);
 
     // Read once, up front: the connection cannot be held across the network
     // work below, and asking again per target would let the answer change
@@ -1062,6 +1063,7 @@ pub struct RestoreTest {
 #[tauri::command]
 pub async fn vault_test_restore(app: AppHandle, code: String) -> Result<RestoreTest, String> {
     let silo = crate::state::active_silo(&app)?;
+    let _open = crate::state::hold_open(&app, silo.id);
 
     let live = {
         let state = app.state::<AppState>();

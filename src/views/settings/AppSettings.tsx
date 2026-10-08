@@ -23,6 +23,7 @@ import { HISTORY_POLICIES, type HistoryPolicy } from "../../lib/entryHistory";
 import { SshAgentSettings } from "./SshAgentSettings";
 import { loadHistoryPolicy, saveHistoryPolicy } from "../../lib/historySetting";
 import { useLasting } from "../../lib/lasting";
+import { setLockNotice, useLockNotice } from "../../lib/lockNotice";
 
 /** The sections that belong to the app rather than to one silo. */
 export type AppSectionId = "general" | "browser" | "ssh" | "updates";
@@ -143,6 +144,7 @@ export function AppSettingsSection({
   useLocale();
   const platform = platformStrings(os);
   const themeControl = useTheme();
+  const lockNotice = useLockNotice();
   const [historyPolicy, setHistoryPolicy] = useState<HistoryPolicy>(loadHistoryPolicy);
 
   // Null until the first read comes back, and again if it fails: the
@@ -285,6 +287,14 @@ export function AppSettingsSection({
                 </option>
               ))}
             </select>
+          </SettingRow>
+
+          <SettingRow
+            label={t("set.gen_lock_notice")}
+            htmlFor="lock-notice"
+            hint={t("set.gen_lock_notice_hint")}
+          >
+            <Toggle id="lock-notice" checked={lockNotice} onChange={setLockNotice} />
           </SettingRow>
 
           <SettingRow

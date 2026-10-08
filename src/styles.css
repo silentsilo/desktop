@@ -4030,6 +4030,45 @@ ol.key-add-steps {
   flex-shrink: 0;
 }
 
+/* The last minute before the silo on screen locks: bottom centre, clear of
+   the status bar and of the toasts on the right. */
+.lock-soon {
+  position: fixed;
+  bottom: 4.25rem;
+  left: 50%;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: min(460px, calc(100vw - 2rem));
+  padding: 0.75rem 1rem;
+  transform: translateX(-50%);
+  background: var(--surface-raised);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  /* Fade only: a slide would fight the centring transform. */
+  animation: fade-in var(--dur-2) ease-out;
+}
+
+.lock-soon > svg {
+  flex-shrink: 0;
+  color: var(--warning-text);
+}
+
+.lock-soon strong {
+  display: block;
+  font-size: var(--fs-14);
+  font-variant-numeric: tabular-nums;
+}
+
+.lock-soon span {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: var(--fs-12);
+  color: var(--text-secondary);
+}
+
 .toast-host {
   position: fixed;
   /* Bottom right, clear of the status bar like the selection toolbar. At

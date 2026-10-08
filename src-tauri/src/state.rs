@@ -603,13 +603,72 @@ pub fn touch_if_open(state: &State<AppState>, id: Uuid) {
 }
 
 /// How long each open silo has gone unused, in seconds. Only open ones: a
-/// timer left for a silo that is not open would ask to lock it.
+/// timer left for a silo that is not open would ask to lock it. A silo held
+/// open by work the user started reads as in use.
 pub fn idle_seconds(state: &State<AppState>) -> Vec<(Uuid, u64)> {
     let open = state.open_silo_ids();
     let Ok(seen) = state.last_touched.lock() else {
         return Vec::new();
     };
+    let held = held_ids();
     idle_of_open(&seen, &open, Instant::now())
+        .into_iter()
+        .map(|(id, idle)| (id, if held.contains(&id) { 0 } else { idle }))
+        .collect()
+}
+
+/// Silos kept open by work the user started and is waiting on: a check of
+/// the copies, a seed, a trial recovery. Hours, some of them, with nothing
+/// touching the silo, and the auto-lock would end them half way. Counted,
+/// since two can run at once.
+static HELD: Mutex<Option<HashMap<Uuid, usize>>> = Mutex::new(None);
+
+fn held_ids() -> Vec<Uuid> {
+    HELD.lock()
+        .ok()
+        .and_then(|held| held.as_ref().map(|m| m.keys().copied().collect()))
+        .unwrap_or_default()
+}
+
+/// While this lives, silo `id` does not lock itself. When it goes, the
+/// work's end counts as use: its result is on screen, and the usual idle
+/// time starts from there.
+pub struct HoldOpen {
+    app: AppHandle,
+    id: Uuid,
+}
+
+pub fn hold_open(app: &AppHandle, id: Uuid) -> HoldOpen {
+    hold(id);
+    HoldOpen {
+        app: app.clone(),
+        id,
+    }
+}
+
+impl Drop for HoldOpen {
+    fn drop(&mut self) {
+        release(self.id);
+        touch_if_open(&self.app.state::<AppState>(), self.id);
+    }
+}
+
+fn hold(id: Uuid) {
+    if let Ok(mut held) = HELD.lock() {
+        *held.get_or_insert_with(HashMap::new).entry(id).or_insert(0) += 1;
+    }
+}
+
+fn release(id: Uuid) {
+    if let Ok(mut held) = HELD.lock()
+        && let Some(map) = held.as_mut()
+        && let Some(count) = map.get_mut(&id)
+    {
+        *count -= 1;
+        if *count == 0 {
+            map.remove(&id);
+        }
+    }
 }
 
 fn idle_of_open(seen: &HashMap<Uuid, Instant>, open: &[Uuid], now: Instant) -> Vec<(Uuid, u64)> {
@@ -691,6 +750,26 @@ pub fn snapshot_focused_session(state: &State<AppState>) -> Result<SessionSnapsh
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn work_holds_a_silo_open_until_the_last_of_it_ends() {
+        let id = Uuid::new_v4();
+        hold(id);
+        hold(id);
+        assert!(held_ids().contains(&id));
+        release(id);
+        assert!(
+            held_ids().contains(&id),
+            "the second piece of work still runs"
+        );
+        release(id);
+        assert!(!held_ids().contains(&id));
+        release(id);
+        assert!(
+            !held_ids().contains(&id),
+            "an extra release changes nothing"
+        );
+    }
 
     #[test]
     fn only_an_open_silo_has_an_idle_timer() {

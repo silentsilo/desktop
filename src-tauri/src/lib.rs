@@ -175,6 +175,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         // Size, position and maximised state, and nothing else. The plugin
         // also tracks visibility by default, and this window is hidden at
         // startup on purpose: restoring a saved "visible" would pop it open
@@ -285,6 +286,7 @@ pub fn run() {
             commands::bitwarden_zip::passwords_read_bitwarden_zip,
             commands::kdbx::passwords_write_kdbx,
             commands::silo::silo_touch,
+            commands::vault::app_set_lock_notice,
             commands::silo::silo_blur,
             commands::silo::silo_rename,
             commands::silo::silo_forget,

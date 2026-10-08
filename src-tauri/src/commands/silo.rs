@@ -500,6 +500,17 @@ pub fn silo_touch(state: State<'_, AppState>) -> Result<(), String> {
     Ok(())
 }
 
+/// A system notification. It names a silo at most, never anything in it.
+pub fn notify(app: &AppHandle, title: &str, text: &str) -> Result<(), String> {
+    use tauri_plugin_notification::NotificationExt;
+    app.notification()
+        .builder()
+        .title(title)
+        .body(text)
+        .show()
+        .map_err(|e| e.to_string())
+}
+
 /// Sets how long a silo may sit unused before it locks itself.
 #[tauri::command(async)]
 pub fn silo_set_auto_lock(app: AppHandle, id: String, minutes: Option<u32>) -> Result<(), String> {

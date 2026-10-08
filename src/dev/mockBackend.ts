@@ -929,10 +929,20 @@ const handlers: Record<string, Handler> = {
   // Two silos open, so the switcher, the picker badge and the Explorer
   // silo chooser are all reachable without a security key.
   silo_open_list: () => silos,
+  // `?locksoon`: the first silo starts 50 seconds from its 5-minute limit,
+  // for the countdown; using the window starts it over.
   silo_idle_status: () =>
-    silos.map((s, i) => ({ id: s.id, idle_seconds: i * 30, auto_lock_minutes: i === 0 ? 5 : null })),
+    silos.map((s, i) => ({
+      id: s.id,
+      idle_seconds:
+        i === 0 && flag("locksoon") ? Math.floor((Date.now() - mockIdleSince) / 1000) : i * 30,
+      auto_lock_minutes: i === 0 ? 5 : null,
+    })),
   silo_set_auto_lock: () => null,
-  silo_touch: () => null,
+  silo_touch: () => {
+    mockIdleSince = Date.now();
+    return null;
+  },
   silo_blur: () => null,
   // A plausible-looking fingerprint, so the confirmation step can be seen
   // without an SSH server to point at.
@@ -1471,6 +1481,9 @@ function nextMinor(version: string): string {
   const [major, minor] = version.split(".").map(Number);
   return `${major}.${(minor ?? 0) + 1}.0`;
 }
+
+/** When the first silo was last used, for `?locksoon`. */
+let mockIdleSince = Date.now() - 250_000;
 
 /** What a week of use looks like on the Activity page: two computers and a
  * phone, each event carrying the key its silo was open with. */
