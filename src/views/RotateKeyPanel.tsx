@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Os } from "../lib/platformStrings";
-import { AlertTriangle, KeyRound, RefreshCw } from "lucide-react";
+import { AlertTriangle, KeyRound, RefreshCw, Smartphone } from "lucide-react";
 import { securityKeyDisplayName, usableHere } from "../lib/keyName";
 import type { SecurityKeyInfo } from "../lib/types";
 import { t, useLocale } from "../i18n";
@@ -68,7 +68,12 @@ export function RotateKeyPanel({
   const toggle = (id: string) =>
     setKeep((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-  const dropping = active.filter((k) => !keep.includes(k.credential_id));
+  // Keys on other devices are never a choice here: listed apart, without a
+  // checkbox, and not part of the red warning, which is for what the user
+  // chose to drop.
+  const local = active.filter(usableHere);
+  const elsewhere = active.filter((k) => !usableHere(k));
+  const dropping = local.filter((k) => !keep.includes(k.credential_id));
   /// The same fallback the Security keys list uses, so one key carries one
   /// name across the page.
   const named = (k: SecurityKeyInfo) => securityKeyDisplayName(k, os);
@@ -121,29 +126,37 @@ export function RotateKeyPanel({
       <p>{t("rotate.tick")}</p>
 
       <ul className="key-list">
-        {active.map((k) => (
+        {local.map((k) => (
           <li key={k.credential_id} className="key-list-item">
             <label className="key-choice">
               <input
                 type="checkbox"
                 checked={keep.includes(k.credential_id)}
-                disabled={busy || !usableHere(k)}
+                disabled={busy}
                 onChange={() => toggle(k.credential_id)}
               />
               <span>
                 {named(k)}
                 <span className="hint">
-                  {!usableHere(k)
-                    ? t("rotate.other_device")
-                    : k.platform
-                      ? t("rotate.built_in")
-                      : t("rotate.removable")}
+                  {k.platform ? t("rotate.built_in") : t("rotate.removable")}
                 </span>
               </span>
             </label>
           </li>
         ))}
       </ul>
+
+      {elsewhere.length > 0 && (
+        <div className="rotate-elsewhere">
+          <Smartphone size={16} aria-hidden />
+          <p>
+            {t("rotate.elsewhere", {
+              count: elsewhere.length,
+              names: elsewhere.map(named).join(", "),
+            })}
+          </p>
+        </div>
+      )}
 
       {dropping.length > 0 && (
         <p className="hint is-error" role="status">

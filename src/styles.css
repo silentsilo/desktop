@@ -2620,12 +2620,13 @@ input[type="range"] {
   margin-top: 0.7rem;
 }
 
-/* `.panel-section > p` caps the reading line at 62ch, counted in that
- * paragraph's own font. A hint is two sizes smaller, so the same count
- * came out ~110px narrower than the card and pushed the last word onto a
- * line of its own with empty space beside it. The card is the measure. */
+/* One measure for every paragraph in a settings card. `.panel-section > p`
+ * caps at 62ch, counted in each paragraph's own font, so a hint (smaller)
+ * and running text (larger) wrapped at different widths and a card's text
+ * had a ragged right edge from one paragraph to the next. */
+.settings-pane .panel-section > p,
 .settings-pane .panel-section > p.hint {
-  max-width: none;
+  max-width: 46rem;
 }
 
 /* Each card sets its own reading width rather than stretching a form
@@ -4567,6 +4568,31 @@ tr.is-moving {
    width of the words. */
 .key-choice {
   width: 100%;
+}
+
+/* Keys a rotation here cannot keep: said once, beside the checklist, in
+   the neutral voice of a fact rather than the red of a choice. */
+.rotate-elsewhere {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text-secondary);
+  font-size: var(--fs-13);
+  line-height: 1.5;
+}
+
+.rotate-elsewhere svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--text-tertiary);
+}
+
+.rotate-elsewhere p {
+  margin: 0;
 }
 
 /* Overrides the global `input { width: 100% }`, which stretches the box
