@@ -133,10 +133,10 @@ export function SiloReportDialog({ report, onClose }: Props) {
         </div>
 
         <div className="modal-actions">
-          <button type="button" className="secondary" onClick={() => void copy()}>
+          <button type="button" className="btn-secondary" onClick={() => void copy()}>
             {copied ? t("start.copied") : t("common.copy")}
           </button>
-          <button type="button" onClick={onClose}>
+          <button className="btn-primary" type="button" onClick={onClose}>
             {t("start.close")}
           </button>
         </div>

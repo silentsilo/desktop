@@ -554,7 +554,7 @@ export function EntryDetail({
                         )}
                         <button
                           type="button"
-                          className="secondary pw-history-restore"
+                          className="btn-secondary btn-sm pw-history-restore"
                           disabled={busy}
                           aria-label={t("pw.history_restore_label", {
                             date: formatDate(version.saved_at),

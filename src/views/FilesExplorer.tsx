@@ -1033,7 +1033,7 @@ export function FilesExplorer(props: Props) {
           <div className="add-menu-container">
             <button
               type="button"
-              className="btn-add-new"
+              className="btn-primary btn-add-new"
               disabled={busy}
               onClick={() => setShowAddDropdown(!showAddDropdown)}
               aria-haspopup="menu"
@@ -1276,13 +1276,13 @@ export function FilesExplorer(props: Props) {
             <p className="empty-title">{t("files.empty_title")}</p>
             <p className="hint">{t("files.empty_hint")}</p>
             <div className="actions">
-              <button type="button" disabled={busy} onClick={onAddFiles}>
+              <button className="btn-primary" type="button" disabled={busy} onClick={onAddFiles}>
                 <IconFilePlus size={15} />
                 {t("files.add_files")}
               </button>
               <button
                 type="button"
-                className="secondary"
+                className="btn-secondary"
                 disabled={busy}
                 onClick={() => {
                   onNewFolderName("");
@@ -1686,13 +1686,14 @@ export function FilesExplorer(props: Props) {
             <div className="modal-actions">
               <button
                 type="button"
-                className="secondary"
+                className="btn-secondary"
                 disabled={busy}
                 onClick={() => setIsModalOpen(false)}
               >
                 {t("common.cancel")}
               </button>
               <button
+                className="btn-primary"
                 type="button"
                 disabled={busy || !newFolderName.trim()}
                 onClick={handleCreate}

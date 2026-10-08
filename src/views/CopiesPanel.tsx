@@ -342,7 +342,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                   {isCloudKind(target.config.kind) && state.health !== "current" && (
                     <button
                       type="button"
-                      className="secondary"
+                      className="btn-secondary"
                       disabled={busy || working || seeding !== null}
                       onClick={() => void reconnect(target.id, target.config.kind as CloudKind)}
                       title={t("backup.sign_in_again_title")}
@@ -355,7 +355,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                     <>
                       <button
                         type="button"
-                        className="secondary"
+                        className="btn-secondary"
                         disabled={busy || working || seeding !== null}
                         onClick={() => void seed(target.id)}
                         title={t("backup.fill_title")}
@@ -374,7 +374,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                       {seeding === target.id && (
                         <button
                           type="button"
-                          className="secondary"
+                          className="btn-secondary"
                           disabled={seedCancelling}
                           onClick={cancelSeed}
                           title={t("backup.fill_stop_title")}
@@ -385,7 +385,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                       )}
                       <button
                         type="button"
-                        className="secondary"
+                        className="btn-secondary"
                         disabled={busy || working || seeding !== null}
                         onClick={() => setConfirmRemove(target)}
                         title={t("backup.remove_title")}
@@ -465,13 +465,18 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
 
           <p className="hint">{t("backup.test_file_hint")}</p>
           <div className="actions">
-            <button type="button" disabled={working} onClick={() => void add()}>
+            <button
+              className="btn-primary"
+              type="button"
+              disabled={working}
+              onClick={() => void add()}
+            >
               {working ? <span className="spinner" aria-hidden /> : <Plus size={15} />}
               {working ? t("backup.checking") : t("backup.add_copy")}
             </button>
             <button
               type="button"
-              className="secondary"
+              className="btn-secondary"
               disabled={working}
               onClick={() => {
                 discardSignIns(draft);
@@ -486,7 +491,12 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
         </div>
       ) : (
         <div className="actions">
-          <button type="button" disabled={busy || working} onClick={() => setAdding(true)}>
+          <button
+            className="btn-primary"
+            type="button"
+            disabled={busy || working}
+            onClick={() => setAdding(true)}
+          >
             <Plus size={15} />
             {t("backup.add_another")}
           </button>

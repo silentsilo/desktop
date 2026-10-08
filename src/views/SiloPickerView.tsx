@@ -169,7 +169,12 @@ export function SiloPickerView({
                 }}
                 spellCheck={false}
               />
-              <button type="button" className="secondary" disabled={busy} onClick={() => void chooseLocation()}>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={busy}
+                onClick={() => void chooseLocation()}
+              >
                 <FolderOpen size={15} />
                 {t("start.browse")}
               </button>
@@ -191,14 +196,18 @@ export function SiloPickerView({
           )}
 
           <div className="actions">
-            <button type="submit" disabled={busy || name.trim().length === 0}>
+            <button
+              className="btn-primary"
+              type="submit"
+              disabled={busy || name.trim().length === 0}
+            >
               <Plus size={15} />
               {busy ? t("start.creating") : t("start.create")}
             </button>
             {silos.length > 0 && (
               <button
                 type="button"
-                className="secondary"
+                className="btn-secondary"
                 disabled={busy}
                 onClick={() => setMode("list")}
               >
@@ -220,14 +229,14 @@ export function SiloPickerView({
               <div className="actions">
                 <button
                   type="button"
-                  className="secondary"
+                  className="btn-secondary"
                   disabled={busy}
                   onClick={() => void addExisting()}
                 >
                   <FolderPlus size={15} />
                   {t("welcome.add_folder")}
                 </button>
-                <button type="button" className="secondary" disabled={busy} onClick={onJoin}>
+                <button type="button" className="btn-secondary" disabled={busy} onClick={onJoin}>
                   <Cloud size={15} />
                   {t("welcome.join")}
                 </button>
@@ -317,20 +326,25 @@ export function SiloPickerView({
             no two edges lined up. One per line, full width, icons in a
             column, and the three ways in read as a list of choices. */}
         <div className="silo-actions">
-          <button type="button" disabled={busy} onClick={() => setMode("create")}>
+          <button
+            className="btn-primary"
+            type="button"
+            disabled={busy}
+            onClick={() => setMode("create")}
+          >
             <Plus size={16} />
             <span>{t("start.new_silo")}</span>
           </button>
           <button
             type="button"
-            className="secondary"
+            className="btn-secondary"
             disabled={busy}
             onClick={() => void addExisting()}
           >
             <FolderPlus size={16} />
             <span>{t("welcome.add_folder")}</span>
           </button>
-          <button type="button" className="secondary" disabled={busy} onClick={onJoin}>
+          <button type="button" className="btn-secondary" disabled={busy} onClick={onJoin}>
             <Cloud size={16} />
             <span>{t("welcome.join")}</span>
           </button>

@@ -42,14 +42,14 @@ export function FirstRunView({ siloId, siloName, busy, onCreateCode, onCopyCode,
               </p>
               <code className="recovery-code">{code}</code>
               <div className="actions">
-                <button type="button" className="secondary" onClick={() => onCopyCode(code)}>
+                <button type="button" className="btn-secondary" onClick={() => onCopyCode(code)}>
                   <Copy size={15} />
                   {t("first.copy")}
                 </button>
               </div>
               <EmergencyKitPanel busy={busy} siloId={siloId} siloName={siloName} freshCode={code} />
               <div className="auth-primary">
-                <button type="button" onClick={() => setStep("backup")}>
+                <button className="btn-primary" type="button" onClick={() => setStep("backup")}>
                   {t("first.written")}
                 </button>
               </div>
@@ -59,6 +59,7 @@ export function FirstRunView({ siloId, siloName, busy, onCreateCode, onCopyCode,
               <p>{t("first.code_intro")}</p>
               <div className="auth-primary">
                 <button
+                  className="btn-primary"
                   type="button"
                   disabled={busy}
                   onClick={() =>
@@ -104,7 +105,7 @@ export function FirstRunView({ siloId, siloName, busy, onCreateCode, onCopyCode,
           <p className="hint">{t("first.skipped_code")}</p>
         )}
         <div className="auth-primary">
-          <button type="button" onClick={() => onFinish("backup")}>
+          <button className="btn-primary" type="button" onClick={() => onFinish("backup")}>
             <CloudUpload size={17} />
             {t("first.setup_backup")}
           </button>

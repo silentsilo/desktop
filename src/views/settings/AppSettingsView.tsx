@@ -54,7 +54,7 @@ export function AppSettingsView({
               type="button"
               role="tab"
               aria-selected={section === tab.id}
-              className={section === tab.id ? "" : "secondary"}
+              className={section === tab.id ? "btn-primary" : "btn-secondary"}
               onClick={() => setSection(tab.id)}
             >
               {t(tab.label)}

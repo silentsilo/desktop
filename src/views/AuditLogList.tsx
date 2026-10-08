@@ -323,7 +323,7 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
         <div className="activity-export">
           <button
             type="button"
-            className="secondary"
+            className="btn-secondary"
             disabled={!log || log.total === 0}
             onClick={() => void exportAs("csv")}
             title={t("set.log_export_csv")}
@@ -333,7 +333,7 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
           </button>
           <button
             type="button"
-            className="secondary"
+            className="btn-secondary"
             disabled={!log || log.total === 0}
             onClick={() => void exportAs("jsonl")}
             title={t("set.log_export_json")}
@@ -396,14 +396,14 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
       {needsKey && !log && !loading && (
         <div className="activity-empty">
           <p>{t("set.log_needs_key")}</p>
-          <button type="button" onClick={() => void load()}>
+          <button className="btn-primary" type="button" onClick={() => void load()}>
             {t("set.log_read")}
           </button>
         </div>
       )}
       {!needsKey && !log && !loading && error && (
         <div className="activity-empty">
-          <button type="button" onClick={() => void load()}>
+          <button className="btn-primary" type="button" onClick={() => void load()}>
             {t("set.log_retry")}
           </button>
         </div>
@@ -425,7 +425,7 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
         <div className="activity-more">
           <button
             type="button"
-            className="secondary"
+            className="btn-secondary"
             disabled={loading}
             onClick={() => void fetchPage(false, entries.length, search, kind, true)}
           >

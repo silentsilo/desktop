@@ -451,6 +451,7 @@ export function AppSettingsSection({
         <div className="actions">
           {updateState.phase === "available" ? (
             <button
+              className="btn-primary"
               type="button"
               onClick={() => void updater.install(updateState.update, updateState.version)}
             >
@@ -459,7 +460,7 @@ export function AppSettingsSection({
           ) : (
             <button
               type="button"
-              className="secondary"
+              className="btn-secondary"
               disabled={updateState.phase === "checking" || updateState.phase === "installing"}
               onClick={() => void updater.check()}
             >
@@ -497,7 +498,7 @@ export function AppSettingsSection({
         <div className="actions">
           <button
             type="button"
-            className="secondary"
+            className="btn-secondary"
             onClick={() => void openUrl("https://silentsilo.com")}
           >
             <ExternalLink size={14} />
@@ -505,7 +506,7 @@ export function AppSettingsSection({
           </button>
           <button
             type="button"
-            className="secondary"
+            className="btn-secondary"
             onClick={() => void openUrl("https://github.com/silentsilo/desktop")}
           >
             <ExternalLink size={14} />

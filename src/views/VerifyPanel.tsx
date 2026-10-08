@@ -147,13 +147,18 @@ export function VerifyPanel({ busy, siloId }: Props) {
       <p>{t("backup.verify_intro")}</p>
 
       <div className="actions">
-        <button type="button" disabled={busy || running !== null} onClick={() => void run(false)}>
+        <button
+          className="btn-primary"
+          type="button"
+          disabled={busy || running !== null}
+          onClick={() => void run(false)}
+        >
           {running === "quick" ? <span className="spinner" aria-hidden /> : <SearchCheck size={15} />}
           {running === "quick" ? t("backup.checking") : t("backup.quick_check")}
         </button>
         <button
           type="button"
-          className="secondary"
+          className="btn-secondary"
           disabled={busy || running !== null}
           onClick={() => void run(true)}
         >
@@ -161,7 +166,7 @@ export function VerifyPanel({ busy, siloId }: Props) {
           {running === "deep" ? t("backup.reading_all") : t("backup.deep_check")}
         </button>
         {running !== null && (
-          <button type="button" className="secondary" disabled={cancelling} onClick={cancelRun}>
+          <button type="button" className="btn-secondary" disabled={cancelling} onClick={cancelRun}>
             <X size={15} />
             {cancelling ? t("backup.stopping") : t("backup.stop")}
           </button>
@@ -317,6 +322,7 @@ export function VerifyPanel({ busy, siloId }: Props) {
 
       <div className="actions">
         <button
+          className="btn-primary"
           type="button"
           disabled={busy || restoring || !isComplete(code)}
           onClick={() => void runRestore()}

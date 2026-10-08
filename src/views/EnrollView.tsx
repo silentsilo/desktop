@@ -96,11 +96,12 @@ export function EnrollView({
         {fidoProgress && <p className="fido-live">{fidoProgress}</p>}
         <div className="actions">
           {!bootstrap.fido_available && (
-            <button type="button" className="secondary" disabled={busy} onClick={onRetry}>
+            <button type="button" className="btn-secondary" disabled={busy} onClick={onRetry}>
               {busy ? t("start.checking") : t("start.enroll_retry")}
             </button>
           )}
           <button
+            className="btn-primary"
             type="button"
             disabled={busy || !bootstrap.fido_available}
             onClick={() => onEnroll("security-key", organisation)}
@@ -115,7 +116,7 @@ export function EnrollView({
           {bootstrap.platform_authenticator && !organisation && (
             <button
               type="button"
-              className="secondary"
+              className="btn-secondary"
               disabled={busy}
               onClick={() => onEnroll("this-device", false)}
             >
@@ -125,7 +126,7 @@ export function EnrollView({
           )}
         </div>
         <div className="auth-alternatives">
-          <button type="button" className="secondary" disabled={busy} onClick={onBack}>
+          <button type="button" className="btn-secondary" disabled={busy} onClick={onBack}>
             <ArrowLeft size={15} />
             {t("start.switch_silo")}
           </button>

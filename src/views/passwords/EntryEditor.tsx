@@ -675,10 +675,11 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
         {!canSave && (
           <span className="hint">{stillNeeded}</span>
         )}
-        <button type="button" className="secondary" onClick={handleCancel}>
+        <button type="button" className="btn-secondary" onClick={handleCancel}>
           {t("common.cancel")}
         </button>
         <button
+          className="btn-primary"
           type="button"
           disabled={!canSave}
           title={!canSave ? stillNeeded : undefined}

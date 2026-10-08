@@ -272,7 +272,7 @@ function PrimaryAction({ actions }: { actions: PanelAction[] }) {
   return (
     <button
       type="button"
-      className="details-open"
+      className="btn-primary details-open"
       disabled={primary.disabled}
       onClick={primary.onClick}
     >

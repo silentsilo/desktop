@@ -96,7 +96,7 @@ export function KdbxPasswordDialog({ mode, busy, error, onSubmit, onCancel }: Pr
             <span>{t("pw.kdbx_key_file")}</span>
             <div className="pw-kdbx-keyfile">
               <span className="hint">{keyFile ?? t("pw.kdbx_no_key_file")}</span>
-              <button type="button" className="secondary" onClick={() => void chooseKeyFile()}>
+              <button type="button" className="btn-secondary" onClick={() => void chooseKeyFile()}>
                 {keyFile ? t("pw.kdbx_change") : t("pw.kdbx_choose")}
               </button>
               {keyFile && (
@@ -111,12 +111,12 @@ export function KdbxPasswordDialog({ mode, busy, error, onSubmit, onCancel }: Pr
           <p className="hint is-error">{error ?? problem}</p>
         )}
         <div className="modal-actions">
-          <button type="button" className="secondary" onClick={onCancel} disabled={busy}>
+          <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
             {t("common.cancel")}
           </button>
           <button
             type="button"
-            className="primary"
+            className="btn-primary"
             disabled={busy || problem !== null}
             onClick={submit}
           >

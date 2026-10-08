@@ -42,7 +42,7 @@ export function ActivityView({ status, devices, onOpenSettings }: Props) {
           <div className="panel-section">
             <p>{t("dlg.activity_off")}</p>
             <div className="actions">
-              <button type="button" className="secondary" onClick={onOpenSettings}>
+              <button type="button" className="btn-secondary" onClick={onOpenSettings}>
                 {t("dlg.activity_turn_on")}
               </button>
             </div>

@@ -62,7 +62,7 @@ export function UnlockView({
             <RecoveryCodeInput value={code} onChange={setCode} disabled={busy} autoFocus />
           </div>
           <div className="actions">
-            <button type="submit" disabled={busy || !isComplete(code)}>
+            <button className="btn-primary" type="submit" disabled={busy || !isComplete(code)}>
               <LifeBuoy size={15} />
               {busy
                 ? t("unlock.checking")
@@ -72,7 +72,7 @@ export function UnlockView({
             </button>
             <button
               type="button"
-              className="secondary"
+              className="btn-secondary"
               disabled={busy}
               onClick={() => {
                 setUsingCode(false);
@@ -116,11 +116,16 @@ export function UnlockView({
         {/* The one thing this screen exists for, given the room to say so. */}
         <div className="auth-primary">
           {!bootstrap.fido_available && (
-            <button type="button" className="secondary" disabled={busy} onClick={onRetry}>
+            <button type="button" className="btn-secondary" disabled={busy} onClick={onRetry}>
               {busy ? t("unlock.checking") : t("unlock.retry")}
             </button>
           )}
-          <button type="button" disabled={busy || !bootstrap.fido_available} onClick={onUnlock}>
+          <button
+            className="btn-primary"
+            type="button"
+            disabled={busy || !bootstrap.fido_available}
+            onClick={onUnlock}
+          >
             {busy ? <span className="spinner" aria-hidden /> : <KeyRound size={17} />}
             <span>{busy ? t("unlock.waiting") : t("unlock.unlock")}</span>
           </button>

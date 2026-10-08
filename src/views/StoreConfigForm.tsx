@@ -304,7 +304,7 @@ function HostKeyStep({
           <code>{sftp.fingerprint}</code>
         </div>
         <p className="hint">{t("backup.host_key_pinned")}</p>
-        <button type="button" className="secondary" disabled={busy || checking} onClick={check}>
+        <button type="button" className="btn-secondary" disabled={busy || checking} onClick={check}>
           {t("backup.host_key_check_again")}
         </button>
       </div>
@@ -328,6 +328,7 @@ function HostKeyStep({
         </p>
         <div className="host-key-actions">
           <button
+            className="btn-primary"
             type="button"
             disabled={busy}
             onClick={() => {
@@ -337,7 +338,12 @@ function HostKeyStep({
           >
             {t("backup.host_key_accept")}
           </button>
-          <button type="button" className="secondary" disabled={busy} onClick={() => setOffered(null)}>
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={busy}
+            onClick={() => setOffered(null)}
+          >
             {t("common.cancel")}
           </button>
         </div>
@@ -349,7 +355,7 @@ function HostKeyStep({
     <div className="host-key">
       <button
         type="button"
-        className="secondary"
+        className="btn-secondary"
         disabled={busy || checking || !sftp.host.trim()}
         onClick={check}
       >
@@ -441,7 +447,7 @@ function CloudStep({
             </div>
             <button
               type="button"
-              className="secondary"
+              className="btn-secondary"
               disabled={busy}
               onClick={() => void signIn()}
             >
@@ -456,7 +462,7 @@ function CloudStep({
             </p>
             <button
               type="button"
-              className="secondary"
+              className="btn-secondary"
               onClick={() => void invoke("cloud_cancel_sign_in").catch(() => {})}
             >
               {t("common.cancel")}
@@ -464,7 +470,12 @@ function CloudStep({
           </>
         ) : (
           <>
-            <button type="button" disabled={busy} onClick={() => void signIn()}>
+            <button
+              className="btn-primary"
+              type="button"
+              disabled={busy}
+              onClick={() => void signIn()}
+            >
               <LogIn size={15} />
               {t("backup.cloud_connect", { provider: CLOUD_NAME[kind] })}
             </button>
@@ -585,7 +596,7 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
                 <button
                   key={kind}
                   type="button"
-                  className={draft.kind === kind ? "" : "secondary"}
+                  className={draft.kind === kind ? "btn-primary" : "btn-secondary"}
                   onClick={() => setKind(kind)}
                 >
                   <CloudCog size={15} />
@@ -602,7 +613,7 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
               key={kind}
               type="button"
               title={t(title)}
-              className={draft.kind === kind ? "" : "secondary"}
+              className={draft.kind === kind ? "btn-primary" : "btn-secondary"}
               onClick={() => setKind(kind)}
             >
               <Icon size={15} />
@@ -643,7 +654,7 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
             />
             <button
               type="button"
-              className="secondary"
+              className="btn-secondary"
               disabled={busy}
               onClick={() => {
                 void openDialog({ directory: true, multiple: false }).then((picked) => {
@@ -666,14 +677,14 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
             <div className="store-kind-picker">
               <button
                 type="button"
-                className={draft.dav.preset === "any" ? "" : "secondary"}
+                className={draft.dav.preset === "any" ? "btn-primary" : "btn-secondary"}
                 onClick={() => setDav({ preset: "any" })}
               >
                 {t("backup.dav_any")}
               </button>
               <button
                 type="button"
-                className={draft.dav.preset === "kdrive" ? "" : "secondary"}
+                className={draft.dav.preset === "kdrive" ? "btn-primary" : "btn-secondary"}
                 onClick={() => setDav({ preset: "kdrive" })}
               >
                 kDrive (Infomaniak)
@@ -796,14 +807,14 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
             <div className="store-kind-picker">
               <button
                 type="button"
-                className={draft.sftp.method === "password" ? "" : "secondary"}
+                className={draft.sftp.method === "password" ? "btn-primary" : "btn-secondary"}
                 onClick={() => setSftp({ method: "password" })}
               >
                 {t("backup.field_password")}
               </button>
                 <button
                   type="button"
-                  className={draft.sftp.method === "key" ? "" : "secondary"}
+                  className={draft.sftp.method === "key" ? "btn-primary" : "btn-secondary"}
                   onClick={() => setSftp({ method: "key" })}
                 >
                   <KeyRound size={15} />

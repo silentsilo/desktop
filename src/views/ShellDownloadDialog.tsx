@@ -150,10 +150,11 @@ export function ShellDownloadDialog(props: Props) {
           <span className="hint" style={{ marginRight: "auto" }}>
             {selected.size > 0 ? t("trash.selected", { count: selected.size }) : ""}
           </span>
-          <button type="button" className="secondary" disabled={busy} onClick={onCancel}>
+          <button type="button" className="btn-secondary" disabled={busy} onClick={onCancel}>
             {t("common.cancel")}
           </button>
           <button
+            className="btn-primary"
             type="button"
             disabled={busy || selected.size === 0}
             onClick={() => onConfirm(Array.from(selected.values()))}

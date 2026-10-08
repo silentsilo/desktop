@@ -71,12 +71,12 @@ export function ConfirmDialog({
           )}
         </div>
         <div className="modal-actions">
-          <button type="button" className="secondary" disabled={busy} onClick={onCancel}>
+          <button type="button" className="btn-secondary" disabled={busy} onClick={onCancel}>
             {cancelLabel}
           </button>
           <button
             type="button"
-            className={danger ? "danger" : undefined}
+            className={danger ? "btn-danger-solid" : "btn-primary"}
             disabled={busy}
             // Not autofocused: the destructive answer should be the one the
             // user reaches for deliberately, not the one Enter lands on.

@@ -59,13 +59,14 @@ export function UpdateCard({ version, update, onLater, onFailedAfterLock, open =
       </div>
       <div className="update-card-actions">
         <button
+          className="btn-primary"
           type="button"
           disabled={installing}
           onClick={() => void updater.install(update, version)}
         >
           {installing ? t("update.installing") : t("update.install")}
         </button>
-        <button type="button" className="secondary" disabled={installing} onClick={onLater}>
+        <button type="button" className="btn-secondary" disabled={installing} onClick={onLater}>
           {t("update.later")}
         </button>
       </div>

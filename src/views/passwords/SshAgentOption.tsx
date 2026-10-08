@@ -93,7 +93,12 @@ export function SshAgentOption({
               if (e.key === "Enter" && passphrase) void open();
             }}
           />
-          <button type="button" disabled={busy || !passphrase} onClick={() => void open()}>
+          <button
+            className="btn-primary"
+            type="button"
+            disabled={busy || !passphrase}
+            onClick={() => void open()}
+          >
             {t("pw.ssh_remove_passphrase")}
           </button>
         </div>

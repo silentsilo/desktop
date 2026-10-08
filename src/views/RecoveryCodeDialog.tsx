@@ -46,7 +46,7 @@ export function RecoveryCodeDialog({ code, siloName, onDone }: Props) {
           </p>
         </div>
         <div className="modal-actions">
-          <button type="button" onClick={onDone}>
+          <button className="btn-primary" type="button" onClick={onDone}>
             {t("recovery_new.done")}
           </button>
         </div>

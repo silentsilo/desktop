@@ -159,12 +159,12 @@ function FillCard({
           {error && <p className="hint is-error">{error}</p>}
         </div>
         <div className="modal-actions">
-          <button type="button" className="secondary" disabled={busy} onClick={cancel}>
+          <button type="button" className="btn-secondary" disabled={busy} onClick={cancel}>
             {t("common.cancel")}
           </button>
           <button
             type="button"
-            className={prompt.mismatch ? "danger" : undefined}
+            className={prompt.mismatch ? "btn-danger-solid" : "btn-primary"}
             disabled={busy || !armed}
             onClick={() => void confirm()}
           >

@@ -199,7 +199,7 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
                 />
                 <button
                   type="button"
-                  className="secondary"
+                  className="btn-secondary"
                   disabled={disabled}
                   onClick={() => {
                     void openDialog({ directory: true, multiple: false }).then((picked) => {
@@ -244,6 +244,7 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
           {preview?.vault_id &&
           (mode === "code" || preview.key_labels.length > 0) ? (
             <button
+              className="btn-primary"
               type="button"
               disabled={disabled || (mode === "code" && !isComplete(code))}
               onClick={() => void handleJoin()}
@@ -256,13 +257,18 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
                 : t("start.join_set_up")}
             </button>
           ) : (
-            <button type="button" disabled={disabled} onClick={() => void handleLook()}>
+            <button
+              className="btn-primary"
+              type="button"
+              disabled={disabled}
+              onClick={() => void handleLook()}
+            >
               {working ? t("start.checking") : t("start.join_look")}
             </button>
           )}
           <button
             type="button"
-            className="secondary"
+            className="btn-secondary"
             disabled={disabled}
             onClick={() => {
               discardSignIns(draft);

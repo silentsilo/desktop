@@ -181,7 +181,7 @@ export function HealthPanel({
             <span className="health-finding-title">{t("dlg.health_breach_title")}</span>
             <button
               type="button"
-              className="secondary health-finding-fix"
+              className="btn-secondary btn-sm health-finding-fix"
               disabled={breaches.kind === "busy" || entryCount === 0}
               onClick={() => void runBreachCheck()}
             >
@@ -300,7 +300,7 @@ function FindingRow({
           {finding.fix && !onShowAgain && (
             <button
               type="button"
-              className="secondary health-finding-fix"
+              className="btn-secondary btn-sm health-finding-fix"
               onClick={() => onOpenFix(finding.fix!)}
             >
               {t(FIX_LABELS[finding.fix])}
@@ -309,7 +309,7 @@ function FindingRow({
           {onIgnore && (
             <button
               type="button"
-              className="secondary health-finding-fix"
+              className="btn-secondary btn-sm health-finding-fix"
               onClick={onIgnore}
               title={t("dlg.health_ignore_tooltip")}
             >
@@ -317,7 +317,11 @@ function FindingRow({
             </button>
           )}
           {onShowAgain && (
-            <button type="button" className="secondary health-finding-fix" onClick={onShowAgain}>
+            <button
+              type="button"
+              className="btn-secondary btn-sm health-finding-fix"
+              onClick={onShowAgain}
+            >
               {t("dlg.health_show_again")}
             </button>
           )}

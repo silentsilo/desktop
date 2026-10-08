@@ -109,10 +109,11 @@ export function MoveToDialog({
           )}
         </div>
         <div className="modal-actions">
-          <button type="button" className="secondary" onClick={onCancel}>
+          <button type="button" className="btn-secondary" onClick={onCancel}>
             {t("common.cancel")}
           </button>
           <button
+            className="btn-primary"
             type="button"
             disabled={!chosen}
             onClick={() =>

@@ -118,7 +118,7 @@ export function AuditLogPanel({ busy, onChanged }: Props) {
           <div className="actions">
             <button
               type="button"
-              className="secondary"
+              className="btn-secondary"
               disabled={disabled}
               onClick={() => void expire()}
             >
@@ -151,6 +151,7 @@ export function AuditLogPanel({ busy, onChanged }: Props) {
         </SettingList>
         <div className="actions">
           <button
+            className="btn-primary"
             type="button"
             disabled={disabled}
             onClick={() =>

@@ -117,7 +117,7 @@ export function ProtectedFoldersPanel() {
               </div>
               <button
                 type="button"
-                className="secondary"
+                className="btn-secondary"
                 disabled={busy}
                 onClick={() => void remove(folder.path)}
                 title={t("set.pf_stop_tooltip")}
@@ -135,13 +135,13 @@ export function ProtectedFoldersPanel() {
       )}
 
       <div className="actions">
-        <button type="button" disabled={busy} onClick={() => void add()}>
+        <button className="btn-primary" type="button" disabled={busy} onClick={() => void add()}>
           <FolderHeart size={15} />
           {t("set.pf_add")}
         </button>
         <button
           type="button"
-          className="secondary"
+          className="btn-secondary"
           disabled={busy || folders === null || folders.length === 0}
           onClick={() => void scan()}
         >

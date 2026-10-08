@@ -73,10 +73,10 @@ export function ImportFilingDialog({ what, categories, onConfirm, onCancel }: Pr
           </label>
         )}
         <div className="modal-actions">
-          <button type="button" className="secondary" onClick={onCancel}>
+          <button type="button" className="btn-secondary" onClick={onCancel}>
             {t("common.cancel")}
           </button>
-          <button type="button" className="primary" onClick={confirm}>
+          <button type="button" className="btn-primary" onClick={confirm}>
             {t("pw.import")}
           </button>
         </div>

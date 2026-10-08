@@ -200,11 +200,16 @@ function SaveCard({
           {error && <p className="hint is-error">{error}</p>}
         </div>
         <div className="modal-actions">
-          <button type="button" className="secondary" disabled={busy} onClick={cancel}>
+          <button type="button" className="btn-secondary" disabled={busy} onClick={cancel}>
             {unchanged ? t("dlg.close") : t("common.cancel")}
           </button>
           {!unchanged && (
-            <button type="button" disabled={busy || !armed} onClick={() => void save()}>
+            <button
+              className="btn-primary"
+              type="button"
+              disabled={busy || !armed}
+              onClick={() => void save()}
+            >
               {update && existing ? t("dlg.update") : t("dlg.save")}
             </button>
           )}

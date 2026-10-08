@@ -198,10 +198,11 @@ export function ShellUploadDialog(props: Props) {
           </ul>
         </div>
         <div className="modal-actions">
-          <button type="button" className="secondary" disabled={busy} onClick={handleCancel}>
+          <button type="button" className="btn-secondary" disabled={busy} onClick={handleCancel}>
             {t("common.cancel")}
           </button>
           <button
+            className="btn-primary"
             type="button"
             disabled={busy || !folder || loading}
             onClick={() =>

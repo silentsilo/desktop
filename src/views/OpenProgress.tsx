@@ -66,7 +66,7 @@ export function OpenProgress({ opening, onCancel }: Props) {
         {detail && <p className="open-progress-detail">{detail}</p>}
       </div>
       {opening.phase !== "opening" && (
-        <button type="button" className="secondary open-progress-cancel" onClick={onCancel}>
+        <button type="button" className="btn-secondary btn-sm open-progress-cancel" onClick={onCancel}>
           {t("common.cancel")}
         </button>
       )}

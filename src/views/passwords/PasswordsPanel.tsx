@@ -875,7 +875,7 @@ export function PasswordsPanel({
         <div className="pw-add-wrap">
           <button
             type="button"
-            className="btn-add-password"
+            className="btn-primary btn-add-password"
             disabled={busy}
             aria-expanded={addMenuOpen}
             onClick={() => setAddMenuOpen((v) => !v)}
@@ -940,13 +940,27 @@ export function PasswordsPanel({
             <p>{t("pw.export_csv_body")}</p>
           </div>
           <div className="pw-export-warning-actions">
-            <button type="button" className="secondary" onClick={() => setConfirmingExport(false)}>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setConfirmingExport(false)}
+            >
               {t("common.cancel")}
             </button>
-            <button type="button" className="secondary" disabled={transferBusy} onClick={() => void handleExport()}>
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={transferBusy}
+              onClick={() => void handleExport()}
+            >
               {t("pw.export_csv_button")}
             </button>
-            <button type="button" disabled={transferBusy} onClick={() => void startKdbxExport()}>
+            <button
+              className="btn-primary"
+              type="button"
+              disabled={transferBusy}
+              onClick={() => void startKdbxExport()}
+            >
               {t("pw.export_kdbx_button")}
             </button>
           </div>
@@ -1048,6 +1062,7 @@ export function PasswordsPanel({
                       <Icon size={36} className="empty-icon" />
                       <p className="empty-title">{t(TYPE_TEXTS[selectedType].noneYet)}</p>
                       <button
+                        className="btn-primary"
                         type="button"
                         disabled={busy}
                         onClick={() => startCreate(selectedType)}

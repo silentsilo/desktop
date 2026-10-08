@@ -64,7 +64,7 @@ function Row({
         <span className={`hint copy-state is-${TONE_CLASS[tone]}`}>{children}</span>
       </div>
       <div className="key-list-actions">
-        <button type="button" className="secondary" disabled={busy} onClick={onAction}>
+        <button type="button" className="btn-secondary" disabled={busy} onClick={onAction}>
           {action}
         </button>
       </div>
@@ -302,7 +302,7 @@ export function OverviewPanel({
             />
             <button
               type="submit"
-              className="secondary"
+              className="btn-secondary"
               disabled={busy || siloName.trim() === silo.name || !siloName.trim()}
             >
               {t("set.rename")}
@@ -316,7 +316,7 @@ export function OverviewPanel({
           {null}
         </SettingRow>
         <SettingRow label={t("set.ov_other_label")} hint={t("set.ov_other_hint")}>
-          <button type="button" className="secondary" disabled={busy} onClick={onSwitchSilo}>
+          <button type="button" className="btn-secondary" disabled={busy} onClick={onSwitchSilo}>
             {t("set.ov_switch")}
           </button>
         </SettingRow>

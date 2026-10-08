@@ -88,6 +88,7 @@ export function RotateKeyPanel({
         <div className="actions">
           {active.filter(usableHere).map((k) => (
             <button
+              className="btn-primary"
               key={k.credential_id}
               type="button"
               disabled={busy}
@@ -175,7 +176,7 @@ export function RotateKeyPanel({
       <div className="actions">
         <button
           type="button"
-          className="danger"
+          className="btn-danger"
           disabled={busy || keep.length === 0}
           onClick={() => onRotate(keep)}
         >

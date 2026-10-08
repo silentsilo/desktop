@@ -417,7 +417,12 @@ export function BackupPanel({
 
         {!expanded && connected && (
           <div className="actions">
-            <button type="button" disabled={working} onClick={() => void handleSyncNow()}>
+            <button
+              className="btn-primary"
+              type="button"
+              disabled={working}
+              onClick={() => void handleSyncNow()}
+            >
               {status.kind === "busy" ? (
                 <span className="spinner" aria-hidden />
               ) : (
@@ -425,19 +430,24 @@ export function BackupPanel({
               )}
               {status.kind === "busy" ? t("backup.syncing") : t("backup.sync_now")}
             </button>
-            <button type="button" className="secondary" onClick={() => setExpanded(true)}>
+            <button type="button" className="btn-secondary" onClick={() => setExpanded(true)}>
               <Pencil size={15} />
               {t("backup.edit")}
             </button>
             {onTestBackup && (
-              <button type="button" className="secondary" disabled={working} onClick={onTestBackup}>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={working}
+                onClick={onTestBackup}
+              >
                 <SearchCheck size={15} />
                 {t("backup.test_backup")}
               </button>
             )}
             <button
               type="button"
-              className="danger"
+              className="btn-danger"
               disabled={working}
               onClick={() => setConfirmingDisconnect(true)}
             >
@@ -495,18 +505,23 @@ export function BackupPanel({
               <div className="actions">
                 {contentFetch ? (
                   <>
-                    <button type="button" disabled>
+                    <button className="btn-primary" type="button" disabled>
                       {t("backup.downloading", {
                         done: contentFetch.done,
                         total: contentFetch.total,
                       })}
                     </button>
-                    <button type="button" className="secondary" onClick={onCancelFetchContent}>
+                    <button type="button" className="btn-secondary" onClick={onCancelFetchContent}>
                       {t("backup.stop")}
                     </button>
                   </>
                 ) : (
-                  <button type="button" disabled={busy} onClick={onFetchAllContent}>
+                  <button
+                    className="btn-primary"
+                    type="button"
+                    disabled={busy}
+                    onClick={onFetchAllContent}
+                  >
                     <HardDriveDownload size={15} />
                     {t("backup.download_all")}
                   </button>
@@ -566,13 +581,18 @@ export function BackupPanel({
             )}
 
             <div className="actions">
-              <button type="button" disabled={working} onClick={() => void handleSave()}>
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={working}
+                onClick={() => void handleSave()}
+              >
                 {status.kind === "busy" && <span className="spinner" aria-hidden />}
                 {status.kind === "busy" ? t("backup.working") : t("backup.save_connect")}
               </button>
               <button
                 type="button"
-                className="secondary"
+                className="btn-secondary"
                 disabled={working}
                 onClick={() => void handleTest()}
               >
@@ -581,7 +601,7 @@ export function BackupPanel({
               {connected && (
                 <button
                   type="button"
-                  className="secondary"
+                  className="btn-secondary"
                   disabled={working}
                   onClick={() => {
                     discardSignIns(draft);

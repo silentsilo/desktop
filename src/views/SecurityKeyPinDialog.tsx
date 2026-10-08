@@ -94,10 +94,10 @@ export function SecurityKeyPinDialog() {
             />
           </div>
           <div className="modal-actions">
-            <button type="button" className="secondary" onClick={() => answer(null)}>
+            <button type="button" className="btn-secondary" onClick={() => answer(null)}>
               {t("common.cancel")}
             </button>
-            <button type="submit" disabled={!pin}>
+            <button className="btn-primary" type="submit" disabled={!pin}>
               {t("dlg.continue")}
             </button>
           </div>

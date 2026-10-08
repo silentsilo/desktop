@@ -125,6 +125,7 @@ export function EmergencyKitPanel({ busy, siloId, siloName, freshCode }: Props) 
 
       <div className="actions">
         <button
+          className="btn-primary"
           type="button"
           disabled={busy || (mode === "printed" && !looksComplete)}
           onClick={() => {

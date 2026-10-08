@@ -28,7 +28,7 @@ export function ExtensionStoreLinks({
         <button
           key={browser}
           type="button"
-          className="secondary"
+          className="btn-secondary"
           onClick={() => {
             onChosen?.();
             void open(url);

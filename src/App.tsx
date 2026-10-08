@@ -3962,15 +3962,19 @@ export default function App() {
             </div>
             <div className="content-offer-actions">
               {contentFetch ? (
-                <button type="button" className="secondary" onClick={cancelFetchAllContent}>
+                <button type="button" className="btn-secondary" onClick={cancelFetchAllContent}>
                   {t("app.offer_stop")}
                 </button>
               ) : (
                 <>
-                  <button type="button" onClick={() => void fetchAllContent()}>
+                  <button
+                    className="btn-primary"
+                    type="button"
+                    onClick={() => void fetchAllContent()}
+                  >
                     {t("app.offer_download")}
                   </button>
-                  <button type="button" className="secondary" onClick={dismissContentOffer}>
+                  <button type="button" className="btn-secondary" onClick={dismissContentOffer}>
                     {t("app.not_now")}
                   </button>
                 </>

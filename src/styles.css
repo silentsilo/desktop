@@ -173,121 +173,187 @@ textarea {
   font: inherit;
 }
 
+/* ── Buttons ──
+ * A bare `button` is a neutral reset: no fill, no border, the text colour
+ * of its parent. Every look is chosen with a class: `.btn-primary`,
+ * `.btn-secondary`, `.btn-ghost`, `.btn-danger`, `.btn-danger-solid`,
+ * `.btn-icon`, `.link`, sized with `.btn-sm` and `.btn-lg`. Components with
+ * their own look (rows, chips, tiles) start from the reset too. */
 button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  cursor: pointer;
-  border: none;
-  border-radius: var(--radius-sm);
-  /* Tall enough to be a comfortable pointer target and to sit level with a
-     text input beside it, which is where most of these live. */
-  min-height: 36px;
-  padding: 0.55rem 1.05rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 500;
   line-height: 1.2;
-  background: linear-gradient(135deg, #7c3aed 0%, #5b5bd6 100%);
-  color: #fff;
-  font-family: inherit;
-  font-size: 0.95rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  border: 1px solid transparent;
-  box-shadow: none;
-  transition: background 0.15s ease, transform 0.12s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
 }
 
-/* The guard is inside `:where()` so it costs no specificity.
- *
- * Written as `button:hover:not(:disabled)` this scored (0,2,1) and beat every
- * `.some-class:hover` rule below that omitted the same guard — which is most
- * of them. The primary violet gradient ended up painting itself over the
- * theme toggle, the sidebar silo switcher, the password pills and chips, the
- * inline icon buttons, the search-result rows and the folder picker: a dozen
- * quiet controls each lighting up like a primary CTA, their grey icons left
- * at 2.7:1 on violet. At (0,1,1) it still beats the base `button` rule but
- * loses to any single class, which is what all of those assumed. */
-button:hover:where(:not(:disabled)) {
-  background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%);
-}
-
-button:active:where(:not(:disabled)) {
-  transform: translateY(0.5px);
-}
-
-/* Faded alone, a violet gradient still read as a button to press. The
-   colour goes too, and the glow that marks the main action. */
 button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-  filter: grayscale(0.85);
-  box-shadow: none;
-}
-
-/* The primary look is a violet gradient *and* the glow beneath it. Controls
- * that paint their own surface were overriding only the gradient, so icon
- * buttons, toolbar chips and list rows each sat in a violet drop shadow that
- * belongs to the main action alone. Qualified with `button` (matching the
- * hover rule's specificity) and placed after it, so the reset holds while
- * hovered too. */
-button.explorer-icon-btn,
-button.sidebar-silo,
-button.silo-item,
-button.silo-remove,
-button.silo-info,
-button.search-result,
-button.search-clear,
-button.folder-picker-row,
-button.browser-open-btn,
-button.pw-favicon-toggle,
-button.pw-transfer-btn,
-button.pw-pill,
-button.pw-gen-chip,
-button.pw-gen-btn,
-button.pw-inline-btn,
-button.pw-action-btn,
-button.pw-totp-remove-btn,
-button.storage-option {
-  box-shadow: none;
 }
 
 button:focus-visible,
 input:focus-visible,
-select:focus-visible {
+select:focus-visible,
+textarea:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
-/* An icon must never be squeezed by a long label, and never drift off the
-   text's optical centre. */
+/* An icon must never be squeezed by a long label. */
 button > svg {
   flex-shrink: 0;
 }
 
-button.secondary {
-  background: rgba(255, 255, 255, 0.03);
+.btn-primary,
+.btn-secondary,
+.btn-ghost,
+.btn-danger,
+.btn-danger-solid {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-13);
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background-color var(--dur-1) ease,
+    border-color var(--dur-1) ease,
+    color var(--dur-1) ease;
+}
+
+/* Labels may wrap only where a button carries a sentence. */
+.btn-wrap {
+  white-space: normal;
+  text-align: center;
+}
+
+.btn-sm {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: var(--fs-12);
+}
+
+.btn-lg {
+  min-height: 44px;
+  padding: 0 18px;
+  font-size: var(--fs-14);
+}
+
+.btn-primary {
+  background: var(--accent-solid);
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-solid-hover);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--accent-solid-active);
+}
+
+.btn-secondary {
+  background: var(--surface-raised);
+  border-color: var(--border);
   color: var(--text);
-  border: 1px solid var(--border);
-  box-shadow: none;
 }
 
-button.secondary:hover:not(:disabled) {
+.btn-secondary:hover:not(:disabled) {
+  background: linear-gradient(var(--row-hover), var(--row-hover)), var(--surface-raised);
+  border-color: var(--border-field);
+}
+
+.btn-secondary:active:not(:disabled) {
+  background: linear-gradient(var(--row-active), var(--row-active)), var(--surface-raised);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover:not(:disabled) {
   background: var(--row-hover);
-  border-color: rgba(139, 92, 246, 0.35);
+  color: var(--text);
 }
 
-button.danger {
+.btn-ghost:active:not(:disabled) {
+  background: var(--row-active);
+}
+
+.btn-ghost[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.btn-danger {
   background: transparent;
   border-color: var(--danger-border);
   color: var(--danger-text);
-  box-shadow: none;
+  font-weight: 600;
 }
 
-button.danger:hover:not(:disabled) {
+.btn-danger:hover:not(:disabled) {
   background: var(--danger-soft);
   border-color: var(--danger-text);
 }
 
+.btn-danger:active:not(:disabled) {
+  background: color-mix(in srgb, var(--danger-solid) 20%, transparent);
+}
+
+/* The confirm of a destructive dialog. */
+.btn-danger-solid {
+  background: var(--danger-solid);
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn-danger-solid:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.btn-danger-solid:active:not(:disabled) {
+  background: #991b1b;
+}
+
+/* Disabled reads as unavailable, not as a faded call to action. */
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-danger:disabled,
+.btn-danger-solid:disabled {
+  opacity: 1;
+  background: var(--surface-sunken);
+  border-color: var(--border);
+  color: var(--text-disabled);
+}
+
+/* A square button with only an icon; its name is in `aria-label` and the
+   Tooltip. */
+.btn-icon {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+}
+
+.btn-icon.btn-sm {
+  width: 28px;
+  min-width: 28px;
+}
+
+/* A button that reads as a link inside text. */
 button.link {
   display: inline;
   min-height: 0;
@@ -298,35 +364,32 @@ button.link {
   font-size: inherit;
   font-weight: 600;
   border: none;
-  border-radius: 4px;
-  box-shadow: none;
+  border-radius: var(--r-xs);
 }
 
-/* An icon inside a link sits in the text, so it aligns to the baseline
-   rather than to a flex centre that no longer exists. */
+/* An icon inside a link sits in the text, so it aligns to the baseline. */
 button.link > svg {
   vertical-align: -0.16em;
   margin-right: 0.3em;
 }
 
-/* `--accent-hover` rather than a fixed violet: the light theme redefines the
-   token to a *darker* violet, and the hardcoded #c4b5fd this used to carry
-   measured 1.64:1 on the white auth card — every inline link on the unlock,
-   enrolment and restore screens vanished under the pointer. */
 button.link:hover:not(:disabled) {
-  background: var(--accent-soft);
-  /* Mixed towards `--ink`, which lightens in dark and darkens in light —
-     so the hover reads as a change in both themes rather than only one. */
+  /* Mixed towards the text colour, so the hover reads as a change in both
+     themes. */
   color: color-mix(in srgb, var(--accent-text) 80%, var(--text));
   text-decoration: underline;
 }
 
+button.link:focus-visible {
+  outline-offset: 1px;
+}
+
+button.link.danger {
+  color: var(--danger-text);
+}
+
 /* Icons that open a line of prose sit in the text, so they align to the
-   baseline and keep a word space after them. `button` used to be listed in
-   this selector too (and in a duplicate of it near the top of the file),
-   which handed every button in the app a 0.4em right margin: enough to push
-   a centred `.actions` row off the centre of its card, and to detach the
-   full stop from an inline link inside a sentence. */
+   baseline and keep a word space after them. */
 .hint > svg:first-child,
 .error > svg:first-child {
   vertical-align: -0.16em;
@@ -860,6 +923,7 @@ textarea:focus {
   justify-content: center;
   gap: 0.4rem;
   flex: 1;
+  min-height: 36px;
   padding: 0.45rem 0.85rem;
   background: var(--danger-soft);
   border: 1px solid var(--danger-border);
@@ -1775,12 +1839,7 @@ textarea:focus {
 
 /* The main action, full width under the name. */
 .details-open {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  height: 2.5rem;
-  white-space: nowrap;
+  min-height: 40px;
 }
 
 /* Every other action, named, after the details: the panel has the height. */
@@ -3415,9 +3474,6 @@ tr.is-moving {
 
 .open-progress-cancel {
   width: auto;
-  min-height: 0;
-  padding: 0.35rem 0.75rem;
-  font-size: 0.82rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3444,12 +3500,7 @@ tr.is-moving {
   background: var(--surface-raised);
 }
 
-/* The global `min-height: 36px` is sized for buttons that stand next to a
-   text input. Left standing here it beat the 1.4rem height and produced a
-   20x36 sliver: tall enough to set the toast's own height, and tall enough
-   that the glyph, centred in its own box, sat a full line below the words it
-   dismisses. Hence `min-height: 0` and `flex: none`, which also stops the
-   row from shaving the width down to 19px. */
+/* `flex: none` stops the row from shaving the width down. */
 .toast-dismiss {
   background: transparent;
   color: var(--text-secondary);
@@ -4178,28 +4229,9 @@ tr.is-moving {
   position: relative;
 }
 
+/* A `.btn-primary` with a menu chevron. */
 .btn-add-new {
-  display: flex;
-  align-items: center;
   gap: 0.4rem;
-  background: var(--accent-solid);
-  color: #fff;
-  border: 1px solid transparent;
-  font-weight: 600;
-  padding: 0.45rem 0.95rem;
-  border-radius: var(--radius-sm);
-  box-shadow: none;
-  height: 36px;
-  transition: all 0.15s ease;
-}
-
-.btn-add-new:hover:not(:disabled) {
-  background: var(--accent-solid-hover);
-  box-shadow: none;
-}
-
-.btn-add-new:active:not(:disabled) {
-  transform: translateY(0.5px);
 }
 
 .chevron-icon {
@@ -4235,9 +4267,7 @@ tr.is-moving {
 .dropdown-item {
   display: flex;
   align-items: center;
-  /* The global `button` rule centres its content. These are menu rows, so
-     they start at the left edge and the icons form a column; `text-align`
-     alone never fixed it, because on a flex container it governs nothing. */
+  /* Menu rows start at the left edge, so the icons form a column. */
   justify-content: flex-start;
   gap: 0.55rem;
   width: 100%;
@@ -4296,9 +4326,7 @@ tr.is-moving {
 .context-menu-item {
   display: flex;
   align-items: center;
-  /* The global `button` rule centres its content. These are menu rows, so
-     they start at the left edge and the icons form a column; `text-align`
-     alone never fixed it, because on a flex container it governs nothing. */
+  /* Menu rows start at the left edge, so the icons form a column. */
   justify-content: flex-start;
   gap: 0.6rem;
   width: 100%;
@@ -4537,10 +4565,7 @@ tr.is-moving {
 .view-rail-item {
   display: flex;
   align-items: center;
-  /* The global button rule centres its content. These are list rows: they
-     start at the left edge, and their icons form a column. In Credentials
-     the count's `margin-left: auto` masked this; a rail item without one
-     sat in the middle of its own row. */
+  /* List rows start at the left edge, and their icons form a column. */
   justify-content: flex-start;
   gap: 0.5rem;
   width: 100%;
@@ -4554,9 +4579,6 @@ tr.is-moving {
   font-weight: 600;
   text-align: left;
   cursor: pointer;
-  /* The global button rule's violet glow survives a transparent background
-     and drew a lavender pill behind every resting item in light theme. */
-  box-shadow: none;
 }
 
 .view-rail-item:hover,
@@ -4872,25 +4894,7 @@ tr.is-moving {
 }
 
 .btn-add-password {
-  display: inline-flex;
-  align-items: center;
   gap: 0.4rem;
-  padding: 0 1rem;
-  height: 36px;
-  background: var(--accent-solid);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-weight: 650;
-  font-size: 0.85rem;
-  white-space: nowrap;
-  transition: background-color var(--dur-1) ease;
-  box-shadow: none;
-}
-
-.btn-add-password:hover:not(:disabled) {
-  background: var(--accent-solid-hover);
-  box-shadow: none;
 }
 
 /* Import/Export sit between the search field and the primary "Add
@@ -5313,9 +5317,6 @@ button.pw-gen-toggle {
 
 .pw-history-restore {
   margin-left: auto;
-  min-height: 0;
-  padding: 0.2rem 0.6rem;
-  font-size: 0.82rem;
 }
 
 button.link.pw-history-clear {
@@ -5924,11 +5925,7 @@ button.link.pw-history-clear {
 
 /* Sync state in the status bar. Clickable, because someone who has just
    noticed pending changes wants to act on them there, not go looking in
-   Settings for the button. */
-/* The global `button` rule lends a raised look: a violet drop shadow, a
-   36px floor and a 7px radius. Left in place they drew a capsule around a
-   line of status text. Everything that makes a button look like a button is
-   dropped here; only the pointer and the hover colour say it is clickable. */
+   Settings for the button. Only the pointer and the hover colour say so. */
 .status-sync {
   display: inline-flex;
   align-items: center;
@@ -5993,11 +5990,6 @@ button.link.pw-history-clear {
   color: inherit;
   text-align: left;
   cursor: pointer;
-}
-
-.silo-item:hover:not(:disabled) {
-  background: transparent;
-  box-shadow: none;
 }
 
 /* Dimmed rather than hidden: the silo still exists, the drive just isn't
@@ -6187,8 +6179,7 @@ button.link.pw-history-clear {
   border-top: 1px solid var(--border-subtle);
 }
 
-/* The links carry icons, so they need the row treatment rather than the
-   centred one the global button rule hands out. */
+/* The links carry icons, so they get the row treatment. */
 .auth-alt .link {
   display: inline-flex;
   align-items: center;
@@ -6214,9 +6205,9 @@ button.link.pw-history-clear {
   border-top: 1px solid var(--border-subtle);
 }
 
-/* Left-aligned against the global centred `button`, so the three icons form
-   a column and the labels start on one line. Taller than a normal button:
-   these are the whole point of the screen, not a form's footer. */
+/* Left-aligned, so the three icons form a column and the labels start on
+   one line. Taller than a normal button: these are the whole point of the
+   screen, not a form's footer. */
 .silo-actions button {
   justify-content: flex-start;
   width: 100%;
@@ -6490,8 +6481,6 @@ button.link.pw-history-clear {
 .health-finding-fix {
   margin-left: auto;
   width: auto;
-  padding: 0.35rem 0.8rem;
-  font-size: 0.8rem;
 }
 
 .health-finding-actions {
@@ -6591,16 +6580,6 @@ button.link.pw-history-clear {
 .health-empty-state .hint {
   max-width: 32rem;
   color: var(--text-secondary);
-}
-
-/* The base `button:hover` rule scores (0,1,1) and so outranks a plain class
-   rule at (0,1,0): without this, the primary violet gradient paints itself
-   over the finding's title on hover and leaves it at 2.6:1. Same trap the
-   comment on that rule describes. */
-.health-finding-toggle:hover,
-.health-finding-toggle:focus-visible {
-  background: none;
-  box-shadow: none;
 }
 
 .health-finding-toggle:hover .health-finding-title {
@@ -6837,19 +6816,8 @@ button.link.pw-history-clear {
   gap: 0.4rem;
 }
 
-.storage-option:hover,
-button.storage-option:hover:where(:not(:disabled)) {
-  /* Qualified to match the global hover rule's specificity: a card paints
-     its own surface, and inheriting the primary gradient made an unchosen
-     option look chosen. */
-  background: var(--surface);
-  border-color: var(--accent);
-  box-shadow: none;
-  transform: translateY(-1px);
-}
-
-.storage-option:hover {
-  border-color: var(--accent);
+.storage-option:hover:not(:disabled) {
+  border-color: var(--border-field);
 }
 
 .storage-option.is-active {

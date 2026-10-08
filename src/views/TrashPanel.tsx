@@ -117,7 +117,7 @@ export function TrashPanel({
         </div>
         <button
           type="button"
-          className="danger"
+          className="btn-danger"
           disabled={busy || entries.length === 0}
           onClick={onEmptyTrash}
           title={t("trash.empty_tooltip")}
@@ -137,7 +137,7 @@ export function TrashPanel({
           <div className="trash-selection-actions">
             <button
               type="button"
-              className="secondary"
+              className="btn-secondary"
               disabled={busy}
               onClick={() => onRestoreMany(selected)}
             >
@@ -146,7 +146,7 @@ export function TrashPanel({
             </button>
             <button
               type="button"
-              className="danger"
+              className="btn-danger"
               disabled={busy}
               onClick={() => onDeleteForever(selected)}
             >
@@ -214,7 +214,7 @@ export function TrashPanel({
                 <div className="trash-row-actions">
                   <button
                     type="button"
-                    className="secondary"
+                    className="btn-secondary"
                     disabled={busy}
                     onClick={() => onRestore(entry)}
                   >
@@ -223,7 +223,7 @@ export function TrashPanel({
                   </button>
                   <button
                     type="button"
-                    className="danger"
+                    className="btn-danger"
                     disabled={busy}
                     title={t("trash.delete_for_good")}
                     aria-label={t("trash.delete_one_label", { name: entry.name })}

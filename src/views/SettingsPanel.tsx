@@ -299,11 +299,11 @@ export function SettingsPanel(props: Props) {
                   <p>{t("recovery.only_way_body")}</p>
                 </div>
                 <div className="actions">
-                  <button type="button" onClick={onCopyRecoveryCode}>
+                  <button className="btn-primary" type="button" onClick={onCopyRecoveryCode}>
                     <Copy size={15} />
                     {t("common.copy")}
                   </button>
-                  <button type="button" className="secondary" onClick={onDismissRecoveryCode}>
+                  <button type="button" className="btn-secondary" onClick={onDismissRecoveryCode}>
                     {t("recovery_new.done")}
                   </button>
                 </div>
@@ -323,7 +323,12 @@ export function SettingsPanel(props: Props) {
                   )}
                 </p>
                 <div className="actions">
-                  <button type="button" disabled={busy} onClick={onGenerateRecovery}>
+                  <button
+                    className="btn-primary"
+                    type="button"
+                    disabled={busy}
+                    onClick={onGenerateRecovery}
+                  >
                     {recovery.enabled ? t("recovery.replace") : t("first.create_code")}
                   </button>
                 </div>
@@ -354,7 +359,12 @@ export function SettingsPanel(props: Props) {
                 {t("set.rotation_pending")}
               </p>
               <div className="actions">
-                <button type="button" disabled={busy} onClick={() => onSection("advanced")}>
+                <button
+                  className="btn-primary"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onSection("advanced")}
+                >
                   {t("set.rotation_finish")}
                 </button>
               </div>
@@ -534,6 +544,7 @@ export function SettingsPanel(props: Props) {
                   onChange={(e) => onNewKeyLabel(e.target.value)}
                 />
                 <button
+                  className="btn-primary"
                   type="button"
                   disabled={busy}
                   onClick={() => onAddKey("security-key", addAsOrganisation)}
@@ -544,7 +555,7 @@ export function SettingsPanel(props: Props) {
                 {platformAvailable && !addAsOrganisation && (
                   <button
                     type="button"
-                    className="secondary"
+                    className="btn-secondary"
                     disabled={busy}
                     onClick={() => onAddKey("this-device", false)}
                   >
@@ -709,7 +720,7 @@ export function SettingsPanel(props: Props) {
                 <div className="actions">
                   <button
                     type="button"
-                    className="danger"
+                    className="btn-danger"
                     disabled={busy}
                     onClick={onDisableRecovery}
                   >
@@ -726,7 +737,7 @@ export function SettingsPanel(props: Props) {
               </h3>
               <p>{tx("set.remove_silo_body", { name: <strong>{silo.name}</strong> })}</p>
               <div className="actions">
-                <button type="button" className="danger" disabled={busy} onClick={onForgetSilo}>
+                <button type="button" className="btn-danger" disabled={busy} onClick={onForgetSilo}>
                   {t("set.remove_silo")}
                 </button>
               </div>
