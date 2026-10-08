@@ -87,7 +87,7 @@ import { TrashPanel } from "./views/TrashPanel";
 import { describeFidoPrompt, type FidoPrompt } from "./lib/fidoPrompt";
 import { t, translate, useLocale, type Key } from "./i18n";
 import { UnlockView } from "./views/UnlockView";
-import { AppSettingsView } from "./views/settings/AppSettingsView";
+import { AppSettingsDrawer } from "./views/settings/AppSettingsView";
 import { FirstRunView } from "./views/FirstRunView";
 import { lastDone } from "./lib/siloMemory";
 import { decodeAppError, formatAppError, plainError } from "./lib/errors";
@@ -3744,8 +3744,8 @@ export default function App() {
     bootstrap.provisioned && !bootstrap.locked && meta !== null && bootstrap.fido_enrolled;
   const needsEnrollment = bootstrap.provisioned && !bootstrap.fido_enrolled;
 
-  /// The screens before a silo is unlocked offer the app's settings, and
-  /// show them in place of themselves while they are open.
+  /// The screens before a silo is unlocked offer the app's settings, in a
+  /// panel over them: the screen underneath stays as it was.
   const updateCard =
     pendingUpdate && backgroundUpdate && !updateCardLater ? (
       <UpdateCard
@@ -3758,23 +3758,19 @@ export default function App() {
   const beforeUnlock = (screen: ReactNode) => (
     <AppSettingsContext.Provider value={openAppSettings}>
       <UpdateCardContext.Provider value={updateCard}>
-        {appSettingsOpen ? (
-          <>
-            {toastHost}
-            <AppSettingsView
-              os={osOf(bootstrap)}
-              initial={pendingUpdate ? "updates" : "general"}
-              backgroundUpdate={backgroundUpdate}
-              autoUpdateEnabled={autoUpdateEnabled}
-              onAutoUpdateEnabled={setAutoUpdateEnabled}
-              defaultAutoLockMinutes={autoLockMinutes}
-              onDefaultAutoLockMinutes={setAutoLockMinutes}
-              onClose={() => setAppSettingsOpen(false)}
-              onUpdateFailedAfterLock={updateFailedAfterLock}
-            />
-          </>
-        ) : (
-          screen
+        {screen}
+        {appSettingsOpen && (
+          <AppSettingsDrawer
+            os={osOf(bootstrap)}
+            initial={pendingUpdate ? "updates" : "general"}
+            backgroundUpdate={backgroundUpdate}
+            autoUpdateEnabled={autoUpdateEnabled}
+            onAutoUpdateEnabled={setAutoUpdateEnabled}
+            defaultAutoLockMinutes={autoLockMinutes}
+            onDefaultAutoLockMinutes={setAutoLockMinutes}
+            onClose={() => setAppSettingsOpen(false)}
+            onUpdateFailedAfterLock={updateFailedAfterLock}
+          />
         )}
       </UpdateCardContext.Provider>
     </AppSettingsContext.Provider>

@@ -43,6 +43,8 @@ test("the app's settings open before any silo is unlocked", async ({ page }) => 
   await expect(page.getByRole("tab", { name: "General" })).toBeVisible();
   await page.getByRole("tab", { name: /Updates and about/ }).click();
   await expect(page.getByRole("button", { name: "Check for updates" })).toBeVisible();
-  await page.getByRole("button", { name: "Back" }).click();
+  // A panel over the picker, which stays where it was underneath.
   await expect(page.getByText("Your silos")).toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("dialog", { name: "App settings" })).toBeHidden();
 });
