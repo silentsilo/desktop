@@ -145,6 +145,9 @@ function rest(x: Record<string, unknown>, used: string[]): string[] {
       if (k === "program") return t("dlg.activity_detail_program", { program: text(v) });
       if (k === "format") return t("dlg.activity_detail_format", { format: text(v).toUpperCase() });
       if (k === "entry") return t("dlg.activity_detail_entry", { entry: text(v) });
+      if (k === "replaced" && typeof v === "number") {
+        return t("dlg.activity_detail_replaced", { count: v });
+      }
       if (k === "folder" && typeof v === "string") {
         return t("dlg.activity_detail_folder", { folder: v });
       }
@@ -266,6 +269,7 @@ export function describe(entry: AuditEntry): DescribedEvent {
             ["files"],
           );
     case 32:
+      if (l && x.replaced === true) return say("edit", "dlg.activity_replaced", l, ["count", "replaced"]);
       return l
         ? say("file-add", "dlg.activity_added", l, ["count"])
         : sayCount(

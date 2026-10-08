@@ -12,6 +12,15 @@ function sentence(e: AuditEntry): string {
 }
 
 group("activity events", () => {
+  it("says when an added file replaced the content of one already there", () => {
+    expect(sentence(entry(32, { l: "a.pdf", x: { replaced: true } }))).toBe(
+      "Replaced the content of a.pdf",
+    );
+    expect(
+      describe(entry(32, { x: { count: 3, replaced: 2, names: ["a", "b", "c"] } })).details,
+    ).toContain("2 of them replaced existing files");
+  });
+
   it("says which key the silo was open with, apart from the details", () => {
     const opened = describe(entry(30, { l: "a.pdf", x: { via: "YubiKey USBc", folder: "/Docs" } }));
     expect(opened.via).toBe("with YubiKey USBc");

@@ -1426,6 +1426,14 @@ pub async fn vault_import_file(
     .await
 }
 
+/// Whether an import replaced the content of a file already there rather
+/// than adding one. `add_file` keeps the file's id and creation time when the
+/// name was taken, so a creation time older than the change is a
+/// replacement. One made in the same millisecond reads as added.
+fn replaced(file: &FileEntry) -> bool {
+    file.created_at < file.updated_at
+}
+
 /// How many names an event about several files carries.
 const LOGGED_NAMES: usize = 10;
 
@@ -1439,9 +1447,18 @@ fn log_added(app: &AppHandle, silo_id: Uuid, folder_id: Uuid, files: &[FileEntry
     }
     let mut event = crate::audit::event(crate::audit::codes::FILE_ADDED);
     match files {
-        [one] if count == 1 => event = event.on(one.id.to_string(), one.name.clone()),
+        [one] if count == 1 => {
+            event = event.on(one.id.to_string(), one.name.clone());
+            if replaced(one) {
+                event = event.with("replaced", true);
+            }
+        }
         _ => {
             event = event.with("count", count);
+            let over = files.iter().filter(|f| replaced(f)).count();
+            if over > 0 {
+                event = event.with("replaced", over);
+            }
             let names: Vec<String> = files
                 .iter()
                 .take(LOGGED_NAMES)
