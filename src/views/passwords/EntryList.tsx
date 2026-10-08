@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Contact, CreditCard, StickyNote, TerminalSquare, User } from "lucide-react";
 import type { PasswordEntry } from "../../lib/types";
-import { faviconUrl, inkOn, serviceInitials, subtitleFor, typeOf } from "./util";
+import { avatarColor, faviconUrl, inkOn, serviceInitials, subtitleFor, typeOf } from "./util";
 import { IconCopy } from "../../ui/Icons";
 import { t, useLocale } from "../../i18n";
 
@@ -78,8 +78,8 @@ export function EntryList({
                 showIcon
                   ? undefined
                   : {
-                      background: colorFor(entry.category),
-                      color: inkOn(colorFor(entry.category)),
+                      background: avatarColor(colorFor(entry.category)),
+                      color: inkOn(avatarColor(colorFor(entry.category))),
                     }
               }
             >

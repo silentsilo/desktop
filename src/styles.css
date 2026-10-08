@@ -4570,6 +4570,19 @@ tr.is-moving {
   color: var(--accent);
 }
 
+/* Delete keeps its red in light, at rest and on hover. */
+.light-theme .selection-toolbar-btn.danger {
+  background: rgba(220, 38, 38, 0.06);
+  border-color: rgba(220, 38, 38, 0.35);
+  color: #b91c1c;
+}
+
+.light-theme .selection-toolbar-btn.danger:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.12);
+  border-color: rgba(220, 38, 38, 0.5);
+  color: #991b1b;
+}
+
 .light-theme .modal-overlay {
   background: rgba(15, 23, 42, 0.4);
 }
@@ -5280,7 +5293,8 @@ tr.is-moving {
 }
 
 .pw-row:hover .pw-row-actions,
-.pw-row.is-selected .pw-row-actions {
+.pw-row.is-selected .pw-row-actions,
+.pw-row:focus-within .pw-row-actions {
   opacity: 1;
 }
 
@@ -5575,11 +5589,16 @@ button.link.pw-history-clear {
   gap: 0.15rem;
 }
 
+/* The category's colour is the dot; the name stays readable text. */
 .pw-card-category {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  color: var(--text-muted);
 }
 
 .pw-card-actions {

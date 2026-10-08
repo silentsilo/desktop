@@ -14,6 +14,7 @@ import { formatBytes, formatDate } from "../../lib/format";
 import { changedLabels } from "../../lib/entryHistory";
 import { TotpDisplay } from "./TotpDisplay";
 import {
+  avatarColor,
   cardDigits,
   faviconUrl,
   groupCardNumber,
@@ -188,8 +189,8 @@ export function EntryDetail({
             showIcon
               ? undefined
               : {
-                  background: colorFor(entry.category),
-                  color: inkOn(colorFor(entry.category)),
+                  background: avatarColor(colorFor(entry.category)),
+                  color: inkOn(avatarColor(colorFor(entry.category))),
                 }
           }
         >
@@ -209,7 +210,8 @@ export function EntryDetail({
         </div>
         <div className="pw-card-title">
           <span className="pw-detail-service">{entry.service || t("pw.untitled")}</span>
-          <span className="pw-card-category" style={{ color: colorFor(entry.category) }}>
+          <span className="pw-card-category">
+            <span className="pw-rail-dot" style={{ background: colorFor(entry.category) }} aria-hidden />
             {entry.category}
           </span>
         </div>

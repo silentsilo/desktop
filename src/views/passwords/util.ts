@@ -157,24 +157,44 @@ export function isCategoriesRow(row: unknown): row is CategoriesRow {
  * category" always has somewhere to put the entries it orphans. */
 export const FALLBACK_CATEGORY = "General";
 
+/** Tile colours: each carries white initials at 4.9:1 or better. The same
+ * list is used on mobile. */
+export const AVATAR_PALETTE = [
+  "#7c3aed",
+  "#4f46e5",
+  "#2563eb",
+  "#0369a1",
+  "#0f766e",
+  "#047857",
+  "#4d7c0f",
+  "#a16207",
+  "#b45309",
+  "#c2410c",
+  "#b91c1c",
+  "#be185d",
+  "#a21caf",
+  "#9333ea",
+  "#475569",
+] as const;
+
 const DEFAULT_CATEGORIES: PasswordCategory[] = [
-  { name: "General", color: "hsl(260, 60%, 55%)" },
-  { name: "Social", color: "hsl(330, 65%, 55%)" },
-  { name: "Email", color: "hsl(200, 70%, 50%)" },
-  { name: "Banking", color: "hsl(145, 60%, 40%)" },
-  { name: "Development", color: "hsl(35, 80%, 50%)" },
-  { name: "Shopping", color: "hsl(15, 75%, 55%)" },
-  { name: "Work", color: "hsl(220, 55%, 50%)" },
-  { name: "Entertainment", color: "hsl(290, 55%, 55%)" },
-  { name: "Other", color: "hsl(0, 0%, 50%)" },
+  { name: "General", color: "#7c3aed" },
+  { name: "Social", color: "#be185d" },
+  { name: "Email", color: "#0369a1" },
+  { name: "Banking", color: "#047857" },
+  { name: "Development", color: "#b45309" },
+  { name: "Shopping", color: "#c2410c" },
+  { name: "Work", color: "#2563eb" },
+  { name: "Entertainment", color: "#a21caf" },
+  { name: "Other", color: "#475569" },
 ];
 
 /** A stable colour for a name the list does not define: same name, same
- * hue, on every device, with nothing to store. */
+ * colour, on every device, with nothing to store. */
 export function hashColor(name: string): string {
   let hash = 0;
   for (const ch of name) hash = (hash * 31 + ch.codePointAt(0)!) >>> 0;
-  return `hsl(${hash % 360}, 60%, 50%)`;
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length]!;
 }
 
 /**
@@ -377,17 +397,98 @@ export function serviceInitials(service: string): string {
   return service.slice(0, 2).toUpperCase();
 }
 
+type Rgb = [number, number, number];
+
+/** Reads `#rgb`, `#rrggbb`, `rgb()` and `hsl()`; null for anything else. */
+export function parseColor(value: string): Rgb | null {
+  const v = value.trim();
+  const short = v.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i);
+  if (short) return [1, 2, 3].map((i) => parseInt(short[i]! + short[i]!, 16)) as Rgb;
+  const long = v.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (long) return [1, 2, 3].map((i) => parseInt(long[i]!, 16)) as Rgb;
+  const rgb = v.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i);
+  if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+  const hsl = v.match(/^hsla?\(\s*([\d.]+)(?:deg)?[\s,]+([\d.]+)%[\s,]+([\d.]+)%/i);
+  if (hsl) {
+    const h = Number(hsl[1]) % 360;
+    const s = Number(hsl[2]) / 100;
+    const l = Number(hsl[3]) / 100;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n: number) => {
+      const k = (n + h / 30) % 12;
+      return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
+    };
+    return [f(0), f(8), f(4)];
+  }
+  return null;
+}
+
+/** WCAG relative luminance. */
+function luminance([r, g, b]: Rgb): number {
+  const f = (c: number) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+
+function contrast(a: Rgb, b: Rgb): number {
+  const la = luminance(a);
+  const lb = luminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+const WHITE: Rgb = [255, 255, 255];
+const INK_DARK: Rgb = [10, 14, 26];
+
+function hueOf([r, g, b]: Rgb): { hue: number; sat: number } {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  if (d === 0) return { hue: 0, sat: 0 };
+  let hue: number;
+  if (max === r) hue = ((g - b) / d) % 6;
+  else if (max === g) hue = (b - r) / d + 2;
+  else hue = (r - g) / d + 4;
+  return { hue: (hue * 60 + 360) % 360, sat: d / max };
+}
+
 /**
- * Ink that stays readable on a given tile colour.
+ * The tile colour for a category colour.
  *
- * The tile is a category colour: a default, a name hash, or whatever the
- * user picked. White initials on a yellow or lime tile measured under 3:1,
- * so the letters follow the tile rather than the theme.
+ * Stored categories keep whatever colour they were saved with, and older
+ * ones are light hues that white initials cannot sit on. Those are drawn
+ * with the palette colour nearest in hue, so the tile still matches the
+ * rail dot and the initials still read.
+ */
+export function avatarColor(color: string): string {
+  const rgb = parseColor(color);
+  if (!rgb) return AVATAR_PALETTE[0];
+  if (contrast(rgb, WHITE) >= 4.5) return color;
+  const { hue, sat } = hueOf(rgb);
+  if (sat < 0.15) return "#475569";
+  let best: string = AVATAR_PALETTE[0];
+  let bestDistance = 360;
+  for (const candidate of AVATAR_PALETTE) {
+    const c = hueOf(parseColor(candidate)!);
+    if (c.sat < 0.15) continue;
+    const distance = Math.min(Math.abs(c.hue - hue), 360 - Math.abs(c.hue - hue));
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+/**
+ * Ink that stays readable on a given tile colour, chosen by WCAG luminance:
+ * whichever of white and near-black has more contrast with the tile.
  */
 export function inkOn(background: string): string {
-  const hsl = background.match(/hsl\(\s*[\d.]+\s*,\s*[\d.]+%\s*,\s*([\d.]+)%/i);
-  const lightness = hsl ? Number(hsl[1]) : 0;
-  return lightness > 58 ? "#0a0e1a" : "#fff";
+  const rgb = parseColor(background);
+  if (!rgb) return "#fff";
+  return contrast(rgb, WHITE) >= contrast(rgb, INK_DARK) ? "#fff" : "#0a0e1a";
 }
 
 /** Colour lookup over the resolved list, falling back to the name hash so

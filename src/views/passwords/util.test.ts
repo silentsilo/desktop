@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { PasswordEntry } from "../../lib/types";
 import {
+  AVATAR_PALETTE,
+  avatarColor,
   copyKindFor,
   exportNeedsTouch,
   faviconUrl,
+  hashColor,
+  inkOn,
   normalizeUrl,
   notesAreSecret,
   oneClickCopyValue,
@@ -191,5 +195,25 @@ describe("custom fields in search", () => {
     expect(text).toContain("40021");
     expect(text).toContain("card pin");
     expect(text).not.toContain("9876");
+  });
+});
+
+describe("avatar colours", () => {
+  it("hashes a name into the fixed palette", () => {
+    expect(AVATAR_PALETTE).toContain(hashColor("Travel"));
+    expect(hashColor("Travel")).toBe(hashColor("Travel"));
+  });
+
+  it("keeps a dark stored colour and swaps a light one for the nearest palette hue", () => {
+    expect(avatarColor("#4f46e5")).toBe("#4f46e5");
+    // The old yellow default: white initials measured 1.7:1 on it.
+    expect(AVATAR_PALETTE).toContain(avatarColor("hsl(55, 60%, 50%)"));
+    expect(avatarColor("hsl(0, 0%, 70%)")).toBe("#475569");
+  });
+
+  it("picks ink by luminance, not by HSL lightness", () => {
+    for (const c of AVATAR_PALETTE) expect(inkOn(c)).toBe("#fff");
+    expect(inkOn("#fde047")).toBe("#0a0e1a");
+    expect(inkOn("hsl(60, 90%, 50%)")).toBe("#0a0e1a");
   });
 });
