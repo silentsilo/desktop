@@ -189,6 +189,26 @@ const DEFAULT_CATEGORIES: PasswordCategory[] = [
   { name: "Other", color: "#475569" },
 ];
 
+const CATEGORY_KEYS: Record<string, Key> = {
+  General: "pw.cat_general",
+  Social: "pw.cat_social",
+  Email: "pw.cat_email",
+  Banking: "pw.cat_banking",
+  Development: "pw.cat_development",
+  Shopping: "pw.cat_shopping",
+  Work: "pw.cat_work",
+  Entertainment: "pw.cat_entertainment",
+  Other: "pw.cat_other",
+};
+
+/** How a category is shown: a built-in name in the language in use, any
+ * other name as it was written. Only the label changes; entries keep the
+ * stored name, so every device and every language files them alike. */
+export function categoryLabel(name: string): string {
+  const key = CATEGORY_KEYS[name];
+  return key ? t(key) : name;
+}
+
 /** A stable colour for a name the list does not define: same name, same
  * colour, on every device, with nothing to store. */
 export function hashColor(name: string): string {

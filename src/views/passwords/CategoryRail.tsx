@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { Check, Contact, CreditCard, KeyRound, StickyNote, TerminalSquare } from "lucide-react";
 import type { CredentialType, PasswordCategory } from "../../lib/types";
-import { CREDENTIAL_TYPES, FALLBACK_CATEGORY, hashColor, TYPE_LABELS } from "./util";
+import {
+  categoryLabel,
+  CREDENTIAL_TYPES,
+  FALLBACK_CATEGORY,
+  hashColor,
+  TYPE_LABELS,
+} from "./util";
 import { IconClose, IconEdit, IconPlus, IconTrash } from "../../ui/Icons";
 import { t, useLocale } from "../../i18n";
 
@@ -167,7 +173,7 @@ export function CategoryRail({
               onClick={() => onSelect(selected === cat.name ? null : cat.name)}
             >
               <span className="pw-rail-dot" style={{ background: cat.color }} />
-              <span className="view-rail-label">{cat.name}</span>
+              <span className="view-rail-label">{categoryLabel(cat.name)}</span>
               <span className="view-rail-count">{counts.get(cat.name) ?? 0}</span>
             </button>
             {confirmingDelete === cat.name ? (

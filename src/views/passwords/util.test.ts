@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PasswordEntry } from "../../lib/types";
 import {
+  categoryLabel,
   AVATAR_PALETTE,
   avatarColor,
   copyKindFor,
@@ -215,5 +216,16 @@ describe("avatar colours", () => {
     for (const c of AVATAR_PALETTE) expect(inkOn(c)).toBe("#fff");
     expect(inkOn("#fde047")).toBe("#0a0e1a");
     expect(inkOn("hsl(60, 90%, 50%)")).toBe("#0a0e1a");
+  });
+});
+
+describe("categoryLabel", () => {
+  it("translates a built-in category and keeps any other name", async () => {
+    const { setLanguage } = await import("../../i18n");
+    setLanguage("ro");
+    expect(categoryLabel("Banking")).toBe("Bancă");
+    expect(categoryLabel("Banking stuff")).toBe("Banking stuff");
+    setLanguage("en");
+    expect(categoryLabel("Banking")).toBe("Banking");
   });
 });

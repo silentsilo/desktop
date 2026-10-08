@@ -14,6 +14,7 @@ import { formatBytes } from "../../lib/format";
 import { formatAppError } from "../../lib/errors";
 import { TotpDisplay } from "./TotpDisplay";
 import {
+  categoryLabel,
   categoryChoices,
   DEFAULT_GEN_OPTIONS,
   generatePassword,
@@ -526,7 +527,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
               .filter(Boolean)
               .map((cat) => (
                 <option key={cat} value={cat}>
-                  {cat}
+                  {categoryLabel(cat)}
                 </option>
               ))}
           </select>

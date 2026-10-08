@@ -3,7 +3,7 @@ import { ViewHeader } from "../components/ViewHeader";
 import type { PasswordEntry, SearchHit } from "../lib/types";
 import { formatBytes } from "../lib/format";
 import { fileIconFor, fileKindOf } from "../lib/fileKinds";
-import { subtitleFor, typeOf } from "./passwords/util";
+import { categoryLabel, subtitleFor, typeOf } from "./passwords/util";
 import { TYPE_ICONS } from "./passwords/CategoryRail";
 import { IconFolder } from "../ui/Icons";
 import { t, useLocale } from "../i18n";
@@ -132,7 +132,7 @@ export function FavoritesPanel({
                           </span>
                           <span className="favorites-card-name">{entry.service || t("files.untitled")}</span>
                           <span className="favorites-card-sub">{sub}</span>
-                          <span className="favorites-card-meta">{entry.category}</span>
+                          <span className="favorites-card-meta">{categoryLabel(entry.category)}</span>
                         </button>
                         <button
                           type="button"

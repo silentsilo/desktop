@@ -14,6 +14,7 @@ import { formatBytes, formatDate } from "../../lib/format";
 import { changedLabels } from "../../lib/entryHistory";
 import { TotpDisplay } from "./TotpDisplay";
 import {
+  categoryLabel,
   avatarColor,
   cardDigits,
   faviconUrl,
@@ -216,7 +217,7 @@ export function EntryDetail({
               style={{ background: colorFor(entry.category) }}
               aria-hidden
             />
-            {entry.category}
+            {categoryLabel(entry.category)}
           </span>
         </div>
         <div className="pw-card-actions">
