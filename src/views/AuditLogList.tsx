@@ -234,8 +234,6 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
 
   const entries = useMemo(() => log?.entries ?? [], [log]);
   const days = useMemo(() => byDay(entries), [entries]);
-  // One device in the whole log: its name on every row says nothing.
-  const severalDevices = (log?.devices.length ?? 0) > 1;
 
   const exportAs = async (format: "csv" | "jsonl") => {
     setNotice(null);
@@ -283,7 +281,8 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
   const row = (e: AuditEntry) => {
     const d = describe(e);
     const Icon = ICONS[d.icon];
-    const meta = [...(severalDevices ? [nameOf(e.device)] : []), ...d.details];
+    // Who did it, every row: the device, and the key it was unlocked with.
+    const meta = [nameOf(e.device), ...(d.via ? [d.via] : []), ...d.details];
     return (
       <li key={`${e.device}-${e.i}`} className={`activity-row is-${d.tone}`}>
         <span className="activity-icon" aria-hidden>

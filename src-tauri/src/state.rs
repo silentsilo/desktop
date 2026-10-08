@@ -523,6 +523,7 @@ pub fn open_focused_session(app: &AppHandle, session: VaultSession) -> Result<()
         return Err("The silo on screen changed while this one was opening. Open it again.".into());
     }
     if let Some((evicted, scratch_left)) = state.open_session(id, session)? {
+        crate::audit::set_unlocked_with(evicted, None);
         // What a lock of that silo would have done: a password it copied
         // goes, and a file still held open is reported.
         crate::commands::vault::take_back_clipboard(app, Some(&[evicted]));
@@ -535,6 +536,8 @@ pub fn open_focused_session(app: &AppHandle, session: VaultSession) -> Result<()
             .unwrap_or_default();
         let _ = app.emit("silo-auto-locked", serde_json::json!({ "name": name }));
     }
+    // Whoever opened it names the key afterwards, if there was one.
+    crate::audit::set_unlocked_with(id, None);
     announce_this_device(&state);
     crate::commands::sync::start_audit_by_default(app, id);
     Ok(())

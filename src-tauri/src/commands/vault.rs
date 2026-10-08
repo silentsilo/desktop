@@ -690,8 +690,9 @@ pub async fn vault_unlock(
         crate::state::open_focused_session(&app, session)?;
         let label = keys
             .find_by_credential_id(&unlock.credential_id)
-            .map(|key| key.label.clone())
+            .map(crate::audit::key_name)
             .unwrap_or_default();
+        crate::audit::set_unlocked_with(creds.vault_id, Some(label.clone()));
         crate::audit::record(
             &app,
             crate::audit::event(crate::audit::codes::UNLOCKED).with("key", label),

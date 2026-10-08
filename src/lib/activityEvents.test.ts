@@ -12,11 +12,22 @@ function sentence(e: AuditEntry): string {
 }
 
 group("activity events", () => {
+  it("says which key the silo was open with, apart from the details", () => {
+    const opened = describe(entry(30, { l: "a.pdf", x: { via: "YubiKey USBc", folder: "/Docs" } }));
+    expect(opened.via).toBe("with YubiKey USBc");
+    expect(opened.details).toEqual(["in /Docs"]);
+    expect(describe(entry(30, { x: { via: "recovery code" } })).via).toBe("with the recovery code");
+    expect(describe(entry(30, { x: { via: "phone key" } })).via).toBe("with the phone's key");
+    expect(describe(entry(30)).via).toBeNull();
+  });
+
   it("reads each kind as a sentence naming its object", () => {
     expect(sentence(entry(1, { x: { key: "YubiKey" } }))).toBe("Unlocked with YubiKey");
     expect(sentence(entry(1, { x: { by: "recovery code" } }))).toBe(
       "Unlocked with the recovery code",
     );
+    expect(sentence(entry(1, { x: { by: "this phone" } }))).toBe("Unlocked with the phone's key");
+    expect(sentence(entry(1, { x: { by: "security key" } }))).toBe("Unlocked with a security key");
     expect(sentence(entry(11, { l: "Bank", x: { field: "password" } }))).toBe(
       "Copied the password of Bank",
     );

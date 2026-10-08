@@ -73,7 +73,19 @@ export type DescribedEvent = {
   after: string;
   /** What else the event carries, already in words. */
   details: string[];
+  /** The key the silo was unlocked with when it happened, in words. */
+  via: string | null;
 };
+
+/** The key a session was unlocked with, as a log row says it. Older events
+ * do not carry one. */
+function viaOf(x: Record<string, unknown>): string | null {
+  const via = text(x.via);
+  if (!via) return null;
+  if (via === "recovery code") return t("dlg.activity_via_recovery_code");
+  if (via === "phone key") return t("dlg.activity_via_phone_key");
+  return t("dlg.activity_via", { key: via });
+}
 
 /** How a key's kind reads. A security key and Windows Hello are both
  * `fido2`, so that one says nothing. */
@@ -123,7 +135,7 @@ function around(
 function rest(x: Record<string, unknown>, used: string[]): string[] {
   // `folder: true` only marks a rename as a folder's; the sentence says it.
   return Object.keys(x)
-    .filter((k) => !used.includes(k) && x[k] !== undefined && x[k] !== "")
+    .filter((k) => !used.includes(k) && k !== "via" && x[k] !== undefined && x[k] !== "")
     .filter((k) => !(k === "kind" && KEY_KINDS[text(x[k])] === ""))
     .filter((k) => !(k === "folder" && typeof x[k] !== "string"))
     .map((k) => {
@@ -168,6 +180,7 @@ export function describe(entry: AuditEntry): DescribedEvent {
     object,
     after,
     details: rest(x, used),
+    via: viaOf(x),
   });
   /** A whole sentence from the catalog, its `{object}` shown strong. */
   const say = (
@@ -192,6 +205,11 @@ export function describe(entry: AuditEntry): DescribedEvent {
   switch (entry.c) {
     case 1: {
       if (x.key) return say("unlock", "dlg.activity_unlocked_with", text(x.key), ["key"]);
+      // What a phone writes: its own key or a security key, unnamed.
+      if (text(x.by) === "this phone") return make("unlock", t("dlg.activity_unlocked_phone_key"), "", "", ["by"]);
+      if (text(x.by) === "security key") {
+        return make("unlock", t("dlg.activity_unlocked_security_key"), "", "", ["by"]);
+      }
       if (x.by) {
         const by =
           text(x.by) === "recovery code" ? t("dlg.activity_by_recovery_code") : text(x.by);

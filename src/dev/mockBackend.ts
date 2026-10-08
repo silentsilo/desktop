@@ -688,6 +688,15 @@ const handlers: Record<string, Handler> = {
       operations: 4,
       last_change_at: 0,
     },
+    {
+      id: "d0000000-0000-0000-0000-000000000005",
+      label: null,
+      system_name: "Pixel 8",
+      platform: "Android 15",
+      is_this_device: false,
+      operations: 57,
+      last_change_at: Math.floor(Date.now() / 1000) - 2 * 3600,
+    },
   ],
   vault_set_device_label: () => null,
   vault_set_favorite: (args) => {
@@ -1137,11 +1146,7 @@ const handlers: Record<string, Handler> = {
             x,
           };
         })
-      : [
-          { device: "dev-1", what: "Secret copied", i: 2, t: Date.now() - 60_000, c: 11, o: "e1", l: "Bank", x: { field: "password" } },
-          { device: "dev-1", what: "Unlocked", i: 1, t: Date.now() - 120_000, c: 1, x: { key: "YubiKey" } },
-          { device: "dev-1", what: "Activity log started", i: 0, t: Date.now() - 180_000, c: 60 },
-        ];
+      : ACTIVITY_SAMPLE();
     const term = String(args.search ?? "").trim().toLowerCase();
     const codes = (args.kinds as number[] | null) ?? null;
     const hits = all
@@ -1465,6 +1470,38 @@ let nextListenerId = 1;
 function nextMinor(version: string): string {
   const [major, minor] = version.split(".").map(Number);
   return `${major}.${(minor ?? 0) + 1}.0`;
+}
+
+/** What a week of use looks like on the Activity page: two computers and a
+ * phone, each event carrying the key its silo was open with. */
+function ACTIVITY_SAMPLE() {
+  const here = "d0000000-0000-0000-0000-000000000001";
+  const laptop = "d0000000-0000-0000-0000-000000000002";
+  const phone = "d0000000-0000-0000-0000-000000000005";
+  const min = 60_000;
+  const rows: [string, number, string, string | undefined, Record<string, unknown>][] = [
+    [here, 11, "Secret copied", "Bank", { field: "password", via: "YubiKey 5C" }],
+    [here, 36, "Moved", undefined, { name: "Invoice 2026-09.pdf", to: "/Invoices", via: "YubiKey 5C" }],
+    [here, 32, "File added", undefined, { count: 3, names: ["scan-1.jpg", "scan-2.jpg", "scan-3.jpg"], folder: "/Photos", via: "YubiKey 5C" }],
+    [here, 37, "Renamed", "Taxes 2026", { from: "Taxes", folder: true, via: "YubiKey 5C" }],
+    [here, 1, "Unlocked", undefined, { key: "YubiKey 5C" }],
+    [phone, 14, "Filled in an app", "GitHub", { via: "phone key" }],
+    [phone, 1, "Unlocked", undefined, { by: "this phone" }],
+    [laptop, 35, "Restored", "Passport scan.pdf", { via: "Windows Hello" }],
+    [laptop, 38, "Folder created", "/Invoices", { via: "Windows Hello" }],
+    [laptop, 1, "Unlocked", undefined, { key: "Windows Hello" }],
+    [here, 52, "Recovery code used", undefined, { via: "recovery code" }],
+    [here, 60, "Activity log started", undefined, {}],
+  ];
+  return rows.map(([device, c, what, l, x], k) => ({
+    device,
+    what,
+    i: rows.length - k,
+    t: Date.now() - (k + 1) * 37 * min,
+    c,
+    ...(l ? { o: `o${k}`, l } : {}),
+    x,
+  }));
 }
 
 export function installMockBackend() {

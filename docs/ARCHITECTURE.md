@@ -345,6 +345,13 @@ log was never started starts it there.
 - The lock is the session's last event (`silentsilo_app::record_lock`, from
   `close_one`), which also closes the batch into a segment for the next
   pass.
+- Every event names the key the silo was unlocked with, as `via` (a key's
+  label, Windows Hello or Touch ID when it has none, or `recovery code`).
+  The unlock that opens a session sets it (`audit::set_unlocked_with`);
+  `open_focused_session` clears it first, so a session opened without a key
+  (a new silo, a join) carries none rather than the last session's. The
+  unlock event names its key itself. A reader that predates `via` shows it
+  as a plain detail.
 - Recording takes the sessions mutex and the queue's file lock, so it is
   never called with the sessions mutex held.
 

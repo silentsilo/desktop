@@ -10,6 +10,7 @@
 //! Never call these while holding the sessions lock: recording takes it.
 
 use std::collections::HashMap;
+use std::sync::Mutex;
 
 use silentsilo_audit::Event;
 pub use silentsilo_audit::codes;
@@ -42,9 +43,61 @@ pub async fn record_off_thread(app: &AppHandle, id: Uuid, event: Event) -> Resul
     crate::commands::fido::run_blocking(move || record_in(&app, id, event)).await
 }
 
+/// The key each open silo was unlocked with, as the log names it. Every
+/// event the silo records while open carries it as `via`, so a row says
+/// which key did what, not only on which device.
+static UNLOCKED_WITH: Mutex<Option<HashMap<Uuid, String>>> = Mutex::new(None);
+
+/// Set when a session opens: `None` for one opened without a key the log
+/// can name (a new silo, a join), so an earlier session's key never sticks.
+pub fn set_unlocked_with(id: Uuid, via: Option<String>) {
+    let Ok(mut map) = UNLOCKED_WITH.lock() else {
+        return;
+    };
+    let map = map.get_or_insert_with(HashMap::new);
+    match via.filter(|v| !v.is_empty()) {
+        Some(via) => map.insert(id, via),
+        None => map.remove(&id),
+    };
+}
+
+fn unlocked_with(id: Uuid) -> Option<String> {
+    UNLOCKED_WITH.lock().ok()?.as_ref()?.get(&id).cloned()
+}
+
+/// What the built-in authenticator is called here.
+const BUILT_IN: &str = if cfg!(target_os = "macos") {
+    "Touch ID"
+} else if cfg!(windows) {
+    "Windows Hello"
+} else {
+    "Built-in key"
+};
+
+/// A key as the log names it: its label, or what it is when it has none.
+pub fn key_name(key: &silentsilo_vault::StoredFidoCredential) -> String {
+    if !key.label.is_empty() {
+        key.label.clone()
+    } else if key.platform {
+        BUILT_IN.into()
+    } else {
+        format!("Security key {}", key.key_slot)
+    }
+}
+
+/// What the log calls an unlock with the recovery code.
+pub const VIA_RECOVERY_CODE: &str = "recovery code";
+
 /// Records `event` in silo `id`'s log. An `Err` means the silo was locked
 /// and the action must not happen.
-pub fn record_in(app: &AppHandle, id: Uuid, event: Event) -> Result<(), String> {
+pub fn record_in(app: &AppHandle, id: Uuid, mut event: Event) -> Result<(), String> {
+    // The unlock itself already names its key.
+    if event.c != codes::UNLOCKED
+        && !event.x.contains_key("via")
+        && let Some(via) = unlocked_with(id)
+    {
+        event = event.with("via", via);
+    }
     let state = app.state::<AppState>();
     let Err(e) = state.audit_record(id, event) else {
         return Ok(());
@@ -506,6 +559,18 @@ mod tests {
             label: "Bank".into(),
             field: field.into(),
         }
+    }
+
+    #[test]
+    fn a_session_names_its_key_until_another_opens() {
+        let id = Uuid::new_v4();
+        set_unlocked_with(id, Some("YubiKey".into()));
+        assert_eq!(unlocked_with(id).as_deref(), Some("YubiKey"));
+        set_unlocked_with(id, Some(String::new()));
+        assert_eq!(unlocked_with(id), None, "an empty name is no name");
+        set_unlocked_with(id, Some("YubiKey".into()));
+        set_unlocked_with(id, None);
+        assert_eq!(unlocked_with(id), None);
     }
 
     #[test]

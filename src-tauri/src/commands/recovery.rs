@@ -307,6 +307,7 @@ pub async fn vault_unlock_with_recovery(
         crate::commands::vault::wipe_open_scratch(&session.paths.root);
         let silo_id = session.vault_id;
         crate::state::open_focused_session(&app, session)?;
+        crate::audit::set_unlocked_with(silo_id, Some(crate::audit::VIA_RECOVERY_CODE.into()));
         crate::audit::record_in(
             &app,
             silo_id,
@@ -315,7 +316,8 @@ pub async fn vault_unlock_with_recovery(
         crate::audit::record_in(
             &app,
             silo_id,
-            crate::audit::event(crate::audit::codes::UNLOCKED).with("by", "recovery code"),
+            crate::audit::event(crate::audit::codes::UNLOCKED)
+                .with("by", crate::audit::VIA_RECOVERY_CODE),
         )?;
         Ok(meta)
     })
