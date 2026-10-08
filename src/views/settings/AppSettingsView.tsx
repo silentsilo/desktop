@@ -135,7 +135,6 @@ export function AppSettingsDrawer({
             siloHasKeys={null}
           />
         </div>
-        <footer className="drawer-foot">SilentSilo v{__APP_VERSION__}</footer>
       </aside>
     </div>
   );
