@@ -268,6 +268,11 @@ export function AppShell({
           ))}
         </nav>
 
+        {/* Above the storage figure, so the figure and the footer under it
+            stay where they are when work starts or ends: the list grows up
+            into the free space under the menu. */}
+        <SidebarTasks tasks={tasks} collapsed={collapsed} onOpen={onOpenTask} />
+
         {/* What this silo occupies here. Content arrives only when a file is
             opened, so this grows with use rather than with the silo. Only
             the size: whether it is backed up is the status bar's to say. */}
@@ -300,8 +305,6 @@ export function AppShell({
               </span>
             </button>
           ))}
-
-        <SidebarTasks tasks={tasks} collapsed={collapsed} onOpen={onOpenTask} />
 
         <div className="sidebar-footer">
           <div className="sidebar-actions">
