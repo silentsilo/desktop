@@ -165,10 +165,16 @@ describe("coded backend errors", () => {
           const text = fs.readFileSync(full, "utf8");
           for (const m of text.matchAll(/coded!\(\s*"(err\.[\w.]+)"/g)) codes.add(m[1]!);
           for (const m of text.matchAll(/coded_with\(\s*"(err\.[\w.]+)"/g)) codes.add(m[1]!);
+          // Written by hand where a crate cannot reach the helper.
+          for (const m of text.matchAll(/\\u\{1f\}(err\.[\w.]+)/g)) codes.add(m[1]!);
         }
       }
     };
     walk(root);
+    // Core's own, when its checkout sits beside this one (on a developer's
+    // machine; CI has only the pinned tag, under cargo's own directory).
+    const core = path.resolve(__dirname, "../../../silentsilo.core/crates");
+    if (fs.existsSync(core)) walk(core);
     expect(codes.size).toBeGreaterThan(50);
     expect([...codes].filter((code) => !hasKey(code))).toEqual([]);
   });
