@@ -286,7 +286,7 @@ export type PasswordStrength = { score: 0 | 1 | 2 | 3 | 4; label: string; color:
 /** Quick heuristic (length + character variety), not a real entropy
  * estimate — good enough to steer users away from short/simple passwords. */
 export function passwordStrength(pw: string): PasswordStrength {
-  if (!pw) return { score: 0, label: "", color: "var(--text-dim)" };
+  if (!pw) return { score: 0, label: "", color: "var(--text-tertiary)" };
   let score = 0;
   if (pw.length >= 8) score++;
   if (pw.length >= 14) score++;
@@ -295,11 +295,11 @@ export function passwordStrength(pw: string): PasswordStrength {
   if (/[^A-Za-z0-9]/.test(pw)) score++;
   const capped = Math.min(score, 4) as 0 | 1 | 2 | 3 | 4;
   const levels: [string, string][] = [
-    [t("pw.strength_very_weak"), "var(--danger-on-dark)"],
+    [t("pw.strength_very_weak"), "var(--danger-text)"],
     [t("pw.strength_weak"), "var(--strength-weak)"],
     [t("pw.strength_fair"), "var(--strength-fair)"],
     [t("pw.strength_good"), "var(--strength-good)"],
-    [t("pw.strength_strong"), "var(--success)"],
+    [t("pw.strength_strong"), "var(--success-text)"],
   ];
   const [label, color] = levels[capped]!;
   return { score: capped, label, color };

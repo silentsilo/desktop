@@ -1,51 +1,160 @@
+/* ── Tokens ──
+ * Values from planuri/design-1.5.md, annex A, checked by the contrast
+ * script: text 4.5:1 and boundaries 3:1 on every surface, in both themes.
+ * Dark here, light in `.light-theme` below. */
 :root {
-  /* Match silentsilo.web — dark obsidian + violet */
+  /* Surfaces, from the back: page, panes and cards, menus and dialogs,
+     fields and tracks. */
   --bg: #0a0e1a;
-  --bg-deep: #05070e;
-  --surface: #12182a;
-  --surface-muted: #0e1422;
-  --bg-hover: #1a2238;
-  --border: rgba(139, 92, 246, 0.22);
-  --border-subtle: rgba(139, 92, 246, 0.12);
-  --ink: #f8fafc;
-  --text: #f8fafc;
-  /* Nudged up from #8892b0, which measured 4.2:1 on the app's surfaces —
-     just under AA, and this token carries every hint and secondary label in
-     the product. */
-  --text-muted: #98a3c2;
-  --text-dim: #6b7594;
+  --surface: #121829;
+  --surface-raised: #182034;
+  --surface-sunken: #0c111e;
+  --row-hover: rgba(255, 255, 255, 0.05);
+  --row-active: rgba(255, 255, 255, 0.08);
+  --row-selected: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  --overlay: rgba(5, 7, 14, 0.72);
+
+  --border-subtle: #1f2740;
+  --border: #2a3350;
+  /* Fields, checkboxes and the toggle when off: 3:1 against the surface. */
+  --border-field: #646e8d;
+
+  --text: #f1f5f9;
+  --text-secondary: #a3adc8;
+  --text-tertiary: #8b95b2;
+  --text-disabled: #5a6482;
+
   --accent: #8b5cf6;
-  --accent-hover: #a78bfa;
-  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
-  /* For filled surfaces carrying white text. `--accent` itself is tuned to
-     be read *as* text on a dark background, which leaves it too light to sit
-     behind any: white on it measures 4.2:1, and on `--accent-hover` 2.7:1. */
+  --accent-text: #b39dfa;
+  /* Filled controls with white labels: 7.1:1. */
   --accent-solid: #6d28d9;
-  --accent-solid-hover: #5b21b6;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  /* The middle of the password strength scale. Tokens rather than literals
-     in the component, because amber and lime on near-black are the wrong
-     two colours entirely on a white card. */
+  --accent-solid-hover: #7c3aed;
+  --accent-solid-active: #5b21b6;
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 55%, transparent);
+  --focus-ring: #a78bfa;
+
+  --danger-solid: #dc2626;
+  --danger-text: #f87171;
+  --danger-soft: rgba(239, 68, 68, 0.14);
+  --danger-border: rgba(239, 68, 68, 0.4);
+  --warning-solid: #f59e0b;
+  --warning-ink: #1f1300;
+  --warning-text: #fbbf24;
+  --warning-soft: rgba(245, 158, 11, 0.12);
+  --warning-border: rgba(245, 158, 11, 0.4);
+  --success-solid: #10b981;
+  --success-text: #34d399;
+  --success-soft: rgba(16, 185, 129, 0.12);
+  --success-border: rgba(16, 185, 129, 0.4);
+
+  --toggle-off: #646e8d;
+  --toggle-on: #8b5cf6;
+  --track: #1e2537;
+
+  /* The middle of the password strength scale. */
   --strength-weak: #f59e0b;
   --strength-fair: #eab308;
   --strength-good: #84cc16;
-  /* The same red, lightened enough to be read on the app's dark surfaces. */
-  --danger-on-dark: #f87171;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 24px 56px rgba(0, 0, 0, 0.55);
+
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-full: 999px;
   --radius: 10px;
-  --radius-sm: 7px;
-  --sidebar-w: 76px;
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+
+  /* Type: 11px is the floor. 13 is the UI default, 14 running text. */
+  --fs-11: 11px;
+  --fs-12: 12px;
+  --fs-13: 13px;
+  --fs-14: 14px;
+  --fs-16: 16px;
+  --fs-20: 20px;
+  --fs-28: 28px;
   --font-display: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", system-ui, sans-serif;
   --font-body: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", system-ui, sans-serif;
-  --shadow-soft: 0 12px 40px rgba(0, 0, 0, 0.45);
+  --font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+
+  --dur-1: 100ms;
+  --dur-2: 160ms;
+  --dur-3: 240ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --sidebar-w: 76px;
   font-family: var(--font-body);
-  color: var(--ink);
+  color: var(--text);
   background: var(--bg);
   font-size: 14px;
   line-height: 1.5;
   font-optical-sizing: auto;
   color-scheme: dark;
+}
+
+/* ── Light theme tokens ── */
+.light-theme {
+  --bg: #f7f8fb;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f1f4f8;
+  --row-hover: rgba(15, 23, 42, 0.06);
+  --row-active: rgba(15, 23, 42, 0.09);
+  --row-selected: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  --overlay: rgba(15, 23, 42, 0.32);
+
+  --border-subtle: #e9ecf2;
+  --border: #e1e5ee;
+  --border-field: #7f8a9c;
+
+  --text: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #5a677b;
+  --text-disabled: #9aa3b2;
+
+  --accent: #7c3aed;
+  --accent-text: #6d28d9;
+  --accent-solid: #6d28d9;
+  --accent-solid-hover: #5b21b6;
+  --accent-solid-active: #4c1d95;
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 55%, transparent);
+  --focus-ring: #7c3aed;
+
+  --danger-solid: #dc2626;
+  --danger-text: #b91c1c;
+  --danger-soft: rgba(239, 68, 68, 0.08);
+  --danger-border: rgba(220, 38, 38, 0.35);
+  /* Dark enough to carry white text. */
+  --warning-solid: #b45309;
+  --warning-ink: #ffffff;
+  --warning-text: #a14a06;
+  --warning-soft: rgba(245, 158, 11, 0.1);
+  --warning-border: rgba(180, 83, 9, 0.35);
+  --success-solid: #047857;
+  --success-text: #047857;
+  --success-soft: rgba(16, 185, 129, 0.08);
+  --success-border: rgba(4, 120, 87, 0.35);
+
+  --toggle-off: #7f8a9c;
+  --toggle-on: #6d28d9;
+  --track: #e1e5ee;
+
+  --strength-weak: #b45309;
+  --strength-fair: #a16207;
+  --strength-good: #4d7c0f;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.1);
+  --shadow-lg: 0 24px 56px rgba(15, 23, 42, 0.16);
+  color-scheme: light;
 }
 
 * {
@@ -55,10 +164,7 @@
 body {
   margin: 0;
   overflow: hidden;
-  background:
-    radial-gradient(ellipse 100% 70% at 50% -20%, rgba(139, 92, 246, 0.15), transparent 60%),
-    radial-gradient(circle 800px at 0% 100%, rgba(99, 102, 241, 0.06), transparent 70%),
-    linear-gradient(180deg, var(--bg) 0%, #05070d 100%);
+  background: var(--bg);
 }
 
 input,
@@ -86,8 +192,8 @@ button {
   font-size: 0.95rem;
   font-weight: 600;
   letter-spacing: 0.01em;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 14px rgba(139, 92, 246, 0.22);
+  border: 1px solid transparent;
+  box-shadow: none;
   transition: background 0.15s ease, transform 0.12s ease, opacity 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -103,7 +209,6 @@ button {
  * loses to any single class, which is what all of those assumed. */
 button:hover:where(:not(:disabled)) {
   background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%);
-  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.38);
 }
 
 button:active:where(:not(:disabled)) {
@@ -149,7 +254,7 @@ button.storage-option {
 button:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 70%, white);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -161,26 +266,26 @@ button > svg {
 
 button.secondary {
   background: rgba(255, 255, 255, 0.03);
-  color: var(--ink);
+  color: var(--text);
   border: 1px solid var(--border);
   box-shadow: none;
 }
 
 button.secondary:hover:not(:disabled) {
-  background: var(--bg-hover);
+  background: var(--row-hover);
   border-color: rgba(139, 92, 246, 0.35);
 }
 
 button.danger {
   background: transparent;
-  border-color: rgba(239, 68, 68, 0.35);
-  color: var(--danger-on-dark);
+  border-color: var(--danger-border);
+  color: var(--danger-text);
   box-shadow: none;
 }
 
 button.danger:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: rgba(239, 68, 68, 0.5);
+  background: var(--danger-soft);
+  border-color: var(--danger-text);
 }
 
 button.link {
@@ -188,7 +293,7 @@ button.link {
   min-height: 0;
   gap: 0;
   background: none;
-  color: var(--accent-hover);
+  color: var(--accent-text);
   padding: 0.15rem 0.35rem;
   font-size: inherit;
   font-weight: 600;
@@ -212,7 +317,7 @@ button.link:hover:not(:disabled) {
   background: var(--accent-soft);
   /* Mixed towards `--ink`, which lightens in dark and darkens in light —
      so the hover reads as a change in both themes rather than only one. */
-  color: color-mix(in srgb, var(--accent-hover) 80%, var(--ink));
+  color: color-mix(in srgb, var(--accent-text) 80%, var(--text));
   text-decoration: underline;
 }
 
@@ -234,11 +339,11 @@ textarea {
   width: 100%;
   font-family: inherit;
   font-size: 0.95rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-field);
   border-radius: var(--radius-sm);
   padding: 0.55rem 0.7rem;
-  background: rgba(0, 0, 0, 0.4);
-  color: var(--ink);
+  background: var(--surface-sunken);
+  color: var(--text);
 }
 
 /* A select's drop-down list is drawn by the platform, and Chromium paints
@@ -247,7 +352,7 @@ textarea {
  * top of a dark app: the one list in the product that ignored the theme.
  * Opaque colours here, and on the options themselves, put it back. */
 select {
-  background-color: var(--surface-muted);
+  background-color: var(--surface-sunken);
   /* Its own chevron rather than the platform's arrow, which sat flush
      against the border and looked like an unstyled form. */
   appearance: none;
@@ -257,7 +362,7 @@ select {
 }
 
 select:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  border-color: var(--text-tertiary);
 }
 
 select:disabled {
@@ -266,8 +371,13 @@ select:disabled {
 }
 
 option {
-  background-color: var(--surface);
-  color: var(--ink);
+  background-color: var(--surface-raised);
+  color: var(--text);
+}
+
+::placeholder {
+  color: var(--text-tertiary);
+  opacity: 1;
 }
 
 input:focus,
@@ -275,7 +385,7 @@ select:focus,
 textarea:focus {
   border-color: var(--accent);
   outline: none;
-  box-shadow: 0 0 0 1px var(--accent), 0 0 12px rgba(139, 92, 246, 0.25);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 /* ── Auth ──
@@ -309,7 +419,7 @@ textarea:focus {
   text-align: center;
   font-size: 0.75rem;
   letter-spacing: 0.02em;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   pointer-events: none;
   /* A fade up from the page colour, because the screen behind this can
      scroll: on a short window the enrolment card's last line passes through
@@ -346,12 +456,12 @@ textarea:focus {
   font-size: 2rem;
   letter-spacing: -0.03em;
   margin: 0.85rem 0 0.35rem;
-  color: var(--ink);
+  color: var(--text);
 }
 
 .brand-sub {
   margin: 0;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 0.95rem;
 }
 
@@ -362,12 +472,11 @@ textarea:focus {
      relative date and a full path, and the path was being cut mid-folder
      while the window had room to spare. */
   width: min(480px, 100%);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: calc(var(--radius) + 4px);
   padding: 1.85rem 1.85rem 2rem;
-  box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(16px) saturate(120%);
+  box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
   /* Body copy reads left, headings read centred. Centring everything gave
@@ -440,7 +549,6 @@ textarea:focus {
 
 .recovery-entry-box::placeholder {
   letter-spacing: 0.12em;
-  opacity: 0.35;
 }
 
 /* A way out is not a peer of the action the screen is for, so it sits
@@ -480,7 +588,7 @@ textarea:focus {
 .field>span {
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -511,8 +619,7 @@ textarea:focus {
   font-weight: 800;
   letter-spacing: -0.04em;
   font-size: 1.05rem;
-  color: #ffffff;
-  text-shadow: 0 0 20px rgba(139, 92, 246, 0.25);
+  color: var(--text);
 }
 
 /* ── Shell ── */
@@ -530,7 +637,7 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  background: color-mix(in srgb, var(--surface) 90%, var(--bg-deep));
+  background: var(--surface);
   border-right: 1px solid var(--border-subtle);
   /* Top padding matches the pane views', so the brand and the page header
      beside it start on the same line rather than 12px apart. */
@@ -588,7 +695,7 @@ textarea:focus {
   padding: 0.45rem 1rem;
   border-radius: 999px;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-weight: 600;
   border: 1px solid transparent;
   box-shadow: none;
@@ -597,16 +704,18 @@ textarea:focus {
 }
 
 .tab-item:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--ink);
+  background: var(--row-hover);
+  color: var(--text);
   box-shadow: none;
 }
 
 .tab-item.active {
   background: var(--accent-soft);
-  color: var(--accent-hover);
-  border-color: rgba(139, 92, 246, 0.25);
-  box-shadow: 0 0 15px rgba(139, 92, 246, 0.15);
+  color: var(--text);
+}
+
+.tab-item.active svg {
+  color: var(--accent-text);
 }
 
 .tab-label {
@@ -627,7 +736,7 @@ textarea:focus {
   height: 1.3rem;
   padding: 0 0.35rem;
   border-radius: 999px;
-  background: var(--danger);
+  background: var(--danger-solid);
   color: #fff;
   font-size: 0.75rem;
   font-weight: 700;
@@ -638,22 +747,17 @@ textarea:focus {
 }
 
 .tab-badge-update {
-  background: var(--accent);
+  background: var(--accent-solid);
 }
 
 .tab-badge-neutral {
-  background: color-mix(in srgb, var(--text-muted) 30%, transparent);
+  background: var(--border);
   color: var(--text);
 }
 
 .tab-badge-warn {
-  background: var(--warning);
-  color: #1f1300;
-}
-
-/* The light theme's amber is dark enough to carry white text. */
-.light-theme .tab-badge-warn {
-  color: #fff;
+  background: var(--warning-solid);
+  color: var(--warning-ink);
 }
 
 .rail-update-badge {
@@ -667,7 +771,7 @@ textarea:focus {
   padding: 0.6rem 0.75rem;
   border: 1px solid var(--accent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  background: var(--accent-soft);
   font-size: 0.85rem;
   margin: 0 0 0.5rem;
 }
@@ -675,7 +779,7 @@ textarea:focus {
 .update-available svg {
   flex-shrink: 0;
   margin-top: 0.1rem;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .tab-badge-dot {
@@ -757,9 +861,9 @@ textarea:focus {
   gap: 0.4rem;
   flex: 1;
   padding: 0.45rem 0.85rem;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.18);
-  color: #fca5a5;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  color: var(--danger-text);
   font-weight: 600;
   border-radius: var(--radius-sm);
   box-shadow: none;
@@ -767,10 +871,8 @@ textarea:focus {
 }
 
 .btn-lock:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.16);
-  border-color: rgba(239, 68, 68, 0.35);
-  color: #fee2e2;
-  box-shadow: 0 0 10px rgba(239, 68, 68, 0.15);
+  background: color-mix(in srgb, var(--danger-solid) 22%, transparent);
+  border-color: var(--danger-text);
 }
 
 .sidebar-collapsed .btn-lock {
@@ -788,7 +890,7 @@ textarea:focus {
   /* 0.58rem landed at 8px, which is decoration rather than information. */
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   line-height: 1;
   margin-left: auto;
   white-space: nowrap;
@@ -910,7 +1012,7 @@ textarea:focus {
 .content-offer-text p {
   margin: 0.15rem 0 0;
   font-size: 0.78rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .content-offer-actions {
@@ -928,7 +1030,7 @@ textarea:focus {
   overflow: hidden;
   scrollbar-gutter: stable both-edges;
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* The capsule itself: its own surface, inset from every edge so it belongs
@@ -959,25 +1061,25 @@ textarea:focus {
   border-radius: 50%;
   display: inline-block;
   margin-right: 0.4rem;
-  background: var(--text-dim);
+  background: var(--text-tertiary);
 }
 
 .dot.ok {
-  background: var(--success);
+  background: var(--success-solid);
 }
 
 /* A silo with no backup: not an error, and not green either. The base grey
    already says "nothing to report", named here so the intent survives. */
 .dot.neutral {
-  background: var(--text-dim);
+  background: var(--text-tertiary);
 }
 
 .dot.warn {
-  background: var(--warning);
+  background: var(--warning-solid);
 }
 
 .dot.err {
-  background: var(--danger);
+  background: var(--danger-solid);
 }
 
 /* ── Explorer ── */
@@ -1053,12 +1155,12 @@ textarea:focus {
   align-items: center;
   justify-content: center;
   background: transparent;
-  color: var(--ink);
+  color: var(--text);
   border: 1px solid transparent;
 }
 
 .explorer-icon-btn:hover:not(:disabled) {
-  background: var(--bg-hover);
+  background: var(--row-hover);
   border-color: var(--border-subtle);
 }
 
@@ -1078,7 +1180,7 @@ textarea:focus {
   padding: 0 0.55rem;
   height: 36px;
   box-sizing: border-box;
-  background: var(--surface-muted);
+  background: var(--surface-sunken);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
   font-size: 0.86rem;
@@ -1100,13 +1202,13 @@ textarea:focus {
 }
 
 .explorer-sep {
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   margin: 0 0.2rem;
 }
 
 .explorer-crumb-btn {
   background: none;
-  color: var(--accent);
+  color: var(--accent-text);
   padding: 0.1rem 0.25rem;
   font-weight: 600;
   border: none;
@@ -1121,7 +1223,7 @@ textarea:focus {
 
 .explorer-crumb-current {
   font-weight: 700;
-  color: var(--ink);
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1187,7 +1289,7 @@ textarea:focus {
   flex: 1 1 12rem;
   min-width: 0;
   font-size: 0.9rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .settings-row-label strong {
@@ -1246,7 +1348,7 @@ textarea:focus {
   max-width: 62ch;
   font-size: 0.82rem;
   line-height: 1.5;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .setting-text .hint {
@@ -1271,7 +1373,7 @@ textarea:focus {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
 }
 
 .setting-list > .setting-group-title:first-child {
@@ -1297,7 +1399,7 @@ textarea:focus {
 .settings-pane .panel-section > h3 + p.lead {
   font-size: 0.9rem;
   line-height: 1.55;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   max-width: 64ch;
 }
 
@@ -1337,7 +1439,7 @@ textarea:focus {
   width: 100%;
   height: 100%;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--text-dim) 45%, transparent);
+  background: var(--toggle-off);
   transition: background 0.18s ease;
   display: flex;
   align-items: center;
@@ -1355,7 +1457,7 @@ textarea:focus {
 }
 
 .toggle input:checked + .toggle-track {
-  background: var(--accent-solid);
+  background: var(--toggle-on);
 }
 
 .toggle input:checked + .toggle-track .toggle-thumb {
@@ -1363,7 +1465,7 @@ textarea:focus {
 }
 
 .toggle input:focus-visible + .toggle-track {
-  outline: 2px solid color-mix(in srgb, var(--accent) 70%, white);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -1384,11 +1486,11 @@ textarea:focus {
   gap: 0.6rem;
   padding: 0.45rem 0.7rem;
   border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border-subtle));
+  border: 1px solid var(--accent-border);
   background: var(--accent-soft);
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--accent-hover);
+  color: var(--accent-text);
   animation: fade-in 0.2s ease;
 }
 
@@ -1426,7 +1528,7 @@ textarea:focus {
   width: 100%;
   height: 6px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  background: var(--track);
   overflow: hidden;
 }
 
@@ -1513,15 +1615,15 @@ textarea:focus {
   height: 4.5rem;
   margin-bottom: 0.6rem;
   border-radius: 1.1rem;
-  color: var(--accent-hover);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border: 1px solid var(--border-subtle);
 }
 
 .details-icon.row-file {
-  color: var(--kind-color, var(--text-muted));
-  background: color-mix(in srgb, var(--kind-color, var(--text-muted)) 13%, transparent);
-  border-color: color-mix(in srgb, var(--kind-color, var(--text-muted)) 24%, transparent);
+  color: var(--kind-color, var(--text-secondary));
+  background: color-mix(in srgb, var(--kind-color, var(--text-secondary)) 13%, transparent);
+  border-color: color-mix(in srgb, var(--kind-color, var(--text-secondary)) 24%, transparent);
 }
 
 .details-name {
@@ -1536,7 +1638,7 @@ textarea:focus {
 .details-kind {
   margin: 0;
   font-size: 0.85rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .details-rows {
@@ -1563,7 +1665,7 @@ textarea:focus {
   height: 1.85rem;
   border-radius: var(--radius-sm);
   background: var(--accent-soft);
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 .details-row > div {
@@ -1572,7 +1674,7 @@ textarea:focus {
 
 .details-row dt {
   font-size: 0.76rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   margin-bottom: 0.1rem;
 }
 
@@ -1595,20 +1697,20 @@ textarea:focus {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
-  background: var(--text-dim);
+  background: var(--text-tertiary);
 }
 
 .details-status.is-ok::before,
 .details-copy.is-holds .details-copy-dot {
-  background: var(--success);
+  background: var(--success-solid);
 }
 
 .details-status.is-wait::before {
-  background: var(--warning);
+  background: var(--warning-solid);
 }
 
 .details-status.is-bad::before {
-  background: var(--danger);
+  background: var(--danger-solid);
 }
 
 .details-status.is-away::before {
@@ -1656,11 +1758,11 @@ textarea:focus {
 .details-copy-state {
   grid-column: 2;
   font-size: 0.76rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .details-copy.is-holds .details-copy-state {
-  color: var(--success);
+  color: var(--success-text);
   font-weight: 600;
 }
 
@@ -1668,7 +1770,7 @@ textarea:focus {
   margin: 0;
   font-size: 0.82rem;
   line-height: 1.45;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* The main action, full width under the name. */
@@ -1713,7 +1815,7 @@ textarea:focus {
 
 .details-list-item > svg {
   flex-shrink: 0;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .details-list-item:hover:not(:disabled),
@@ -1723,7 +1825,7 @@ textarea:focus {
 
 .details-list-item.danger,
 .details-list-item.danger > svg {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .details-list-item:disabled {
@@ -1743,7 +1845,7 @@ textarea:focus {
     bottom: 0;
     width: min(20rem, 88%);
     z-index: 5;
-    box-shadow: var(--shadow-soft, 0 12px 30px rgba(0, 0, 0, 0.35));
+    box-shadow: var(--shadow-md);
   }
 }
 
@@ -1766,11 +1868,11 @@ textarea:focus {
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   font-weight: 700;
   padding: 0.65rem 0.85rem;
   border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-muted);
+  background: var(--surface-sunken);
   position: sticky;
   top: 0;
   z-index: 1;
@@ -1789,15 +1891,15 @@ textarea:focus {
 }
 
 .file-list tbody tr:hover {
-  background: var(--bg-hover);
+  background: var(--row-hover);
 }
 
 .file-list tbody tr.is-selected {
-  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  background: var(--row-selected);
 }
 
 .file-list tbody tr.is-selected:hover {
-  background: color-mix(in srgb, var(--accent) 24%, var(--surface));
+  background: var(--row-selected);
 }
 
 .entry-name {
@@ -1808,16 +1910,16 @@ textarea:focus {
 }
 
 .entry-name svg {
-  color: var(--accent-hover);
+  color: var(--accent-text);
   flex-shrink: 0;
 }
 
 .row-file .entry-name svg {
-  color: var(--kind-color, var(--text-muted));
+  color: var(--kind-color, var(--text-secondary));
 }
 
 .col-muted {
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   font-size: 0.85rem;
   /* A date with a year ("Nov 15, 2023, 00:13") must not fold onto two
      lines: every row in an archive is from a past year, so the wrap was
@@ -1905,7 +2007,7 @@ textarea:focus {
   flex-shrink: 0;
   border-radius: 10px;
   background: var(--accent-soft);
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 .view-header-text {
@@ -1927,7 +2029,7 @@ textarea:focus {
 .view-header-text p {
   margin: 0;
   font-size: 0.78rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2030,11 +2132,11 @@ textarea:focus {
 
 .settings-rail-icon {
   flex-shrink: 0;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
 }
 
 .view-rail-item.active .settings-rail-icon {
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 /* ── Backup view ── */
@@ -2061,13 +2163,13 @@ textarea:focus {
   justify-content: center;
   background: var(--accent-soft);
   border: 1px solid var(--border);
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 .backup-status.is-connected .backup-status-icon {
-  background: color-mix(in srgb, var(--success) 14%, transparent);
-  border-color: color-mix(in srgb, var(--success) 35%, transparent);
-  color: var(--success);
+  background: var(--success-soft);
+  border-color: var(--success-border);
+  color: var(--success-text);
 }
 
 .backup-status-text {
@@ -2081,7 +2183,7 @@ textarea:focus {
 
 .backup-status-text p {
   margin: 0;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* The saved connection, read back as label/value rows. Not a form: the
@@ -2092,7 +2194,7 @@ textarea:focus {
   padding: 0.85rem 1rem;
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
-  background: var(--bg-deep);
+  background: var(--surface-sunken);
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
@@ -2108,7 +2210,7 @@ textarea:focus {
 .backup-config dt {
   flex-shrink: 0;
   width: 90px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .backup-config dd {
@@ -2133,7 +2235,7 @@ textarea:focus {
   gap: 0.9rem;
   align-items: flex-start;
   font-size: 0.92rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* Title on its own line, body under it. One long run of bold-into-text per
@@ -2159,7 +2261,7 @@ textarea:focus {
   justify-content: center;
   background: var(--accent-soft);
   border: 1px solid var(--border-subtle);
-  color: var(--accent-hover);
+  color: var(--accent-text);
   margin-top: 0.1rem;
 }
 
@@ -2203,7 +2305,7 @@ textarea:focus {
 
 .s3-checkbox input,
 .confirm-option input[type="checkbox"] {
-  accent-color: var(--accent-solid);
+  accent-color: var(--toggle-on);
   width: 16px;
   height: 16px;
   margin-top: 0.2rem;
@@ -2230,7 +2332,7 @@ textarea:focus {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
   padding: 1.65rem 1.75rem;
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--shadow-md);
   animation: panel-section-in 0.22s ease-out both;
 }
 
@@ -2296,7 +2398,7 @@ textarea:focus {
 
 .panel-section h3 svg {
   flex-shrink: 0;
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 /* A card's description sets up everything under it, so it gets a clear gap
@@ -2307,19 +2409,19 @@ textarea:focus {
 }
 
 .panel-section h3.is-danger svg {
-  color: var(--danger-on-dark);
+  color: var(--danger-text);
 }
 
 /* The card itself says danger, not just its heading, so the eye separates
  * it from its neighbours before reading a word. */
 .panel-section-danger {
-  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
-  background: color-mix(in srgb, var(--danger) 4%, var(--surface));
+  border-color: var(--danger-border);
+  background: var(--surface);
 }
 
 .panel-section>p {
   margin: 0 0 0.85rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* ── File type marks ── */
@@ -2407,7 +2509,7 @@ textarea:focus {
   gap: 0.3rem;
   font-size: 0.78rem;
   line-height: 1;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
 }
 
 .sync-badge svg {
@@ -2415,26 +2517,26 @@ textarea:focus {
 }
 
 .sync-pending {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .sync-backed-up {
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .sync-remote-only {
-  color: var(--text-dim);
+  color: var(--text-tertiary);
 }
 
 .sync-absent {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 /* Moving now: the same cloud, pulsing, so a row being transferred stands
  * out without a spinner in every column. */
 .sync-uploading,
 .sync-downloading {
-  color: var(--accent);
+  color: var(--accent-text);
   animation: sync-pulse 1.1s ease-in-out infinite;
 }
 
@@ -2473,7 +2575,7 @@ textarea:focus {
   width: 22px;
   height: 22px;
   border-radius: 999px;
-  background: var(--bg-deep);
+  background: var(--surface-raised);
   border: 1px solid var(--border-subtle);
 }
 
@@ -2495,7 +2597,7 @@ textarea:focus {
   background: transparent;
   text-align: left;
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
@@ -2517,7 +2619,7 @@ textarea:focus {
   font-size: 0.72rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .sidebar-storage-vertical:hover {
@@ -2530,7 +2632,7 @@ textarea:focus {
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: var(--warning);
+  background: var(--warning-solid);
   flex-shrink: 0;
 }
 
@@ -2551,17 +2653,17 @@ textarea:focus {
 }
 
 .sidebar-storage-limit {
-  color: var(--text-dim);
+  color: var(--text-tertiary);
 }
 
 .sidebar-storage-note {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .storage-bar {
   display: block;
   height: 5px;
-  background: var(--bg-deep);
+  background: var(--track);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -2569,7 +2671,7 @@ textarea:focus {
 .storage-bar-fill {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, var(--accent), #6366f1);
+  background: var(--accent);
   border-radius: inherit;
   transition: width 0.3s ease;
 }
@@ -2591,7 +2693,7 @@ textarea:focus {
   padding: 0.55rem 0.7rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  background: var(--surface-muted);
+  background: var(--surface-sunken);
 }
 
 /* Says that an organisation administers this key, on every device that lists
@@ -2605,10 +2707,10 @@ textarea:focus {
   margin-left: 0.45rem;
   padding: 0.1rem 0.4rem;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--text);
-  font-size: 0.7rem;
+  border: 1px solid var(--accent-solid);
+  background: var(--accent-solid);
+  color: #fff;
+  font-size: var(--fs-11);
   font-weight: 600;
   letter-spacing: 0.01em;
   vertical-align: middle;
@@ -2621,13 +2723,13 @@ textarea:focus {
   padding: 0.75rem 0.85rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--surface-muted);
+  background: var(--surface-sunken);
 }
 
 .org-option svg {
   vertical-align: -2px;
   margin-right: 0.25rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* The pre-unlock screens on a short window. The enrolment card in
@@ -2737,9 +2839,9 @@ ol.key-add-steps {
   margin: 0;
   padding: 0.55rem 0.7rem;
   border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
+  border: 1px solid var(--accent-border);
   background: var(--accent-soft);
-  color: var(--ink);
+  color: var(--text);
   font-size: 0.9rem;
   font-weight: 500;
   animation: fade-in 0.2s ease;
@@ -2790,7 +2892,7 @@ ol.key-add-steps {
 }
 
 .trash-row:hover {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
+  border-color: var(--border-field);
 }
 
 .trash-row.is-selected {
@@ -2804,7 +2906,7 @@ ol.key-add-steps {
 .trash-select-all input {
   width: auto;
   flex-shrink: 0;
-  accent-color: var(--accent);
+  accent-color: var(--toggle-on);
   transform: scale(1.1);
   cursor: pointer;
 }
@@ -2816,7 +2918,7 @@ ol.key-add-steps {
   padding: 0 0.2rem;
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
@@ -2836,7 +2938,7 @@ ol.key-add-steps {
 .trash-selection-count {
   font-size: 0.85rem;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--text);
 }
 
 .trash-selection-actions {
@@ -2855,7 +2957,7 @@ ol.key-add-steps {
   height: 2rem;
   border-radius: calc(var(--radius-sm) * 1.1);
   background: var(--accent-soft);
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 .trash-row-main {
@@ -2869,7 +2971,7 @@ ol.key-add-steps {
 .trash-row-name {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2880,7 +2982,7 @@ ol.key-add-steps {
   align-items: center;
   gap: 0.3rem;
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2900,7 +3002,7 @@ ol.key-add-steps {
   min-width: 5.5rem;
   white-space: nowrap;
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -2944,7 +3046,7 @@ ol.key-add-steps {
   justify-content: center;
   gap: 0.6rem;
   padding: 3rem 1rem;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
 }
 
 .trash-empty-state svg {
@@ -2957,18 +3059,18 @@ ol.key-add-steps {
 
 /* ── Feedback ── */
 .error {
-  color: var(--danger-on-dark);
+  color: var(--danger-text);
   font-size: 0.85rem;
   padding: 0.6rem 0.85rem;
-  background: rgba(194, 65, 12, 0.08);
-  border: 1px solid rgba(194, 65, 12, 0.2);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
   border-radius: var(--radius-sm);
   margin: 0;
 }
 
 .hint {
   font-size: 0.88rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   margin: 0;
   line-height: 1.45;
 }
@@ -2981,7 +3083,7 @@ ol.key-add-steps {
 
 .empty-state-row svg {
   flex-shrink: 0;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
 }
 
 /* Extra separation for a secondary/destructive action placed right after a
@@ -2996,7 +3098,7 @@ ol.key-add-steps {
 }
 
 .hint.is-error {
-  color: var(--danger-on-dark);
+  color: var(--danger-text);
 }
 
 /* The one thing on the setup screen that cannot be undone later, so it is
@@ -3006,9 +3108,9 @@ ol.key-add-steps {
 .consequence {
   margin: 1.1rem 0 0.4rem;
   padding: 0.9rem 1rem;
-  border: 1px solid color-mix(in srgb, var(--warning) 32%, transparent);
+  border: 1px solid var(--warning-border);
   border-radius: var(--radius);
-  background: color-mix(in srgb, var(--warning) 6%, transparent);
+  background: var(--warning-soft);
   text-align: left;
 }
 
@@ -3019,14 +3121,14 @@ ol.key-add-steps {
   margin: 0 0 0.5rem;
   font-size: 0.88rem;
   font-weight: 700;
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .consequence p {
   margin: 0;
   font-size: 0.83rem;
   line-height: 1.55;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .consequence p + p {
@@ -3043,7 +3145,7 @@ ol.key-add-steps {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  color: var(--success);
+  color: var(--success-text);
   font-size: 0.85rem;
   margin: 0;
 }
@@ -3082,7 +3184,7 @@ ol.key-add-steps {
   border-radius: var(--radius);
   border: 1px solid var(--border-subtle);
   background: var(--surface);
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--shadow-md);
   animation: toast-in 0.22s ease;
 }
 
@@ -3120,7 +3222,7 @@ tr.is-moving {
   border-radius: 999px;
   background: var(--surface);
   border: 1px solid var(--border-subtle);
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--shadow-md);
   font-size: 0.8rem;
   color: var(--text);
 }
@@ -3165,7 +3267,7 @@ tr.is-moving {
 
 .move-to-row > svg {
   flex-shrink: 0;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .move-to-row > span {
@@ -3201,12 +3303,12 @@ tr.is-moving {
   border-radius: var(--radius);
   border: 1px solid var(--accent-soft);
   background: var(--surface);
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--shadow-md);
 }
 
 .update-card-icon {
   flex: none;
-  color: var(--accent);
+  color: var(--accent-text);
   margin-top: 0.1rem;
 }
 
@@ -3227,7 +3329,7 @@ tr.is-moving {
 .update-card-text {
   margin-top: 0.15rem !important;
   font-size: 0.82rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
 
@@ -3308,7 +3410,7 @@ tr.is-moving {
 .toast .open-progress-detail {
   flex: none;
   font-size: 0.78rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .open-progress-cancel {
@@ -3328,18 +3430,18 @@ tr.is-moving {
 }
 
 .toast-error {
-  border-color: color-mix(in srgb, var(--danger) 40%, var(--border-subtle));
-  background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+  border-color: var(--danger-border);
+  background: var(--surface-raised);
 }
 
 .toast-success {
-  border-color: color-mix(in srgb, var(--success) 40%, var(--border-subtle));
-  background: color-mix(in srgb, var(--success) 6%, var(--surface));
+  border-color: var(--success-border);
+  background: var(--surface-raised);
 }
 
 .toast-info {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
-  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  border-color: var(--accent-border);
+  background: var(--surface-raised);
 }
 
 /* The global `min-height: 36px` is sized for buttons that stand next to a
@@ -3350,7 +3452,7 @@ tr.is-moving {
    row from shaving the width down to 19px. */
 .toast-dismiss {
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   padding: 0;
   min-height: 0;
   flex: none;
@@ -3362,8 +3464,8 @@ tr.is-moving {
 }
 
 .toast-dismiss:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--ink);
+  background: var(--row-hover);
+  color: var(--text);
 }
 
 @keyframes toast-in {
@@ -3394,7 +3496,7 @@ tr.is-moving {
   margin-left: 0.35rem;
   font-size: 0.78rem;
   opacity: 0.8;
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 .th-sortable {
@@ -3404,8 +3506,8 @@ tr.is-moving {
 }
 
 .th-sortable:hover {
-  background: var(--bg-hover) !important;
-  color: var(--ink);
+  background: var(--row-hover) !important;
+  color: var(--text);
 }
 
 .explorer-search-group {
@@ -3432,7 +3534,7 @@ tr.is-moving {
 .search-icon {
   position: absolute;
   left: 0.75rem;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   pointer-events: none;
   display: flex;
   align-items: center;
@@ -3445,17 +3547,17 @@ tr.is-moving {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
   border-radius: var(--radius-sm);
   box-shadow: none;
 }
 
 .view-toggle-btn:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: rgba(139, 92, 246, 0.3);
-  color: var(--ink);
+  background: var(--row-hover);
+  border-color: var(--border-field);
+  color: var(--text);
 }
 
 .view-toggle-btn.view-toggle-labelled {
@@ -3468,7 +3570,7 @@ tr.is-moving {
 
 .view-toggle-btn.active {
   background: var(--accent-soft);
-  color: var(--accent-hover);
+  color: var(--accent-text);
   border-color: var(--border);
 }
 
@@ -3490,85 +3592,6 @@ tr.is-moving {
   margin-bottom: 4rem;
 }
 
-.selection-toolbar {
-  position: fixed;
-  /* Clear of the status bar, which is 1rem from the window edge and about
-     2.4rem tall. */
-  bottom: 4.25rem;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(10, 14, 26, 0.85);
-  backdrop-filter: blur(20px) saturate(140%);
-  border: 1px solid rgba(139, 92, 246, 0.35);
-  padding: 0.65rem 1.35rem;
-  border-radius: 999px;
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.65), 0 0 25px rgba(139, 92, 246, 0.15);
-  z-index: 100;
-  animation: slide-up 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.selection-toolbar-count {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--accent-hover);
-  padding-right: 0.75rem;
-  border-right: 1px solid var(--border-subtle);
-  white-space: nowrap;
-}
-
-.selection-toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.selection-toolbar-btn {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 0.45rem 0.95rem;
-  font-size: 0.82rem;
-  border-radius: 999px;
-  box-shadow: none;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  transition: all 0.15s ease;
-}
-
-.selection-toolbar-btn:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: rgba(139, 92, 246, 0.3);
-  box-shadow: none;
-}
-
-.selection-toolbar-btn.danger {
-  background: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.25);
-  color: #fca5a5;
-}
-
-.selection-toolbar-btn.danger:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.22);
-  border-color: rgba(239, 68, 68, 0.45);
-  color: #fee2e2;
-}
-
-@keyframes slide-up {
-  from {
-    transform: translate(-50%, 25px);
-    opacity: 0;
-  }
-
-  to {
-    transform: translate(-50%, 0);
-    opacity: 1;
-  }
-}
-
-/* ── Grid View Card Layout ── */
 /* ── Sort menu ── */
 .sort-menu-wrap {
   position: relative;
@@ -3590,7 +3613,7 @@ tr.is-moving {
 .dropdown-hint {
   margin-left: auto;
   font-size: 0.78rem;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -3605,23 +3628,22 @@ tr.is-moving {
   bottom: 4.25rem;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(10, 14, 26, 0.85);
-  backdrop-filter: blur(20px) saturate(140%);
-  border: 1px solid rgba(139, 92, 246, 0.35);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
   padding: 0.65rem 1.35rem;
   border-radius: 999px;
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.65), 0 0 25px rgba(139, 92, 246, 0.15);
+  box-shadow: var(--shadow-lg);
   z-index: 100;
-  animation: slide-up 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  animation: slide-up var(--dur-3) var(--ease-out);
 }
 
 .selection-toolbar-count {
   font-size: 0.85rem;
   font-weight: 700;
-  color: var(--accent-hover);
+  color: var(--accent-text);
   padding-right: 0.75rem;
   border-right: 1px solid var(--border-subtle);
   white-space: nowrap;
@@ -3634,8 +3656,9 @@ tr.is-moving {
 }
 
 .selection-toolbar-btn {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
   padding: 0.45rem 0.95rem;
   font-size: 0.82rem;
   border-radius: 999px;
@@ -3647,26 +3670,26 @@ tr.is-moving {
 }
 
 .selection-toolbar-btn:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: rgba(139, 92, 246, 0.3);
+  background: var(--row-hover);
+  border-color: var(--border-field);
   box-shadow: none;
 }
 
 .selection-toolbar-btn.danger {
-  background: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.25);
-  color: #fca5a5;
+  background: transparent;
+  border-color: var(--danger-border);
+  color: var(--danger-text);
 }
 
 .selection-toolbar-btn.danger:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.22);
-  border-color: rgba(239, 68, 68, 0.45);
-  color: #fee2e2;
+  background: var(--danger-soft);
+  border-color: var(--danger-text);
+  color: var(--danger-text);
 }
 
 @keyframes slide-up {
   from {
-    transform: translate(-50%, 25px);
+    transform: translate(-50%, 4px);
     opacity: 0;
   }
 
@@ -3691,10 +3714,10 @@ tr.is-moving {
   align-items: center;
   justify-content: center;
   padding: 1.25rem 0.85rem;
-  background: rgba(255, 255, 255, 0.015);
+  background: transparent;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius);
-  transition: all 0.18s ease;
+  border-radius: var(--r-md);
+  transition: background-color var(--dur-1) ease, border-color var(--dur-1) ease;
   cursor: default;
   position: relative;
   text-align: center;
@@ -3702,35 +3725,31 @@ tr.is-moving {
 }
 
 .grid-card:hover {
-  background: var(--bg-hover);
-  border-color: rgba(139, 92, 246, 0.3);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+  background: var(--row-hover);
 }
 
 .grid-card.is-selected {
-  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  background: var(--row-selected);
   border-color: var(--accent);
-  box-shadow: 0 0 15px rgba(139, 92, 246, 0.2);
 }
 
 .grid-card-icon {
   position: relative;
   margin-bottom: 0.65rem;
-  color: var(--accent-hover);
+  color: var(--accent-text);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .grid-card-icon.row-file {
-  color: var(--kind-color, var(--text-muted));
+  color: var(--kind-color, var(--text-secondary));
 }
 
 .grid-card-name {
   font-size: 0.85rem;
   font-weight: 550;
-  color: var(--ink);
+  color: var(--text);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3738,11 +3757,9 @@ tr.is-moving {
   margin-bottom: 0.25rem;
 }
 
-/* --text-dim measured 3.7:1 here, under AA on type this small; the muted
-   token is the same greyness at a legible contrast. */
 .grid-card-meta {
   font-size: 0.78rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   /* One line, elided if it must be: a meta line that wraps makes that one
      card taller than its neighbours, and the full date is in Info and in
      the list view anyway. */
@@ -3765,8 +3782,7 @@ tr.is-moving {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(5, 7, 14, 0.8);
-  backdrop-filter: blur(12px);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3783,12 +3799,11 @@ tr.is-moving {
 .modal-card {
   width: min(400px, 90vw);
   max-height: 90vh;
-  background: rgba(18, 24, 42, 0.75);
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  border-radius: var(--radius);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
   padding: 1.5rem;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(139, 92, 246, 0.1);
-  backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -3808,7 +3823,7 @@ tr.is-moving {
   font-family: var(--font-display);
   font-size: 1.2rem;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--text);
   letter-spacing: -0.02em;
 }
 
@@ -3827,12 +3842,12 @@ tr.is-moving {
   height: 2.4rem;
   border-radius: 999px;
   background: var(--accent-soft);
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 .modal-title-icon.is-download {
-  background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
+  background: var(--success-soft);
+  color: var(--success-text);
 }
 
 .modal-body {
@@ -3860,12 +3875,12 @@ tr.is-moving {
 }
 
 .browser-fill-facts dt {
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .browser-fill-facts dd {
   margin: 0;
-  color: var(--ink);
+  color: var(--text);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -3878,9 +3893,9 @@ tr.is-moving {
   margin: 0;
   padding: 0.6rem 0.75rem;
   border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-  color: var(--danger-on-dark);
+  border: 1px solid var(--danger-border);
+  background: var(--danger-soft);
+  color: var(--danger-text);
 }
 
 /* The SSH agent's setup lines, and a key's passphrase asked once. */
@@ -3950,7 +3965,7 @@ tr.is-moving {
   width: auto;
   margin-top: 0.15rem;
   flex-shrink: 0;
-  accent-color: var(--accent);
+  accent-color: var(--toggle-on);
   transform: scale(1.1);
   cursor: pointer;
 }
@@ -3980,7 +3995,7 @@ tr.is-moving {
 }
 
 .info-row .info-label {
-  color: var(--text-muted);
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 
@@ -4007,8 +4022,8 @@ tr.is-moving {
   gap: 0.35rem;
   padding: 0.6rem 0;
   margin: 0.2rem 0;
-  border-top: 1px solid rgba(139, 92, 246, 0.18);
-  border-bottom: 1px solid rgba(139, 92, 246, 0.18);
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .silo-report-files .info-label {
@@ -4017,7 +4032,7 @@ tr.is-moving {
 }
 
 .silo-report-missing {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .folder-picker-list {
@@ -4026,8 +4041,8 @@ tr.is-moving {
   padding: 0;
   max-height: 320px;
   overflow-y: auto;
-  background: var(--bg-deep);
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border-subtle));
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
   border-radius: calc(var(--radius) * 0.7);
 }
 
@@ -4045,7 +4060,7 @@ tr.is-moving {
   border: none;
   text-align: left;
   font-size: 0.92rem;
-  color: var(--ink);
+  color: var(--text);
   cursor: pointer;
 }
 
@@ -4054,7 +4069,7 @@ tr.is-moving {
 }
 
 .folder-picker-row.is-selected {
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  background: var(--row-selected);
   font-weight: 600;
 }
 
@@ -4065,14 +4080,14 @@ tr.is-moving {
   gap: 0.6rem;
   padding: 0.5rem 0.75rem;
   background: var(--accent-soft);
-  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border-subtle));
+  border: 1px solid var(--border-subtle);
   border-radius: calc(var(--radius) * 0.6);
 }
 
 .browser-current-path {
   font-size: 0.92rem;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4082,11 +4097,11 @@ tr.is-moving {
   padding: 1.5rem 0.6rem;
   text-align: center;
   font-size: 0.9rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .browser-empty.is-error {
-  color: var(--danger-on-dark);
+  color: var(--danger-text);
 }
 
 .folder-picker-row-static {
@@ -4096,11 +4111,11 @@ tr.is-moving {
   gap: 0.6rem;
   padding: 0.6rem 0.85rem;
   font-size: 0.92rem;
-  color: var(--ink);
+  color: var(--text);
 }
 
 .folder-picker-row-static.is-selected {
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  background: var(--row-selected);
 }
 
 .browser-checkbox {
@@ -4118,7 +4133,7 @@ tr.is-moving {
      off to the far right with a big empty gap in between. */
   width: auto;
   flex-shrink: 0;
-  accent-color: var(--accent);
+  accent-color: var(--toggle-on);
   transform: scale(1.1);
 }
 
@@ -4131,9 +4146,9 @@ tr.is-moving {
 .browser-open-btn {
   flex-shrink: 0;
   background: transparent;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border-subtle));
+  border: 1px solid var(--border);
   border-radius: calc(var(--radius-sm) * 0.9);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-weight: 600;
   font-size: 0.8rem;
   padding: 0.3rem 0.7rem;
@@ -4142,8 +4157,8 @@ tr.is-moving {
 
 .browser-open-btn:hover:not(:disabled) {
   background: var(--accent-soft);
-  color: var(--accent-hover);
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--border-subtle));
+  color: var(--accent-text);
+  border-color: var(--border-field);
 }
 
 @keyframes modal-in {
@@ -4167,20 +4182,20 @@ tr.is-moving {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  background: linear-gradient(135deg, #7c3aed 0%, #5b5bd6 100%);
+  background: var(--accent-solid);
   color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  font-weight: 650;
+  border: 1px solid transparent;
+  font-weight: 600;
   padding: 0.45rem 0.95rem;
   border-radius: var(--radius-sm);
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+  box-shadow: none;
   height: 36px;
   transition: all 0.15s ease;
 }
 
 .btn-add-new:hover:not(:disabled) {
-  background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%);
-  box-shadow: 0 6px 18px rgba(139, 92, 246, 0.4);
+  background: var(--accent-solid-hover);
+  box-shadow: none;
 }
 
 .btn-add-new:active:not(:disabled) {
@@ -4205,13 +4220,12 @@ tr.is-moving {
   top: calc(100% + 0.35rem);
   right: 0;
   width: 170px;
-  background: color-mix(in srgb, var(--surface) 96%, var(--bg-deep));
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
   padding: 0.35rem;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45), 0 0 15px rgba(139, 92, 246, 0.08);
+  box-shadow: var(--shadow-md);
   z-index: 50;
-  backdrop-filter: blur(16px);
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
@@ -4240,22 +4254,22 @@ tr.is-moving {
 }
 
 .dropdown-item:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--ink);
+  background: var(--row-hover);
+  color: var(--text);
   box-shadow: none;
 }
 
 /* A fixed box per icon, so the labels line up in a column even when the
    glyphs differ in width. */
 .dropdown-item svg {
-  color: var(--text-muted);
+  color: var(--text-secondary);
   flex-shrink: 0;
   width: 15px;
   height: 15px;
 }
 
 .dropdown-item:hover svg {
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 .dropdown-divider {
@@ -4267,13 +4281,12 @@ tr.is-moving {
 .context-menu {
   position: fixed;
   min-width: 190px;
-  background: color-mix(in srgb, var(--surface) 96%, var(--bg-deep));
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
   padding: 0.35rem;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45), 0 0 15px rgba(139, 92, 246, 0.08);
+  box-shadow: var(--shadow-md);
   z-index: 120;
-  backdrop-filter: blur(16px);
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
@@ -4302,8 +4315,8 @@ tr.is-moving {
 }
 
 .context-menu-item:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--ink);
+  background: var(--row-hover);
+  color: var(--text);
   box-shadow: none;
 }
 
@@ -4313,22 +4326,22 @@ tr.is-moving {
 }
 
 .context-menu-item svg {
-  color: var(--text-muted);
+  color: var(--text-secondary);
   flex-shrink: 0;
   width: 15px;
   height: 15px;
 }
 
 .context-menu-item:hover:not(:disabled) svg {
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 .context-menu-item.danger {
-  color: var(--danger-on-dark);
+  color: var(--danger-text);
 }
 
 .context-menu-item.danger svg {
-  color: var(--danger-on-dark);
+  color: var(--danger-text);
 }
 
 .context-menu-divider {
@@ -4355,70 +4368,32 @@ tr.is-moving {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
   border-radius: var(--radius-sm);
   box-shadow: none;
-  transition: all 0.15s ease;
+  transition: background-color var(--dur-1) ease, border-color var(--dur-1) ease, color var(--dur-1) ease;
 }
 
-.btn-theme:hover,
-.btn-collapse:hover {
-  background: var(--bg-hover);
-  border-color: rgba(139, 92, 246, 0.25);
-  color: var(--ink);
+.btn-theme:hover:not(:disabled),
+.btn-collapse:hover:not(:disabled) {
+  background: var(--row-hover);
+  border-color: var(--border-field);
+  color: var(--text);
+  box-shadow: none;
 }
 
-/* ── Light Theme Variables & Tweaks ── */
-.light-theme {
-  --bg: #f8fafc;
-  --bg-deep: #f1f5f9;
-  --surface: #ffffff;
-  --surface-muted: #e2e8f0;
-  --bg-hover: #f1f5f9;
-  --border: rgba(124, 58, 237, 0.14);
-  --border-subtle: rgba(124, 58, 237, 0.08);
-  --ink: #0f172a;
-  --text: #1e293b;
-  --text-muted: #475569;
-  --text-dim: #64748b;
-  --accent: #7c3aed;
-  --accent-hover: #6d28d9;
-  --accent-soft: rgba(124, 58, 237, 0.08);
-  /* The dark theme's green and amber are tuned to sit on near-black: on
-     white they measure 2.5:1 and 2.1:1, which took every "Backing up to…",
-     "You're on the latest version" and "A recovery code is active" line —
-     plus the cloud-folder warning — below legibility. These are the same
-     hues carried down to AA on a white surface. */
-  --success: #047857;
-  --warning: #b45309;
-  --strength-weak: #b45309;
-  --strength-fair: #a16207;
-  --strength-good: #4d7c0f;
-  --shadow-soft: 0 12px 30px rgba(15, 23, 42, 0.05);
-  color-scheme: light;
-}
-
-.light-theme body {
-  background:
-    radial-gradient(ellipse 100% 70% at 50% -20%, rgba(124, 58, 237, 0.08), transparent 60%),
-    radial-gradient(circle 800px at 0% 100%, rgba(99, 102, 241, 0.03), transparent 70%),
-    linear-gradient(180deg, var(--bg) 0%, #f1f5f9 100%);
-}
-
-.light-theme .brand-logo-text {
-  color: var(--ink);
-  text-shadow: none;
-}
+/* ── Light theme tweaks ──
+ * Colours come from the tokens; only what the tokens cannot say lives here. */
 
 .light-theme .sidebar-brand .brand-logo img {
   background: #fff;
   padding: 3px;
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 0 0 1px var(--border);
 }
 
-/* Unlock / auth screens — light mode (avoid dark wash + washed-out card) */
+/* The start screens keep a brand wash in light too. */
 .light-theme .app.auth-screen {
   background:
     radial-gradient(ellipse 90% 50% at 50% -15%, rgba(124, 58, 237, 0.16), transparent 58%),
@@ -4434,191 +4409,14 @@ tr.is-moving {
 }
 
 .light-theme .brand-title {
-  color: #0f172a;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.04em;
 }
 
-/* Darker than the usual muted text: this line sits on the violet wash at
-   the top of the page rather than on the card, and the standard muted
-   slate only reaches 4.3:1 against it. */
+/* Darker than the usual secondary text: this line sits on the violet wash
+   at the top of the page rather than on the card. */
 .light-theme .brand-sub {
   color: #334155;
-}
-
-.light-theme .card.auth-card {
-  background: #ffffff;
-  border: 1px solid rgba(124, 58, 237, 0.14);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.9) inset,
-    0 20px 48px -16px rgba(15, 23, 42, 0.14),
-    0 0 0 1px rgba(124, 58, 237, 0.04);
-  backdrop-filter: none;
-}
-
-.light-theme .auth-card h2 {
-  color: #0f172a;
-}
-
-/* Colour only. A `max-width: 28ch` used to live here and clamped every hint
-   on every auth card to a ~215px column inside a 480px card, so the light
-   theme drew a narrow ragged strip of text under a centred heading while
-   half the card sat empty. The card is the measure; the theme decides
-   contrast, not layout. */
-.light-theme .auth-card .hint {
-  color: #475569;
-}
-
-.light-theme .auth-card .error {
-  background: rgba(239, 68, 68, 0.08);
-  border-color: rgba(239, 68, 68, 0.22);
-  color: #b91c1c;
-}
-
-.light-theme .auth-card .fido-live {
-  background: rgba(124, 58, 237, 0.08);
-  border-color: rgba(124, 58, 237, 0.22);
-  color: #5b21b6;
-}
-
-.light-theme .auth-card button.secondary {
-  background: #f8fafc;
-  color: #0f172a;
-  border-color: rgba(124, 58, 237, 0.18);
-}
-
-.light-theme .auth-card button.secondary:hover:not(:disabled) {
-  background: #f1f5f9;
-  border-color: rgba(124, 58, 237, 0.3);
-}
-
-.light-theme .sidebar {
-  background: #ffffff;
-  border-color: rgba(124, 58, 237, 0.1);
-}
-
-.light-theme .tab-item {
-  color: #475569;
-}
-
-.light-theme .tab-item:hover:not(:disabled) {
-  background: rgba(124, 58, 237, 0.05);
-  color: var(--ink);
-}
-
-.light-theme .tab-item.active {
-  background: var(--accent-soft);
-  color: #5b21b6;
-  border-color: rgba(124, 58, 237, 0.2);
-}
-
-.light-theme input,
-.light-theme select,
-.light-theme textarea {
-  background: #ffffff;
-  border-color: rgba(124, 58, 237, 0.18);
-  color: var(--ink);
-}
-
-.light-theme input::placeholder {
-  color: var(--text-dim);
-}
-
-.light-theme .search-input-wrapper input {
-  background: #f1f5f9;
-  border-color: rgba(124, 58, 237, 0.15);
-  color: #0f172a;
-}
-
-.light-theme .search-input-wrapper input:focus {
-  background: #ffffff;
-  border-color: var(--accent);
-}
-
-.light-theme .explorer-address {
-  background: #f1f5f9;
-  border-color: rgba(124, 58, 237, 0.1);
-}
-
-.light-theme .btn-lock {
-  background: rgba(239, 68, 68, 0.06);
-  border-color: rgba(239, 68, 68, 0.2);
-  color: #b91c1c;
-}
-
-.light-theme .btn-lock:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #b91c1c;
-}
-
-.light-theme .selection-toolbar {
-  background: rgba(255, 255, 255, 0.9);
-  border-color: rgba(124, 58, 237, 0.3);
-  box-shadow: 0 15px 35px rgba(15, 23, 42, 0.12), 0 0 25px rgba(124, 58, 237, 0.08);
-}
-
-.light-theme .selection-toolbar-btn {
-  background: rgba(0, 0, 0, 0.02);
-  border-color: rgba(0, 0, 0, 0.08);
-  color: var(--text);
-}
-
-.light-theme .selection-toolbar-btn:hover:not(:disabled) {
-  background: rgba(124, 58, 237, 0.05);
-  border-color: rgba(124, 58, 237, 0.25);
-  color: var(--accent);
-}
-
-/* Delete keeps its red in light, at rest and on hover. */
-.light-theme .selection-toolbar-btn.danger {
-  background: rgba(220, 38, 38, 0.06);
-  border-color: rgba(220, 38, 38, 0.35);
-  color: #b91c1c;
-}
-
-.light-theme .selection-toolbar-btn.danger:hover:not(:disabled) {
-  background: rgba(220, 38, 38, 0.12);
-  border-color: rgba(220, 38, 38, 0.5);
-  color: #991b1b;
-}
-
-.light-theme .modal-overlay {
-  background: rgba(15, 23, 42, 0.4);
-}
-
-.light-theme .modal-card {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(124, 58, 237, 0.2);
-  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.12), 0 0 30px rgba(124, 58, 237, 0.04);
-}
-
-/* The download icon badge is intentionally green (not accent-purple) to
- * tell it apart from Upload at a glance — its dark-mode colors (bright
- * green text on a barely-there tint) read as low-contrast on a white
- * modal card, so light mode gets its own darker, more saturated pairing. */
-.light-theme .modal-title-icon.is-download {
-  background: rgba(21, 128, 61, 0.12);
-  color: #15803d;
-}
-
-.light-theme .add-dropdown-menu {
-  background: rgba(255, 255, 255, 0.96);
-  border-color: rgba(124, 58, 237, 0.15);
-  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
-}
-
-.light-theme .add-dropdown-menu .dropdown-item:last-child svg {
-  color: var(--accent);
-}
-
-.light-theme .storage-bar {
-  background: #e2e8f0;
-}
-
-.light-theme .key-list-item {
-  background: #f1f5f9;
-  border-color: rgba(124, 58, 237, 0.1);
 }
 
 /* ── Custom Scrollbar Styling ── */
@@ -4751,7 +4549,7 @@ tr.is-moving {
   background: transparent;
   border: none;
   border-radius: 8px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 0.84rem;
   font-weight: 600;
   text-align: left;
@@ -4765,7 +4563,7 @@ tr.is-moving {
 .pw-rail-row:hover .view-rail-item,
 .pw-rail-row.active .view-rail-item {
   background: transparent;
-  color: var(--ink);
+  color: var(--text);
 }
 
 /* The standalone "All" item has no row wrapper to carry its background. */
@@ -4775,7 +4573,7 @@ tr.is-moving {
 
 .view-rail > .view-rail-item.active {
   background: var(--accent-soft);
-  color: var(--ink);
+  color: var(--text);
 }
 
 .view-rail-label {
@@ -4808,7 +4606,7 @@ tr.is-moving {
   margin-left: auto;
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -4825,7 +4623,7 @@ tr.is-moving {
   display: flex;
   /* Opaque on purpose: these sit over the count, and inheriting the row's
      translucent hover colour let the digits read through the icons. */
-  background: var(--bg-hover);
+  background: var(--row-hover);
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   padding: 0 0.1rem;
@@ -4865,7 +4663,7 @@ tr.is-moving {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* The first group sits under the pane's own top padding and needs no push
@@ -4877,11 +4675,11 @@ tr.is-moving {
 
 .pw-rail-type-icon {
   flex-shrink: 0;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
 }
 
 .view-rail-item.active .pw-rail-type-icon {
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 /* The add menu reuses the explorer's dropdown pattern wholesale; this
@@ -4908,7 +4706,7 @@ tr.is-moving {
   background: var(--surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 0.82rem;
   font-weight: 600;
   box-shadow: none;
@@ -4917,7 +4715,7 @@ tr.is-moving {
 .pw-empty-choice:hover:not(:disabled) {
   background: var(--accent-soft);
   border-color: var(--accent);
-  color: var(--ink);
+  color: var(--text);
   box-shadow: none;
 }
 
@@ -4940,7 +4738,7 @@ tr.is-moving {
   background: transparent;
   border: 1px dashed var(--border-subtle);
   border-radius: 8px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 0.8rem;
   font-weight: 600;
   text-align: left;
@@ -4949,7 +4747,7 @@ tr.is-moving {
 }
 
 .pw-rail-add:hover:not(:disabled) {
-  color: var(--ink);
+  color: var(--text);
   border-color: var(--accent);
   background: var(--accent-soft);
 }
@@ -4960,7 +4758,7 @@ tr.is-moving {
   overflow-y: auto;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--surface);
 }
 
 .pw-detail-pane {
@@ -4969,7 +4767,7 @@ tr.is-moving {
   overflow-y: auto;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--surface);
   padding: 1rem 1.1rem;
 }
 
@@ -5067,7 +4865,7 @@ tr.is-moving {
 .view-toolbar .search-icon {
   position: absolute;
   left: 0.75rem;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   pointer-events: none;
   display: flex;
   align-items: center;
@@ -5079,21 +4877,20 @@ tr.is-moving {
   gap: 0.4rem;
   padding: 0 1rem;
   height: 36px;
-  background: #6d28d9;
+  background: var(--accent-solid);
   color: #fff;
   border: none;
   border-radius: var(--radius-sm);
   font-weight: 650;
   font-size: 0.85rem;
   white-space: nowrap;
-  transition: all 0.15s ease;
-  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+  transition: background-color var(--dur-1) ease;
+  box-shadow: none;
 }
 
 .btn-add-password:hover:not(:disabled) {
-  background: #5b21b6;
-  box-shadow: 0 4px 14px rgba(139, 92, 246, 0.4);
-  transform: translateY(-1px);
+  background: var(--accent-solid-hover);
+  box-shadow: none;
 }
 
 /* Import/Export sit between the search field and the primary "Add
@@ -5108,7 +4905,7 @@ tr.is-moving {
   background: transparent;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-weight: 600;
   font-size: 0.8rem;
   white-space: nowrap;
@@ -5116,7 +4913,7 @@ tr.is-moving {
 }
 
 .pw-transfer-btn:hover:not(:disabled) {
-  background: var(--bg-hover);
+  background: var(--row-hover);
   border-color: var(--accent);
   color: var(--text);
 }
@@ -5127,20 +4924,20 @@ tr.is-moving {
   gap: 0.9rem;
   padding: 1rem 1.1rem;
   margin-bottom: 1rem;
-  background: color-mix(in srgb, var(--warning) 8%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border-subtle));
+  background: var(--warning-soft);
+  border: 1px solid var(--warning-border);
   border-radius: var(--radius);
 }
 
 .pw-export-warning strong {
   display: block;
   margin-bottom: 0.3rem;
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .pw-export-warning p {
   margin: 0;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 0.88rem;
   line-height: 1.5;
 }
@@ -5173,15 +4970,15 @@ tr.is-moving {
   gap: 0.75rem;
   padding: 0.7rem 0.9rem;
   margin-bottom: 1rem;
-  background: var(--surface-muted);
-  border: 1px solid color-mix(in srgb, var(--success) 30%, var(--border-subtle));
+  background: var(--surface-sunken);
+  border: 1px solid var(--success-border);
   border-radius: var(--radius-sm);
   font-size: 0.88rem;
 }
 
 .pw-transfer-notice.is-error {
-  border-color: color-mix(in srgb, var(--danger) 40%, var(--border-subtle));
-  color: var(--danger-on-dark);
+  border-color: var(--danger-border);
+  color: var(--danger-text);
 }
 
 .pw-favicon-toggle {
@@ -5193,7 +4990,7 @@ tr.is-moving {
   background: transparent;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-weight: 600;
   font-size: 0.8rem;
   white-space: nowrap;
@@ -5201,14 +4998,14 @@ tr.is-moving {
 }
 
 .pw-favicon-toggle:hover:not(:disabled) {
-  background: var(--bg-hover);
+  background: var(--row-hover);
   color: var(--text);
-  border-color: rgba(139, 92, 246, 0.35);
+  border-color: var(--border-field);
 }
 
 .pw-favicon-toggle.active {
-  border-color: rgba(139, 92, 246, 0.4);
-  color: var(--accent-hover);
+  border-color: var(--accent-border);
+  color: var(--accent-text);
   background: var(--accent-soft);
 }
 
@@ -5221,7 +5018,7 @@ tr.is-moving {
 }
 
 .pw-rows:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 70%, white);
+  outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
   border-radius: var(--radius);
 }
@@ -5268,7 +5065,7 @@ tr.is-moving {
 .pw-row-service {
   font-weight: 650;
   font-size: 0.86rem;
-  color: var(--ink);
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5276,7 +5073,7 @@ tr.is-moving {
 
 .pw-row-username {
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5310,7 +5107,7 @@ tr.is-moving {
 .pw-detail-service {
   font-weight: 700;
   font-size: 1.05rem;
-  color: var(--ink);
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5381,7 +5178,7 @@ button.pw-gen-toggle {
   gap: 0.5rem;
   cursor: pointer;
   font-size: 0.85rem;
-  color: var(--ink);
+  color: var(--text);
 }
 
 .pw-reauth-toggle input[type="checkbox"] {
@@ -5390,7 +5187,7 @@ button.pw-gen-toggle {
      into a one-word-per-line sliver at the far edge. */
   width: auto;
   margin-top: 0.15rem;
-  accent-color: var(--accent);
+  accent-color: var(--toggle-on);
   flex-shrink: 0;
   transform: scale(1.1);
 }
@@ -5418,7 +5215,7 @@ button.pw-gen-toggle {
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--surface);
-  color: var(--ink);
+  color: var(--text);
   font-size: 0.82rem;
   text-align: left;
 }
@@ -5442,7 +5239,7 @@ button.pw-gen-toggle {
 .pw-attachment-size {
   margin-left: auto;
   flex-shrink: 0;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
 }
@@ -5466,7 +5263,7 @@ button.pw-gen-toggle {
   align-items: center;
   gap: 0.3rem;
   font-size: 0.82rem;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   white-space: nowrap;
 }
 
@@ -5510,7 +5307,7 @@ button.pw-gen-toggle {
 
 .pw-history-what {
   min-width: 0;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   font-size: 0.82rem;
 }
 
@@ -5522,7 +5319,7 @@ button.pw-gen-toggle {
 }
 
 button.link.pw-history-clear {
-  color: var(--danger-on-dark);
+  color: var(--danger-text);
   font-size: 0.85rem;
 }
 
@@ -5534,14 +5331,14 @@ button.link.pw-history-clear {
   background: transparent;
   border: 1px dashed var(--border-subtle);
   border-radius: 8px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
 }
 
 .pw-attach-btn:hover:not(:disabled) {
-  color: var(--ink);
+  color: var(--text);
   border-color: var(--accent);
   background: var(--accent-soft);
 }
@@ -5598,7 +5395,7 @@ button.link.pw-history-clear {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .pw-card-actions {
@@ -5634,7 +5431,7 @@ button.link.pw-history-clear {
 
 .pw-field-row.is-clickable:hover,
 .pw-field-row.is-clickable:focus-visible {
-  background: var(--bg-hover);
+  background: var(--row-hover);
 }
 
 .pw-field-label {
@@ -5644,7 +5441,7 @@ button.link.pw-history-clear {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
 }
 
 .pw-field-value {
@@ -5677,12 +5474,12 @@ button.link.pw-history-clear {
 }
 
 .pw-input-error {
-  border-color: var(--danger) !important;
+  border-color: var(--danger-text) !important;
 }
 
 .pw-totp-panel {
   padding: 0.75rem 0.85rem;
-  background: var(--surface-muted);
+  background: var(--surface-sunken);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   box-sizing: border-box;
@@ -5709,7 +5506,7 @@ button.link.pw-history-clear {
 }
 
 .pw-totp-hint-error {
-  color: var(--danger-on-dark);
+  color: var(--danger-text);
 }
 
 .pw-totp-remove-btn {
@@ -5720,7 +5517,7 @@ button.link.pw-history-clear {
   padding: 0.3rem 0.6rem;
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   background: transparent;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
@@ -5729,13 +5526,13 @@ button.link.pw-history-clear {
 }
 
 .pw-totp-remove-btn:hover {
-  color: var(--danger-on-dark);
-  border-color: rgba(239, 68, 68, 0.35);
-  background: rgba(239, 68, 68, 0.06);
+  color: var(--danger-text);
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
 }
 
 .pw-link {
-  color: var(--accent-hover);
+  color: var(--accent-text);
   text-decoration: none;
 }
 
@@ -5753,7 +5550,7 @@ button.link.pw-history-clear {
   background: transparent;
   border: none;
   box-shadow: none;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: all 0.12s ease;
@@ -5762,13 +5559,13 @@ button.link.pw-history-clear {
 
 .pw-inline-btn:hover {
   background: var(--accent-soft);
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 .pw-copied-badge {
   font-size: 0.75rem;
   font-weight: 700;
-  color: var(--success);
+  color: var(--success-text);
   white-space: nowrap;
 }
 
@@ -5781,7 +5578,7 @@ button.link.pw-history-clear {
   justify-content: center;
   background: transparent;
   border: 1px solid transparent;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: all 0.12s ease;
@@ -5790,19 +5587,19 @@ button.link.pw-history-clear {
 }
 
 .pw-action-btn:hover {
-  background: var(--bg-hover);
+  background: var(--row-hover);
   border-color: var(--border-subtle);
-  color: var(--ink);
+  color: var(--text);
 }
 
 .pw-action-btn.danger {
-  color: #fca5a5;
+  color: var(--danger-text);
 }
 
 .pw-action-btn.danger:hover {
-  background: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.25);
-  color: #fee2e2;
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+  color: var(--danger-text);
 }
 
 .pw-form {
@@ -5853,10 +5650,10 @@ button.link.pw-history-clear {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface-muted);
+  background: var(--surface-sunken);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  color: var(--accent-hover);
+  color: var(--accent-text);
   cursor: pointer;
   transition: all 0.12s ease;
   flex-shrink: 0;
@@ -5865,7 +5662,7 @@ button.link.pw-history-clear {
 .pw-gen-btn:hover {
   background: var(--accent-soft);
   border-color: var(--accent);
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 .pw-gen-btn.accent {
@@ -5892,7 +5689,7 @@ button.link.pw-history-clear {
   flex: 1;
   height: 5px;
   border-radius: 999px;
-  background: var(--bg-deep);
+  background: var(--track);
   overflow: hidden;
 }
 
@@ -5914,7 +5711,7 @@ button.link.pw-history-clear {
 .pw-gen-panel {
   margin-top: 0.75rem;
   padding: 0.75rem 0.85rem;
-  background: var(--surface-muted);
+  background: var(--surface-sunken);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   box-sizing: border-box;
@@ -5926,19 +5723,19 @@ button.link.pw-history-clear {
   justify-content: space-between;
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   margin-bottom: 0.5rem;
 }
 
 .pw-gen-length-value {
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
 }
 
 .pw-gen-slider {
   width: 100%;
   height: 4px;
-  accent-color: var(--accent);
+  accent-color: var(--toggle-on);
   display: block;
   box-sizing: border-box;
 }
@@ -5955,7 +5752,7 @@ button.link.pw-history-clear {
   border-radius: 999px;
   border: 1px solid var(--border-subtle);
   background: var(--surface);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 0.78rem;
   font-weight: 600;
   font-family: "Courier New", Courier, monospace;
@@ -5966,7 +5763,7 @@ button.link.pw-history-clear {
 .pw-gen-chip:hover {
   background: var(--accent-soft);
   border-color: var(--accent);
-  color: var(--ink);
+  color: var(--text);
 }
 
 .pw-gen-chip.active {
@@ -5976,38 +5773,11 @@ button.link.pw-history-clear {
 }
 
 .empty-icon {
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   opacity: 0.5;
   margin-bottom: 0.5rem;
 }
 
-/* Light theme button overrides */
-.light-theme button.danger {
-  color: #dc2626;
-}
-
-.light-theme button.danger:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.08);
-  color: #b91c1c;
-}
-
-/* Light theme password overrides */
-.light-theme .pw-card {
-  background: rgba(0, 0, 0, 0.015);
-}
-
-.light-theme .pw-action-btn.danger {
-  color: #dc2626;
-}
-
-.light-theme .pw-action-btn.danger:hover {
-  background: rgba(239, 68, 68, 0.08);
-  color: #b91c1c;
-}
-
-.light-theme .btn-add-password {
-  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
-}
 /* Recovery code reveal — shown once, so it has to be readable enough to
    copy onto paper without a mistake. */
 .recovery-reveal {
@@ -6028,7 +5798,7 @@ button.link.pw-history-clear {
   padding: 0.85rem 1rem;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: var(--surface-muted);
+  background: var(--surface-sunken);
   user-select: all;
 }
 
@@ -6042,7 +5812,7 @@ button.link.pw-history-clear {
   z-index: 90;
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--bg-deep) 72%, transparent);
+  background: var(--overlay);
   backdrop-filter: blur(2px);
   pointer-events: none;
   animation: drop-overlay-in 120ms ease-out;
@@ -6067,7 +5837,7 @@ button.link.pw-history-clear {
   border: 2px dashed var(--accent);
   background: var(--surface);
   text-align: center;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .drop-overlay-card strong {
@@ -6143,12 +5913,12 @@ button.link.pw-history-clear {
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   cursor: pointer;
 }
 
 .search-clear:hover {
-  background: var(--bg-hover);
+  background: var(--row-hover);
   color: var(--text);
 }
 
@@ -6249,11 +6019,11 @@ button.link.pw-history-clear {
 .silo-open-badge {
   margin-left: 0.5rem;
   padding: 0.05rem 0.4rem;
-  border: 1px solid color-mix(in srgb, var(--success) 35%, var(--border-subtle));
+  border: 1px solid var(--success-border);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--success) 12%, transparent);
-  color: var(--success);
-  font-size: 0.78rem;
+  background: var(--success-soft);
+  color: var(--success-text);
+  font-size: var(--fs-11);
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -6293,14 +6063,14 @@ button.link.pw-history-clear {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 0.82rem;
   cursor: pointer;
   overflow: hidden;
 }
 
 .sidebar-silo:hover {
-  background: var(--bg-hover);
+  background: var(--row-hover);
   border-color: var(--accent);
   color: var(--text);
 }
@@ -6321,7 +6091,7 @@ button.link.pw-history-clear {
   gap: 0;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--surface-muted);
+  background: var(--surface-sunken);
   overflow: hidden;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
@@ -6350,20 +6120,18 @@ button.link.pw-history-clear {
   border-left: 1px solid transparent;
   border-radius: 0;
   background: transparent;
-  /* Quiet, but still a control someone has to find — `--text-dim` measured
-     2.9:1 here, which is decoration, not an affordance. */
-  color: var(--text-muted);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
 .silo-row:hover .silo-remove,
 .silo-remove:focus-visible {
   border-left-color: var(--border);
-  color: var(--danger-on-dark);
+  color: var(--danger-text);
 }
 
 .silo-remove:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  background: var(--danger-soft);
   box-shadow: none;
 }
 
@@ -6379,14 +6147,14 @@ button.link.pw-history-clear {
   border: none;
   border-radius: 0;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   cursor: pointer;
   margin-right: 6px;
 }
 
 .silo-info:hover:not(:disabled),
 .silo-info:focus-visible {
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-soft);
   box-shadow: none;
 }
@@ -6462,58 +6230,18 @@ button.link.pw-history-clear {
 }
 
 
-/* ── Sidebar controls in light mode ────────────────────────────────────
-   These sit on a white sidebar and were picking up dark-theme colours,
-   measuring between 1.7:1 and 2.7:1. Stated outright so the values are
-   the ones that were measured. */
-.light-theme .btn-theme,
-.light-theme .btn-collapse {
-  color: #475569;
-}
-
-/* This one sits on the violet wash at the top of the auth screens rather
-   than on the white sidebar, where the muted slate only reached 4.38:1. A
-   solid surface of its own makes the reading predictable. */
-.light-theme .auth-theme-toggle {
-  background: #ffffff;
-  border-color: rgba(124, 58, 237, 0.16);
-  color: #334155;
-}
-
-.light-theme .btn-theme:hover,
-.light-theme .btn-collapse:hover {
-  color: #1e293b;
-  background: rgba(124, 58, 237, 0.06);
-}
-
-.light-theme .sidebar-silo {
-  color: #475569;
-  border-color: rgba(124, 58, 237, 0.16);
-}
-
-.light-theme .sidebar-silo:hover {
-  color: #1e293b;
-  background: rgba(124, 58, 237, 0.06);
-  border-color: rgba(124, 58, 237, 0.3);
-}
-
-.light-theme .btn-lock:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.12);
-  color: #991b1b;
+/* The theme toggle on the start screens sits on the brand wash, not on a
+   pane, so it carries a surface of its own. */
+.auth-theme-toggle {
+  background: var(--surface);
 }
 
 
-/* `--danger-on-dark` is exactly that. On the light theme's white surfaces
-   the darker red is the legible one, so the token is redefined rather than
-   every use being special-cased. */
-.light-theme {
-  --danger-on-dark: #b91c1c;
-}
 
 /* Advisory rather than an error: the user has chosen something workable
    with a caveat, not something wrong. */
 .hint.is-warning {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 /* Two mutually exclusive answers, shown as two buttons rather than a select:
@@ -6557,7 +6285,7 @@ button.link.pw-history-clear {
 .store-kind-group {
   margin: 0.35rem 0 0;
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* Server and port read as one address, so they sit on one line. */
@@ -6575,13 +6303,13 @@ button.link.pw-history-clear {
   align-items: flex-start;
   gap: 0.6rem;
   padding: 0.85rem 0.95rem;
-  background: var(--surface-muted);
+  background: var(--surface-sunken);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
 }
 
 .host-key-confirmed {
-  border-color: color-mix(in srgb, var(--success) 35%, var(--border-subtle));
+  border-color: var(--success-border);
 }
 
 .host-key-line {
@@ -6594,11 +6322,11 @@ button.link.pw-history-clear {
 
 .host-key-line svg {
   flex-shrink: 0;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .host-key-confirmed .host-key-line svg {
-  color: var(--success);
+  color: var(--success-text);
 }
 
 /* A fingerprint is compared character by character, so it must not wrap
@@ -6637,17 +6365,17 @@ button.link.pw-history-clear {
   border-radius: 999px;
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .health-counters .health-high {
-  border-color: color-mix(in srgb, var(--danger) 40%, var(--border-subtle));
-  color: var(--danger-on-dark);
+  border-color: var(--danger-border);
+  color: var(--danger-text);
 }
 
 .health-counters .health-medium {
-  border-color: color-mix(in srgb, var(--warning) 40%, var(--border-subtle));
-  color: var(--warning);
+  border-color: var(--warning-border);
+  color: var(--warning-text);
 }
 
 /* The list owns the scrolling, so the counters above it stay put. */
@@ -6679,15 +6407,15 @@ button.link.pw-history-clear {
 }
 
 .health-finding.health-high {
-  border-left-color: var(--danger);
+  border-left-color: var(--danger-solid);
 }
 
 .health-finding.health-medium {
-  border-left-color: var(--warning);
+  border-left-color: var(--warning-solid);
 }
 
 .health-finding.health-info {
-  border-left-color: var(--text-dim);
+  border-left-color: var(--text-tertiary);
 }
 
 .health-finding.is-ignored {
@@ -6695,7 +6423,7 @@ button.link.pw-history-clear {
 }
 
 .health-finding.is-ignored .health-finding-title {
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .health-ignored {
@@ -6709,7 +6437,7 @@ button.link.pw-history-clear {
   padding: 0.2rem 0;
   border: 0;
   background: none;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
@@ -6738,7 +6466,7 @@ button.link.pw-history-clear {
   padding: 0;
   border: none;
   background: none;
-  color: var(--ink);
+  color: var(--text);
   cursor: pointer;
   text-align: left;
   width: auto;
@@ -6746,13 +6474,13 @@ button.link.pw-history-clear {
 
 .health-finding-toggle svg {
   flex-shrink: 0;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .health-finding-title {
   font-size: 0.95rem;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--text);
 }
 
 .health-finding-title-static {
@@ -6781,7 +6509,7 @@ button.link.pw-history-clear {
   padding-left: 0.15rem;
   font-size: 0.85rem;
   line-height: 1.45;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .health-finding-body {
@@ -6813,7 +6541,7 @@ button.link.pw-history-clear {
   border: none;
   border-radius: var(--radius-sm);
   background: none;
-  color: var(--ink);
+  color: var(--text);
   cursor: pointer;
   text-align: left;
 }
@@ -6834,7 +6562,7 @@ button.link.pw-history-clear {
   flex: 1;
   min-width: 0;
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6846,7 +6574,7 @@ button.link.pw-history-clear {
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
 }
 
 .health-empty-state {
@@ -6856,13 +6584,13 @@ button.link.pw-history-clear {
   justify-content: center;
   gap: 0.6rem;
   padding: 3rem 1rem;
-  color: var(--success);
+  color: var(--success-text);
   text-align: center;
 }
 
 .health-empty-state .hint {
   max-width: 32rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* The base `button:hover` rule scores (0,1,1) and so outranks a plain class
@@ -6876,7 +6604,7 @@ button.link.pw-history-clear {
 }
 
 .health-finding-toggle:hover .health-finding-title {
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 /* ---- Favourites ------------------------------------------------------ */
@@ -6921,7 +6649,7 @@ button.link.pw-history-clear {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
 }
 
 .favorites-grid {
@@ -6952,7 +6680,7 @@ button.link.pw-history-clear {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
   background: var(--surface);
-  color: var(--ink);
+  color: var(--text);
   text-align: center;
   cursor: pointer;
   box-shadow: none;
@@ -6960,10 +6688,9 @@ button.link.pw-history-clear {
 }
 
 .favorites-card-open:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
-  transform: translateY(-2px);
-  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+  background: var(--row-hover);
+  border-color: var(--border-field);
+  box-shadow: none;
 }
 
 .favorites-card-icon {
@@ -6971,7 +6698,7 @@ button.link.pw-history-clear {
   align-items: center;
   justify-content: center;
   min-height: 2.2rem;
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 /* Two lines at most, then an ellipsis: a long file name must not make one
@@ -6991,7 +6718,7 @@ button.link.pw-history-clear {
 .favorites-card-sub {
   max-width: 100%;
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7000,7 +6727,7 @@ button.link.pw-history-clear {
 .favorites-card-meta {
   margin-top: 0.15rem;
   font-size: 0.78rem;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
 }
 
 .favorites-unstar {
@@ -7014,7 +6741,7 @@ button.link.pw-history-clear {
   border-radius: var(--radius-sm);
   background: none;
   box-shadow: none;
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .favorites-unstar:hover:not(:disabled) {
@@ -7030,13 +6757,13 @@ button.link.pw-history-clear {
   justify-content: center;
   gap: 0.6rem;
   padding: 3rem 1rem;
-  color: var(--warning);
+  color: var(--warning-text);
   text-align: center;
 }
 
 .favorites-empty-state .hint {
   max-width: 34rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* A star on a row in the explorer, and on a starred credential's button. */
@@ -7044,7 +6771,7 @@ button.link.pw-history-clear {
 .grid-card-star {
   display: inline-flex;
   align-items: center;
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .row-star {
@@ -7058,7 +6785,7 @@ button.link.pw-history-clear {
 }
 
 .pw-action-btn.is-starred {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 /* Health is a column page, so it follows `.panel`'s rule rather than
@@ -7136,7 +6863,7 @@ button.storage-option:hover:where(:not(:disabled)) {
 
 .storage-option span {
   font-size: 0.82rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* ── Activity ── */
@@ -7183,27 +6910,27 @@ button.storage-option:hover:where(:not(:disabled)) {
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 0.8rem;
   cursor: pointer;
 }
 
 .activity-chip:hover {
   color: var(--text);
-  border-color: var(--text-dim);
+  border-color: var(--text-tertiary);
 }
 
 .activity-chip.is-on {
   background: var(--accent-soft);
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 
 .activity-count {
   margin-left: auto;
   font-size: 0.78rem;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
 }
 
 .activity-checking {
@@ -7215,8 +6942,8 @@ button.storage-option:hover:where(:not(:disabled)) {
 .activity-warnings {
   padding: 0.6rem 0.8rem;
   border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
-  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  border: 1px solid var(--warning-border);
+  background: var(--warning-soft);
   font-size: 0.82rem;
 }
 
@@ -7234,7 +6961,7 @@ button.storage-option:hover:where(:not(:disabled)) {
   align-items: flex-start;
   gap: 0.6rem;
   margin: 0;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .activity-day-label {
@@ -7243,7 +6970,7 @@ button.storage-option:hover:where(:not(:disabled)) {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
 }
 
 .activity-list {
@@ -7273,13 +7000,13 @@ button.storage-option:hover:where(:not(:disabled)) {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: var(--surface-muted);
-  color: var(--text-muted);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
 }
 
 .activity-row.is-notice .activity-icon {
-  background: color-mix(in srgb, var(--warning) 16%, transparent);
-  color: var(--warning);
+  background: var(--warning-soft);
+  color: var(--warning-text);
 }
 
 .activity-body {
@@ -7297,17 +7024,17 @@ button.storage-option:hover:where(:not(:disabled)) {
 
 .activity-summary strong {
   font-weight: 600;
-  color: var(--ink);
+  color: var(--text);
 }
 
 .activity-times {
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   font-size: 0.8rem;
 }
 
 .activity-meta {
   font-size: 0.76rem;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -7315,7 +7042,7 @@ button.storage-option:hover:where(:not(:disabled)) {
 
 .activity-time {
   font-size: 0.78rem;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -7396,21 +7123,21 @@ button.storage-option:hover:where(:not(:disabled)) {
   height: 1.75rem;
   border-radius: var(--radius-sm);
   background: var(--surface);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   margin-top: 0.1rem;
 }
 
 .copy-icon.is-current {
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .copy-icon.is-behind {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .copy-icon.is-stale,
 .copy-icon.is-never {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 /* The headline reads before the supporting line, so it carries the weight
@@ -7420,16 +7147,16 @@ button.storage-option:hover:where(:not(:disabled)) {
 }
 
 .copy-state.is-current {
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .copy-state.is-behind {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .copy-state.is-stale,
 .copy-state.is-never {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .copies-add {
@@ -7440,7 +7167,7 @@ button.storage-option:hover:where(:not(:disabled)) {
   padding: 0.85rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  background: var(--surface-muted);
+  background: var(--surface-sunken);
 }
 
 /* The role, as a word on the row rather than a second icon. A copy the app
@@ -7453,7 +7180,7 @@ button.storage-option:hover:where(:not(:disabled)) {
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
   background: var(--surface);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 0.75rem;
   font-weight: 500;
   letter-spacing: 0.02em;
@@ -7708,7 +7435,7 @@ button.storage-option:hover:where(:not(:disabled)) {
    stays on screen and has to show which way it went. */
 .storage-option.is-chosen {
   border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: var(--accent-soft);
 }
 
 .kit-choice {
@@ -7739,7 +7466,7 @@ button.storage-option:hover:where(:not(:disabled)) {
 /* The kit sits under the section's own description and must not outrank
    it: same colour and measure as a card's opening paragraph. */
 .kit-block > p:not(.hint) {
-  color: var(--text-muted);
+  color: var(--text-secondary);
   line-height: 1.55;
   max-width: 62ch;
 }
@@ -7815,7 +7542,7 @@ button.storage-option:hover:where(:not(:disabled)) {
   margin: 4px 0 0;
   padding-left: 18px;
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* The select's chevron. Last in the file and scoped to :root so the light
@@ -7842,7 +7569,7 @@ button.storage-option:hover:where(:not(:disabled)) {
   padding: 7px;
   border-radius: 9px;
   background: var(--accent-soft);
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 .settings-pane .panel-section > h3 + p,
@@ -7875,7 +7602,7 @@ button.storage-option:hover:where(:not(:disabled)) {
   word-break: break-all;
   background: none;
   padding: 0;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* In Settings the kit is a card of its own: no rule above it, and its
@@ -7899,7 +7626,7 @@ button.storage-option:hover:where(:not(:disabled)) {
   padding: 7px;
   border-radius: 9px;
   background: var(--accent-soft);
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 .settings-pane .kit-block > p:not(.hint) {
