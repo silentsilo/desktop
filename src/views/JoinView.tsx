@@ -17,6 +17,7 @@ import {
   storeDraftPayload,
   type StoreDraft,
 } from "./StoreConfigForm";
+import { useLasting } from "../lib/lasting";
 
 type JoinPreview = {
   vault_id: string | null;
@@ -65,12 +66,17 @@ type Props = {
  * and which keys can open it — all before anything local is created, so
  * being pointed at the wrong place costs nothing but a correction.
  */
+const never = () => false;
+
 export function JoinView({ busy, onBack, onJoined }: Props) {
   useLocale();
   const [draft, setDraft] = useState<StoreDraft>(EMPTY_STORE_DRAFT);
   const [preview, setPreview] = useState<JoinPreview | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [working, setWorking] = useState(false);
+  // Lasting: a join is minutes of download and goes on when the settings
+  // gear takes this screen away. The storage details are not kept: they
+  // hold secrets. See lib/lasting.
+  const [error, setError] = useLasting<string | null>("join.error", null, never);
+  const [working, setWorking] = useLasting<boolean>("join.working", false, Boolean);
   const [mode, setMode] = useState<Mode>("key");
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -78,7 +84,11 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
   /// How far through the download the join is. Joining a large silo is
   /// minutes of work, and a spinner that says nothing for minutes reads as a
   /// hang rather than as progress.
-  const [fetched, setFetched] = useState<{ done: number; total: number } | null>(null);
+  const [fetched, setFetched] = useLasting<{ done: number; total: number } | null>(
+    "join.fetched",
+    null,
+    Boolean,
+  );
   useEffect(() => {
     const stop = listen<{ fetched: number; total: number }>("join-progress", (event) => {
       setFetched({ done: event.payload.fetched, total: event.payload.total });
@@ -86,7 +96,7 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
     return () => {
       void stop.then((off) => off());
     };
-  }, []);
+  }, [setFetched]);
 
   const handleLook = async () => {
     // Nothing is stored yet on this computer, so a blank password has

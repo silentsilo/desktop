@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Copy, HardDrive, Laptop, LogIn, Plus, Trash2, Truck, X } from "lucide-react";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useEventSubscription } from "../hooks/useEventSubscription";
+import { useLasting } from "../lib/lasting";
 import { coalesceLatest, coalesceRuns } from "../lib/coalesce";
 import { formatAppError } from "../lib/errors";
 import {
@@ -53,10 +54,13 @@ type Props = {
  * days ago" rather than as an error nobody can distinguish from a bad
  * afternoon on the network.
  */
+const never = () => false;
+
 export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
   useLocale();
   const [targets, setTargets] = useState<BackupTargetView[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Lasting, like the work behind them: see lib/lasting.
+  const [error, setError] = useLasting<string | null>("copies.error", null, never);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<StoreDraft>(EMPTY_STORE_DRAFT);
   const [label, setLabel] = useState("");
@@ -64,17 +68,21 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
   /// What the place says about resisting deletion, once it has been asked.
   /// Null means not asked yet, which is different from "answered no".
   const [protection, setProtection] = useState<Protection | null>(null);
-  const [working, setWorking] = useState(false);
+  const [working, setWorking] = useLasting<boolean>("copies.working", false, Boolean);
   /// The target being filled right now, and how far through. Seeding runs
   /// for hours on the volumes it exists for, and a spinner with no number on
   /// it is what makes people pull the cable.
-  const [seeding, setSeeding] = useState<string | null>(null);
-  const [seedProgress, setSeedProgress] = useState<SeedProgress | null>(null);
-  const [seedCancelling, setSeedCancelling] = useState(false);
+  const [seeding, setSeeding] = useLasting<string | null>("copies.seeding", null, Boolean);
+  const [seedProgress, setSeedProgress] = useLasting<SeedProgress | null>(
+    "copies.seed_progress",
+    null,
+    Boolean,
+  );
+  const [seedCancelling, setSeedCancelling] = useLasting<boolean>("copies.seed_cancelling", false, Boolean);
   /// The target Remove is asking about. Removing a copy is not destructive
   /// to data, but it silently stops a backup, which deserves one question.
   const [confirmRemove, setConfirmRemove] = useState<BackupTargetView | null>(null);
-  const [note, setNote] = useState<string | null>(null);
+  const [note, setNote] = useLasting<string | null>("copies.note", null, never);
   // One instant for the whole list, so two rows written a second apart do not
   // disagree about what "now" was.
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
@@ -87,7 +95,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
       setError(formatAppError(e));
       setTargets([]);
     }
-  }, []);
+  }, [setError]);
 
   useEffect(() => {
     void refresh();
@@ -107,7 +115,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
   // is already stale by the time a frame could draw it, so only the newest
   // is kept: without this the panel re-rendered once per report, and the
   // Stop button was competing with its own progress line for frames.
-  const seedTicker = useMemo(() => coalesceLatest<SeedProgress>(setSeedProgress), []);
+  const seedTicker = useMemo(() => coalesceLatest<SeedProgress>(setSeedProgress), [setSeedProgress]);
   useEffect(() => seedTicker.stop, [seedTicker]);
   useEventSubscription(
     () => listen<SeedProgress>("seed-progress", (event) => seedTicker.push(event.payload)),

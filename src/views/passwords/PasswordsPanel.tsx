@@ -63,6 +63,7 @@ import {
 } from "./util";
 import { IconEye, IconEyeOff, IconPlus, IconSearch } from "../../ui/Icons";
 import { t, useLocale, type Key } from "../../i18n";
+import { useLasting } from "../../lib/lasting";
 
 type Props = {
   entries: PasswordEntry[];
@@ -150,6 +151,8 @@ function emptyEntry(type: CredentialType): PasswordEntry {
  * "which one", "what's in it". The old single column answered all three with
  * cards, which meant four logins per screen and a modal for everything else.
  */
+const never = () => false;
+
 export function PasswordsPanel({
   entries,
   storedCategories,
@@ -173,12 +176,23 @@ export function PasswordsPanel({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ entry: PasswordEntry; creating: boolean } | null>(null);
-  const [transferBusy, setTransferBusy] = useState(false);
-  const [transferNotice, setTransferNotice] = useState<string | null>(null);
-  const [transferError, setTransferError] = useState<string | null>(null);
+  // Lasting: an import goes on when the view is left, and one parsed and
+  // waiting to be filed must still be there, or its attachments, already
+  // encrypted into the silo, are never cleaned up. See lib/lasting.
+  const [transferBusy, setTransferBusy] = useLasting<boolean>("pw.transfer_busy", false, Boolean);
+  const [transferNotice, setTransferNotice] = useLasting<string | null>(
+    "pw.transfer_notice",
+    null,
+    never,
+  );
+  const [transferError, setTransferError] = useLasting<string | null>(
+    "pw.transfer_error",
+    null,
+    never,
+  );
   const [confirmingExport, setConfirmingExport] = useState(false);
   /** Parsed and counted, waiting for the user to say where it gets filed. */
-  const [pendingImport, setPendingImport] = useState<{
+  const [pendingImport, setPendingImport] = useLasting<{
     imported: PasswordEntry[];
     skipped: number;
     /** For the activity log, in English. */
@@ -190,7 +204,7 @@ export function PasswordsPanel({
     /** Attachments a KeePass import already encrypted into the silo, which
      * a cancel deletes again. */
     blobs?: string[];
-  } | null>(null);
+  } | null>("pw.pending_import", null, Boolean);
   /** A KeePass database being opened for import, or the export's password
    * being asked for. */
   const [kdbx, setKdbx] = useState<{ mode: "open" | "export"; path: string } | null>(null);
@@ -393,7 +407,7 @@ export function PasswordsPanel({
         setVerifying(false);
       }
     },
-    [REAUTH_GRACE_MS]
+    [REAUTH_GRACE_MS, setTransferError]
   );
 
   /// Showing an entry's secrets: the gate, then the activity log, which an
@@ -413,7 +427,7 @@ export function PasswordsPanel({
         return false;
       }
     },
-    [ensureVerified]
+    [ensureVerified, setTransferError]
   );
 
   const flashCopied = useCallback((key: string) => {
@@ -497,7 +511,7 @@ export function PasswordsPanel({
         setTransferError(formatAppError(e));
       }
     },
-    [ensureVerified, onConfirmRun]
+    [ensureVerified, onConfirmRun, setTransferError]
   );
 
   const startCreate = useCallback((type: CredentialType) => {
@@ -585,7 +599,7 @@ export function PasswordsPanel({
     } finally {
       setTransferBusy(false);
     }
-  }, []);
+  }, [setPendingImport, setTransferBusy, setTransferError]);
 
   const handleImport = useCallback(async () => {
     setTransferError(null);
@@ -644,7 +658,7 @@ export function PasswordsPanel({
     } finally {
       setTransferBusy(false);
     }
-  }, [importBitwardenZip]);
+  }, [importBitwardenZip, setPendingImport, setTransferBusy, setTransferError]);
 
   /// Content a KeePass import encrypted for entries that will not be stored.
   const dropBlobs = useCallback((blobIds: string[]) => {
@@ -684,13 +698,13 @@ export function PasswordsPanel({
         setTransferBusy(false);
       }
     },
-    [dropBlobs, kdbx]
+    [dropBlobs, kdbx, setPendingImport, setTransferBusy]
   );
 
   const cancelImport = useCallback(() => {
     if (pendingImport?.blobs) dropBlobs(pendingImport.blobs);
     setPendingImport(null);
-  }, [dropBlobs, pendingImport]);
+  }, [dropBlobs, pendingImport, setPendingImport]);
 
   const finishImport = useCallback(
     (choice: ImportCategoryChoice) => {
@@ -732,7 +746,7 @@ export function PasswordsPanel({
               .join(" ")
       );
     },
-    [dropBlobs, entries, onImportEntries, pendingImport]
+    [dropBlobs, entries, onImportEntries, pendingImport, setPendingImport, setTransferNotice]
   );
 
   /// Every entry, every kind, encrypted: the file KeePassXC and KeePassDX
@@ -746,7 +760,7 @@ export function PasswordsPanel({
     }
     setKdbxError(null);
     setKdbx({ mode: "export", path: "" });
-  }, [ensureVerified, entries]);
+  }, [ensureVerified, entries, setTransferError]);
 
   const finishKdbxExport = useCallback(
     async (password: string) => {
@@ -767,7 +781,7 @@ export function PasswordsPanel({
         setTransferBusy(false);
       }
     },
-    [entries]
+    [entries, setTransferBusy, setTransferNotice]
   );
 
   const handleExport = useCallback(async () => {
@@ -817,7 +831,7 @@ export function PasswordsPanel({
       setTransferBusy(false);
       setConfirmingExport(false);
     }
-  }, [ensureVerified, entries]);
+  }, [ensureVerified, entries, setTransferBusy, setTransferError, setTransferNotice]);
 
   return (
     <div className="pw-view">

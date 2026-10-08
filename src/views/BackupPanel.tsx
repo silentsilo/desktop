@@ -20,6 +20,7 @@ import { formatBytes, formatDay } from "../lib/format";
 import { detectPreset } from "../lib/s3Presets";
 import { backupHeadline, syncOutcome, type Status, type SyncReport } from "../lib/syncOutcome";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { useLasting } from "../lib/lasting";
 import { t, tx, useLocale } from "../i18n";
 import {
   discardSignIns,
@@ -159,6 +160,8 @@ type Props = {
  * between a silo that survives this machine and one that does not. That
  * earns a page, not a fold.
  */
+const IDLE: Status = { kind: "idle" };
+
 export function BackupPanel({
   busy,
   lastSyncAt,
@@ -181,7 +184,8 @@ export function BackupPanel({
 }: Props) {
   useLocale();
   const [connected, setConnected] = useState(false);
-  const [status, setStatus] = useState<Status>({ kind: "idle" });
+  // Lasting: a sync started here goes on when the page is left.
+  const [status, setStatus] = useLasting<Status>("backup.status", IDLE, (s) => s.kind === "busy");
   const [expanded, setExpanded] = useState(false);
   /// Whether the Disconnect question is on screen. One click used to do it,
   /// and a slipped click on a red button silently ended the backup.

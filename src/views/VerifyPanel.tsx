@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AlertTriangle, CheckCircle2, LifeBuoy, SearchCheck, X } from "lucide-react";
 import { useEventSubscription } from "../hooks/useEventSubscription";
+import { useLasting } from "../lib/lasting";
 import { formatAppError } from "../lib/errors";
 import { formatBytes } from "../lib/format";
 import { markDone } from "../lib/siloMemory";
@@ -56,25 +57,37 @@ type Props = {
  * them looks exactly like a healthy backup until the day something is
  * restored, and this is the only thing that asks before that day.
  */
+const never = () => false;
+
 export function VerifyPanel({ busy, siloId }: Props) {
   useLocale();
-  const [results, setResults] = useState<Result[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Lasting: a deep check runs for hours, and leaving the page must not
+  // lose it or its answer. See lib/lasting.
+  const [results, setResults] = useLasting<Result[] | null>("verify.results", null, never);
+  const [error, setError] = useLasting<string | null>("verify.error", null, never);
   /// Set when the user pressed stop. Its own state rather than an error:
   /// nothing failed, and saying so in red would claim otherwise.
-  const [stopped, setStopped] = useState(false);
-  const [running, setRunning] = useState<"quick" | "deep" | null>(null);
-  const [cancelling, setCancelling] = useState(false);
-  const [progress, setProgress] = useState<[string, number, number] | null>(null);
+  const [stopped, setStopped] = useLasting<boolean>("verify.stopped", false, never);
+  const [running, setRunning] = useLasting<"quick" | "deep" | null>("verify.running", null, Boolean);
+  const [cancelling, setCancelling] = useLasting<boolean>("verify.cancelling", false, Boolean);
+  const [progress, setProgress] = useLasting<[string, number, number] | null>(
+    "verify.progress",
+    null,
+    Boolean,
+  );
   /// The trial restore is a separate question with its own answer, so it
   /// keeps its own state rather than sharing the scrub's.
   const [code, setCode] = useState("");
-  const [restore, setRestore] = useState<RestoreTest | null>(null);
-  const [restoreError, setRestoreError] = useState<string | null>(null);
-  const [restoring, setRestoring] = useState(false);
+  const [restore, setRestore] = useLasting<RestoreTest | null>("restore.result", null, never);
+  const [restoreError, setRestoreError] = useLasting<string | null>("restore.error", null, never);
+  const [restoring, setRestoring] = useLasting<boolean>("restore.running", false, Boolean);
   /// How far through the download the trial restore is. Fetching the history
   /// is the long half, and it used to run behind a disabled button alone.
-  const [restoreProgress, setRestoreProgress] = useState<[number, number] | null>(null);
+  const [restoreProgress, setRestoreProgress] = useLasting<[number, number] | null>(
+    "restore.progress",
+    null,
+    Boolean,
+  );
 
   useEventSubscription(
     () =>

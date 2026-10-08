@@ -93,6 +93,7 @@ import { lastDone } from "./lib/siloMemory";
 import { formatAppError } from "./lib/errors";
 import { AppSettingsContext, UpdateCardContext } from "./lib/appSettings";
 import { UpdateCard } from "./views/UpdateCard";
+import { forgetLasting, LastingScope } from "./lib/lasting";
 
 const AUTO_LOCK_KEY = "silentsilo.autoLockMinutes";
 const DEFAULT_AUTO_LOCK_MINUTES = 30;
@@ -1482,7 +1483,9 @@ export default function App() {
     // sidebar, so it reads as a statement about that silo — locking the
     // others too is a decision the user did not make here. Quitting and
     // the per-silo timeouts are what close the rest.
-    await invoke("vault_lock", { id: focusedSiloRef.current });
+    const id = focusedSiloRef.current;
+    await invoke("vault_lock", { id });
+    if (id) forgetLasting(id);
     resetExplorer();
     await refreshBootstrap();
   }, [refreshBootstrap, resetExplorer]);
@@ -1565,6 +1568,7 @@ export default function App() {
         } catch {
           continue;
         }
+        forgetLasting(silo.id);
         lockedAny = true;
         // Only the silo on screen changes what is on screen; the others
         // lock quietly, which is what "in the background" means.
@@ -3853,7 +3857,8 @@ export default function App() {
   }
 
   return (
-    <>
+    // Work a view started survives leaving it, per silo: see lib/lasting.
+    <LastingScope.Provider value={bootstrap.silo?.id ?? ""}>
       {toastHost}
       {confirmHost}
       {mintedCodeHost}
@@ -4223,6 +4228,6 @@ export default function App() {
           />
         )}
       </AppShell>
-    </>
+    </LastingScope.Provider>
   );
 }

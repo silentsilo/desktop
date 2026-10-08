@@ -8,6 +8,7 @@ import { subtitleFor, typeOf, TYPE_LABELS } from "../passwords/util";
 import { summarise, type HealthFinding, type HealthFix } from "./analysis";
 import { canIgnore, fingerprint } from "./ignored";
 import { dateLocale, t, useLocale, type Key } from "../../i18n";
+import { useLasting } from "../../lib/lasting";
 
 type Props = {
   /** Computed by the shell, which also badges the count on the tab: one
@@ -54,6 +55,8 @@ type BreachState =
  * whether to look; the list of entries is the part you act on, one at a
  * time, and expanded lists would bury the next finding under the first.
  */
+const BREACHES_IDLE: BreachState = { kind: "idle" };
+
 export function HealthPanel({
   findings,
   ignored,
@@ -67,7 +70,13 @@ export function HealthPanel({
   const counts = useMemo(() => summarise(findings), [findings]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showIgnored, setShowIgnored] = useState(false);
-  const [breaches, setBreaches] = useState<BreachState>({ kind: "idle" });
+  // Lasting until the silo locks: the check asks the network about every
+  // password, and its answer should not vanish on leaving the page.
+  const [breaches, setBreaches] = useLasting<BreachState>(
+    "health.breaches",
+    BREACHES_IDLE,
+    (b) => b.kind !== "idle",
+  );
   const entryCount = entries.length;
   // Entries no finding names: the one number that says how the silo is doing.
   const fineCount = useMemo(() => {

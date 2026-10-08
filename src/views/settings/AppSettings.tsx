@@ -22,6 +22,7 @@ import { ExtensionStoreLinks } from "../ExtensionStoreLinks";
 import { HISTORY_POLICIES, type HistoryPolicy } from "../../lib/entryHistory";
 import { SshAgentSettings } from "./SshAgentSettings";
 import { loadHistoryPolicy, saveHistoryPolicy } from "../../lib/historySetting";
+import { useLasting } from "../../lib/lasting";
 
 /** The sections that belong to the app rather than to one silo. */
 export type AppSectionId = "general" | "browser" | "ssh" | "updates";
@@ -45,17 +46,24 @@ export type UpdateState =
     }
   | { phase: "error"; message: string };
 
-/**
- * The update check and install, held by whoever hosts the Updates page so
- * the state survives moving between sections.
- */
+const UPDATE_IDLE: UpdateState = { phase: "idle" };
+
+/** The update check and install. */
 export function useUpdater(
   backgroundUpdate: { version: string; update: Update } | null,
   /** Told when an install failed after locking every silo, which takes
    * this page off screen before it can show the error. */
   onFailedAfterLock?: (message: string) => void,
 ) {
-  const [state, setState] = useState<UpdateState>({ phase: "idle" });
+  // One state for the whole app, kept while there is something to show:
+  // the Updates page, the settings before unlock and the update card all
+  // read it, and a download goes on when any of them is left.
+  const [state, setState] = useLasting<UpdateState>(
+    "updater",
+    UPDATE_IDLE,
+    (s) => s.phase === "checking" || s.phase === "installing" || s.phase === "available",
+    true,
+  );
 
   // An update the daily check found lands here as the initial state, so
   // opening Settings shows it without another request. Any state the user
@@ -68,7 +76,7 @@ export function useUpdater(
         update: backgroundUpdate.update,
       });
     }
-  }, [backgroundUpdate, state.phase]);
+  }, [backgroundUpdate, setState, state.phase]);
 
   const check = async () => {
     setState({ phase: "checking" });

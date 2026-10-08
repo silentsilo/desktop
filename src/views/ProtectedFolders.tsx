@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useLasting } from "../lib/lasting";
 import { open as openDialog } from "../lib/dialog";
 import { FolderHeart, RefreshCw, Trash2 } from "lucide-react";
 import { formatAppError } from "../lib/errors";
@@ -17,12 +18,15 @@ type ProtectedFolder = { path: string; target: string };
  * on the day they were counting on the deletion, which is the worst possible
  * day to find out.
  */
+const never = () => false;
+
 export function ProtectedFoldersPanel() {
   useLocale();
   const [folders, setFolders] = useState<ProtectedFolder[] | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Lasting: a scan imports a whole folder and goes on when the page is left.
+  const [busy, setBusy] = useLasting<boolean>("protected.busy", false, Boolean);
+  const [status, setStatus] = useLasting<string | null>("protected.status", null, never);
+  const [error, setError] = useLasting<string | null>("protected.error", null, never);
 
   const refresh = useCallback(async () => {
     try {
@@ -36,7 +40,7 @@ export function ProtectedFoldersPanel() {
       setError(formatAppError(e));
       setFolders(null);
     }
-  }, []);
+  }, [setError]);
 
   useEffect(() => {
     void refresh();
