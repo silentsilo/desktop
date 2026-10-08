@@ -773,6 +773,52 @@ as if they did.
   cannot stand in for it without the host noticing (owner, server user and
   server image). An administrator can do anything.
 
+## Auto-type
+
+Types a login's username, a Tab and its password (and Enter, if the person
+wants it) into the window that was in front, for programs the browser
+extension cannot reach: a desktop client, a VPN, a game launcher. Windows
+only for now. On Linux it can only ever work under X11 (Wayland gives no
+program a way to type into another), and macOS needs the Accessibility
+permission; both come later and say so in the app.
+
+It is off until turned on under Settings > General. Turned on, the shell
+registers a global shortcut, Ctrl+Alt+A (`silentsilo_shell::autotype`,
+`RegisterHotKey` on a thread of its own). A shortcut another program holds
+is reported, not taken.
+
+The flow:
+
+1. The shortcut captures the window in front (`foreground_window`, its root
+   owner, only another process's), its title and its program's file name,
+   and brings SilentSilo forward with `autotype-request`.
+2. The window offers the open silo's logins ranked by how well their name
+   and site match the window title and program (`lib/autoType.ts`), with a
+   search. Nothing is picked for the person: a title is whatever the
+   program chose to show, so a good match is a suggestion, not a proof.
+3. Type runs the same presence check as a browser fill (Windows Hello or a
+   security key, `Presence::AutoType`), naming the login and the program. A
+   silo with no key cannot confirm, and auto-type refuses there as the
+   browser fill does. The browser has an origin to check; here the person
+   reading the program's name is the only check, so the dialog shows it.
+4. The event is recorded (`APP_FILLED`, with the program) before anything is
+   typed, as every secret that leaves the silo is.
+5. Focus goes back to the captured window (`take_back_from`), and nothing is
+   typed until that same window, in the same process, is in front again;
+   after 1.5 seconds without it the type is dropped and said so. A window
+   that runs as administrator is refused before typing: Windows silently
+   discards input to a process above ours, and typing into nothing would
+   look like success.
+6. The shell waits for the shortcut's own keys to be released, then sends
+   the text with `SendInput` and `KEYEVENTF_UNICODE`, one character at a
+   time, so the keyboard layout does not matter; Tab and Enter go as keys.
+   The password is held in a `Zeroizing` buffer and dropped after typing.
+
+Not in 1.5: rules stored on an entry (a window title to match, a custom
+sequence). They would be a field in the password entry JSON, which is a
+persisted format; the computed match needs none. Nothing about a target
+window is stored either.
+
 ## SSH agent
 
 The SSH keys kept in a silo sign for `ssh`, `git` and VS Code without the

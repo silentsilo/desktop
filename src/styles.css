@@ -4069,6 +4069,84 @@ ol.key-add-steps {
   color: var(--text-secondary);
 }
 
+/* Auto-type: the logins to choose from, the best match first. */
+.modal-card.autotype {
+  width: min(480px, 92vw);
+}
+
+.autotype-title {
+  overflow-wrap: anywhere;
+}
+
+.autotype-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0 0.6rem;
+  border: 1px solid var(--border-field);
+  border-radius: var(--r-sm);
+  background: var(--surface-sunken);
+  color: var(--text-tertiary);
+}
+
+.autotype-search input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding-inline: 0;
+}
+
+.autotype-list {
+  max-height: 14rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.autotype-list > li.hint {
+  padding: 0.5rem 0.6rem;
+}
+
+.autotype-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 36px;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  text-align: left;
+}
+
+.autotype-row:hover:not(:disabled) {
+  background: var(--row-hover);
+}
+
+.autotype-row.is-chosen {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.autotype-row-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.autotype-row-user {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: var(--fs-12);
+}
+
 .toast-host {
   position: fixed;
   /* Bottom right, clear of the status bar like the selection toolbar. At

@@ -1,4 +1,5 @@
 mod audit;
+mod autotype;
 mod browser;
 mod commands;
 mod diagnostics;
@@ -203,6 +204,7 @@ pub fn run() {
             open_cancelled: Mutex::new(std::collections::HashSet::new()),
         })
         .manage(browser::BrowserBridge::default())
+        .manage(autotype::AutoType::default())
         .manage(TrayItems::default())
         .manage(ssh_agent::SshAgent::default())
         .manage(commands::cloud::SignInSlot::default())
@@ -238,6 +240,8 @@ pub fn run() {
             // does not exist.
             browser::start_if_enabled(app.handle());
             ssh_agent::start_if_enabled(app.handle());
+            // Only when auto-type is on under Settings > General.
+            autotype::start(app.handle());
 
             // Locking the workstation and walking away is the common way a
             // silo is left unattended, and the idle timer only notices
@@ -286,6 +290,11 @@ pub fn run() {
             commands::bitwarden_zip::passwords_read_bitwarden_zip,
             commands::kdbx::passwords_write_kdbx,
             commands::silo::silo_touch,
+            autotype::autotype_status,
+            autotype::autotype_set,
+            autotype::autotype_pending,
+            autotype::autotype_cancel,
+            autotype::autotype_confirm,
             commands::vault::app_set_lock_notice,
             commands::silo::silo_blur,
             commands::silo::silo_rename,

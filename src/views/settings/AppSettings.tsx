@@ -21,6 +21,7 @@ import { AUTO_LOCK_OPTIONS_MINUTES, type BrowserExtensionStatus } from "../../li
 import { ExtensionStoreLinks } from "../ExtensionStoreLinks";
 import { HISTORY_POLICIES, type HistoryPolicy } from "../../lib/entryHistory";
 import { SshAgentSettings } from "./SshAgentSettings";
+import { AutoTypeSettings } from "./AutoTypeSettings";
 import { loadHistoryPolicy, saveHistoryPolicy } from "../../lib/historySetting";
 import { useLasting } from "../../lib/lasting";
 import { setLockNotice, useLockNotice } from "../../lib/lockNotice";
@@ -321,6 +322,8 @@ export function AppSettingsSection({
               ))}
             </select>
           </SettingRow>
+
+          <AutoTypeSettings platform={platform} />
         </SettingList>
       </div>
     );

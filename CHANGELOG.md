@@ -9,6 +9,23 @@ silo from opening needs a major version rather than a note.
 
 ### Added
 
+- Auto-type on Windows, for programs outside the browser: turned on under
+  Settings > General, Ctrl+Alt+A in another program offers the open silo's
+  logins, best match first, and types the username, a Tab and the password
+  (and Enter, if you want) once you confirm with Windows Hello or your
+  security key. A window that runs as administrator is refused, since
+  Windows would drop the input.
+- The last minute before a silo locks itself is counted down in the window,
+  and announced by a system notification when the window is hidden or
+  behind others (a switch under General). A check of the copies, a seed or a
+  trial recovery keeps the silo open while it runs.
+- The sidebar lists work running in the background, each leading to its
+  page; a sync, a check, a seed or an import keeps its progress when you
+  leave its page and come back.
+- The app in 8 languages now includes errors from the app and from core.
+- The activity log names the device and the key behind every row, the files
+  added, moved, renamed or restored, the folders created, and a file whose
+  content an import replaced.
 - Test backup repairs what it finds: a file that rotted, was cut short or
   went missing on a working copy is put back from this computer or another
   copy that holds it whole, and the report says from where. Never-delete
@@ -27,6 +44,12 @@ silo from opening needs a major version rather than a note.
 
 ### Changed
 
+- Settings before a silo opens slide in from the right, over the screen you
+  were on, instead of replacing it.
+- Test backup is part of Backup, and the trial recovery part of Recovery
+  code.
+- Replacing the encryption key lists keys on other devices apart, with how
+  they get back in, and a phone left out says so on every screen.
 - An available update is shown on the screens before a silo opens, with
   Install and restart and Later, until it is installed. Later hides it until
   the next start. It used to be one notice per version, which most people

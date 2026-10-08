@@ -939,6 +939,18 @@ const handlers: Record<string, Handler> = {
       auto_lock_minutes: i === 0 ? 5 : null,
     })),
   silo_set_auto_lock: () => null,
+  // `?autotype`: Ctrl+Alt+A was pressed in a program a moment after start.
+  autotype_status: () => ({ supported: true, enabled: mockAutoType.enabled, enter: mockAutoType.enter, taken: false }),
+  autotype_set: (args) => {
+    mockAutoType = { enabled: Boolean(args.enabled), enter: Boolean(args.enter) };
+    return { supported: true, ...mockAutoType, taken: false };
+  },
+  autotype_pending: () =>
+    flag("autotype")
+      ? { request_id: "at-1", title: "GitHub Desktop", program: "GitHubDesktop.exe", elevated: flag("elevated") }
+      : null,
+  autotype_cancel: () => null,
+  autotype_confirm: () => new Promise((resolve) => setTimeout(() => resolve(null), 600)),
   silo_touch: () => {
     mockIdleSince = Date.now();
     return null;
@@ -1481,6 +1493,9 @@ function nextMinor(version: string): string {
   const [major, minor] = version.split(".").map(Number);
   return `${major}.${(minor ?? 0) + 1}.0`;
 }
+
+/** Auto-type's settings, as Rust keeps them. */
+let mockAutoType = { enabled: false, enter: true };
 
 /** When the first silo was last used, for `?locksoon`. */
 let mockIdleSince = Date.now() - 250_000;

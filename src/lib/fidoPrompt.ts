@@ -24,6 +24,8 @@ const KEYS: Record<string, Key> = {
   verify_key_fill_any: "app.fido_verify_key_fill_any",
   verify_built_in_ssh: "app.fido_verify_built_in_ssh",
   verify_key_ssh: "app.fido_verify_key_ssh",
+  verify_built_in_autotype: "app.fido_verify_built_in_autotype",
+  verify_key_autotype: "app.fido_verify_key_autotype",
   org_confirm_change: "app.fido_org_confirm_change",
   org_read_log: "app.fido_org_read_log",
   org_start_log: "app.fido_org_start_log",

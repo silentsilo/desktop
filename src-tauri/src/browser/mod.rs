@@ -11,7 +11,7 @@
 //! contract is `docs/PROTOCOL.md` in silentsilo/browser.
 
 mod limits;
-mod logins;
+pub(crate) mod logins;
 mod protocol;
 
 use std::collections::VecDeque;

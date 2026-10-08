@@ -625,6 +625,7 @@ pub(crate) enum Presence {
     FillLogin { label: String, site: String },
     FillAny,
     SshSign { key: String },
+    AutoType { label: String, program: String },
 }
 
 impl Presence {
@@ -637,6 +638,10 @@ impl Presence {
             }
             Presence::FillAny => ("fill_any", "fill a login in your browser".to_string()),
             Presence::SshSign { key } => ("ssh", format!("sign with your {key} SSH key")),
+            Presence::AutoType { label, program } => (
+                "autotype",
+                format!("type your {label} login into {program}"),
+            ),
         };
         let prompt = if built_in {
             Prompt::new(
@@ -656,6 +661,9 @@ impl Presence {
         match self {
             Presence::FillLogin { label, site } => prompt.with("label", label).with("site", site),
             Presence::SshSign { key } => prompt.with("key", key),
+            Presence::AutoType { label, program } => {
+                prompt.with("label", label).with("program", program)
+            }
             _ => prompt,
         }
     }

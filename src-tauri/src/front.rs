@@ -41,6 +41,11 @@ impl Front {
         }
     }
 
+    /// The program that was in front when the question came, if any.
+    pub fn caller(&self) -> Option<silentsilo_shell::ForegroundWindow> {
+        self.caller
+    }
+
     /// Puts the window in front of the caller, above other windows while the
     /// question is open.
     pub fn raise(app: &AppHandle) {

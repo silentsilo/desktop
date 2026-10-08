@@ -117,7 +117,8 @@ KeePassDX open, or the logins alone to CSV. The browser extension fills
 logins, confirmed in the app, and offers a login typed on a page for saving,
 which the app asks about first; it holds nothing itself. The SSH agent lets
 ssh, Git and your editor sign with the SSH keys in the silo, each use
-confirmed in the app.
+confirmed in the app. On Windows, auto-type types a login into another program's
+window with Ctrl+Alt+A, also confirmed in the app.
 
 ## Unlocking
 
@@ -201,7 +202,7 @@ whatever you answer on its one question:
 Ticking **Delete the application data** also removes:
 
 - `%APPDATA%\com.silentsilo.desktop`, the list of silos this computer keeps
-  (names and folder paths). Losing it costs the list, not the data: the app
+  (names and folder paths) and the auto-type settings. Losing it costs the list, not the data: the app
   finds a silo again from its folder.
 - `%LOCALAPPDATA%\SilentSilo`, the encrypted working copies, the cache and
   the browser extension setting
