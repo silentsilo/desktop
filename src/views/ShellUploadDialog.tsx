@@ -167,7 +167,8 @@ export function ShellUploadDialog(props: Props) {
               className="explorer-icon-btn"
               disabled={!folder?.parent_id || busy || loading}
               onClick={() => folder?.parent_id && void loadFolder(folder.parent_id)}
-              title={t("dlg.up")}
+              data-tooltip={t("dlg.up")}
+              aria-label={t("dlg.up")}
             >
               <ChevronUp size={16} />
             </button>

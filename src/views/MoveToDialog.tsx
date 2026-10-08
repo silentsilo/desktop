@@ -90,10 +90,10 @@ export function MoveToDialog({
                       type="button"
                       role="option"
                       aria-selected={chosen?.id === folder.id}
-                      className={`move-to-row${chosen?.id === folder.id ? " is-chosen" : ""}`}
+                      className={`move-to-row${chosen?.id === folder.id ? " is-selected" : ""}`}
                       style={{ paddingLeft: `${0.6 + depthOf(folder) * 1.1}rem` }}
                       disabled={!ok}
-                      title={ok ? folder.path : undefined}
+                      data-tooltip={ok ? folder.path : undefined}
                       onClick={() => setChosen(folder)}
                       onDoubleClick={() =>
                         ok && onPick({ id: folder.id, path: folder.path, label: labelOf(folder) })

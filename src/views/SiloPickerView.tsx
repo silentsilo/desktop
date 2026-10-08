@@ -260,7 +260,9 @@ export function SiloPickerView({
                 className={`silo-item${silo.present ? "" : " is-missing"}`}
                 disabled={busy || !silo.present}
                 onClick={() => onOpen(silo.id)}
-                title={silo.present ? silo.path : t("start.path_not_reachable", { path: silo.path })}
+                data-tooltip={
+                  silo.present ? silo.path : t("start.path_not_reachable", { path: silo.path })
+                }
               >
                 <HardDrive size={18} />
                 <span className="silo-item-text">
@@ -283,7 +285,7 @@ export function SiloPickerView({
                 className="silo-info"
                 disabled={busy}
                 onClick={() => void showReport(silo.id)}
-                title={t("start.report_tooltip", { name: silo.name })}
+                data-tooltip={t("start.report_tooltip", { name: silo.name })}
                 aria-label={t("start.about_silo", { name: silo.name })}
               >
                 <Info size={15} />
@@ -293,7 +295,7 @@ export function SiloPickerView({
                 className="silo-remove"
                 disabled={busy}
                 onClick={() => onForget(silo)}
-                title={t("start.remove_from_list", { name: silo.name })}
+                data-tooltip={t("start.remove_from_list", { name: silo.name })}
                 aria-label={t("start.remove_from_list", { name: silo.name })}
               >
                 <X size={15} />

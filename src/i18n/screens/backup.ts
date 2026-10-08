@@ -1831,7 +1831,7 @@ export const backup = {
     pl: "Folder na dysku lub NAS",
   },
   "backup.kind_folder_title": {
-    note: "Tooltip of the 'Drive or NAS folder' button.",
+    note: "Line under the 'Drive or NAS folder' choice in the storage picker: what counts as one.",
     en: "A network share, an external drive or a synced folder",
     ro: "O partajare în rețea, un disc extern sau un folder sincronizat",
     de: "Eine Netzwerkfreigabe, ein externes Laufwerk oder ein synchronisierter Ordner",
@@ -1842,7 +1842,7 @@ export const backup = {
     pl: "Udział sieciowy, dysk zewnętrzny lub synchronizowany folder",
   },
   "backup.kind_s3_title": {
-    note: "Tooltip of the 'S3 bucket' button. Provider names stay as they are.",
+    note: "Line under the 'S3 bucket' choice in the storage picker. Provider names stay as they are.",
     en: "Backblaze B2, Cloudflare R2, Wasabi, AWS or any S3-compatible storage",
     ro: "Backblaze B2, Cloudflare R2, Wasabi, AWS sau orice stocare compatibilă S3",
     de: "Backblaze B2, Cloudflare R2, Wasabi, AWS oder jeder S3-kompatible Speicher",
@@ -1864,7 +1864,7 @@ export const backup = {
     pl: "Serwer WebDAV",
   },
   "backup.kind_webdav_title": {
-    note: "Tooltip of the 'WebDAV server' button. Product names stay as they are.",
+    note: "Line under the 'WebDAV server' choice in the storage picker. Product names stay as they are.",
     en: "Nextcloud, ownCloud, Synology, kDrive or any WebDAV server",
     ro: "Nextcloud, ownCloud, Synology, kDrive sau orice server WebDAV",
     de: "Nextcloud, ownCloud, Synology, kDrive oder jeder WebDAV-Server",
@@ -1886,7 +1886,7 @@ export const backup = {
     pl: "Serwer SFTP",
   },
   "backup.kind_sftp_title": {
-    note: "Tooltip of the 'SFTP server' button.",
+    note: "Line under the 'SFTP server' choice in the storage picker.",
     en: "Any server you reach over SSH",
     ro: "Orice server la care ajungi prin SSH",
     de: "Jeder Server, den du per SSH erreichst",

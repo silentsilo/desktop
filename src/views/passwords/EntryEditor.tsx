@@ -374,7 +374,8 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
             <button
               type="button"
               className="pw-gen-btn"
-              title={passwordVisible ? t("pw.hide") : t("pw.show")}
+              data-tooltip={passwordVisible ? t("pw.hide") : t("pw.show")}
+              aria-label={passwordVisible ? t("pw.hide") : t("pw.show")}
               onClick={() => setPasswordVisible((v) => !v)}
             >
               {passwordVisible ? <IconEyeOff size={15} /> : <IconEye size={15} />}
@@ -382,7 +383,8 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
             <button
               type="button"
               className="pw-gen-btn"
-              title={t("pw.copy_password")}
+              data-tooltip={t("pw.copy_password")}
+              aria-label={t("pw.copy_password")}
               onClick={() => void copySecret(draft.password, "password")}
             >
               <IconCopy size={15} />
@@ -390,7 +392,8 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
             <button
               type="button"
               className="pw-gen-btn accent"
-              title={t("pw.generate_password")}
+              data-tooltip={t("pw.generate_password")}
+              aria-label={t("pw.generate_password")}
               onClick={() => setDraft({ ...draft, password: generatePassword(genOptions) })}
             >
               <IconGenerate size={15} />
@@ -485,7 +488,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
                   onChange={(e) => applyTotpInput(e.target.value)}
                   onFocus={() => setTotpTyping(true)}
                   onBlur={() => setTotpTyping(false)}
-                  className={totpError ? "pw-input-error" : undefined}
+                  aria-invalid={totpError ? true : undefined}
                   autoComplete="off"
                   spellCheck={false}
                 />
@@ -561,7 +564,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
                     value={field.value}
                     onChange={(e) => update({ value: e.target.value })}
                   />
-                  <label className="pw-custom-hidden" title={t("pw.custom_hidden_tip")}>
+                  <label className="pw-custom-hidden" data-tooltip={t("pw.custom_hidden_tip")}>
                     <input
                       type="checkbox"
                       checked={field.hidden}
@@ -572,7 +575,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
                   <button
                     type="button"
                     className="pw-inline-btn danger"
-                    title={t("pw.custom_remove")}
+                    data-tooltip={t("pw.custom_remove")}
                     aria-label={
                       field.name
                         ? t("pw.custom_remove_label", { name: field.name })
@@ -618,7 +621,8 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
                 <button
                   type="button"
                   className="pw-inline-btn danger"
-                  title={t("pw.attach_remove")}
+                  data-tooltip={t("pw.attach_remove")}
+                  aria-label={t("pw.attach_remove")}
                   onClick={() => removeAttachment(a.blob_id)}
                 >
                   <IconTrash size={13} />
@@ -682,7 +686,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
           className="btn-primary"
           type="button"
           disabled={!canSave}
-          title={!canSave ? stillNeeded : undefined}
+          data-tooltip={!canSave ? stillNeeded : undefined}
           onClick={handleSave}
         >
           {creating ? t("pw.add") : t("pw.save")}

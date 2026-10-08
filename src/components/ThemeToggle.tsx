@@ -19,7 +19,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
       type="button"
       className={`btn-theme ${className}`.trim()}
       onClick={toggle}
-      title={theme === "light" ? t("nav.dark") : t("nav.light")}
+      data-tooltip={theme === "light" ? t("nav.dark") : t("nav.light")}
       aria-label={t("start.toggle_theme")}
     >
       {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}

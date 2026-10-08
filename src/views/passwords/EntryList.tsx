@@ -114,7 +114,7 @@ export function EntryList({
                 <button
                   type="button"
                   className="pw-inline-btn"
-                  title={t("pw.copy_username")}
+                  data-tooltip={t("pw.copy_username")}
                   aria-label={t("pw.list_copy_username_label", {
                     name: entry.service || t("pw.untitled_entry"),
                   })}
@@ -133,7 +133,7 @@ export function EntryList({
               <button
                 type="button"
                 className="pw-inline-btn"
-                title={
+                data-tooltip={
                   type === "card"
                     ? t("pw.copy_card_number")
                     : type === "identity"

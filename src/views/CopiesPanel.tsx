@@ -345,7 +345,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                       className="btn-secondary"
                       disabled={busy || working || seeding !== null}
                       onClick={() => void reconnect(target.id, target.config.kind as CloudKind)}
-                      title={t("backup.sign_in_again_title")}
+                      data-tooltip={t("backup.sign_in_again_title")}
                     >
                       <LogIn size={14} />
                       {t("backup.sign_in_again")}
@@ -358,7 +358,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                         className="btn-secondary"
                         disabled={busy || working || seeding !== null}
                         onClick={() => void seed(target.id)}
-                        title={t("backup.fill_title")}
+                        data-tooltip={t("backup.fill_title")}
                       >
                         {seeding === target.id ? (
                           <span className="spinner" aria-hidden />
@@ -377,7 +377,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                           className="btn-secondary"
                           disabled={seedCancelling}
                           onClick={cancelSeed}
-                          title={t("backup.fill_stop_title")}
+                          data-tooltip={t("backup.fill_stop_title")}
                         >
                           <X size={14} />
                           {seedCancelling ? t("backup.stopping") : t("backup.stop")}
@@ -388,7 +388,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
                         className="btn-secondary"
                         disabled={busy || working || seeding !== null}
                         onClick={() => setConfirmRemove(target)}
-                        title={t("backup.remove_title")}
+                        data-tooltip={t("backup.remove_title")}
                       >
                         <Trash2 size={14} />
                         {t("backup.remove")}

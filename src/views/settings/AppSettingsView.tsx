@@ -5,6 +5,7 @@ import { AuthShell } from "../../layout/AuthShell";
 import type { Os } from "../../lib/platformStrings";
 import { AppSettingsSection, useUpdater, type AppSectionId } from "./AppSettings";
 import { t, useLocale, type Key } from "../../i18n";
+import { Segmented } from "../../components/Segmented";
 
 const TABS: { id: AppSectionId; label: Key }[] = [
   { id: "general", label: "settings.general" },
@@ -47,24 +48,21 @@ export function AppSettingsView({
       <section className="card auth-card app-settings-card">
         <h2>{t("set.app_title")}</h2>
         <p className="hint">{t("set.app_hint")}</p>
-        <div className="app-settings-tabs" role="tablist">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={section === tab.id}
-              className={section === tab.id ? "btn-primary" : "btn-secondary"}
-              onClick={() => setSection(tab.id)}
-            >
-              {t(tab.label)}
-              {tab.id === "updates" && updater.state.phase === "available" && (
-                <span className="tab-badge tab-badge-update rail-update-badge">
-                  {t("settings.update_badge")}
-                </span>
-              )}
-            </button>
-          ))}
+        <div className="app-settings-tabs">
+          <Segmented
+            kind="tab"
+            label={t("set.app_title")}
+            value={section}
+            onChange={setSection}
+            options={TABS.map((tab) => ({
+              value: tab.id,
+              label: t(tab.label),
+              extra:
+                tab.id === "updates" && updater.state.phase === "available" ? (
+                  <span className="badge badge-accent">{t("settings.update_badge")}</span>
+                ) : undefined,
+            }))}
+          />
         </div>
         <AppSettingsSection
           section={section}

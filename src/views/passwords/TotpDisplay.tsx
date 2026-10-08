@@ -57,12 +57,12 @@ export function TotpDisplay({ entry, now, copied, hidden = false, onCopy }: Prop
       <span
         className="pw-totp-ring"
         style={{ "--pw-totp-frac": String(secondsLeft / period) } as React.CSSProperties}
-        title={t("pw.totp_left", { seconds: secondsLeft })}
+        data-tooltip={t("pw.totp_left", { seconds: secondsLeft })}
       />
       <button
         type="button"
         className="pw-inline-btn"
-        title={t("pw.copy_code")}
+        data-tooltip={t("pw.copy_code")}
         aria-label={t("pw.copy_one_time_code")}
         disabled={!code}
         onClick={() => code && onCopy(code)}

@@ -117,7 +117,7 @@ export function EntryDetail({
     <button
       type="button"
       className="pw-inline-btn"
-      title={revealed ? t("pw.hide") : t("pw.show")}
+      data-tooltip={revealed ? t("pw.hide") : t("pw.show")}
       aria-label={revealed ? t("pw.hide") : t("pw.show")}
       onClick={toggleReveal}
     >
@@ -144,7 +144,7 @@ export function EntryDetail({
           <button
             type="button"
             className="pw-inline-btn"
-            title={copyLabel}
+            data-tooltip={copyLabel}
             aria-label={copyLabel}
             onClick={() => onCopyPlain(copyKey, value)}
           >
@@ -169,7 +169,7 @@ export function EntryDetail({
       <button
         type="button"
         className="pw-inline-btn"
-        title={copyLabel}
+        data-tooltip={copyLabel}
         aria-label={copyLabel}
         onClick={() => onCopySecretField(entry, copyKey, value, audit)}
       >
@@ -219,7 +219,8 @@ export function EntryDetail({
           <button
             type="button"
             className={`pw-action-btn${entry.favorite ? " is-starred" : ""}`}
-            title={entry.favorite ? t("pw.unfavorite") : t("pw.favorite")}
+            data-tooltip={entry.favorite ? t("pw.unfavorite") : t("pw.favorite")}
+            aria-label={entry.favorite ? t("pw.unfavorite") : t("pw.favorite")}
             aria-pressed={entry.favorite ?? false}
             disabled={busy}
             onClick={() => onToggleFavorite(entry)}
@@ -229,7 +230,8 @@ export function EntryDetail({
           <button
             type="button"
             className="pw-action-btn"
-            title={t("pw.edit")}
+            data-tooltip={t("pw.edit")}
+            aria-label={t("pw.edit")}
             disabled={busy}
             onClick={() => onEdit(entry)}
           >
@@ -242,7 +244,8 @@ export function EntryDetail({
           <button
             type="button"
             className="pw-action-btn danger"
-            title={t("pw.delete")}
+            data-tooltip={t("pw.delete")}
+            aria-label={t("pw.delete")}
             disabled={busy}
             onClick={() => onDelete(entry.id)}
           >
@@ -264,7 +267,7 @@ export function EntryDetail({
               <button
                 type="button"
                 className="pw-inline-btn"
-                title={t("pw.copy_username")}
+                data-tooltip={t("pw.copy_username")}
                 aria-label={t("pw.copy_username")}
                 onClick={() => onCopyUsername(entry)}
               >
@@ -365,7 +368,7 @@ export function EntryDetail({
                 <button
                   type="button"
                   className="pw-inline-btn"
-                  title={t("pw.copy_public_key")}
+                  data-tooltip={t("pw.copy_public_key")}
                   aria-label={t("pw.copy_public_key")}
                   onClick={() => onCopyPlain(`k-${entry.id}`, entry.ssh_public_key ?? "")}
                 >
@@ -383,7 +386,7 @@ export function EntryDetail({
               <button
                 type="button"
                 className="pw-inline-btn"
-                title={t("pw.copy_private_key")}
+                data-tooltip={t("pw.copy_private_key")}
                 aria-label={t("pw.copy_private_key")}
                 onClick={() =>
                   onCopySecretField(entry, entry.id, entry.ssh_private_key ?? "", "private key")
@@ -462,7 +465,7 @@ export function EntryDetail({
                   key={a.blob_id}
                   type="button"
                   className="pw-attachment-row is-clickable"
-                  title={t("pw.open_attachment")}
+                  data-tooltip={t("pw.open_attachment")}
                   onClick={() => onOpenAttachment(a)}
                 >
                   <Paperclip size={14} aria-hidden />
@@ -492,7 +495,7 @@ export function EntryDetail({
             <button
               type="button"
               className="pw-inline-btn"
-              title={t("pw.copy_notes")}
+              data-tooltip={t("pw.copy_notes")}
               aria-label={t("pw.copy_notes")}
               onClick={() => onCopySecretField(entry, `notes-${entry.id}`, entry.notes, "notes")}
             >
@@ -537,7 +540,7 @@ export function EntryDetail({
                             <button
                               type="button"
                               className="pw-inline-btn"
-                              title={t("pw.copy_this_password")}
+                              data-tooltip={t("pw.copy_this_password")}
                               aria-label={t("pw.copy_this_password")}
                               onClick={() =>
                                 onCopySecretField(

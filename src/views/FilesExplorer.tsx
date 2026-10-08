@@ -948,7 +948,8 @@ export function FilesExplorer(props: Props) {
           <button
             type="button"
             className="explorer-icon-btn"
-            title={t("files.back")}
+            data-tooltip={t("files.back")}
+            aria-label={t("files.back")}
             disabled={navigating || !canGoBack}
             onClick={onBack}
           >
@@ -957,7 +958,8 @@ export function FilesExplorer(props: Props) {
           <button
             type="button"
             className="explorer-icon-btn"
-            title={t("files.forward")}
+            data-tooltip={t("files.forward")}
+            aria-label={t("files.forward")}
             disabled={navigating || !canGoForward}
             onClick={onForward}
           >
@@ -966,7 +968,8 @@ export function FilesExplorer(props: Props) {
           <button
             type="button"
             className="explorer-icon-btn"
-            title={t("files.up")}
+            data-tooltip={t("files.up")}
+            aria-label={t("files.up")}
             disabled={navigating || !canGoUp}
             onClick={onUp}
           >
@@ -1038,7 +1041,7 @@ export function FilesExplorer(props: Props) {
               onClick={() => setShowAddDropdown(!showAddDropdown)}
               aria-haspopup="menu"
               aria-expanded={showAddDropdown}
-              title={t("files.add_or_create")}
+              data-tooltip={t("files.add_or_create")}
             >
               <IconPlus size={15} />
               <span className="btn-add-new-label">{t("files.add")}</span>
@@ -1096,7 +1099,7 @@ export function FilesExplorer(props: Props) {
             className="explorer-icon-btn btn-refresh-sync"
             disabled={navigating}
             onClick={onRefresh}
-            title={t("files.refresh_f5")}
+            data-tooltip={t("files.refresh_f5")}
             aria-label={t("files.refresh")}
           >
             <IconRefresh size={16} />
@@ -1107,7 +1110,7 @@ export function FilesExplorer(props: Props) {
             className={`view-toggle-btn${detailsShown ? " active" : ""}`}
             onClick={() => setDetailsShown((v) => !v)}
             aria-pressed={detailsShown}
-            title={detailsShown ? t("files.hide_details") : t("files.show_details")}
+            data-tooltip={detailsShown ? t("files.hide_details") : t("files.show_details")}
             aria-label={detailsShown ? t("files.hide_details") : t("files.show_details")}
           >
             <IconInfo size={18} />
@@ -1117,7 +1120,7 @@ export function FilesExplorer(props: Props) {
             type="button"
             className={`view-toggle-btn${viewType === "grid" ? " active" : ""}`}
             onClick={() => setViewType(viewType === "list" ? "grid" : "list")}
-            title={viewType === "list" ? t("files.grid_view") : t("files.list_view")}
+            data-tooltip={viewType === "list" ? t("files.grid_view") : t("files.list_view")}
             aria-label={viewType === "list" ? t("files.grid_view") : t("files.list_view")}
           >
             {viewType === "list" ? <IconGrid size={18} /> : <IconList size={18} />}
@@ -1131,7 +1134,9 @@ export function FilesExplorer(props: Props) {
               type="button"
               className={`view-toggle-btn view-toggle-labelled${sortBy ? " active" : ""}`}
               onClick={() => setShowSortMenu((v) => !v)}
-              title={sortBy ? t("files.sorted_by", { field: sortLabel(sortBy) }) : t("files.sort")}
+              data-tooltip={
+                sortBy ? t("files.sorted_by", { field: sortLabel(sortBy) }) : t("files.sort")
+              }
               aria-haspopup="menu"
               aria-expanded={showSortMenu}
             >
@@ -1329,7 +1334,7 @@ export function FilesExplorer(props: Props) {
                     </span>
                   )}
                   {entry.favorite && (
-                    <span className="grid-card-star" title={t("files.in_favorites")}>
+                    <span className="grid-card-star" data-tooltip={t("files.in_favorites")}>
                       <Star size={13} fill="currentColor" />
                     </span>
                   )}
@@ -1360,7 +1365,7 @@ export function FilesExplorer(props: Props) {
                       onBlur={() => onCommitRename()}
                     />
                   ) : (
-                    <div className="grid-card-name" title={entry.name}>
+                    <div className="grid-card-name" data-tooltip={entry.name}>
                       {entry.name || "/"}
                     </div>
                   )}
@@ -1413,6 +1418,7 @@ export function FilesExplorer(props: Props) {
                     key={entry.id}
                     ref={(el) => registerItemRef(entry.id, el)}
                     className={`${entry.kind === "folder" ? "row-folder" : "row-file"}${selected ? " is-selected" : ""}${moveClass(entry)}`}
+                    aria-selected={selected}
                     {...dropProps(entry)}
                     onMouseDown={(e) => startItemDrag(e, entry)}
                     onClick={(e) => {
@@ -1456,7 +1462,7 @@ export function FilesExplorer(props: Props) {
                           <span>{entry.name || "/"}</span>
                         )}
                         {entry.favorite && !renaming && (
-                          <span className="row-star" title={t("files.in_favorites")}>
+                          <span className="row-star" data-tooltip={t("files.in_favorites")}>
                             <Star size={12} fill="currentColor" />
                           </span>
                         )}
@@ -1642,7 +1648,7 @@ export function FilesExplorer(props: Props) {
                 type="button"
                 className="selection-toolbar-btn"
                 onClick={onClearSelection}
-                title={t("files.clear_selection")}
+                data-tooltip={t("files.clear_selection")}
               >
                 <IconClose size={14} /> {t("trash.clear")}
               </button>

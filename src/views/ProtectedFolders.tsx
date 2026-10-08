@@ -120,7 +120,7 @@ export function ProtectedFoldersPanel() {
                 className="btn-secondary"
                 disabled={busy}
                 onClick={() => void remove(folder.path)}
-                title={t("set.pf_stop_tooltip")}
+                data-tooltip={t("set.pf_stop_tooltip")}
               >
                 <Trash2 size={14} />
                 {t("set.pf_stop")}

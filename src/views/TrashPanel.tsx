@@ -120,7 +120,7 @@ export function TrashPanel({
           className="btn-danger"
           disabled={busy || entries.length === 0}
           onClick={onEmptyTrash}
-          title={t("trash.empty_tooltip")}
+          data-tooltip={t("trash.empty_tooltip")}
         >
           <Trash2 size={15} />
           {t("trash.empty")}
@@ -225,7 +225,7 @@ export function TrashPanel({
                     type="button"
                     className="btn-danger"
                     disabled={busy}
-                    title={t("trash.delete_for_good")}
+                    data-tooltip={t("trash.delete_for_good")}
                     aria-label={t("trash.delete_one_label", { name: entry.name })}
                     onClick={() => onDeleteForever([entry])}
                   >

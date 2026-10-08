@@ -110,7 +110,7 @@ export function FileDetailsPanel({
         type="button"
         className="explorer-icon-btn details-close"
         onClick={onClose}
-        title={t("files.hide_details")}
+        data-tooltip={t("files.hide_details")}
         aria-label={t("files.hide_details")}
       >
         <IconClose size={14} />
@@ -123,7 +123,7 @@ export function FileDetailsPanel({
         >
           {Icon ? <Icon size={36} strokeWidth={1.5} /> : <IconFolder size={38} />}
         </div>
-        <h3 className="details-name" title={title ?? entry.name}>
+        <h3 className="details-name" data-tooltip={title ?? entry.name}>
           {title ?? entry.name}
         </h3>
         <p className="details-kind">
@@ -163,7 +163,7 @@ export function FileDetailsPanel({
           <Row icon={<CopyIcon size={15} />} label={t("files.backup_row")}>
             <span
               className={`details-status is-${syncStateShort(syncState).tone}`}
-              title={describeSyncState(syncState)}
+              data-tooltip={describeSyncState(syncState)}
             >
               {syncStateShort(syncState).label}
             </span>
@@ -184,7 +184,7 @@ export function FileDetailsPanel({
               {lines.map((line) => (
                 <li key={line.id} className={`details-copy is-${line.state}`}>
                   <span className="details-copy-dot" aria-hidden />
-                  <span className="details-copy-name" title={line.name}>
+                  <span className="details-copy-name" data-tooltip={line.name}>
                     {line.name}
                   </span>
                   <span className="details-copy-state">{copyState(line.state)}</span>
@@ -244,7 +244,7 @@ export function SelectionDetails({
         type="button"
         className="explorer-icon-btn details-close"
         onClick={onClose}
-        title={t("files.hide_details")}
+        data-tooltip={t("files.hide_details")}
         aria-label={t("files.hide_details")}
       >
         <IconClose size={14} />

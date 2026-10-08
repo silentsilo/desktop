@@ -841,7 +841,7 @@ export function PasswordsPanel({
           type="button"
           className={`pw-favicon-toggle${showFavicons ? " active" : ""}`}
           onClick={toggleShowFavicons}
-          title={
+          data-tooltip={
             showFavicons ? t("pw.site_icons_on_tip") : t("pw.site_icons_off_tip")
           }
         >
@@ -853,7 +853,7 @@ export function PasswordsPanel({
           className="pw-transfer-btn"
           disabled={busy || transferBusy}
           onClick={() => void handleImport()}
-          title={t("pw.import_tip")}
+          data-tooltip={t("pw.import_tip")}
         >
           <Upload size={15} />
           <span>{t("pw.import")}</span>
@@ -867,7 +867,7 @@ export function PasswordsPanel({
             setTransferNotice(null);
             setConfirmingExport(true);
           }}
-          title={t("pw.export_tip")}
+          data-tooltip={t("pw.export_tip")}
         >
           <Download size={15} />
           <span>{t("pw.export")}</span>

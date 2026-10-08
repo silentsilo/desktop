@@ -76,7 +76,7 @@ export function FavoritesPanel({
                           type="button"
                           className="favorites-card-open"
                           onClick={() => onOpenHit(hit)}
-                          title={t("files.fav_open", { name: hit.name || "/" })}
+                          data-tooltip={t("files.fav_open", { name: hit.name || "/" })}
                         >
                           <span
                             className={`favorites-card-icon ${
@@ -96,7 +96,7 @@ export function FavoritesPanel({
                           className="favorites-unstar"
                           onClick={() => onUnstarHit(hit)}
                           disabled={busy}
-                          title={t("files.remove_favorite")}
+                          data-tooltip={t("files.remove_favorite")}
                           aria-label={
                             hit.name
                               ? t("files.fav_remove_named", { name: hit.name })
@@ -125,7 +125,7 @@ export function FavoritesPanel({
                           type="button"
                           className="favorites-card-open"
                           onClick={() => onOpenCredential(entry.id)}
-                          title={t("files.fav_open_in_passwords", { name: entry.service })}
+                          data-tooltip={t("files.fav_open_in_passwords", { name: entry.service })}
                         >
                           <span className="favorites-card-icon">
                             <Icon size={26} />
@@ -139,7 +139,7 @@ export function FavoritesPanel({
                           className="favorites-unstar"
                           onClick={() => onUnstarCredential(entry)}
                           disabled={busy}
-                          title={t("files.remove_favorite")}
+                          data-tooltip={t("files.remove_favorite")}
                           aria-label={t("files.fav_remove_named", { name: entry.service })}
                         >
                           <Star size={14} fill="currentColor" />

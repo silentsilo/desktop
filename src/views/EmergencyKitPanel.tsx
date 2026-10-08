@@ -5,6 +5,7 @@ import { EmergencyKit } from "./EmergencyKit";
 import { fromGroups, isComplete, toGroups } from "../lib/recoveryCode";
 import { markDone } from "../lib/siloMemory";
 import { RecoveryCodeInput } from "../components/RecoveryCodeInput";
+import { OptionTiles } from "../components/OptionTiles";
 import { t, tx, useLocale } from "../i18n";
 
 type Props = {
@@ -88,24 +89,20 @@ export function EmergencyKitPanel({ busy, siloId, siloName, freshCode }: Props) 
 
       <div className="field">
         <span>{t("kit.how_question")}</span>
-        <div className="storage-choice kit-choice">
-          <button
-            type="button"
-            className={`storage-option${mode === "blank" ? " is-chosen" : ""}`}
-            onClick={() => setMode("blank")}
-          >
-            <strong>{t("kit.blank_title")}</strong>
-            <span>{t("kit.blank_body")}</span>
-          </button>
-          <button
-            type="button"
-            className={`storage-option${mode === "printed" ? " is-chosen" : ""}`}
-            onClick={() => setMode("printed")}
-          >
-            <strong>{t("kit.printed_title")}</strong>
-            <span>{t("kit.printed_body")}</span>
-          </button>
-        </div>
+        <OptionTiles
+          className="kit-choice"
+          label={t("kit.how_question")}
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: "blank", title: t("kit.blank_title"), description: t("kit.blank_body") },
+            {
+              value: "printed",
+              title: t("kit.printed_title"),
+              description: t("kit.printed_body"),
+            },
+          ]}
+        />
       </div>
 
       {needsTyping && (

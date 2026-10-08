@@ -182,7 +182,7 @@ export function AppShell({
           type="button"
           className="sidebar-silo"
           onClick={onSwitchSilo}
-          title={t("nav.switch_silo", { name: siloName })}
+          data-tooltip={t("nav.switch_silo", { name: siloName })}
         >
           <HardDrive size={15} />
           {!collapsed && (
@@ -226,7 +226,7 @@ export function AppShell({
                 type="button"
                 className={`tab-item${active ? " active" : ""}`}
                 onClick={() => onView(item.id)}
-                title={title}
+                data-tooltip={title}
                 aria-label={title}
                 aria-current={active ? "page" : undefined}
               >
@@ -264,7 +264,7 @@ export function AppShell({
               type="button"
               className="sidebar-storage sidebar-storage-vertical"
               onClick={onOpenBackup}
-              title={
+              data-tooltip={
                 storage.unsyncedBytes > 0
                   ? t("start.storage_title_unsynced", {
                       size: formatBytes(storage.localBytes),
@@ -283,7 +283,7 @@ export function AppShell({
               type="button"
               className="sidebar-storage"
               onClick={onOpenBackup}
-              title={t("start.storage_title")}
+              data-tooltip={t("start.storage_title")}
             >
               <span className="sidebar-storage-line">
                 <span>{formatBytes(storage.localBytes)}</span>
@@ -303,7 +303,7 @@ export function AppShell({
               type="button"
               className="btn-theme"
               onClick={onToggleTheme}
-              title={theme === "light" ? t("nav.dark") : t("nav.light")}
+              data-tooltip={theme === "light" ? t("nav.dark") : t("nav.light")}
               aria-label={t("start.toggle_theme")}
             >
               {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
@@ -317,7 +317,7 @@ export function AppShell({
                 type="button"
                 className="btn-collapse"
                 onClick={toggleCollapsed}
-                title={collapsed ? t("nav.expand") : t("nav.collapse")}
+                data-tooltip={collapsed ? t("nav.expand") : t("nav.collapse")}
                 aria-label={t("start.toggle_sidebar")}
               >
                 {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
@@ -328,7 +328,7 @@ export function AppShell({
               type="button"
               className="btn-lock"
               onClick={onLock}
-              title={t("nav.lock_silo")}
+              data-tooltip={t("nav.lock_silo")}
               aria-label={t("nav.lock_silo")}
             >
               <Lock size={16} />
@@ -362,7 +362,7 @@ export function AppShell({
               // and what to do; retrying from here repeated it without a word.
               onClick={sync.state === "error" ? onOpenBackup : onSyncNow}
               disabled={sync.state === "syncing"}
-              title={sync.lastError ?? t("start.sync_now")}
+              data-tooltip={sync.lastError ?? t("start.sync_now")}
             >
               <span
                 className={`dot ${
@@ -390,7 +390,7 @@ export function AppShell({
               type="button"
               className="status-sync"
               onClick={onOpenBackup}
-              title={t("start.open_backup_title")}
+              data-tooltip={t("start.open_backup_title")}
             >
               {/* Neutral, not green: a silo with no backup is not a state
                   worth a reassuring colour, it is the one Health flags. */}

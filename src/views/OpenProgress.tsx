@@ -50,7 +50,7 @@ export function OpenProgress({ opening, onCancel }: Props) {
   return (
     <div className="toast open-progress" role="status" aria-live="polite">
       <div className="open-progress-body">
-        <p className="open-progress-title" title={opening.name}>
+        <p className="open-progress-title" data-tooltip={opening.name}>
           {openingTitle(opening)}
         </p>
         <div

@@ -427,7 +427,7 @@ export function SettingsPanel(props: Props) {
                     className="key-list-item"
                     // For telling two keys apart when asking for help; not
                     // something to read on every visit.
-                    title={t("set.key_tooltip", {
+                    data-tooltip={t("set.key_tooltip", {
                       slot: k.key_slot,
                       id: k.credential_id.slice(0, 12),
                     })}
@@ -438,7 +438,7 @@ export function SettingsPanel(props: Props) {
                           computer cannot remove is something they are entitled
                           to see named for what it is. */}
                       {k.policy === "org" && (
-                        <span className="key-badge" title={t("set.key_org_badge_tooltip")}>
+                        <span className="key-badge" data-tooltip={t("set.key_org_badge_tooltip")}>
                           <Building2 size={12} aria-hidden />
                           {t("set.key_org_badge")}
                         </span>
@@ -472,7 +472,7 @@ export function SettingsPanel(props: Props) {
                         type="button"
                         className="link"
                         disabled={busy || securityKeys.length <= 1}
-                        title={
+                        data-tooltip={
                           securityKeys.length <= 1
                             ? t("set.key_remove_last")
                             : k.policy === "org"

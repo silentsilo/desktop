@@ -43,6 +43,8 @@ import { KDRIVE_DEFAULT_FOLDER, kdriveIdFrom, kdriveUrl } from "../lib/kdrive";
 import { S3ConfigForm } from "./S3ConfigForm";
 import { plainHttpWarning, isPlainHttp } from "../lib/plainHttp";
 import { t, tx, useLocale, type Key } from "../i18n";
+import { OptionTiles } from "../components/OptionTiles";
+import { Segmented } from "../components/Segmented";
 
 /**
  * Every field any backend needs, held together.
@@ -591,36 +593,32 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
         {clouds.length > 0 && (
           <>
             <p className="store-kind-group">{t("backup.group_accounts")}</p>
-            <div className="store-kind-grid is-accounts">
-              {clouds.map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  className={draft.kind === kind ? "btn-primary" : "btn-secondary"}
-                  onClick={() => setKind(kind)}
-                >
-                  <CloudCog size={15} />
-                  {CLOUD_NAME[kind]}
-                </button>
-              ))}
-            </div>
+            <OptionTiles
+              className="store-kind-grid is-accounts"
+              label={t("backup.group_accounts")}
+              value={isCloudKind(draft.kind) ? draft.kind : null}
+              onChange={setKind}
+              options={clouds.map((kind) => ({
+                value: kind,
+                title: CLOUD_NAME[kind],
+                icon: <CloudCog size={16} />,
+              }))}
+            />
             <p className="store-kind-group">{t("backup.group_own")}</p>
           </>
         )}
-        <div className="store-kind-grid">
-          {OWN_STORAGE.map(({ kind, label, title, Icon }) => (
-            <button
-              key={kind}
-              type="button"
-              title={t(title)}
-              className={draft.kind === kind ? "btn-primary" : "btn-secondary"}
-              onClick={() => setKind(kind)}
-            >
-              <Icon size={15} />
-              {t(label)}
-            </button>
-          ))}
-        </div>
+        <OptionTiles
+          className="store-kind-grid"
+          label={clouds.length > 0 ? t("backup.group_own") : t("backup.where_question")}
+          value={isCloudKind(draft.kind) ? null : draft.kind}
+          onChange={setKind}
+          options={OWN_STORAGE.map(({ kind, label, title, Icon }) => ({
+            value: kind,
+            title: t(label),
+            description: t(title),
+            icon: <Icon size={16} />,
+          }))}
+        />
       </div>
 
       {isCloudKind(draft.kind) && (
@@ -674,22 +672,16 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
         <>
           <div className="field">
             <span>{t("backup.field_server")}</span>
-            <div className="store-kind-picker">
-              <button
-                type="button"
-                className={draft.dav.preset === "any" ? "btn-primary" : "btn-secondary"}
-                onClick={() => setDav({ preset: "any" })}
-              >
-                {t("backup.dav_any")}
-              </button>
-              <button
-                type="button"
-                className={draft.dav.preset === "kdrive" ? "btn-primary" : "btn-secondary"}
-                onClick={() => setDav({ preset: "kdrive" })}
-              >
-                kDrive (Infomaniak)
-              </button>
-            </div>
+            <Segmented
+              fill
+              label={t("backup.field_server")}
+              value={draft.dav.preset}
+              onChange={(preset) => setDav({ preset })}
+              options={[
+                { value: "any", label: t("backup.dav_any") },
+                { value: "kdrive", label: "kDrive (Infomaniak)" },
+              ]}
+            />
           </div>
           {draft.dav.preset === "kdrive" ? (
             <div className="s3-form-row">
@@ -804,23 +796,20 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
 
             <div className="field">
               <span>{t("backup.sign_in_with")}</span>
-            <div className="store-kind-picker">
-              <button
-                type="button"
-                className={draft.sftp.method === "password" ? "btn-primary" : "btn-secondary"}
-                onClick={() => setSftp({ method: "password" })}
-              >
-                {t("backup.field_password")}
-              </button>
-                <button
-                  type="button"
-                  className={draft.sftp.method === "key" ? "btn-primary" : "btn-secondary"}
-                  onClick={() => setSftp({ method: "key" })}
-                >
-                  <KeyRound size={15} />
-                  {t("backup.private_key_label")}
-                </button>
-              </div>
+              <Segmented
+                fill
+                label={t("backup.sign_in_with")}
+                value={draft.sftp.method}
+                onChange={(method) => setSftp({ method })}
+                options={[
+                  { value: "password", label: t("backup.field_password") },
+                  {
+                    value: "key",
+                    label: t("backup.private_key_label"),
+                    icon: <KeyRound size={15} />,
+                  },
+                ]}
+              />
             </div>
           </div>
 

@@ -90,7 +90,7 @@ export function ShellDownloadDialog(props: Props) {
         <div className="modal-body">
           <p className="hint">
             {tx("dlg.download_intro", {
-              dir: <strong title={targetDir}>{dirName}</strong>,
+              dir: <strong data-tooltip={targetDir}>{dirName}</strong>,
               path: targetDir,
             })}
             {onNetwork && ` ${t("dlg.download_network")}`}
@@ -101,7 +101,8 @@ export function ShellDownloadDialog(props: Props) {
               className="explorer-icon-btn"
               disabled={!folder?.parent_id || busy || loading}
               onClick={() => folder?.parent_id && void loadFolder(folder.parent_id)}
-              title={t("dlg.up")}
+              data-tooltip={t("dlg.up")}
+              aria-label={t("dlg.up")}
             >
               <ChevronUp size={16} />
             </button>

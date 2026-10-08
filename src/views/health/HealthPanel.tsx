@@ -237,7 +237,7 @@ function BreachResults({
                 type="button"
                 className="health-entry"
                 onClick={() => onOpenEntry(id)}
-                title={t("dlg.health_open_entry", { name: nameOf(id) })}
+                data-tooltip={t("dlg.health_open_entry", { name: nameOf(id) })}
               >
                 <span className="health-entry-name">{nameOf(id)}</span>
                 <span className="health-entry-sub">
@@ -311,7 +311,7 @@ function FindingRow({
               type="button"
               className="btn-secondary btn-sm health-finding-fix"
               onClick={onIgnore}
-              title={t("dlg.health_ignore_tooltip")}
+              data-tooltip={t("dlg.health_ignore_tooltip")}
             >
               {t("dlg.health_ignore")}
             </button>
@@ -368,7 +368,7 @@ function EntryButton({
         type="button"
         className="health-entry"
         onClick={() => onOpen(entry.id)}
-        title={t("dlg.health_open_entry", { name: entry.service })}
+        data-tooltip={t("dlg.health_open_entry", { name: entry.service })}
       >
         <span className="health-entry-name">{entry.service || t("dlg.untitled")}</span>
         {subtitle && <span className="health-entry-sub">{subtitle}</span>}

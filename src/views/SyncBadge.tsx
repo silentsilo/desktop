@@ -57,7 +57,7 @@ export function SyncBadge({ state, compact }: { state: FileSyncState; compact?: 
   const label = t(LOOK[state].label);
   const title = t(LOOK[state].title);
   return (
-    <span className={`sync-badge sync-${state}`} title={title} aria-label={title}>
+    <span className={`sync-badge sync-${state}`} data-tooltip={title} aria-label={title}>
       <Icon size={12} aria-hidden />
       {!compact && <span aria-hidden>{label}</span>}
     </span>

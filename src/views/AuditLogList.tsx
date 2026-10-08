@@ -326,7 +326,7 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
             className="btn-secondary"
             disabled={!log || log.total === 0}
             onClick={() => void exportAs("csv")}
-            title={t("set.log_export_csv")}
+            data-tooltip={t("set.log_export_csv")}
           >
             <Download size={14} />
             CSV
@@ -336,7 +336,7 @@ export function AuditLogList({ devices, needsKey = false }: Props) {
             className="btn-secondary"
             disabled={!log || log.total === 0}
             onClick={() => void exportAs("jsonl")}
-            title={t("set.log_export_json")}
+            data-tooltip={t("set.log_export_json")}
           >
             <Download size={14} />
             JSON

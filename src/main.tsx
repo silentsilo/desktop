@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { ThemeProvider } from "./components/ThemeProvider";
+import { TooltipHost } from "./ui/Tooltip";
 import "@fontsource-variable/plus-jakarta-sans/index.css";
 import "./styles.css";
 
@@ -20,6 +21,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <ThemeProvider>
       <App />
+      <TooltipHost />
     </ThemeProvider>
   </React.StrictMode>,
 );

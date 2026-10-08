@@ -133,7 +133,8 @@ export function CategoryRail({
               <button
                 type="button"
                 className="pw-inline-btn"
-                title={t("pw.rail_save_name")}
+                data-tooltip={t("pw.rail_save_name")}
+                aria-label={t("pw.rail_save_name")}
                 disabled={
                   !renameDraft.trim() || nameTaken(renameDraft.trim(), cat.name)
                 }
@@ -144,7 +145,8 @@ export function CategoryRail({
               <button
                 type="button"
                 className="pw-inline-btn"
-                title={t("common.cancel")}
+                data-tooltip={t("common.cancel")}
+                aria-label={t("common.cancel")}
                 onClick={() => setRenaming(null)}
               >
                 <IconClose size={14} />
@@ -173,7 +175,12 @@ export function CategoryRail({
                 <button
                   type="button"
                   className="pw-inline-btn danger"
-                  title={t("pw.rail_delete_confirm", { name: cat.name, fallback: FALLBACK_CATEGORY })}
+                  data-tooltip={
+                    t("pw.rail_delete_confirm", { name: cat.name, fallback: FALLBACK_CATEGORY })
+                  }
+                  aria-label={
+                    t("pw.rail_delete_confirm", { name: cat.name, fallback: FALLBACK_CATEGORY })
+                  }
                   onClick={() => {
                     setConfirmingDelete(null);
                     onDelete(cat.name);
@@ -184,7 +191,8 @@ export function CategoryRail({
                 <button
                   type="button"
                   className="pw-inline-btn"
-                  title={t("pw.rail_keep")}
+                  data-tooltip={t("pw.rail_keep")}
+                  aria-label={t("pw.rail_keep")}
                   onClick={() => setConfirmingDelete(null)}
                 >
                   <IconClose size={14} />
@@ -195,7 +203,8 @@ export function CategoryRail({
                 <button
                   type="button"
                   className="pw-inline-btn"
-                  title={t("pw.rail_rename")}
+                  data-tooltip={t("pw.rail_rename")}
+                  aria-label={t("pw.rail_rename")}
                   disabled={busy}
                   onClick={() => {
                     setRenameDraft(cat.name);
@@ -210,7 +219,8 @@ export function CategoryRail({
                   <button
                     type="button"
                     className="pw-inline-btn danger"
-                    title={t("pw.rail_delete")}
+                    data-tooltip={t("pw.rail_delete")}
+                    aria-label={t("pw.rail_delete")}
                     disabled={busy}
                     onClick={() => setConfirmingDelete(cat.name)}
                   >
@@ -244,7 +254,8 @@ export function CategoryRail({
             <button
               type="button"
               className="pw-inline-btn"
-              title={t("pw.rail_add")}
+              data-tooltip={t("pw.rail_add")}
+              aria-label={t("pw.rail_add")}
               disabled={!draft.trim() || nameTaken(draft.trim())}
               onClick={submitAdd}
             >
@@ -253,7 +264,8 @@ export function CategoryRail({
             <button
               type="button"
               className="pw-inline-btn"
-              title={t("common.cancel")}
+              data-tooltip={t("common.cancel")}
+              aria-label={t("common.cancel")}
               onClick={() => {
                 setAdding(false);
                 setDraft("");

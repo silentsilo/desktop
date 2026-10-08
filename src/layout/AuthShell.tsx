@@ -38,7 +38,7 @@ export function AuthShell({ title, subtitle, children }: AuthShellProps) {
             type="button"
             className="btn-theme"
             onClick={openSettings}
-            title={t("start.app_settings")}
+            data-tooltip={t("start.app_settings")}
             aria-label={t("start.app_settings")}
           >
             <Settings2 size={16} />
