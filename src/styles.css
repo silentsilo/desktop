@@ -7233,18 +7233,19 @@ button.link.pw-history-clear {
   color: var(--warning-text);
 }
 
-/* Health is a column page, so it follows `.panel`'s rule rather than
-   stretching: at 2560px an uncapped finding put a 100-character sentence on
-   one line and threw its action button two thousand pixels from the title it
-   belongs to. The scroller stays full width, so the scrollbar keeps to the
-   window edge and only the content is centred. Favourites is a card grid
-   below, which fills the width instead. */
+/* Health is a column page: at 2560px an uncapped finding put a
+   100-character sentence on one line and threw its action button two
+   thousand pixels from the title it belongs to. Capped, and kept to the
+   left like the Settings cards, so it lines up with every other page
+   instead of floating in the middle. The scroller stays full width, so the
+   scrollbar keeps to the window edge. Favourites is a card grid below,
+   which fills the width instead. */
 .health-view .view-header,
 .health-summary,
 .health-pane > * {
   width: 100%;
   max-width: var(--content-max);
-  margin-inline: auto;
+  margin-inline: 0 auto;
 }
 
 /* ── Activity ──
