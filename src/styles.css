@@ -2733,6 +2733,11 @@ input[type="range"] {
   font-size: var(--fs-13);
 }
 
+/* Publisher and licence are prose, not paths. */
+.about-meta dd {
+  font-family: inherit;
+}
+
 .backup-points {
   list-style: none;
   margin: 0.35rem 0 0;
@@ -4922,6 +4927,24 @@ tr.is-moving {
   .view-rail-item {
     flex-shrink: 0;
   }
+
+  /* Each item sits in a wrapper with its group's heading; lying down, the
+     headings go and the items share one line instead of stepping down. */
+  .settings-view .view-rail > div {
+    display: contents;
+  }
+
+  .settings-view .view-rail {
+    width: auto;
+  }
+
+  .settings-view .view-rail-item {
+    width: auto;
+  }
+
+  .settings-view .view-rail-heading {
+    display: none;
+  }
 }
 
 /* Wraps an item and its hover tools; the item alone when there are none. */
@@ -4994,8 +5017,10 @@ tr.is-moving {
 
 /* Wide enough for the longest single word a section name has in any
    language, German "Wiederherstellungscode", which cannot wrap. */
-.settings-view .view-rail {
-  width: 200px;
+@container settings-view (min-width: 641px) {
+  .settings-view .view-rail {
+    width: 200px;
+  }
 }
 
 .pw-rail-dot {

@@ -34,6 +34,28 @@ group("activity events", () => {
     expect(sentence(entry(53, { x: { now: "off" } }))).toBe("Turned the recovery code off");
   });
 
+  it("names the files added, moved, renamed and restored", () => {
+    const one = describe(entry(32, { l: "Taxes.pdf", x: { folder: "/Docs" } }));
+    expect(`${one.before}${one.object}${one.after}`).toBe("Added Taxes.pdf");
+    expect(one.details).toEqual(["in /Docs"]);
+    const many = describe(
+      entry(32, { x: { count: 12, names: ["a.jpg", "b.jpg"], folder: "/Photos" } }),
+    );
+    expect(`${many.before}${many.object}${many.after}`).toBe("Added 12 files");
+    expect(many.details).toEqual(["a.jpg, b.jpg and 10 more", "in /Photos"]);
+    expect(sentence(entry(35, { l: "a.txt" }))).toBe("Restored a.txt from the trash");
+    expect(sentence(entry(36, { x: { name: "a.txt", to: "/Docs" } }))).toBe("Moved a.txt to /Docs");
+    expect(sentence(entry(36, { x: { count: 3, names: ["a", "b", "c"], to: "/Docs" } }))).toBe(
+      "Moved 3 items to /Docs",
+    );
+    expect(sentence(entry(37, { l: "new.txt", x: { from: "old.txt" } }))).toBe(
+      "Renamed old.txt to new.txt",
+    );
+    expect(describe(entry(37, { l: "B", x: { from: "A", folder: true } })).details).toEqual([]);
+    expect(sentence(entry(38, { l: "/Docs/2026" }))).toBe("Created the folder /Docs/2026");
+    expect(KIND_CODES.files).toEqual(expect.arrayContaining([35, 36, 37, 38]));
+  });
+
   it("says what the window and core put in the details, never raw pairs", () => {
     const imported = describe(entry(40, { x: { count: 3, format: "KeePass" } }));
     expect(`${imported.before}${imported.object}`).toBe("Imported 3 passwords");

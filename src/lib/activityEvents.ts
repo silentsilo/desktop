@@ -28,7 +28,7 @@ export const KIND_CODES: Record<ActivityKind, number[]> = {
   access: [1, 2, 3],
   secrets: [10, 11, 12, 13, 14, 15],
   entries: [20, 21, 22, 23, 24, 40, 41],
-  files: [30, 31, 32, 33, 34],
+  files: [30, 31, 32, 33, 34, 35, 36, 37, 38],
   security: [50, 51, 52, 53, 54, 60, 61, 62, 63, 70, 71],
 };
 
@@ -121,9 +121,11 @@ function around(
 
 /** The details an event's own sentence did not already use. */
 function rest(x: Record<string, unknown>, used: string[]): string[] {
+  // `folder: true` only marks a rename as a folder's; the sentence says it.
   return Object.keys(x)
     .filter((k) => !used.includes(k) && x[k] !== undefined && x[k] !== "")
     .filter((k) => !(k === "kind" && KEY_KINDS[text(x[k])] === ""))
+    .filter((k) => !(k === "folder" && typeof x[k] !== "string"))
     .map((k) => {
       const v = x[k];
       if (k === "site") return t("dlg.activity_detail_site", { site: text(v) });
@@ -131,6 +133,14 @@ function rest(x: Record<string, unknown>, used: string[]): string[] {
       if (k === "program") return t("dlg.activity_detail_program", { program: text(v) });
       if (k === "format") return t("dlg.activity_detail_format", { format: text(v).toUpperCase() });
       if (k === "entry") return t("dlg.activity_detail_entry", { entry: text(v) });
+      if (k === "folder" && typeof v === "string") {
+        return t("dlg.activity_detail_folder", { folder: v });
+      }
+      if (k === "names" && Array.isArray(v)) {
+        const names = v.map(text).join(", ");
+        const more = Number(x.count) - v.length;
+        return more > 0 ? t("dlg.activity_detail_names_more", { names, count: more }) : names;
+      }
       if (k === "kind") {
         const known = KEY_KINDS[text(v)];
         return known ? t(known) : text(v);
@@ -248,6 +258,25 @@ export function describe(entry: AuditEntry): DescribedEvent {
           );
     case 33:
       return say("trash", "dlg.activity_moved_trash", l);
+    case 35:
+      return say("restore", "dlg.activity_restored_from_trash", l);
+    case 36: {
+      const to = text(x.to);
+      if (text(x.name)) {
+        return say("file", "dlg.activity_moved_to", text(x.name), ["name", "to"], "plain", { to });
+      }
+      const counted = count(x.count, "dlg.activity_n_items", "dlg.activity_items");
+      return say("file", "dlg.activity_moved_count", counted.object, ["count", "to"], "plain", {
+        count: counted.n,
+        to,
+      });
+    }
+    case 37:
+      return say("edit", "dlg.activity_renamed", l, ["from", "folder"], "plain", {
+        from: text(x.from),
+      });
+    case 38:
+      return say("create", "dlg.activity_folder_created", l);
     case 34:
       if (x.what === "trash") {
         return make("trash", t("dlg.activity_emptied_trash"), "", "", ["what"]);

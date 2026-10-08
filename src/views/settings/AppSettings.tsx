@@ -487,7 +487,7 @@ export function AppSettingsSection({
             ? t("set.about_body_builtin", { version: __APP_VERSION__, builtin: platform.builtIn })
             : t("set.about_body", { version: __APP_VERSION__ })}
         </p>
-        <dl className="backup-config">
+        <dl className="backup-config about-meta">
           <div className="backup-config-row">
             <dt>{t("set.about_publisher")}</dt>
             <dd>Software Hive S.R.L.</dd>
