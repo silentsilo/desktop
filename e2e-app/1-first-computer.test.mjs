@@ -57,6 +57,7 @@ test("a new silo is backed up, passes its backup test and survives a lock", asyn
   await click(driver, "Test backup");
   await click(driver, "Read every file back");
   await sees(driver, "No problems found.");
+  await click(driver, "Recovery code");
   await type(driver, "input", code);
   await click(driver, "Try a recovery now");
   await sees(driver, "Recovery works.");
