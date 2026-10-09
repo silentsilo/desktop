@@ -332,3 +332,10 @@ Persisted formats, their versions, and what an older build does when it meets
 a newer one:
 [`FORMATS.md`](https://github.com/silentsilo/core/blob/main/FORMATS.md), in
 core
+
+## Licence
+
+Copyright (C) 2026 Software Hive S.R.L.
+
+AGPL-3.0-or-later, see [LICENSE](LICENSE). Contributions are accepted under
+[CLA.md](CLA.md), identical in all four SilentSilo repositories.

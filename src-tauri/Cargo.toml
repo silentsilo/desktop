@@ -2,7 +2,7 @@
 name = "silentsilo"
 version = "1.4.0"
 description = "SilentSilo desktop client"
-authors = ["SilentSilo"]
+authors = ["Software Hive S.R.L."]
 edition = "2024"
 rust-version = "1.94"
 license = "AGPL-3.0-or-later"
