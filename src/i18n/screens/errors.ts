@@ -1370,4 +1370,15 @@ export const errors = {
     "pt-BR": "Esse item não tem senha para digitar.",
     pl: "Ten wpis nie ma hasła do wpisania.",
   },
+  "err.touchid_unsigned": {
+    note: "Error message from core, shown when Touch ID setup fails on macOS because this copy of the app is not signed (a self-built or modified copy). Touch ID and macOS are names, kept as is. 'silentsilo.com' is the website address.",
+    en: "This copy of SilentSilo is not signed, so macOS does not let it use Touch ID. Use a security key, or install SilentSilo from silentsilo.com.",
+    ro: "Această copie SilentSilo nu e semnată, așa că macOS nu o lasă să folosească Touch ID. Folosește o cheie de securitate sau instalează SilentSilo de pe silentsilo.com.",
+    de: "Diese Kopie von SilentSilo ist nicht signiert, deshalb lässt macOS sie Touch ID nicht verwenden. Nutze einen Sicherheitsschlüssel oder installiere SilentSilo von silentsilo.com.",
+    fr: "Cette copie de SilentSilo n’est pas signée, donc macOS ne la laisse pas utiliser Touch ID. Utilisez une clé de sécurité ou installez SilentSilo depuis silentsilo.com.",
+    es: "Esta copia de SilentSilo no está firmada, así que macOS no le deja usar Touch ID. Usa una llave de seguridad o instala SilentSilo desde silentsilo.com.",
+    it: "Questa copia di SilentSilo non è firmata, quindi macOS non le permette di usare Touch ID. Usa una chiave di sicurezza o installa SilentSilo da silentsilo.com.",
+    "pt-BR": "Esta cópia do SilentSilo não está assinada, por isso o macOS não deixa que ela use o Touch ID. Use uma chave de segurança ou instale o SilentSilo pelo silentsilo.com.",
+    pl: "Ta kopia SilentSilo nie jest podpisana, więc macOS nie pozwala jej używać Touch ID. Użyj klucza bezpieczeństwa albo zainstaluj SilentSilo ze strony silentsilo.com.",
+  },
 } satisfies Screen;
