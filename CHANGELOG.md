@@ -44,6 +44,10 @@ silo from opening needs a major version rather than a note.
 
 ### Changed
 
+- macOS: the app is signed with the company's Developer ID and carries its
+  provisioning profile, which grants the keychain access group Touch ID
+  needs. Tested on a Mac: Touch ID enrols and unlocks, a YubiKey works over
+  USB-C.
 - Settings before a silo opens slide in from the right, over the screen you
   were on, instead of replacing it.
 - Test backup is part of Backup, and the trial recovery part of Recovery

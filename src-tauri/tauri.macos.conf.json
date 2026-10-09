@@ -4,7 +4,11 @@
     "icon": ["icons/icon.icns"],
     "macOS": {
       "minimumSystemVersion": "13.0",
-      "hardenedRuntime": true
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.plist",
+      "files": {
+        "embedded.provisionprofile": "macos/embedded.provisionprofile"
+      }
     }
   }
 }
