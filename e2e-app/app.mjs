@@ -18,9 +18,10 @@ export async function launch() {
 const literal = (text) =>
   text.includes("'") ? `concat('${text.split("'").join(`', "'", '`)}')` : `'${text}'`;
 
-/** A button by its text or its accessible name. */
+/** A button by its text, its accessible name, or the title of a card button
+ *  whose text goes on under the title (the first-key choices). */
 export async function button(driver, name) {
-  const xpath = `//*[(self::button or @role='button' or @role='menuitem') and (normalize-space(.)=${literal(name)} or @aria-label=${literal(name)})]`;
+  const xpath = `//*[(self::button or @role='button' or @role='menuitem') and (normalize-space(.)=${literal(name)} or @aria-label=${literal(name)} or .//strong[normalize-space(.)=${literal(name)}])]`;
   const found = await driver.wait(until.elementLocated(By.xpath(xpath)), WAIT, `no button "${name}"`);
   await driver.wait(until.elementIsEnabled(found), WAIT, `"${name}" stays disabled`);
   return found;
