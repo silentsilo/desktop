@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useLasting } from "../lib/lasting";
 import { open as openDialog } from "../lib/dialog";
 import { FolderHeart, RefreshCw, Trash2 } from "lucide-react";
@@ -27,6 +28,20 @@ export function ProtectedFoldersPanel() {
   const [busy, setBusy] = useLasting<boolean>("protected.busy", false, Boolean);
   const [status, setStatus] = useLasting<string | null>("protected.status", null, never);
   const [error, setError] = useLasting<string | null>("protected.error", null, never);
+  const [progress, setProgress] = useState<string | null>(null);
+
+  // Also the scan unlock started, which "Check now" waits for.
+  useEffect(() => {
+    const stop = listen<{ done: number; total: number }>(
+      "protected-scan-progress",
+      ({ payload: { done, total } }) => {
+        setProgress(total === 0 ? t("set.pf_looking") : t("set.pf_importing", { done, total }));
+      },
+    );
+    return () => {
+      void stop.then((off) => off());
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -97,6 +112,7 @@ export function ProtectedFoldersPanel() {
       setError(formatAppError(e));
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   };
 
@@ -154,6 +170,11 @@ export function ProtectedFoldersPanel() {
         </button>
       </div>
 
+      {busy && progress && (
+        <p className="hint" role="status">
+          {progress}
+        </p>
+      )}
       {status && <p className="hint">{status}</p>}
       {error && (
         <p className="hint is-error" role="status">

@@ -721,17 +721,6 @@ export const errors = {
     "pt-BR": "Desbloqueie o silo antes de testar uma recuperação.",
     pl: "Odblokuj silos przed testem odzyskiwania.",
   },
-  "err.scan_running": {
-    note: "Error message from the app's backend, shown in a toast or under a form. Auto-import folders: folders whose new files go into the silo by themselves.",
-    en: "A check of the auto-import folders is already running.",
-    ro: "O verificare a folderelor de import automat rulează deja.",
-    de: "Eine Prüfung der Auto-Import-Ordner läuft bereits.",
-    fr: "Une vérification des dossiers d’import automatique est déjà en cours.",
-    es: "Ya hay una comprobación de las carpetas de importación automática en curso.",
-    it: "È già in corso un controllo delle cartelle di importazione automatica.",
-    "pt-BR": "Uma verificação das pastas de importação automática já está em andamento.",
-    pl: "Sprawdzanie folderów automatycznego importu już trwa.",
-  },
   "err.enrol_before_unlock": {
     note: "Error message from the app's backend, shown in a toast or under a form. 'Key' here is a security key (YubiKey, Windows Hello). ",
     en: "Enrol a key before unlocking.",

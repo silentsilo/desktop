@@ -2921,6 +2921,13 @@ fn sealed_passwords_fingerprint(session: &VaultSession) -> Option<u64> {
 
 // ── Protected folders ───────────────────────────────────────────────
 
+/// How far a scan is: files done of those found, 0 of 0 while walking.
+#[derive(Clone, serde::Serialize)]
+struct ScanProgress {
+    done: usize,
+    total: usize,
+}
+
 /// What one scan managed.
 #[derive(Debug, Default, Clone, serde::Serialize)]
 pub struct ProtectedScanReport {
@@ -3017,29 +3024,9 @@ pub async fn protected_folders_scan(app: AppHandle) -> Result<ProtectedScanRepor
     // One scan at a time. Each reads the ledger of what it already took when
     // it starts, so a second scan started while the first was still walking
     // (the one unlock starts, then "Check now") imported the same files again.
-    static SCANNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-    struct Scanning;
-    impl Drop for Scanning {
-        fn drop(&mut self) {
-            SCANNING.store(false, std::sync::atomic::Ordering::SeqCst);
-        }
-    }
-    if SCANNING
-        .compare_exchange(
-            false,
-            true,
-            std::sync::atomic::Ordering::SeqCst,
-            std::sync::atomic::Ordering::SeqCst,
-        )
-        .is_err()
-    {
-        return Err(crate::err::coded!(
-            "err.scan_running",
-            "A check of the auto-import folders is already running."
-        )
-        .into());
-    }
-    let _scanning = Scanning;
+    // The second waits for the first, then finds only what is left.
+    static SCAN: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let _scanning = SCAN.lock().await;
 
     run_blocking(move || {
         let (silo, kek) = crate::state::unlocked_silo_with_kek(&app)?;
@@ -3054,36 +3041,46 @@ pub async fn protected_folders_scan(app: AppHandle) -> Result<ProtectedScanRepor
         let snapshot = crate::state::snapshot_focused_session(&state)?;
 
         let mut report = ProtectedScanReport::default();
+        // Counted on the settings page: a first scan of a large folder takes
+        // minutes. Every folder is walked first, so the count has an end.
+        let progress = |done: usize, total: usize| {
+            let _ = app.emit("protected-scan-progress", ScanProgress { done, total });
+        };
+        progress(0, 0);
+        let mut pending = Vec::new();
         for folder in &list.folders {
             // The walk itself reads the user's folders, never the silo, so
             // it holds no lock; only resolving a target path and committing
             // a row do, briefly, per file.
-            let pending = silentsilo_vault::plan_scan(&folder.path, &folder.target, &seen)
-                .map_err(|e| e.to_string())?;
-
-            for item in pending {
-                let target = crate::state::with_session_id(&state, snapshot.id, |_s, vfs| {
-                    ensure_vault_path(vfs, &item.target_folder).map_err(CoreError::InvalidPath)
-                });
-                let Ok(target) = target else {
-                    report.skipped += 1;
-                    continue;
-                };
-                match import_one(&app, &snapshot, target, &item.source) {
-                    Ok(_) => {
-                        // Marked after the import, never before: the other order
-                        // would skip a file that never arrived and leave it
-                        // missing until someone touched it again.
-                        let _ = silentsilo_vault::protected::mark_seen(
-                            &silo.path,
-                            &kek,
-                            &item.source,
-                            item.stat,
-                        );
-                        report.imported += 1;
-                    }
-                    Err(_) => report.skipped += 1,
+            pending.extend(
+                silentsilo_vault::plan_scan(&folder.path, &folder.target, &seen)
+                    .map_err(|e| e.to_string())?,
+            );
+        }
+        let total = pending.len();
+        for (done, item) in pending.into_iter().enumerate() {
+            progress(done, total);
+            let target = crate::state::with_session_id(&state, snapshot.id, |_s, vfs| {
+                ensure_vault_path(vfs, &item.target_folder).map_err(CoreError::InvalidPath)
+            });
+            let Ok(target) = target else {
+                report.skipped += 1;
+                continue;
+            };
+            match import_one(&app, &snapshot, target, &item.source) {
+                Ok(_) => {
+                    // Marked after the import, never before: the other order
+                    // would skip a file that never arrived and leave it
+                    // missing until someone touched it again.
+                    let _ = silentsilo_vault::protected::mark_seen(
+                        &silo.path,
+                        &kek,
+                        &item.source,
+                        item.stat,
+                    );
+                    report.imported += 1;
                 }
+                Err(_) => report.skipped += 1,
             }
         }
 
