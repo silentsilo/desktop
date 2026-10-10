@@ -459,10 +459,21 @@ pub async fn vault_repair_from_storage(
     // the whole log otherwise.
     let handle = app.clone();
     let plan = sync::fetch_join_plan_reporting(store, join.dek(), &mut move |done, total| {
-        let _ = handle.emit("join-progress", (done, total));
+        let _ = handle.emit(
+            "join-progress",
+            crate::commands::sync::JoinProgress {
+                fetched: done,
+                total,
+                building: false,
+            },
+        );
     })
     .await
     .map_err(|e| e.to_string())?;
+    let _ = app.emit(
+        "join-progress",
+        crate::commands::sync::JoinProgress::building(),
+    );
 
     crate::commands::fido::run_blocking(move || {
         let mut session = session;
@@ -544,10 +555,21 @@ pub async fn vault_join_with_recovery(
     // to compare it against.
     let handle = app.clone();
     let plan = sync::fetch_join_plan_reporting(&**store, join.dek(), &mut move |done, total| {
-        let _ = handle.emit("join-progress", (done, total));
+        let _ = handle.emit(
+            "join-progress",
+            crate::commands::sync::JoinProgress {
+                fetched: done,
+                total,
+                building: false,
+            },
+        );
     })
     .await
     .map_err(|e| e.to_string())?;
+    let _ = app.emit(
+        "join-progress",
+        crate::commands::sync::JoinProgress::building(),
+    );
 
     // Replayed while the session is still owned here, before it enters the
     // shared map. It used to be inserted first and re-borrowed for the

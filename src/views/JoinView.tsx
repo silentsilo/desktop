@@ -84,14 +84,14 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
   /// How far through the download the join is. Joining a large silo is
   /// minutes of work, and a spinner that says nothing for minutes reads as a
   /// hang rather than as progress.
-  const [fetched, setFetched] = useLasting<{ done: number; total: number } | null>(
+  const [fetched, setFetched] = useLasting<{ done: number; total: number; building: boolean } | null>(
     "join.fetched",
     null,
     Boolean,
   );
   useEffect(() => {
-    const stop = listen<{ fetched: number; total: number }>("join-progress", (event) => {
-      setFetched({ done: event.payload.fetched, total: event.payload.total });
+    const stop = listen<{ fetched: number; total: number; building: boolean }>("join-progress", (event) => {
+      setFetched({ done: event.payload.fetched, total: event.payload.total, building: event.payload.building });
     });
     return () => {
       void stop.then((off) => off());
@@ -175,9 +175,11 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
 
         {/* Shown while the download runs, and only then: a count left on
             screen after it finishes is a number nobody is waiting for. */}
-        {working && fetched !== null && fetched.total > 0 && (
+        {working && fetched !== null && (fetched.building || fetched.total > 0) && (
           <p className="hint" role="status">
-            {t("start.join_downloading", { done: fetched.done, total: fetched.total })}
+            {fetched.building
+              ? t("start.join_building")
+              : t("start.join_downloading", { done: fetched.done, total: fetched.total })}
           </p>
         )}
 

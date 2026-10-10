@@ -75,6 +75,19 @@ pub(crate) fn release_purged_blobs(
 pub struct JoinProgress {
     pub fetched: usize,
     pub total: usize,
+    /// Downloaded; the silo is being built from it on this computer, which
+    /// for a long history takes minutes of its own.
+    pub building: bool,
+}
+
+impl JoinProgress {
+    pub fn building() -> Self {
+        Self {
+            fetched: 0,
+            total: 0,
+            building: true,
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, serde::Serialize)]
@@ -577,12 +590,14 @@ pub async fn vault_join_from_storage(
             JoinProgress {
                 fetched: done,
                 total,
+                building: false,
             },
         );
     };
     let plan = sync::fetch_join_plan_reporting(&**store, &dek_for_fetch, &mut report)
         .await
         .map_err(|e| e.to_string())?;
+    let _ = app.emit("join-progress", JoinProgress::building());
 
     // Replayed while the session is still owned here, before it enters the
     // shared map: it used to be inserted first and locked mutably for the

@@ -346,6 +346,17 @@ export const start = {
     "pt-BR": "Baixando as alterações deste silo: {done} de {total}.",
     pl: "Pobieranie zmian tego silosu: {done} z {total}.",
   },
+  "start.join_building": {
+    note: "Progress line after the download, while the silo is rebuilt on this computer from its history.",
+    en: "Building the silo on this computer from what was downloaded. A large silo takes a few minutes.",
+    ro: "Se construiește silozul pe acest calculator din ce s-a descărcat. Un siloz mare durează câteva minute.",
+    de: "Das Silo wird auf diesem Computer aus dem Geladenen aufgebaut. Ein großes Silo braucht einige Minuten.",
+    fr: "Construction du silo sur cet ordinateur à partir de ce qui a été téléchargé. Un grand silo prend quelques minutes.",
+    es: "Construyendo el silo en este equipo con lo descargado. Un silo grande tarda unos minutos.",
+    it: "Costruzione del silo su questo computer da ciò che è stato scaricato. Un silo grande richiede qualche minuto.",
+    "pt-BR": "Montando o silo neste computador a partir do que foi baixado. Um silo grande leva alguns minutos.",
+    pl: "Budowanie silosu na tym komputerze z pobranych danych. Duży silos zajmuje kilka minut.",
+  },
   "start.join_no_silo": {
     note: "Error after reading the backup storage: it holds no silo. 'Sync once': run a sync on the computer that has the silo.",
     en: "There is no silo there yet. Sync once from the computer that has it, or create a new silo here instead.",
