@@ -1922,6 +1922,19 @@ export default function App() {
     }
   };
 
+  /// A large file's bytes while it is encrypted, on the progress line: one
+  /// file of several gigabytes otherwise sat on "1 of 1" for minutes.
+  const listenImportBytes = (show: (text: string) => void) =>
+    listen<{ name: string; done: number; total: number }>("import-bytes", ({ payload }) =>
+      show(
+        t("app.progress_encrypting_bytes", {
+          name: payload.name,
+          done: formatBytes(payload.done),
+          total: formatBytes(payload.total),
+        }),
+      ),
+    );
+
   const handleAddFiles = async () => {
     if (!currentFolder) return;
     const picked = await open({ multiple: true });
@@ -1960,6 +1973,8 @@ export default function App() {
     setUploadCancelling(false);
     begin("transfer");
     refreshProgress();
+    // One file at a time is the case that sat still: its bytes are shown.
+    const unlistenBytes = total === 1 ? await listenImportBytes(setUploadProgress) : () => {};
     try {
       await mapPool(
         paths,
@@ -2007,6 +2022,7 @@ export default function App() {
         );
       }
     } finally {
+      unlistenBytes();
       setUploadProgress(null);
       end("transfer");
       setUploadCancelable(false);
@@ -2048,6 +2064,7 @@ export default function App() {
     setUploadProgress(t("app.progress_scanning_folder"));
 
     let skipped = 0;
+    const unlistenBytes = await listenImportBytes(setUploadProgress);
     const unlisten = await listen<{
       phase: string;
       current: number;
@@ -2103,6 +2120,7 @@ export default function App() {
       }
     } finally {
       unlisten();
+      unlistenBytes();
       setUploadProgress(null);
       end("transfer");
       setUploadCancelable(false);
@@ -2182,6 +2200,7 @@ export default function App() {
     setUploadProgress(verb === "Pasted" ? t("app.progress_pasting") : t("app.progress_adding"));
 
     let skipped = 0;
+    const unlistenBytes = await listenImportBytes(setUploadProgress);
     const unlisten = await listen<{
       phase: string;
       current: number;
@@ -2241,6 +2260,7 @@ export default function App() {
       toasts.error(e);
     } finally {
       unlisten();
+      unlistenBytes();
       setUploadProgress(null);
       end("transfer");
       setUploadCancelable(false);
@@ -2259,6 +2279,7 @@ export default function App() {
     setShellUploadBusy(true);
     setShellUploadProgress(null);
     setShellUploadStopping(false);
+    const unlistenBytes = await listenImportBytes(setShellUploadProgress);
     const unlisten = await listen<{ phase: string; current: number; total: number; name: string }>(
       "import-progress",
       ({ payload: { phase, current, total, name } }) => {
@@ -2319,6 +2340,7 @@ export default function App() {
       toasts.error(e);
     } finally {
       unlisten();
+      unlistenBytes();
       if (returnTo) {
         await invoke("silo_open", { id: returnTo }).catch(() => {});
         await refreshBootstrap();

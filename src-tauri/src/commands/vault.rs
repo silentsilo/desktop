@@ -123,6 +123,7 @@ struct EncryptedImport {
 }
 
 fn encrypt_import(
+    app: &AppHandle,
     root: &Path,
     kek: &silentsilo_crypto::ContentKek,
     source: &Path,
@@ -154,6 +155,7 @@ fn encrypt_import(
     let content_key = silentsilo_crypto::generate_content_key();
     let blob_key =
         silentsilo_crypto::wrap_content_key(&content_key, kek).map_err(|e| e.to_string())?;
+    let _watch = ImportBytes::start(app, source, &file_name, &blob_path);
     let result = encrypt_file(source, &blob_path, &content_key, file_id, blob_id)
         .map_err(|e| e.to_string())?;
     let _ = silentsilo_vault::record_blob_present(root, blob_id, result.size_bytes as i64, false);
@@ -168,6 +170,53 @@ fn encrypt_import(
         mime: silentsilo_vfs::guess_mime(source),
         blob_key,
     })
+}
+
+/// A large file's encryption, reported by the size of the `.part` it is
+/// written to: one file of several gigabytes sat on "1 of 1" for minutes.
+/// Only above 32 MB, where it takes long enough to matter. Stops when dropped.
+struct ImportBytes(Option<std::sync::Arc<std::sync::atomic::AtomicBool>>);
+
+#[derive(Clone, serde::Serialize)]
+struct ImportBytesEvent {
+    name: String,
+    done: u64,
+    total: u64,
+}
+
+impl ImportBytes {
+    fn start(app: &AppHandle, source: &Path, name: &str, blob_path: &Path) -> Self {
+        let total = std::fs::metadata(source).map(|m| m.len()).unwrap_or(0);
+        if total < 32 * 1024 * 1024 {
+            return Self(None);
+        }
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let watching = stop.clone();
+        let (app, name, part) = (app.clone(), name.to_string(), part_path(blob_path));
+        std::thread::spawn(move || {
+            while !watching.load(Ordering::Relaxed) {
+                let done = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
+                let _ = app.emit(
+                    "import-bytes",
+                    ImportBytesEvent {
+                        name: name.clone(),
+                        done: done.min(total),
+                        total,
+                    },
+                );
+                std::thread::sleep(std::time::Duration::from_millis(250));
+            }
+        });
+        Self(Some(stop))
+    }
+}
+
+impl Drop for ImportBytes {
+    fn drop(&mut self) {
+        if let Some(stop) = &self.0 {
+            stop.store(true, Ordering::Relaxed);
+        }
+    }
 }
 
 /// The short half: the row naming what was just sealed. Runs under the
@@ -197,7 +246,7 @@ fn import_one(
     folder_id: Uuid,
     source: &Path,
 ) -> Result<FileEntry, String> {
-    let encrypted = encrypt_import(&snapshot.root, &snapshot.kek, source)?;
+    let encrypted = encrypt_import(app, &snapshot.root, &snapshot.kek, source)?;
     crate::state::with_session_id(&app.state::<AppState>(), snapshot.id, |_session, vfs| {
         commit_import(vfs, folder_id, &encrypted)
     })

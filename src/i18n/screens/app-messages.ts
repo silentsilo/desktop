@@ -569,6 +569,17 @@ export const appMessages = {
     "pt-BR": "Criptografando {done}/{total}: {name}",
     pl: "Szyfrowanie {done}/{total}: {name}",
   },
+  "app.progress_encrypting_bytes": {
+    note: "Progress line while one large file is encrypted into the silo. {name}: the file; {done} and {total}: sizes like 1.2 GB.",
+    en: "Encrypting {name}: {done} of {total}",
+    ro: "Se criptează {name}: {done} din {total}",
+    de: "{name} wird verschlüsselt: {done} von {total}",
+    fr: "Chiffrement de {name} : {done} sur {total}",
+    es: "Cifrando {name}: {done} de {total}",
+    it: "Cifratura di {name}: {done} di {total}",
+    "pt-BR": "Criptografando {name}: {done} de {total}",
+    pl: "Szyfrowanie {name}: {done} z {total}",
+  },
   "app.progress_encrypting_one": {
     note: "Same progress line when the total is not known yet. {name}: the file being encrypted.",
     en: "Encrypting: {name}",
