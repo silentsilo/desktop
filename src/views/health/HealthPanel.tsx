@@ -37,7 +37,7 @@ const FIX_LABELS: Record<HealthFix, Key> = {
 /** The breach check, as a state the page can be in. */
 type BreachState =
   | { kind: "idle" }
-  | { kind: "busy" }
+  | { kind: "busy"; done?: number; total?: number }
   | { kind: "done"; report: PwnedReport }
   | { kind: "unavailable" };
 
@@ -96,8 +96,10 @@ export function HealthPanel({
   const runBreachCheck = async () => {
     setBreaches({ kind: "busy" });
     try {
-      const report = await checkPasswords(entries, (prefix) =>
-        invoke<string>("pwned_range", { prefix }),
+      const report = await checkPasswords(
+        entries,
+        (prefix) => invoke<string>("pwned_range", { prefix }),
+        (done, total) => setBreaches({ kind: "busy", done, total }),
       );
       // Every request failing means the service or the network is gone,
       // and "0 exposed" would be the wrong reading of that.
@@ -210,7 +212,11 @@ export function HealthPanel({
               disabled={breaches.kind === "busy" || entryCount === 0}
               onClick={() => void runBreachCheck()}
             >
-              {breaches.kind === "busy" ? t("dlg.health_checking") : t("dlg.health_check_now")}
+              {breaches.kind === "busy"
+                ? breaches.total
+                  ? t("dlg.health_checking_count", { done: breaches.done ?? 0, total: breaches.total })
+                  : t("dlg.health_checking")
+                : t("dlg.health_check_now")}
             </button>
           </div>
           <p className="hint">{t("dlg.health_breach_hint")}</p>

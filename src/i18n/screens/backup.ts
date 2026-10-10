@@ -2778,6 +2778,17 @@ export const backup = {
     "pt-BR": "Baixando as alterações deste silo: {done} de {total}.",
     pl: "Pobieranie zmian tego silosu: {done} z {total}.",
   },
+  "backup.restore_building": {
+    note: "Progress line of the trial recovery after the download: a throwaway copy of the silo is rebuilt to compare with this one.",
+    en: "Rebuilding a throwaway copy from what was downloaded. A large silo takes a few minutes.",
+    ro: "Se reconstruiește o copie de probă din ce s-a descărcat. Un siloz mare durează câteva minute.",
+    de: "Eine Wegwerfkopie wird aus dem Geladenen aufgebaut. Ein großes Silo braucht einige Minuten.",
+    fr: "Reconstruction d’une copie jetable à partir de ce qui a été téléchargé. Un grand silo prend quelques minutes.",
+    es: "Reconstruyendo una copia desechable con lo descargado. Un silo grande tarda unos minutos.",
+    it: "Ricostruzione di una copia usa e getta da ciò che è stato scaricato. Un silo grande richiede qualche minuto.",
+    "pt-BR": "Reconstruindo uma cópia descartável a partir do que foi baixado. Um silo grande leva alguns minutos.",
+    pl: "Odtwarzanie kopii próbnej z pobranych danych. Duży silos zajmuje kilka minut.",
+  },
   "backup.restore_reading": {
     note: "Progress line of the trial recovery before the download count is known.",
     en: "Reading the backup storage…",

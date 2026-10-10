@@ -31,7 +31,7 @@ use silentsilo_shell::ensure_os_integration;
 use state::AppState;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{Manager, RunEvent};
+use tauri::{Emitter, Manager, RunEvent};
 
 /// The tray menu's items, kept so the window can relabel them in the
 /// language it shows. English until it does.
@@ -44,6 +44,36 @@ fn tray_set_labels(items: tauri::State<'_, TrayItems>, open: String, quit: Strin
         let _ = o.set_text(open);
         let _ = q.set_text(quit);
     }
+}
+
+/// Set by the window when work is running and it asks the user first.
+static QUIT_HELD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Quit from the tray goes through the window, which asks when an import,
+/// a save or a check is still running. A window that does not answer in two
+/// seconds (hung, or not loaded) does not keep the app from quitting.
+fn ask_before_quit(app: &tauri::AppHandle) {
+    QUIT_HELD.store(false, std::sync::atomic::Ordering::SeqCst);
+    let _ = app.emit("quit-requested", ());
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        if !QUIT_HELD.load(std::sync::atomic::Ordering::SeqCst) {
+            app.exit(0);
+        }
+    });
+}
+
+/// The window is asking the user whether to quit, in front.
+#[tauri::command]
+fn app_quit_hold(app: tauri::AppHandle) {
+    QUIT_HELD.store(true, std::sync::atomic::Ordering::SeqCst);
+    show_main_window(&app);
+}
+
+#[tauri::command]
+fn app_quit(app: tauri::AppHandle) {
+    app.exit(0);
 }
 
 fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
@@ -77,7 +107,7 @@ fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
         .on_menu_event(move |app, event| match event.id.as_ref() {
             "tray-open" => show_main_window(app),
             // The exit handler below snapshots and closes every open silo.
-            "tray-quit" => app.exit(0),
+            "tray-quit" => ask_before_quit(app),
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -277,6 +307,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             tray_set_labels,
+            app_quit_hold,
+            app_quit,
             commands::silo::silo_list,
             commands::silo_report::silo_report,
             commands::silo::silo_create,
@@ -399,6 +431,7 @@ pub fn run() {
             commands::fido::vault_rotate_resume,
             commands::sync::vault_verify,
             commands::sync::vault_test_restore,
+            commands::sync::vault_test_restore_stop,
             commands::storage::sftp_probe_host_key,
             commands::cloud::cloud_providers,
             commands::cloud::cloud_sign_in,

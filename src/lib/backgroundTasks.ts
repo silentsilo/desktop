@@ -71,8 +71,16 @@ export function lastingTasks(running: Map<string, unknown>): BackgroundTask[] {
       place: { section: "recovery" },
     });
   }
-  if ((running.get("health.breaches") as { kind: string } | undefined)?.kind === "busy") {
-    tasks.push({ id: "breaches", label: t("nav.task_breaches"), detail: null, place: { view: "health" } });
+  const breaches = running.get("health.breaches") as
+    | { kind: string; done?: number; total?: number }
+    | undefined;
+  if (breaches?.kind === "busy") {
+    tasks.push({
+      id: "breaches",
+      label: t("nav.task_breaches"),
+      detail: breaches.total ? percent(breaches.done ?? 0, breaches.total) : null,
+      place: { view: "health" },
+    });
   }
   if (has("pw.transfer_busy")) {
     tasks.push({ id: "passwords", label: t("nav.task_passwords"), detail: null, place: { view: "passwords" } });

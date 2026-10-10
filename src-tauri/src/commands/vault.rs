@@ -697,6 +697,15 @@ pub async fn vault_unlock(
     .await?;
 
     let wrapped_dek = wrapped_dek_for(&keys, &unlock.credential_id)?;
+    // The touch is done. Opening can take a while (after an update the
+    // tree is rebuilt from the history), and the touch line must not stay.
+    emit_fido_progress(
+        &app,
+        Prompt::new(
+            "opening",
+            "Opening the silo. Right after an update a large one takes a minute.",
+        ),
+    );
 
     // Opening the session adopts a working copy a crash left behind, or
     // restores one from the encrypted snapshot: real disk work on a large

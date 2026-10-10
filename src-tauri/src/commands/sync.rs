@@ -1092,6 +1092,7 @@ pub struct RestoreTest {
 /// rebuild is deleted afterwards and never becomes the open session.
 #[tauri::command]
 pub async fn vault_test_restore(app: AppHandle, code: String) -> Result<RestoreTest, String> {
+    RESTORE_STOP.store(false, std::sync::atomic::Ordering::SeqCst);
     let silo = crate::state::active_silo(&app)?;
     let _open = crate::state::hold_open(&app, silo.id);
 
@@ -1192,12 +1193,26 @@ pub async fn vault_test_restore(app: AppHandle, code: String) -> Result<RestoreT
         .map_err(|e| e.to_string())?;
     let horizon = snapshot.as_ref().map(|s| s.horizon).unwrap_or(0);
     let handle = app.clone();
-    let ops =
-        sync::fetch_all_ops_above_reporting(&*store, &dek, horizon, &mut move |done, total| {
-            let _ = handle.emit("restore-progress", (done, total));
-        })
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut report = move |done, total| {
+        let _ = handle.emit("restore-progress", (done, total, false));
+    };
+    let ops = {
+        let fetch = sync::fetch_all_ops_above_reporting(&*store, &dek, horizon, &mut report);
+        tokio::pin!(fetch);
+        loop {
+            tokio::select! {
+                done = &mut fetch => break done.map_err(|e| e.to_string())?,
+                _ = tokio::time::sleep(std::time::Duration::from_millis(150)) => {
+                    if RESTORE_STOP.load(std::sync::atomic::Ordering::SeqCst) {
+                        return Err(RESTORE_STOPPED.into());
+                    }
+                }
+            }
+        }
+    };
+    // The rebuild cannot stop half way, and on a long history it takes as
+    // long as the download: said, so the count does not sit at its end.
+    let _ = app.emit("restore-progress", (0, 0, true));
 
     // The rebuild takes its own copy: the check afterwards opens a file with
     // the same key, once the blocking work has finished with it.
@@ -1276,6 +1291,16 @@ pub async fn vault_test_restore(app: AppHandle, code: String) -> Result<RestoreT
         checked_file,
         content_error,
     })
+}
+
+/// Stops a trial recovery while it downloads. The rebuild after it runs to
+/// its end; the copy is thrown away either way.
+static RESTORE_STOP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+const RESTORE_STOPPED: &str = "Stopped.";
+
+#[tauri::command(async)]
+pub fn vault_test_restore_stop() {
+    RESTORE_STOP.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
 /// Wipes the machine-local scratch space a throwaway session left behind.

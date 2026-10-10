@@ -75,6 +75,8 @@ export function parseRange(body: string): Map<string, number> {
 export async function checkPasswords(
   entries: PasswordEntry[],
   fetchRange: (prefix: string) => Promise<string>,
+  /** Ranges answered so far, of all to ask. */
+  onProgress?: (done: number, total: number) => void,
 ): Promise<PwnedReport> {
   // Distinct passwords, remembering which entries carry each.
   const byPassword = new Map<string, string[]>();
@@ -100,6 +102,8 @@ export async function checkPasswords(
   // "asked too hard".
   const ranges = new Map<string, Map<string, number> | null>();
   const prefixes = [...new Set(hashed.map((h) => h.hash.slice(0, 5)))];
+  let answered = 0;
+  onProgress?.(0, prefixes.length);
   await mapPool(prefixes, RANGE_CONCURRENCY, async (prefix) => {
     try {
       ranges.set(prefix, parseRange(await fetchRange(prefix)));
@@ -107,6 +111,7 @@ export async function checkPasswords(
       // Theirs to break; ours to survive. Marked unknown, never fatal.
       ranges.set(prefix, null);
     }
+    onProgress?.(++answered, prefixes.length);
   });
 
   const exposures: Exposure[] = [];

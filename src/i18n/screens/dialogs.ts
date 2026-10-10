@@ -864,6 +864,17 @@ export const dialogs = {
     "pt-BR": "Senhas em vazamentos conhecidos",
     pl: "Hasła w znanych wyciekach",
   },
+  "dlg.health_checking_count": {
+    note: "Breach check button while it runs, with progress. {done} and {total} count requests to the breach service, not passwords.",
+    en: "Checking… {done} of {total}",
+    ro: "Se verifică… {done} din {total}",
+    de: "Wird geprüft… {done} von {total}",
+    fr: "Vérification… {done} sur {total}",
+    es: "Comprobando… {done} de {total}",
+    it: "Controllo… {done} di {total}",
+    "pt-BR": "Verificando… {done} de {total}",
+    pl: "Sprawdzanie… {done} z {total}",
+  },
   "dlg.health_checking": {
     note: "Breach check button while it runs.",
     en: "Checking…",

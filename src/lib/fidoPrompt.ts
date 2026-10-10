@@ -11,6 +11,7 @@ const KEYS: Record<string, Key> = {
   keep_key: "app.fido_keep_key",
   finish_with_key: "app.fido_finish_with_key",
   rotating: "app.fido_rotating",
+  opening: "app.fido_opening",
   rotating_count: "app.fido_rotating_count",
   touch_enrolled: "app.fido_touch_enrolled",
   unlock_built_in: "app.fido_unlock_built_in",

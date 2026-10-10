@@ -12,6 +12,9 @@ import { isComplete } from "../lib/recoveryCode";
 import { RecoveryCodeInput } from "../components/RecoveryCodeInput";
 import { t, useLocale } from "../i18n";
 
+/** What a stopped trial recovery answers with; nothing is shown for it. */
+const RESTORE_STOPPED = "Stopped.";
+
 type Result = {
   id: string;
   label: string;
@@ -97,7 +100,7 @@ export function VerifyPanel({ part, busy, siloId }: Props) {
   const [restoring, setRestoring] = useLasting<boolean>("restore.running", false, Boolean);
   /// How far through the download the trial restore is. Fetching the history
   /// is the long half, and it used to run behind a disabled button alone.
-  const [restoreProgress, setRestoreProgress] = useLasting<[number, number] | null>(
+  const [restoreProgress, setRestoreProgress] = useLasting<[number, number, boolean] | null>(
     "restore.progress",
     null,
     Boolean,
@@ -111,9 +114,15 @@ export function VerifyPanel({ part, busy, siloId }: Props) {
 
   useEventSubscription(
     () =>
-      listen<[number, number]>("restore-progress", (e) => setRestoreProgress(e.payload)),
+      listen<[number, number, boolean]>("restore-progress", (e) => setRestoreProgress(e.payload)),
     [],
   );
+
+  const [restoreStopping, setRestoreStopping] = useState(false);
+  const stopRestore = () => {
+    setRestoreStopping(true);
+    void invoke("vault_test_restore_stop").catch(() => {});
+  };
 
   const runRestore = async () => {
     setRestoreError(null);
@@ -125,9 +134,10 @@ export function VerifyPanel({ part, busy, siloId }: Props) {
       setRestore(result);
       if (result.matches && !result.content_error) markDone(siloId, "restore-tested");
     } catch (e) {
-      setRestoreError(formatAppError(e));
+      if (String(e) !== RESTORE_STOPPED) setRestoreError(formatAppError(e));
     } finally {
       setRestoring(false);
+      setRestoreStopping(false);
       setRestoreProgress(null);
       // The code has done its job. Left in the field, it stayed on screen
       // for anyone looking or sharing the screen until the page was left.
@@ -372,12 +382,14 @@ export function VerifyPanel({ part, busy, siloId }: Props) {
       {restoring && (
         <div className="progress-row" role="status">
           <p className="hint">
-            {restoreProgress && restoreProgress[1] > 0
-              ? t("backup.restore_downloading", {
-                  done: restoreProgress[0],
-                  total: restoreProgress[1],
-                })
-              : t("backup.restore_reading")}
+            {restoreProgress?.[2]
+              ? t("backup.restore_building")
+              : restoreProgress && restoreProgress[1] > 0
+                ? t("backup.restore_downloading", {
+                    done: restoreProgress[0],
+                    total: restoreProgress[1],
+                  })
+                : t("backup.restore_reading")}
           </p>
           {restoreProgress && restoreProgress[1] > 0 && (
             <div className="progress-track">
@@ -388,6 +400,16 @@ export function VerifyPanel({ part, busy, siloId }: Props) {
                 }}
               />
             </div>
+          )}
+          {!restoreProgress?.[2] && (
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              disabled={restoreStopping}
+              onClick={stopRestore}
+            >
+              {restoreStopping ? t("files.stopping") : t("files.stop")}
+            </button>
           )}
         </div>
       )}

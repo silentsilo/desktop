@@ -422,6 +422,9 @@ export default function App() {
   const [focusEntryId, setFocusEntryId] = useState<string | null>(null);
   const [pendingShellUploadPaths, setPendingShellUploadPaths] = useState<string[] | null>(null);
   const [shellUploadBusy, setShellUploadBusy] = useState(false);
+  const [passwordImport, setPasswordImport] = useState<{ done: number; total: number } | null>(
+    null,
+  );
   const [shellUploadProgress, setShellUploadProgress] = useState<string | null>(null);
   const [shellUploadStopping, setShellUploadStopping] = useState(false);
   const [pendingShellDownloadTarget, setPendingShellDownloadTarget] = useState<string | null>(null);
@@ -1558,6 +1561,15 @@ export default function App() {
     if (uploadProgress) {
       tasks.push({ id: "transfer", label: uploadProgress, detail: null, place: { view: "files" } });
     }
+    // A large import writes one entry at a time, for minutes.
+    if (passwordImport) {
+      tasks.push({
+        id: "pw-import",
+        label: t("nav.task_passwords"),
+        detail: `${passwordImport.done} / ${passwordImport.total}`,
+        place: { view: "passwords" },
+      });
+    }
     if (opening) {
       tasks.push({
         id: "open",
@@ -1571,6 +1583,38 @@ export default function App() {
     const shown = syncing ? kept.filter((task) => task.id !== "backup") : kept;
     return [...tasks, ...shown];
   };
+
+  // Quit from the tray. Work that would be cut off is named first; a sync
+  // pass is not, since the next start carries on from where it stopped.
+  const runningWorkRef = useRef<() => string[]>(() => []);
+  runningWorkRef.current = () => {
+    const names = backgroundTasks()
+      .filter((task) => task.id !== "sync" && task.id !== "update")
+      .map((task) => task.label);
+    if (rebuilding) names.push(t("app.out_of_step_title"));
+    if (shellUploadBusy) names.push(t("dlg.adding"));
+    return names;
+  };
+  useEventSubscription(
+    () =>
+      listen("quit-requested", () => {
+        const running = runningWorkRef.current();
+        if (running.length === 0) {
+          void invoke("app_quit");
+          return;
+        }
+        void (async () => {
+          await invoke("app_quit_hold");
+          const quit = await askConfirm(
+            t("app.quit_busy_title"),
+            t("app.quit_busy", { list: running.join(", ") }),
+            { confirmLabel: t("app.quit_busy_button"), danger: true },
+          );
+          if (quit) await invoke("app_quit");
+        })();
+      }),
+    [askConfirm],
+  );
 
   const lockSilo = useCallback(async () => {
     // This silo, not every open one. The button lives in one silo's
@@ -3749,6 +3793,7 @@ export default function App() {
     async (entries: PasswordEntry[], source: string) => {
       begin("entries");
       let stored = 0;
+      setPasswordImport({ done: 0, total: entries.length });
       try {
         await withPasswordWrite(async () => {
           for (const entry of entries) {
@@ -3758,6 +3803,7 @@ export default function App() {
               change: "imported",
             });
             stored += 1;
+            setPasswordImport({ done: stored, total: entries.length });
             // Upsert on the store side, so the list has to be an upsert too.
             // Appending blindly put two rows under one id, which React then
             // rendered with a duplicate key.
@@ -3773,6 +3819,7 @@ export default function App() {
       } catch (e) {
         toasts.error(e);
       } finally {
+        setPasswordImport(null);
         end("entries");
         // Once for the whole import, with what actually landed.
         if (stored > 0) {
