@@ -216,7 +216,15 @@ export type SeedProgress = {
 /** Where a running sync pass is (`sync-progress`). Gone once it reports. */
 export type SyncProgress = {
   silo_id: string;
-  phase: "sending-changes" | "uploading" | "fetching-changes" | "downloading" | "importing";
+  phase:
+    | "sending-changes"
+    | "uploading"
+    | "fetching-changes"
+    | "downloading"
+    | "importing"
+    | "applying"
+    | "compacting"
+    | "checking";
   done: number;
   total: number;
   /** How much of the file this step moves has moved, and how big it is. Both

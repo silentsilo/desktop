@@ -66,6 +66,16 @@ export function formatAppError(err: unknown): string {
   if (msg.includes("CloudNotConfigured") || lower.includes("no backup storage is connected")) {
     return t("app.err_not_backed_up");
   }
+  // The disk filled up: "os error 28" on Linux, macOS, iOS and Android,
+  // "os error 112" on Windows, which read as nothing to anyone.
+  if (
+    lower.includes("os error 28)") ||
+    lower.includes("os error 112)") ||
+    lower.includes("no space left on device") ||
+    lower.includes("not enough space on the disk")
+  ) {
+    return t("app.err_disk_full");
+  }
   // "Unlock the silo first", "enrol a key before unlocking" and friends
   // already say the right thing, so they go back unchanged. Checked before
   // the rules below, several of which would otherwise claim them. "enrol"

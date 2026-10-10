@@ -5,6 +5,16 @@ import { hasKey } from "../i18n";
 import { decodeAppError, formatAppError, plainError } from "./errors";
 
 describe("formatAppError", () => {
+  it("says a full disk in words, on every platform", () => {
+    for (const raw of [
+      "No space left on device (os error 28)",
+      "There is not enough space on the disk. (os error 112)",
+    ]) {
+      expect(formatAppError(raw)).toContain("disk is full");
+    }
+    expect(formatAppError("failed (os error 280)")).not.toContain("disk is full");
+  });
+
   it("recognizes an unconfigured bucket as a benign local-only notice", () => {
     const expected = "Not backed up. This silo is only on this computer.";
     expect(formatAppError("CloudNotConfigured")).toBe(expected);

@@ -1780,6 +1780,17 @@ export const appMessages = {
     "pt-BR": "Erro desconhecido",
     pl: "Nieznany błąd",
   },
+  "app.err_disk_full": {
+    note: "Error shown when the computer's disk is full and a file could not be written.",
+    en: "This computer's disk is full. Free some space and try again.",
+    ro: "Discul acestui calculator e plin. Fă loc și încearcă din nou.",
+    de: "Die Festplatte dieses Computers ist voll. Gib Speicher frei und versuche es erneut.",
+    fr: "Le disque de cet ordinateur est plein. Libérez de l’espace et réessayez.",
+    es: "El disco de este equipo está lleno. Libera espacio y vuelve a intentarlo.",
+    it: "Il disco di questo computer è pieno. Libera spazio e riprova.",
+    "pt-BR": "O disco deste computador está cheio. Libere espaço e tente de novo.",
+    pl: "Dysk tego komputera jest pełny. Zwolnij miejsce i spróbuj ponownie.",
+  },
   "app.err_not_backed_up": {
     note: "Error when something needs backup storage and the silo has none connected.",
     en: "Not backed up. This silo is only on this computer.",

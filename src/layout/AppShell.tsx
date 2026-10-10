@@ -62,6 +62,12 @@ function describeProgress(p: SyncProgress): string {
       return `${t("start.progress_downloading")}${count}${name}${bytes}`;
     case "importing":
       return `${t("start.progress_importing")}${count}`;
+    case "applying":
+      return `${t("start.progress_applying")}${count}`;
+    case "compacting":
+      return t("start.progress_compacting");
+    case "checking":
+      return t("start.progress_checking");
   }
 }
 
