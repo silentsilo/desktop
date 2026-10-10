@@ -20,6 +20,8 @@ type Props = {
    * user has to reach for it.
    */
   option?: { label: string; hint?: string };
+  /** What the work is doing while `busy`, under the message. */
+  progress?: string | null;
   onConfirm: (optionChecked: boolean) => void;
   onCancel: () => void;
 };
@@ -32,6 +34,7 @@ export function ConfirmDialog({
   danger = false,
   busy = false,
   option,
+  progress,
   onConfirm,
   onCancel,
 }: Props) {
@@ -55,6 +58,11 @@ export function ConfirmDialog({
         <h3 className="modal-title">{title}</h3>
         <div className="modal-body">
           <p>{message}</p>
+          {busy && progress && (
+            <p className="hint" role="status">
+              {progress}
+            </p>
+          )}
           {option && (
             <label className="confirm-option">
               <input

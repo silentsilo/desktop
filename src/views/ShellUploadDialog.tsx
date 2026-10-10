@@ -12,6 +12,11 @@ type Props = {
   os: Os;
   paths: string[];
   busy: boolean;
+  /** What the import is doing while `busy`. */
+  progress?: string | null;
+  /** Stops a running import between items. */
+  onStop?: () => void;
+  stopping?: boolean;
   /** `returnTo` is the silo to focus again once the import is done, when the
    *  user picked a different one here. */
   onConfirm: (folderId: string, returnTo: string | null) => void;
@@ -23,7 +28,7 @@ type Subfolder = Extract<VaultEntry, { kind: "folder" }>;
 
 export function ShellUploadDialog(props: Props) {
   useLocale();
-  const { os, paths, busy, onConfirm, onCancel } = props;
+  const { os, paths, busy, progress, onStop, stopping = false, onConfirm, onCancel } = props;
   const platform = platformStrings(os);
   const [folder, setFolder] = useState<FolderEntry | null>(null);
   const [subfolders, setSubfolders] = useState<Subfolder[]>([]);
@@ -198,10 +203,21 @@ export function ShellUploadDialog(props: Props) {
             )}
           </ul>
         </div>
+        {busy && progress && (
+          <p className="hint" role="status">
+            {progress}
+          </p>
+        )}
         <div className="modal-actions">
-          <button type="button" className="btn-secondary" disabled={busy} onClick={handleCancel}>
-            {t("common.cancel")}
-          </button>
+          {busy && onStop ? (
+            <button type="button" className="btn-secondary" disabled={stopping} onClick={onStop}>
+              {stopping ? t("files.stopping") : t("files.stop")}
+            </button>
+          ) : (
+            <button type="button" className="btn-secondary" disabled={busy} onClick={handleCancel}>
+              {t("common.cancel")}
+            </button>
+          )}
           <button
             className="btn-primary"
             type="button"

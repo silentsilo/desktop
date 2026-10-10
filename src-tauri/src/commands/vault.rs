@@ -1501,6 +1501,22 @@ async fn log_purge(app: &AppHandle, event: silentsilo_audit::Event) -> Result<()
 /// Every copy is tried: the first target being unreachable must not fail an
 /// export the second could serve.
 pub(crate) async fn ensure_blobs_local(app: &AppHandle, blob_ids: &[Uuid]) -> Result<(), String> {
+    ensure_blobs_local_watched(app, blob_ids, None).await
+}
+
+/// A download shown on the progress card of `item` (a file or a folder) and
+/// stopped when that item is cancelled. `sizes` gives each blob's size, so
+/// the card counts bytes across all of them.
+struct Watched<'a> {
+    item: Uuid,
+    sizes: &'a std::collections::HashMap<Uuid, u64>,
+}
+
+async fn ensure_blobs_local_watched(
+    app: &AppHandle,
+    blob_ids: &[Uuid],
+    watched: Option<Watched<'_>>,
+) -> Result<(), String> {
     let root = vault_dir(app)?;
     let missing: Vec<Uuid> = blob_ids
         .iter()
@@ -1522,18 +1538,52 @@ pub(crate) async fn ensure_blobs_local(app: &AppHandle, blob_ids: &[Uuid]) -> Re
         targets.iter().map(|t| (t.id, &*t.store)).collect();
     let every_copy = crate::state::active_silo(app)
         .is_ok_and(|silo| silentsilo_vault::load_targets(silo.id).len() == targets.len());
+    let size = |id: &Uuid| {
+        watched
+            .as_ref()
+            .and_then(|w| w.sizes.get(id).copied())
+            .unwrap_or(0)
+    };
+    let total: u64 = missing.iter().map(size).sum();
+    let mut base = 0u64;
+    let mut outcome = Ok(());
     for id in missing {
-        silentsilo_sync::fetch_blob_from_targets(&stores, &root, id, every_copy)
-            .await
-            .map_err(|e| {
-                crate::err::coded_with(
+        let fetch = silentsilo_sync::fetch_blob_from_targets(&stores, &root, id, every_copy);
+        let fetched = match &watched {
+            None => Some(fetch.await),
+            Some(w) => {
+                let watch = ProgressWatch::start_from(
+                    app,
+                    w.item,
+                    "downloading",
+                    root.join("blobs").join(format!("{id}.sslo.part")),
+                    base,
+                    total,
+                );
+                let fetched = until_cancelled(app, w.item, fetch).await;
+                watch.stop();
+                fetched
+            }
+        };
+        base += size(&id);
+        match fetched {
+            Some(Ok(_)) => {}
+            Some(Err(e)) => {
+                outcome = Err(crate::err::coded_with(
                     "err.download_failed",
                     format!("Could not download the file: {e}"),
                     &[("detail", &e)],
-                )
-            })?;
+                ));
+                break;
+            }
+            None => {
+                outcome = Err(OPEN_CANCELLED.to_string());
+                break;
+            }
+        }
     }
-    // On the copy it came from, so no longer waiting to back up there.
+    // On the copy it came from, so no longer waiting to back up there. Also
+    // after a stop: what came down before it stays.
     if let Ok(silo) = crate::state::active_silo(app) {
         let every_target: Vec<Uuid> = silentsilo_vault::load_targets(silo.id)
             .iter()
@@ -1541,7 +1591,30 @@ pub(crate) async fn ensure_blobs_local(app: &AppHandle, blob_ids: &[Uuid]) -> Re
             .collect();
         let _ = silentsilo_vault::settle_blob_delivery(&root, &every_target);
     }
-    Ok(())
+    outcome
+}
+
+/// `work`, or `None` once `item` is cancelled.
+async fn until_cancelled<T>(
+    app: &AppHandle,
+    item: Uuid,
+    work: impl std::future::Future<Output = T>,
+) -> Option<T> {
+    tokio::pin!(work);
+    loop {
+        tokio::select! {
+            done = &mut work => return Some(done),
+            _ = tokio::time::sleep(std::time::Duration::from_millis(150)) => {
+                if is_cancelled(app, item) {
+                    return None;
+                }
+            }
+        }
+    }
+}
+
+fn is_cancelled(app: &AppHandle, item: Uuid) -> bool {
+    crate::state::lock_recovering(&app.state::<AppState>().open_cancelled).contains(&item)
 }
 
 #[tauri::command]
@@ -1552,11 +1625,12 @@ pub async fn vault_export_file(
 ) -> Result<(), String> {
     let file_id = Uuid::parse_str(&file_id).map_err(|e| e.to_string())?;
     let dest = PathBuf::from(&dest_path);
+    crate::state::lock_recovering(&app.state::<AppState>().open_cancelled).remove(&file_id);
 
     // The row and its wrapped key under one short lock, before the network
     // and before the decrypt: neither of those may hold the sessions mutex,
     // or every small command in the app queues behind a large file.
-    let (blob_id, name, wrapped_key) = {
+    let (blob_id, name, size, wrapped_key) = {
         let state = app.state::<AppState>();
         let session_guard = state.focused_session()?;
         let session = session_guard
@@ -1565,11 +1639,26 @@ pub async fn vault_export_file(
         let vfs = Vfs::new(session);
         let file = vfs.get_file(file_id).map_err(|e| e.to_string())?;
         let wrapped = vfs.blob_key(file_id).map_err(|e| e.to_string())?;
-        (file.blob_id, file.name, wrapped)
+        (
+            file.blob_id,
+            file.name,
+            file.size_bytes.max(0) as u64,
+            wrapped,
+        )
     };
-    ensure_blobs_local(&app, &[blob_id]).await?;
+    // On the same card as opening a file, Cancel included.
+    let sizes = std::collections::HashMap::from([(blob_id, size)]);
+    let watched = Watched {
+        item: file_id,
+        sizes: &sizes,
+    };
+    ensure_blobs_local_watched(&app, &[blob_id], Some(watched)).await?;
+    if is_cancelled(&app, file_id) {
+        return Err(OPEN_CANCELLED.into());
+    }
 
-    run_blocking(move || {
+    let watch = ProgressWatch::start(&app, file_id, "decrypting", part_path(&dest), size);
+    let written = run_blocking(move || {
         let snapshot = crate::state::snapshot_focused_session(&app.state::<AppState>())?;
         crate::audit::record_in(
             &app,
@@ -1583,7 +1672,9 @@ pub async fn vault_export_file(
         let _ = touch_blob_access(&snapshot.root, blob_id);
         Ok(())
     })
-    .await
+    .await;
+    watch.stop();
+    written
 }
 
 /// The key a file's content is encrypted under, unwrapped for use.
@@ -1691,6 +1782,7 @@ pub async fn vault_export_folder(
     skip_existing: bool,
 ) -> Result<u32, String> {
     let folder_id = Uuid::parse_str(&folder_id).map_err(|e| e.to_string())?;
+    crate::state::lock_recovering(&app.state::<AppState>().open_cancelled).remove(&folder_id);
 
     // The whole subtree as a plan — destination paths, blob ids, wrapped
     // keys — read under one short lock at database speed. The download and
@@ -1711,14 +1803,23 @@ pub async fn vault_export_folder(
         (plan, folder.path)
     };
 
-    let blob_ids: Vec<Uuid> = plan
+    let sizes: std::collections::HashMap<Uuid, u64> = plan
         .iter()
         .filter_map(|item| match item {
-            ExportItem::File { blob_id, .. } => Some(*blob_id),
+            ExportItem::File { blob_id, size, .. } => Some((*blob_id, *size)),
             ExportItem::Dir(_) => None,
         })
         .collect();
-    ensure_blobs_local(&app, &blob_ids).await?;
+    let blob_ids: Vec<Uuid> = sizes.keys().copied().collect();
+    let file_count = plan
+        .iter()
+        .filter(|item| matches!(item, ExportItem::File { .. }))
+        .count() as u64;
+    let watched = Watched {
+        item: folder_id,
+        sizes: &sizes,
+    };
+    ensure_blobs_local_watched(&app, &blob_ids, Some(watched)).await?;
 
     run_blocking(move || {
         let snapshot = crate::state::snapshot_focused_session(&app.state::<AppState>())?;
@@ -1740,7 +1841,11 @@ pub async fn vault_export_folder(
                     dest,
                     blob_id,
                     wrapped_key,
+                    ..
                 } => {
+                    if is_cancelled(&app, folder_id) {
+                        return Err(OPEN_CANCELLED.to_string());
+                    }
                     if skip_existing && dest.try_exists().unwrap_or(false) {
                         continue;
                     }
@@ -1754,7 +1859,7 @@ pub async fn vault_export_folder(
                         .map_err(|e| e.to_string())?;
                     let _ = touch_blob_access(&snapshot.root, *blob_id);
                     exported += 1;
-                    let _ = app.emit("export-progress", exported);
+                    open_progress(&app, folder_id, "decrypting", exported.into(), file_count);
                 }
             }
         }
@@ -1769,6 +1874,7 @@ enum ExportItem {
     File {
         dest: PathBuf,
         blob_id: Uuid,
+        size: u64,
         wrapped_key: String,
     },
 }
@@ -1793,6 +1899,7 @@ fn plan_export(
                 plan.push(ExportItem::File {
                     dest: safe_join(dest, &file.name)?,
                     blob_id: file.blob_id,
+                    size: file.size_bytes.max(0) as u64,
                     wrapped_key: vfs.blob_key(file.id).map_err(|e| e.to_string())?,
                 });
             }
@@ -1903,30 +2010,12 @@ pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), Stri
 
     // Fetched first when only backup storage has it, watched by the size of
     // the file it streams into, and given up on when the person cancels.
-    if !root.join("blobs").join(format!("{blob_id}.sslo")).is_file() {
-        let watch = ProgressWatch::start(
-            &app,
-            file_id,
-            "downloading",
-            root.join("blobs").join(format!("{blob_id}.sslo.part")),
-            size,
-        );
-        let wanted = [blob_id];
-        let fetch = ensure_blobs_local(&app, &wanted);
-        tokio::pin!(fetch);
-        let fetched = loop {
-            tokio::select! {
-                done = &mut fetch => break done,
-                _ = tokio::time::sleep(std::time::Duration::from_millis(150)) => {
-                    if cancelled() {
-                        break Err(OPEN_CANCELLED.to_string());
-                    }
-                }
-            }
-        };
-        watch.stop();
-        fetched?;
-    }
+    let sizes = std::collections::HashMap::from([(blob_id, size)]);
+    let watched = Watched {
+        item: file_id,
+        sizes: &sizes,
+    };
+    ensure_blobs_local_watched(&app, &[blob_id], Some(watched)).await?;
 
     // The original name, so the OS picks the right application and the
     // title bar says something the user recognises.
@@ -2040,12 +2129,24 @@ impl ProgressWatch {
         path: PathBuf,
         total: u64,
     ) -> Self {
+        Self::start_from(app, file_id, phase, path, 0, total)
+    }
+
+    /// `base` bytes done before this file, for a step over several.
+    fn start_from(
+        app: &AppHandle,
+        file_id: Uuid,
+        phase: &'static str,
+        path: PathBuf,
+        base: u64,
+        total: u64,
+    ) -> Self {
         let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let watching = stop.clone();
         let app = app.clone();
         tauri::async_runtime::spawn(async move {
             while !watching.load(Ordering::Relaxed) {
-                let done = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                let done = base + std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
                 open_progress(&app, file_id, phase, done.min(total), total);
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
             }

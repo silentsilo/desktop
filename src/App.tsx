@@ -422,6 +422,8 @@ export default function App() {
   const [focusEntryId, setFocusEntryId] = useState<string | null>(null);
   const [pendingShellUploadPaths, setPendingShellUploadPaths] = useState<string[] | null>(null);
   const [shellUploadBusy, setShellUploadBusy] = useState(false);
+  const [shellUploadProgress, setShellUploadProgress] = useState<string | null>(null);
+  const [shellUploadStopping, setShellUploadStopping] = useState(false);
   const [pendingShellDownloadTarget, setPendingShellDownloadTarget] = useState<string | null>(null);
   const [shellDownloadBusy, setShellDownloadBusy] = useState(false);
   const unlockedRef = useRef(false);
@@ -768,6 +770,22 @@ export default function App() {
   /// until that silo is on screen, where it used to be cleared on the way.
   const [needsRebuild, setNeedsRebuild] = useState<ReadonlySet<string>>(() => new Set());
   const [rebuilding, setRebuilding] = useState(false);
+  const [rebuildProgress, setRebuildProgress] = useState<string | null>(null);
+  // A long history takes minutes to come down and as long again to build.
+  useEventSubscription(
+    () =>
+      listen<{ fetched: number; total: number; building: boolean }>(
+        "rebuild-progress",
+        ({ payload }) => {
+          setRebuildProgress(
+            payload.building
+              ? t("start.join_building")
+              : t("start.join_downloading", { done: payload.fetched, total: payload.total }),
+          );
+        },
+      ),
+    [],
+  );
   const dropRebuild = useCallback((siloId: string) => {
     setNeedsRebuild((prev) => {
       if (!prev.has(siloId)) return prev;
@@ -781,6 +799,7 @@ export default function App() {
     const siloId = bootstrap?.silo?.id;
     if (!siloId || !needsRebuild.has(siloId)) return;
     setRebuilding(true);
+    setRebuildProgress(null);
     try {
       await invoke("vault_rebuild_from_snapshot", { siloId });
       dropRebuild(siloId);
@@ -1399,6 +1418,33 @@ export default function App() {
   /// agreed to rebuild. The rebuild needs the recovery code, so the unlock
   /// screen asks for it and the next code unlock rebuilds first.
   const [repairWithCode, setRepairWithCode] = useState<string | null>(null);
+  // The repair downloads the whole history and builds from it, which for a
+  // large silo is minutes: its steps go on the unlock screen.
+  const repairingRef = useRef(false);
+  useEventSubscription(
+    () =>
+      listen<{ fetched: number; total: number; building: boolean }>(
+        "join-progress",
+        ({ payload }) => {
+          if (!repairingRef.current) return;
+          setFidoProgress(
+            payload.building
+              ? t("start.join_building")
+              : t("start.join_downloading", { done: payload.fetched, total: payload.total }),
+          );
+        },
+      ),
+    [],
+  );
+  const repairFromStorage = async (siloId: string, code: string) => {
+    repairingRef.current = true;
+    try {
+      await invoke("vault_repair_from_storage", { siloId, code });
+    } finally {
+      repairingRef.current = false;
+      setFidoProgress(null);
+    }
+  };
 
   const unlockSilo = async (recoveryCodeUsed?: string): Promise<void> => {
     setFidoProgress(null);
@@ -1408,7 +1454,7 @@ export default function App() {
     try {
       const siloId = bootstrap?.silo?.id;
       if (recoveryCodeUsed && siloId && repairWithCode === siloId) {
-        await invoke("vault_repair_from_storage", { siloId, code: recoveryCodeUsed });
+        await repairFromStorage(siloId, recoveryCodeUsed);
         repairedNow = true;
         setRepairWithCode(null);
         toasts.info(t("app.repaired"));
@@ -1465,10 +1511,7 @@ export default function App() {
         if (rebuild) {
           // The outer finally still runs after these returns.
           try {
-            await invoke("vault_repair_from_storage", {
-              siloId: bootstrap.silo.id,
-              code: recoveryCodeUsed,
-            });
+            await repairFromStorage(bootstrap.silo.id, recoveryCodeUsed);
             toasts.info(t("app.repaired"));
             // Opened again the ordinary way once this attempt has wound
             // down. Opening it here skipped the bootstrap refresh, so the
@@ -2170,6 +2213,26 @@ export default function App() {
     if (!pendingShellUploadPaths) return;
     if (!(await roomFor(pendingShellUploadPaths, false))) return;
     setShellUploadBusy(true);
+    setShellUploadProgress(null);
+    setShellUploadStopping(false);
+    const unlisten = await listen<{ phase: string; current: number; total: number; name: string }>(
+      "import-progress",
+      ({ payload: { phase, current, total, name } }) => {
+        if (phase === "scanning") {
+          setShellUploadProgress(
+            total > 0 ? t("app.progress_scanning_found", { count: total }) : t("app.progress_scanning"),
+          );
+        } else if (phase === "folders") {
+          setShellUploadProgress(t("app.progress_creating_folders", { name }));
+        } else if (phase === "encrypting") {
+          setShellUploadProgress(
+            total > 0
+              ? t("app.progress_encrypting_name", { done: current, total, name })
+              : t("app.progress_encrypting_one", { name }),
+          );
+        }
+      },
+    );
     try {
       // The same command paste and drop use, because the shell hands over
       // whatever was right-clicked and that is as often a folder as a file.
@@ -2211,11 +2274,13 @@ export default function App() {
     } catch (e) {
       toasts.error(e);
     } finally {
+      unlisten();
       if (returnTo) {
         await invoke("silo_open", { id: returnTo }).catch(() => {});
         await refreshBootstrap();
       }
       setShellUploadBusy(false);
+      setShellUploadProgress(null);
     }
   };
 
@@ -2265,24 +2330,31 @@ export default function App() {
     }
 
     setShellDownloadBusy(true);
+    // The card shows the rest, with a way to stop it.
+    setPendingShellDownloadTarget(null);
     try {
       let count = 0;
       const failed: string[] = [];
       for (const entry of selection) {
         try {
           if (entry.kind === "folder") {
-            count += await invoke<number>("vault_export_folder", {
-              folderId: entry.id,
-              destDir,
-              skipExisting: !replace,
-            });
+            count += await onCard(entry.id, entry.name, () =>
+              invoke<number>("vault_export_folder", {
+                folderId: entry.id,
+                destDir,
+                skipExisting: !replace,
+              }),
+            );
           } else {
             if (skipFiles.has(entry.name)) continue;
             const destPath = await join(destDir, entry.name);
-            await invoke("vault_export_file", { fileId: entry.id, destPath });
+            await onCard(entry.id, entry.name, () =>
+              invoke("vault_export_file", { fileId: entry.id, destPath }),
+            );
             count += 1;
           }
         } catch (e) {
+          if (String(e) === OPEN_CANCELLED) break;
           failed.push(`${entry.name}: ${formatAppError(e)}`);
         }
       }
@@ -2561,12 +2633,26 @@ export default function App() {
     if (!dest) return;
     begin("transfer");
     try {
-      await invoke("vault_export_file", { fileId: file.id, destPath: dest });
+      await onCard(file.id, file.name, () =>
+        invoke("vault_export_file", { fileId: file.id, destPath: dest }),
+      );
       toasts.success(t("app.saved_copy"));
     } catch (e) {
-      toasts.error(e);
+      if (String(e) !== OPEN_CANCELLED) toasts.error(e);
     } finally {
       end("transfer");
+    }
+  };
+
+  /// Saving out shows on the card opening a file uses: a file only in
+  /// backup storage downloads first, which for a large one takes minutes,
+  /// and the card says how far it got and can stop it.
+  const onCard = async <T,>(id: string, name: string, work: () => Promise<T>): Promise<T> => {
+    setOpening({ fileId: id, name, phase: "preparing", done: 0, total: 0 });
+    try {
+      return await work();
+    } finally {
+      setOpening(null);
     }
   };
 
@@ -2598,9 +2684,13 @@ export default function App() {
         if (skip.has(file.name)) continue;
         const destPath = await join(dest, file.name);
         try {
-          await invoke("vault_export_file", { fileId: file.id, destPath });
+          await onCard(file.id, file.name, () =>
+            invoke("vault_export_file", { fileId: file.id, destPath }),
+          );
           saved++;
         } catch (e) {
+          // Stopped from the card: the rest were not asked for either.
+          if (String(e) === OPEN_CANCELLED) break;
           // The first failure ends the run. A silo that locked while the
           // destination picker was open fails every remaining file for the
           // same reason, and reporting it once is the whole of the news.
@@ -2642,28 +2732,22 @@ export default function App() {
     }
 
     begin("transfer");
-    setUploadProgress(t("app.progress_saving_folder", { name: folder.name }));
-    const unlisten = await listen<number>("export-progress", (event) => {
-      setUploadProgress(
-        t("app.progress_saving_folder_count", { name: folder.name, count: event.payload }),
-      );
-    });
     try {
-      const count = await invoke<number>("vault_export_folder", {
-        folderId: folder.id,
-        destDir: dest,
-        skipExisting: !replace,
-      });
+      const count = await onCard(folder.id, folder.name, () =>
+        invoke<number>("vault_export_folder", {
+          folderId: folder.id,
+          destDir: dest,
+          skipExisting: !replace,
+        }),
+      );
       if (count === 0) {
         toasts.info(t("app.nothing_saved"));
       } else {
         toasts.success(t("app.saved_files", { count }));
       }
     } catch (e) {
-      toasts.error(e);
+      if (String(e) !== OPEN_CANCELLED) toasts.error(e);
     } finally {
-      unlisten();
-      setUploadProgress(null);
       end("transfer");
     }
   };
@@ -3056,6 +3140,8 @@ export default function App() {
     } catch (e) {
       toasts.error(e);
     } finally {
+      // The last live line was the move to the new key, done now.
+      setFidoProgress(null);
       end("keys");
     }
   };
@@ -3110,6 +3196,7 @@ export default function App() {
       setSettingsSection("advanced");
       toasts.error(e);
     } finally {
+      setFidoProgress(null);
       end("keys");
     }
   };
@@ -3729,6 +3816,7 @@ export default function App() {
       confirmLabel={t("app.out_of_step_button")}
       cancelLabel={t("app.not_now")}
       busy={rebuilding}
+      progress={rebuildProgress}
       onConfirm={() => void rebuildFromSnapshot()}
       onCancel={() => dropRebuild(rebuildSiloId)}
     />
@@ -3951,6 +4039,12 @@ export default function App() {
           os={osOf(bootstrap)}
           paths={pendingShellUploadPaths}
           busy={shellUploadBusy}
+          progress={shellUploadProgress}
+          stopping={shellUploadStopping}
+          onStop={() => {
+            setShellUploadStopping(true);
+            void invoke("cancel_import").catch(() => {});
+          }}
           onConfirm={(folderId, returnTo) => void confirmShellUpload(folderId, returnTo)}
           onCancel={cancelShellUpload}
         />

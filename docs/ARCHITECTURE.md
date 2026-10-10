@@ -249,6 +249,12 @@ written (same content, size and modified time, `AppState::opened_copies`)
 is opened again without decrypting it again; the epoch moving forgets them
 all, and the lock sweep deletes the files as before.
 
+Saving out (`vault_export_file`, `vault_export_folder`) shows on the same
+card through the same event and the same cancel, keyed by the file or folder
+id. A folder's download counts bytes across every blob it fetches
+(`ensure_blobs_local_watched`), its decrypt counts files, and a stop lands
+between files; the files already written stay.
+
 The silo evicted to make room is taken out of the map under the mutexes and
 snapshotted after they are released, and its eviction does what a lock
 does: its copied password is taken back and `scratch-still-open` is sent

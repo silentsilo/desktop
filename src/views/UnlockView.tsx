@@ -57,6 +57,7 @@ export function UnlockView({
         >
           <h2>{t("unlock.recovery_code_title")}</h2>
           <p className="hint">{t("unlock.recovery_code_hint")}</p>
+          {busy && fidoProgress && <p className="fido-live">{fidoProgress}</p>}
           <div className="field">
             <span>{t("unlock.code_label")}</span>
             <RecoveryCodeInput value={code} onChange={setCode} disabled={busy} autoFocus />

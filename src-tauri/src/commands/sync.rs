@@ -348,8 +348,22 @@ pub async fn vault_rebuild_from_snapshot(app: AppHandle, silo_id: String) -> Res
         silentsilo_vfs::snapshot::Snapshot,
         Vec<silentsilo_vfs::OpRecord>,
     )> = None;
+    // A long history takes minutes to come down: the dialog counts it.
     for target in &targets {
-        if let Ok(Some(found)) = sync::fetch_rebuild(&*target.store, &dek).await {
+        let emitter = app.clone();
+        let mut report = move |fetched: usize, total: usize| {
+            let _ = emitter.emit(
+                "rebuild-progress",
+                JoinProgress {
+                    fetched,
+                    total,
+                    building: false,
+                },
+            );
+        };
+        if let Ok(Some(found)) =
+            sync::fetch_rebuild_reporting(&*target.store, &dek, &mut report).await
+        {
             let better = plan.as_ref().is_none_or(|(best, best_ops)| {
                 (found.0.horizon, found.1.len()) > (best.horizon, best_ops.len())
             });
@@ -362,6 +376,7 @@ pub async fn vault_rebuild_from_snapshot(app: AppHandle, silo_id: String) -> Res
         "err.nothing_to_rebuild",
         "Backup storage holds nothing to rebuild this silo from."
     ))?;
+    let _ = app.emit("rebuild-progress", JoinProgress::building());
 
     // The one long operation that has to hold the sessions lock: a
     // half-rebuilt tree must not answer queries. Blocking pool regardless,

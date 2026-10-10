@@ -1091,6 +1091,43 @@ fn opens_current_key(
 /// possible: only the staged key opens what has already been re-sealed. So
 /// the message names the state and points at the one action that leads out
 /// of it, rather than describing a failure that left nothing behind.
+/// The touches are done and storage is being converted, which on a large
+/// silo takes minutes: the touch instruction is replaced by what runs.
+fn reseal_started(app: &AppHandle) {
+    emit_fido_progress(
+        app,
+        Prompt::new(
+            "rotating",
+            "Replacing the encryption key. Keep the app open until it finishes.",
+        ),
+    );
+}
+
+/// Each object moved to the new key on `target`, a few times a second.
+fn reseal_reporter<'a>(
+    app: &'a AppHandle,
+    target: &'a str,
+) -> impl FnMut(usize, usize) + Send + 'a {
+    let mut last: Option<std::time::Instant> = None;
+    move |done, total| {
+        if done < total && last.is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(250))
+        {
+            return;
+        }
+        last = Some(std::time::Instant::now());
+        emit_fido_progress(
+            app,
+            Prompt::new(
+                "rotating_count",
+                format!("Moving the files on {target} to the new key: {done} of {total}"),
+            )
+            .with("target", target)
+            .with("done", done.to_string())
+            .with("total", total.to_string()),
+        );
+    }
+}
+
 fn unfinished(target: &str, why: &str) -> String {
     format!(
         "Replacing the encryption key stopped part way through {target} ({why}). Nothing is lost: \
@@ -1235,6 +1272,7 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
     // Storage second, and only now, because the staged key is on disk: an
     // object re-sealed under a key that exists only in memory is one no
     // surviving key opens.
+    reseal_started(&app);
     let mut resealed = 0;
     let mut unreadable = 0;
     let mut unchanged_targets = Vec::new();
@@ -1251,10 +1289,14 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
         // The message says so rather than claiming nothing happened: it once
         // said "the key was left unchanged", which sent people back to start
         // a second rotation over the objects the first had already moved.
-        let outcome =
-            sync::reseal_under_new_key(&*target.store, &old_dek, &new_dek, &mut |_, _| {})
-                .await
-                .map_err(|e| unfinished(&target.label, &e.to_string()))?;
+        let outcome = sync::reseal_under_new_key(
+            &*target.store,
+            &old_dek,
+            &new_dek,
+            &mut reseal_reporter(&app, &target.label),
+        )
+        .await
+        .map_err(|e| unfinished(&target.label, &e.to_string()))?;
         if !outcome.failed.is_empty() {
             return Err(unfinished(
                 &target.label,
@@ -1432,16 +1474,21 @@ pub async fn vault_rotate_resume(
 
     // Idempotent, so whatever the interrupted pass managed is kept and only
     // the rest is done.
+    reseal_started(&app);
     let mut resealed = 0;
     let mut unreadable = 0;
     for target in every_target {
         if !target.role.allows_delete() {
             continue;
         }
-        let outcome =
-            sync::reseal_under_new_key(&*target.store, &old_dek, &new_dek, &mut |_, _| {})
-                .await
-                .map_err(|e| e.to_string())?;
+        let outcome = sync::reseal_under_new_key(
+            &*target.store,
+            &old_dek,
+            &new_dek,
+            &mut reseal_reporter(&app, &target.label),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
         if !outcome.failed.is_empty() {
             return Err(format!(
                 "{} files on {} still cannot move to the new key, so replacing the encryption \
