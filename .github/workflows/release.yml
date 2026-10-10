@@ -254,7 +254,9 @@ jobs:
   # pointing at the same archive.
   build-macos-app:
     # Manual runs reach here too, so that "does it build" can be answered
-    # without a tag.
+    # without a tag. The Apple secrets live in the `release` environment,
+    # which only tags may use: a manual run builds unsigned.
+    environment: ${{ startsWith(github.ref, 'refs/tags/') && 'release' || '' }}
     runs-on: macos-latest
     outputs:
       signed: ${{ steps.apple.outputs.signed }}
@@ -335,6 +337,11 @@ jobs:
             cargo build -p silentsilo-browser-host --release --locked --target "$arch"
           done
           mkdir -p src-tauri/binaries
+          # A universal build compiles each architecture on its own first,
+          # and each looks for its own copy.
+          for arch in aarch64-apple-darwin x86_64-apple-darwin; do
+            cp "target/$arch/release/silentsilo-browser-host" "src-tauri/binaries/silentsilo-browser-host-$arch"
+          done
           lipo -create -output src-tauri/binaries/silentsilo-browser-host-universal-apple-darwin \
             target/aarch64-apple-darwin/release/silentsilo-browser-host \
             target/x86_64-apple-darwin/release/silentsilo-browser-host
