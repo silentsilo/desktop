@@ -36,6 +36,9 @@ export type PlatformStrings = {
   /** Windows offers a phone over a QR code during a key ceremony; nothing
    * else does, so the sentence explaining that only belongs there. */
   offersPhone: boolean;
+  /** The auto-type shortcut as this system writes it: "Ctrl+Alt+A" (German
+   * "Strg+Alt+A"), or "⌃⌥A" on a Mac. */
+  autotypeKeys: string;
 };
 
 // The generic words are getters, so each read is in the language in use.
@@ -62,6 +65,9 @@ const WINDOWS: PlatformStrings = {
     return t("app.platform_fido_unavailable_windows");
   },
   offersPhone: true,
+  get autotypeKeys() {
+    return t("app.platform_autotype_keys");
+  },
 };
 
 const MACOS: PlatformStrings = {
@@ -86,6 +92,7 @@ const MACOS: PlatformStrings = {
     return t("app.platform_fido_unavailable_macos");
   },
   offersPhone: false,
+  autotypeKeys: "⌃⌥A",
 };
 
 /** No built-in authenticator the app uses: a security key opens a silo. */
@@ -115,6 +122,9 @@ const LINUX: PlatformStrings = {
     return t("app.platform_fido_unavailable_linux");
   },
   offersPhone: false,
+  get autotypeKeys() {
+    return t("app.platform_autotype_keys");
+  },
 };
 
 export function platformStrings(os: Os): PlatformStrings {

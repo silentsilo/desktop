@@ -1,10 +1,11 @@
 //! Auto-type: the global shortcut that asks for it, and typing a login into
-//! the window that was in front. Windows only; elsewhere every call says it
-//! is not available.
+//! the window that was in front. Windows and macOS; elsewhere every call
+//! says it is not available.
 //!
-//! The text goes as Unicode characters (`KEYEVENTF_UNICODE`), not as keys,
-//! so the keyboard layout cannot turn a password into something else. Tab
-//! and Enter go as keys, since a form reads them as keys.
+//! The text goes as Unicode characters (`KEYEVENTF_UNICODE`, or a key event
+//! carrying the character on macOS), not as keys, so the keyboard layout
+//! cannot turn a password into something else. Tab and Enter go as keys,
+//! since a form reads them as keys.
 
 use zeroize::Zeroizing;
 
@@ -19,6 +20,8 @@ pub enum Step {
 pub struct Hotkey {
     #[cfg(windows)]
     thread: u32,
+    #[cfg(target_os = "macos")]
+    _registered: crate::mac_input::MacHotkey,
 }
 
 /// Why a shortcut could not be registered.
@@ -29,9 +32,10 @@ pub enum HotkeyError {
     NotSupported,
 }
 
-/// Registers Ctrl+Alt+A for the whole session and calls `on_press` on each
-/// press, on a thread of its own: `RegisterHotKey` delivers to the thread
-/// that registered, which must run a message loop.
+/// Registers Ctrl+Alt+A (Control-Option-A on a Mac) for the whole session
+/// and calls `on_press` on each press, on a thread of its own:
+/// `RegisterHotKey` delivers to the thread that registered, which must run a
+/// message loop.
 pub fn register_hotkey(on_press: impl Fn() + Send + 'static) -> Result<Hotkey, HotkeyError> {
     #[cfg(windows)]
     {
@@ -72,7 +76,15 @@ pub fn register_hotkey(on_press: impl Fn() + Send + 'static) -> Result<Hotkey, H
             _ => Err(HotkeyError::Taken),
         }
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        crate::mac_input::register(on_press)
+            .map(|registered| Hotkey {
+                _registered: registered,
+            })
+            .ok_or(HotkeyError::Taken)
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         let _ = on_press;
         Err(HotkeyError::NotSupported)
@@ -102,7 +114,44 @@ pub enum TypeError {
     KeysHeld,
     /// Windows took fewer inputs than were sent.
     Refused,
+    /// macOS: SilentSilo is not allowed under Privacy & Security,
+    /// Accessibility, and typed events would go nowhere.
+    NoAccess,
+    /// macOS: another program has secure keyboard entry on.
+    SecureInput,
     NotSupported,
+}
+
+/// Whether the system lets SilentSilo type into other programs. Only macOS
+/// asks; elsewhere it is always yes.
+pub fn access_granted() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        crate::mac_input::access_granted()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
+    }
+}
+
+/// macOS: adds SilentSilo to the Accessibility list and shows the system's
+/// prompt that leads there. Nothing elsewhere.
+pub fn ask_for_access() {
+    #[cfg(target_os = "macos")]
+    crate::mac_input::ask_for_access();
+}
+
+/// macOS: opens Privacy & Security, Accessibility, with SilentSilo already
+/// in its list. Nothing elsewhere.
+pub fn open_access_settings() {
+    #[cfg(target_os = "macos")]
+    {
+        crate::mac_input::ask_for_access();
+        let _ = std::process::Command::new("/usr/bin/open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+            .spawn();
+    }
 }
 
 /// Types `steps` into whatever window is in front, after the shortcut's own
@@ -125,7 +174,40 @@ pub fn type_steps(steps: &[Step]) -> Result<(), TypeError> {
         }
         Ok(())
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        use crate::mac_input as mac;
+        if !mac::access_granted() {
+            return Err(TypeError::NoAccess);
+        }
+        if mac::secure_input_on() {
+            return Err(TypeError::SecureInput);
+        }
+        let mut released = false;
+        for _ in 0..100 {
+            if !mac::modifiers_held() {
+                released = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        if !released {
+            return Err(TypeError::KeysHeld);
+        }
+        for step in steps {
+            let sent = match step {
+                Step::Text(text) => mac::post_text(text),
+                Step::Tab => mac::post_tab(),
+                Step::Enter => mac::post_return(),
+            };
+            if !sent {
+                return Err(TypeError::Refused);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(60));
+        }
+        Ok(())
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         let _ = steps;
         Err(TypeError::NotSupported)

@@ -5,7 +5,14 @@ import { builtInOrKey, type PlatformStrings } from "../../lib/platformStrings";
 import { formatAppError } from "../../lib/errors";
 import { t, useLocale } from "../../i18n";
 
-type Status = { supported: boolean; enabled: boolean; enter: boolean; taken: boolean };
+type Status = {
+  supported: boolean;
+  enabled: boolean;
+  enter: boolean;
+  taken: boolean;
+  /** False only on a Mac, until SilentSilo is allowed under Accessibility. */
+  access: boolean;
+};
 
 /** Auto-type, under General: the shortcut on or off, and Enter after the
  * password. Rust keeps both, since it holds the shortcut before the window
@@ -34,14 +41,30 @@ export function AutoTypeSettings({ platform }: { platform: PlatformStrings }) {
     <>
       <SettingGroupTitle>{t("set.group_autotype")}</SettingGroupTitle>
       <SettingRow
-        label={t("set.gen_autotype")}
+        label={t("set.gen_autotype", { keys: platform.autotypeKeys })}
         htmlFor="autotype"
         hint={
           <>
             {status.supported
               ? t("set.gen_autotype_hint", { method: builtInOrKey(platform) })
               : t("set.gen_autotype_unsupported")}
-            {status.taken && <span className="hint is-error">{t("set.gen_autotype_taken")}</span>}
+            {status.taken && (
+              <span className="hint is-error">
+                {t("set.gen_autotype_taken", { keys: platform.autotypeKeys })}
+              </span>
+            )}
+            {status.supported && status.enabled && !status.access && (
+              <span className="hint is-error">
+                {t("set.gen_autotype_access")}{" "}
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => void invoke("autotype_open_access")}
+                >
+                  {t("set.gen_autotype_open_access")}
+                </button>
+              </span>
+            )}
             {error && <span className="hint is-error">{error}</span>}
           </>
         }

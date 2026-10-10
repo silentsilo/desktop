@@ -38,7 +38,15 @@ const KEYS_HELD: &str = coded!(
 );
 const REFUSED: &str = coded!(
     "err.autotype_refused",
-    "Windows did not take the typed text."
+    "The system did not take the typed text."
+);
+const NO_ACCESS: &str = coded!(
+    "err.autotype_no_access",
+    "macOS did not let SilentSilo type. Allow it under System Settings > Privacy & Security > Accessibility, then try again."
+);
+const SECURE_INPUT: &str = coded!(
+    "err.autotype_secure_input",
+    "Another program has secure keyboard entry on, and macOS lets nothing else type while it does. Turn it off there (in Terminal: Terminal > Secure Keyboard Entry) and try again."
 );
 const NOT_A_LOGIN: &str = coded!(
     "err.autotype_not_a_login",
@@ -88,6 +96,9 @@ pub struct Status {
     pub enter: bool,
     /// Turned on, but another program holds Ctrl+Alt+A.
     pub taken: bool,
+    /// The system lets SilentSilo type. Only a Mac can say no, until the
+    /// person allows it under Accessibility.
+    pub access: bool,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -113,7 +124,7 @@ fn save(app: &AppHandle, settings: Settings) -> Result<(), String> {
     std::fs::write(path, raw).map_err(|e| e.to_string())
 }
 
-const SUPPORTED: bool = cfg!(windows);
+const SUPPORTED: bool = cfg!(any(windows, target_os = "macos"));
 
 fn status(app: &AppHandle) -> Status {
     let settings = load(app);
@@ -123,6 +134,7 @@ fn status(app: &AppHandle) -> Status {
         enabled: settings.enabled,
         enter: settings.enter,
         taken: SUPPORTED && settings.enabled && !held,
+        access: silentsilo_shell::autotype::access_granted(),
     }
 }
 
@@ -188,7 +200,18 @@ pub fn autotype_set(app: AppHandle, enabled: bool, enter: bool) -> Result<Status
     let settings = Settings { enabled, enter };
     save(&app, settings)?;
     apply(&app, settings);
+    // A Mac asks once, at the moment the person turns it on.
+    if enabled && !silentsilo_shell::autotype::access_granted() {
+        silentsilo_shell::autotype::ask_for_access();
+    }
     Ok(status(&app))
+}
+
+/// macOS: the Accessibility page of System Settings, where SilentSilo is
+/// allowed to type.
+#[tauri::command(async)]
+pub fn autotype_open_access() {
+    silentsilo_shell::autotype::open_access_settings();
 }
 
 /// The auto-type waiting for a login, for a window that mounted after it.
@@ -306,6 +329,8 @@ pub async fn autotype_confirm(
         silentsilo_shell::autotype::type_steps(&steps).map_err(|e| {
             match e {
                 silentsilo_shell::autotype::TypeError::KeysHeld => KEYS_HELD,
+                silentsilo_shell::autotype::TypeError::NoAccess => NO_ACCESS,
+                silentsilo_shell::autotype::TypeError::SecureInput => SECURE_INPUT,
                 _ => REFUSED,
             }
             .to_string()

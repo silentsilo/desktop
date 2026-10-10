@@ -940,11 +940,13 @@ const handlers: Record<string, Handler> = {
     })),
   silo_set_auto_lock: () => null,
   // `?autotype`: Ctrl+Alt+A was pressed in a program a moment after start.
-  autotype_status: () => ({ supported: true, enabled: mockAutoType.enabled, enter: mockAutoType.enter, taken: false }),
+  // `?noaccess`: a Mac that has not allowed SilentSilo under Accessibility.
+  autotype_status: () => ({ supported: true, enabled: mockAutoType.enabled, enter: mockAutoType.enter, taken: false, access: !flag("noaccess") }),
   autotype_set: (args) => {
     mockAutoType = { enabled: Boolean(args.enabled), enter: Boolean(args.enter) };
-    return { supported: true, ...mockAutoType, taken: false };
+    return { supported: true, ...mockAutoType, taken: false, access: !flag("noaccess") };
   },
+  autotype_open_access: () => null,
   autotype_pending: () =>
     flag("autotype")
       ? { request_id: "at-1", title: "GitHub Desktop", program: "GitHubDesktop.exe", elevated: flag("elevated") }

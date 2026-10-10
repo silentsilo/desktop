@@ -2,12 +2,15 @@
 //! to it. A fill raises SilentSilo over the browser to ask for confirmation;
 //! once confirmed, the person wants the page that was filled, not the app.
 
-/// A top-level window of another process. Only Windows remembers one;
-/// elsewhere nothing is taken and nothing is given back.
+/// A top-level window of another process. Windows remembers the window; a
+/// Mac remembers the application, which is what it brings forward. Elsewhere
+/// nothing is taken and nothing is given back.
 #[derive(Clone, Copy, Debug)]
 pub struct ForegroundWindow {
     #[cfg(windows)]
     hwnd: isize,
+    #[cfg(target_os = "macos")]
+    pid: i32,
 }
 
 /// The window in front now, when it belongs to another process. Taken by its
@@ -38,7 +41,11 @@ pub fn foreground_window() -> Option<ForegroundWindow> {
             })
         }
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        crate::mac_input::frontmost_pid().map(|pid| ForegroundWindow { pid })
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         None
     }
@@ -61,7 +68,12 @@ impl ForegroundWindow {
             let browser = self.hwnd;
             std::thread::spawn(move || hand_over(browser, ours));
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        {
+            let _ = ours;
+            crate::mac_input::activate(self.pid);
+        }
+        #[cfg(not(any(windows, target_os = "macos")))]
         {
             let _ = ours;
         }
@@ -81,7 +93,11 @@ impl ForegroundWindow {
             let n = unsafe { GetWindowTextW(self.handle(), &mut buf) };
             String::from_utf16_lossy(&buf[..n.max(0) as usize])
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        {
+            crate::mac_input::window_title(self.pid)
+        }
+        #[cfg(not(any(windows, target_os = "macos")))]
         {
             String::new()
         }
@@ -97,14 +113,18 @@ impl ForegroundWindow {
             unsafe { GetWindowThreadProcessId(self.handle(), Some(&mut pid)) };
             pid
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        {
+            self.pid.max(0) as u32
+        }
+        #[cfg(not(any(windows, target_os = "macos")))]
         {
             0
         }
     }
 
-    /// The owning program's file name ("putty.exe"), empty when it cannot be
-    /// read.
+    /// The owning program's file name ("putty.exe"), or its name on a Mac
+    /// ("Terminal"); empty when it cannot be read.
     pub fn program(&self) -> String {
         #[cfg(windows)]
         {
@@ -142,7 +162,11 @@ impl ForegroundWindow {
                     .to_string()
             }
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        {
+            crate::mac_input::app_name(self.pid)
+        }
+        #[cfg(not(any(windows, target_os = "macos")))]
         {
             String::new()
         }
@@ -210,7 +234,11 @@ impl ForegroundWindow {
         {
             self.hwnd == other.hwnd
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        {
+            self.pid == other.pid
+        }
+        #[cfg(not(any(windows, target_os = "macos")))]
         {
             let _ = other;
             false

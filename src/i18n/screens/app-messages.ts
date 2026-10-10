@@ -1472,6 +1472,17 @@ export const appMessages = {
     "pt-BR": "área de notificação",
     pl: "obszarze powiadomień",
   },
+  "app.platform_autotype_keys": {
+    note: "Windows and Linux: the auto-type shortcut as Windows writes it in that language (German Strg). Fills {keys}. A Mac shows ⌃⌥A instead.",
+    en: "Ctrl+Alt+A",
+    ro: "Ctrl+Alt+A",
+    de: "Strg+Alt+A",
+    fr: "Ctrl+Alt+A",
+    es: "Ctrl+Alt+A",
+    it: "Ctrl+Alt+A",
+    "pt-BR": "Ctrl+Alt+A",
+    pl: "Ctrl+Alt+A",
+  },
   "app.platform_tray_macos": {
     note: "macOS: same slot as the Windows value above (after a preposition; de dative, pl locative, it and pt-BR in parentheses).",
     en: "the menu bar",

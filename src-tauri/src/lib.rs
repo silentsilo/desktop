@@ -292,6 +292,7 @@ pub fn run() {
             commands::silo::silo_touch,
             autotype::autotype_status,
             autotype::autotype_set,
+            autotype::autotype_open_access,
             autotype::autotype_pending,
             autotype::autotype_cancel,
             autotype::autotype_confirm,

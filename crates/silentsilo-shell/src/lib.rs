@@ -10,6 +10,8 @@ mod foreground;
 mod hardening;
 mod identity;
 #[cfg(target_os = "macos")]
+mod mac_input;
+#[cfg(target_os = "macos")]
 mod macos;
 mod os_integration;
 mod secret_clipboard;

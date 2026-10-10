@@ -868,6 +868,17 @@ pub async fn fido_remove_key(
     key.revoked = true;
     save_fido_keys(&root, &keys, authority(proof.as_ref())).map_err(|e| e.to_string())?;
 
+    // A Touch ID key is this Mac's own: once it opens nothing, it goes from
+    // the keychain too. Any other key is left to whoever holds it.
+    if let Ok(raw) = hex::decode(&credential_id)
+        && let Err(e) = silentsilo_fido::forget_platform_key(&raw)
+    {
+        crate::diagnostics::warn(
+            "revoke",
+            format_args!("the Touch ID key is still in the keychain: {e}"),
+        );
+    }
+
     // Removing it locally is not revocation once envelopes are shared: the
     // copy in the bucket would still let anyone holding the physical key
     // unlock the vault from another device.

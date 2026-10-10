@@ -621,7 +621,9 @@ flowchart LR
   that was in front when the request came in gets the focus back
   (`silentsilo_shell::foreground_window`, taken by its root owner so the
   popup, which closes when the app comes up, resolves to its browser
-  window). A window that was on screen stays open behind the browser.
+  window). A Mac gets the application that was in front back instead
+  (activated by its process id). A window that was on screen stays open
+  behind the browser.
   The app drops always-on-top itself, synchronously, first: Tauri's call
   lands later, and a browser brought forward under a window still on top
   stays hidden (a maximised SilentSilo covered it entirely). Windows grants
@@ -778,14 +780,20 @@ as if they did.
 Types a login's username, a Tab and its password (and Enter, if the person
 wants it) into the window that was in front, for programs the browser
 extension cannot reach: a desktop client, a VPN, a game launcher. Windows
-only for now. On Linux it can only ever work under X11 (Wayland gives no
-program a way to type into another), and macOS needs the Accessibility
-permission; both come later and say so in the app.
+and macOS. On Linux it can only ever work under X11 (Wayland gives no
+program a way to type into another); that comes later and the app says so.
 
 It is off until turned on under Settings > General. Turned on, the shell
 registers a global shortcut, Ctrl+Alt+A (`silentsilo_shell::autotype`,
-`RegisterHotKey` on a thread of its own). A shortcut another program holds
-is reported, not taken.
+`RegisterHotKey` on a thread of its own). On a Mac it is Control-Option-A,
+through Carbon's `RegisterEventHotKey` on the main thread, which needs no
+permission (`mac_input.rs`). A shortcut another program holds is reported,
+not taken.
+
+A Mac also has to allow SilentSilo under Privacy & Security, Accessibility,
+or every typed event is dropped without an error. Turning auto-type on
+shows macOS's own prompt once; while access is missing, Settings says so
+and opens that page. Access is checked again before each type.
 
 The flow:
 
@@ -808,10 +816,16 @@ The flow:
    after 1.5 seconds without it the type is dropped and said so. A window
    that runs as administrator is refused before typing: Windows silently
    discards input to a process above ours, and typing into nothing would
-   look like success.
+   look like success. A Mac remembers the application rather than the
+   window (its process id) and activates it; its window title is read
+   through Accessibility, so it is empty until access is given. Secure
+   keyboard entry in another program (Terminal's option) makes macOS drop
+   typed events, so it is refused with that reason.
 6. The shell waits for the shortcut's own keys to be released, then sends
    the text with `SendInput` and `KEYEVENTF_UNICODE`, one character at a
    time, so the keyboard layout does not matter; Tab and Enter go as keys.
+   A Mac posts key events that carry the character
+   (`CGEventKeyboardSetUnicodeString`), with the modifier flags cleared.
    The password is held in a `Zeroizing` buffer and dropped after typing.
 
 Not in 1.5: rules stored on an entry (a window title to match, a custom

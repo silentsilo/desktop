@@ -153,7 +153,7 @@ function AutoTypeCard({
           <h3 className="modal-title">{t("dlg.autotype_title")}</h3>
         </div>
         <div className="modal-body">
-          <p>{t("dlg.autotype_body", { program: prompt.program || "?" })}</p>
+          <p>{t("dlg.autotype_body", { program: prompt.program || "?", keys: platform.autotypeKeys })}</p>
           <dl className="browser-fill-facts">
             <dt>{t("dlg.autotype_program")}</dt>
             <dd>{prompt.program || "?"}</dd>
