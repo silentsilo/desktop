@@ -44,6 +44,7 @@ function defaultSiloName(draft: StoreDraft): string {
   if (isCloudKind(draft.kind)) {
     return draft.cloud[draft.kind].folder;
   }
+  if (draft.kind === "icloud") return draft.icloud.folder;
   return draft.s3.bucket;
 }
 

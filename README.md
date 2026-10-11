@@ -6,8 +6,9 @@ fallback. For Windows 10 and 11, and for Linux as a .deb or an AppImage
 (security keys only: Linux has no built-in key the app uses). AGPL-3.0.
 
 Everything runs locally: no SilentSilo account, no SilentSilo server. Backup
-is optional, to storage you choose: your OneDrive, Dropbox or Google Drive, an
-S3-compatible bucket, a WebDAV share, an SFTP server or a plain folder. File
+is optional, to storage you choose: your OneDrive, Dropbox or Google Drive,
+iCloud Drive (on macOS and Windows), an S3-compatible bucket, a WebDAV share,
+an SFTP server or a plain folder. File
 contents and names are encrypted before they leave. What the storage can still
 see, such as sizes, times and the name of the silo folder, is listed in
 [CRYPTO.md](https://github.com/silentsilo/core/blob/main/docs/CRYPTO.md#what-the-storage-provider-learns).
@@ -68,7 +69,7 @@ crates.
 | `silentsilo-vfs` | core | Folder/file tree, operation log |
 | `silentsilo-fido` | core | FIDO2 security keys and Windows Hello |
 | `silentsilo-s3` | core | S3-compatible object storage client |
-| `silentsilo-store` | core | Backup storage: bucket, folder, WebDAV or SFTP |
+| `silentsilo-store` | core | Backup storage: bucket, folder, iCloud Drive, WebDAV or SFTP |
 | `silentsilo-sync` | core | Multi-device sync over whichever of those |
 
 ## Silos

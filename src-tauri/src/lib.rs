@@ -434,6 +434,7 @@ pub fn run() {
             commands::sync::vault_test_restore_stop,
             commands::storage::sftp_probe_host_key,
             commands::cloud::cloud_providers,
+            commands::cloud::icloud_status,
             commands::cloud::cloud_sign_in,
             commands::cloud::cloud_cancel_sign_in,
             commands::cloud::cloud_list_silos,

@@ -423,6 +423,18 @@ second word as a security key prompt. `cloud_providers` lists what this
 build can sign in to; a build without Google's client secret leaves Google
 Drive out.
 
+## iCloud Drive
+
+An iCloud Drive copy has no sign-in: it is the computer's own iCloud, and
+core stores only a folder name (`{kind: "icloud", folder}`) and finds
+SilentSilo's container from the user profile on macOS and Windows. The
+form asks `icloud_status` whether this computer can have iCloud Drive at
+all (the tile is hidden on Linux), whether the container is there (it
+appears once iCloud Drive is on and the iPhone app has used it, so the step
+says how to get there and offers Check again), and which silo folders it
+holds, for setting up from it. Saving and the checks then go through
+`storage::describe` like any other kind.
+
 ## Browser extension
 
 The extension (silentsilo/browser) fills a username and a password into a

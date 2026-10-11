@@ -41,6 +41,7 @@ function kindLabel(kind: StoreConfigView["kind"]): string {
     folder: t("backup.kind_folder"),
     "web-dav": "WebDAV",
     sftp: "SFTP",
+    icloud: "iCloud Drive",
     ...CLOUD_NAME,
   };
   return labels[kind];
@@ -76,6 +77,8 @@ function StoredSummary({ stored }: { stored: StoreConfigView }) {
       [t("backup.summary_account"), stored.account],
       [t("backup.field_folder"), stored.folder],
     );
+  } else if (stored.kind === "icloud") {
+    rows.push([t("backup.field_folder"), stored.folder]);
   } else {
     rows.push(
       [t("backup.field_server"), `${stored.username}@${stored.host}:${stored.port}`],
@@ -235,6 +238,11 @@ export function BackupPanel({
           dav: davFromStored(stored.url, stored.username),
         }));
         setWhere(stored.url);
+        return;
+      }
+      if (stored.kind === "icloud") {
+        setDraft((prev) => ({ ...prev, kind: "icloud", icloud: { folder: stored.folder } }));
+        setWhere(`iCloud Drive, ${stored.folder}`);
         return;
       }
       if (isCloudView(stored)) {

@@ -906,6 +906,7 @@ const handlers: Record<string, Handler> = {
   // A sign-in that "happens in the browser" after a short wait, so the
   // waiting state and the connected account can both be seen.
   cloud_providers: () => ["onedrive", "dropbox", "google-drive"],
+  icloud_status: () => ({ supported: true, found: true, folders: ["Silo"], computer: "windows" }),
   cloud_sign_in: (args) =>
     new Promise((resolve) =>
       setTimeout(

@@ -33,6 +33,24 @@ pub fn cloud_providers() -> Vec<&'static str> {
     .collect()
 }
 
+/// iCloud Drive on this computer: whether it can be here at all, whether
+/// SilentSilo's folder is, and the silo folders in it. `computer` picks the
+/// instructions the form shows when the folder is missing.
+#[derive(serde::Serialize)]
+pub struct ICloudStatusView {
+    #[serde(flatten)]
+    status: silentsilo_store::ICloudStatus,
+    computer: &'static str,
+}
+
+#[tauri::command(async)]
+pub fn icloud_status() -> ICloudStatusView {
+    ICloudStatusView {
+        status: silentsilo_store::icloud_status(),
+        computer: std::env::consts::OS,
+    }
+}
+
 /// Opens the provider's sign-in page and waits for it to come back, for at
 /// most five minutes.
 #[tauri::command]

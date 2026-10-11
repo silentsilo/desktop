@@ -111,7 +111,15 @@ export type SecurityKeyInfo = {
 export type Authenticator = "security-key" | "this-device";
 
 /** Where a silo's backup lives. The shapes differ because the questions do. */
-export type StoreKind = "s3" | "folder" | "web-dav" | "sftp" | CloudKind;
+export type StoreKind = "s3" | "folder" | "web-dav" | "sftp" | "icloud" | CloudKind;
+
+/** iCloud Drive on this computer, as `icloud_status` answers. */
+export type ICloudStatus = {
+  supported: boolean;
+  found: boolean;
+  folders: string[];
+  computer: string;
+};
 
 /** Storage reached by signing in to an account the user already has. */
 export type CloudKind = "onedrive" | "dropbox" | "google-drive";
@@ -157,6 +165,7 @@ export type StoreConfigView =
       /** Shown back to the user, which is the entire point of a fingerprint. */
       host_fingerprint: string | null;
     }
+  | { kind: "icloud"; folder: string }
   | CloudConfigView;
 
 export type CloudConfigView = { kind: CloudKind; account: string; folder: string };

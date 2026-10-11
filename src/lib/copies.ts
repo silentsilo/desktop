@@ -238,6 +238,8 @@ export function whereIs(config: StoreConfigView): string {
       return config.url;
     case "sftp":
       return `${config.username}@${config.host}`;
+    case "icloud":
+      return `iCloud Drive, ${config.folder}`;
     default:
       return CLOUD_NAME[config.kind];
   }

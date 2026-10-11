@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Cloud,
   CloudCog,
+  CloudOff,
+  RefreshCw,
   FolderOpen,
   HardDrive,
   KeyRound,
@@ -27,6 +29,7 @@ import {
   isCloudKind,
   type CloudKind,
   type CloudSignIn,
+  type ICloudStatus,
   type StoreKind,
 } from "../lib/types";
 import {
@@ -122,6 +125,8 @@ export type StoreDraft = {
   dav: DavForm;
   sftp: SftpForm;
   cloud: Record<CloudKind, CloudForm>;
+  /** The silo's folder inside SilentSilo's folder in iCloud Drive. */
+  icloud: { folder: string };
 };
 
 /// Starts on a folder: the choice most people can make without an account
@@ -155,6 +160,7 @@ export const EMPTY_STORE_DRAFT: StoreDraft = {
     dropbox: EMPTY_CLOUD_FORM,
     "google-drive": EMPTY_CLOUD_FORM,
   },
+  icloud: { folder: DEFAULT_CLOUD_FOLDER },
 };
 
 /** What the backend expects, for whichever kind is selected. */
@@ -164,6 +170,8 @@ export function storeDraftPayload(draft: StoreDraft) {
     return { kind: draft.kind, signIn: cloud.signIn, folder: cloud.folder.trim() };
   }
   switch (draft.kind) {
+    case "icloud":
+      return { kind: "icloud" as const, folder: draft.icloud.folder.trim() };
     case "folder":
       return { kind: "folder" as const, path: draft.folder };
     case "web-dav":
@@ -229,6 +237,8 @@ export function missingStoreFields(draft: StoreDraft, hasStoredSecret: boolean):
     ].filter((v): v is string => typeof v === "string");
   }
   switch (draft.kind) {
+    case "icloud":
+      return draft.icloud.folder.trim() ? [] : [t("backup.missing_folder_name")];
     case "folder":
       return draft.folder.trim() ? [] : [t("backup.missing_folder")];
     case "web-dav":
@@ -534,6 +544,121 @@ function CloudStep({
 }
 
 /** The kinds that need no sign-in, in the order they are offered. */
+/**
+ * iCloud Drive: nothing to sign in to, since it is the computer's own
+ * iCloud. What there is to say is whether SilentSilo's folder is here,
+ * which it is only once iCloud Drive is on and the iPhone app has used it.
+ */
+function ICloudStep({
+  folder,
+  set,
+  busy,
+  joining,
+}: {
+  folder: string;
+  set: (folder: string) => void;
+  busy: boolean;
+  joining: boolean;
+}) {
+  useLocale();
+  const [status, setStatus] = useState<ICloudStatus | null>(null);
+  const [checking, setChecking] = useState(false);
+  const latestFolder = useRef(folder);
+  latestFolder.current = folder;
+  const check = useCallback(async () => {
+    setChecking(true);
+    try {
+      const found = await invoke<ICloudStatus>("icloud_status");
+      setStatus(found);
+      // Setting up from iCloud picks a silo that is there.
+      if (joining && found.folders.length > 0 && !found.folders.includes(latestFolder.current)) {
+        set(found.folders[0]!);
+      }
+    } catch {
+      setStatus(null);
+    } finally {
+      setChecking(false);
+    }
+  }, [joining, set]);
+  useEffect(() => {
+    void check();
+    // Once, when the step opens; Check again asks after that.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const folderProblem = folder ? cloudFolderProblem(folder) : null;
+
+  return (
+    <>
+      <div className="host-key">
+        {status?.found ? (
+          <div className="host-key-line">
+            <UserCheck size={16} />
+            <span>{t("backup.icloud_found")}</span>
+          </div>
+        ) : status ? (
+          <>
+            <div className="host-key-line">
+              <CloudOff size={16} />
+              <span>
+                {status.computer === "macos"
+                  ? t("backup.icloud_missing_mac")
+                  : t("backup.icloud_missing_windows")}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={busy || checking}
+              onClick={() => void check()}
+            >
+              <RefreshCw size={14} />
+              {t("backup.icloud_check_again")}
+            </button>
+          </>
+        ) : (
+          <p className="hint" role="status">
+            <span className="spinner" aria-hidden />
+          </p>
+        )}
+        <p className="hint">{t("backup.icloud_platforms")}</p>
+      </div>
+
+      {joining && status?.found ? (
+        status.folders.length > 0 ? (
+          <label className="field">
+            <span>{t("backup.cloud_silo_folder")}</span>
+            <select value={folder} disabled={busy} onChange={(e) => set(e.target.value)}>
+              {status.folders.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <p className="hint is-error" role="status">
+            {t("backup.icloud_no_silo")}
+          </p>
+        )
+      ) : !joining ? (
+        <label className="field">
+          <span>{t("backup.cloud_folder_name")}</span>
+          <input
+            value={folder}
+            disabled={busy}
+            onChange={(e) => set(e.target.value)}
+            spellCheck={false}
+          />
+          <p className={`hint${folderProblem ? " is-error" : ""}`}>
+            {folderProblem ?? t("backup.icloud_folder_hint")}
+          </p>
+        </label>
+      ) : null}
+    </>
+  );
+}
+
 const OWN_STORAGE: readonly { kind: StoreKind; label: Key; title: Key; Icon: typeof HardDrive }[] = [
   {
     kind: "folder",
@@ -574,6 +699,19 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
   const setDav = (patch: Partial<DavForm>) => onChange({ ...draft, dav: { ...draft.dav, ...patch } });
   // A build without a provider's client details leaves it out.
   const [clouds, setClouds] = useState<CloudKind[]>([]);
+  // Linux has no iCloud Drive, so no tile there.
+  const [icloudHere, setICloudHere] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void invoke<ICloudStatus>("icloud_status")
+      .then((status) => live && setICloudHere(status.supported))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  const accounts: (CloudKind | "icloud")[] = [...clouds, ...(icloudHere ? ["icloud" as const] : [])];
+  const isAccount = isCloudKind(draft.kind) || draft.kind === "icloud";
   useEffect(() => {
     let live = true;
     void invoke<string[]>("cloud_providers")
@@ -590,17 +728,17 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
     <>
       <div className="field">
         <span>{t("backup.where_question")}</span>
-        {clouds.length > 0 && (
+        {accounts.length > 0 && (
           <>
             <p className="store-kind-group">{t("backup.group_accounts")}</p>
             <OptionTiles
               className="store-kind-grid is-accounts"
               label={t("backup.group_accounts")}
-              value={isCloudKind(draft.kind) ? draft.kind : null}
+              value={isAccount ? (draft.kind as CloudKind | "icloud") : null}
               onChange={setKind}
-              options={clouds.map((kind) => ({
+              options={accounts.map((kind) => ({
                 value: kind,
-                title: CLOUD_NAME[kind],
+                title: kind === "icloud" ? "iCloud Drive" : CLOUD_NAME[kind],
                 icon: <CloudCog size={16} />,
               }))}
             />
@@ -609,8 +747,8 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
         )}
         <OptionTiles
           className="store-kind-grid"
-          label={clouds.length > 0 ? t("backup.group_own") : t("backup.where_question")}
-          value={isCloudKind(draft.kind) ? null : draft.kind}
+          label={accounts.length > 0 ? t("backup.group_own") : t("backup.where_question")}
+          value={isAccount ? null : draft.kind}
           onChange={setKind}
           options={OWN_STORAGE.map(({ kind, label, title, Icon }) => ({
             value: kind,
@@ -635,6 +773,15 @@ export function StoreConfigForm({ draft, onChange, hasStoredSecret, busy, joinin
               cloud: { ...current.cloud, [kind]: { ...current.cloud[kind], ...patch } },
             });
           }}
+          busy={busy}
+          joining={joining ?? false}
+        />
+      )}
+
+      {draft.kind === "icloud" && (
+        <ICloudStep
+          folder={draft.icloud.folder}
+          set={(folder) => onChange({ ...latest.current, icloud: { folder } })}
           busy={busy}
           joining={joining ?? false}
         />
