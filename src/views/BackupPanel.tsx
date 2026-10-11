@@ -24,7 +24,7 @@ import { useLasting } from "../lib/lasting";
 import { t, tx, useLocale } from "../i18n";
 import {
   discardSignIns,
-  EMPTY_STORE_DRAFT,
+  storeDraftFor,
   missingStoreFields,
   StoreConfigForm,
   storeDraftPayload,
@@ -118,6 +118,8 @@ function davFromStored(url: string, username: string): StoreDraft["dav"] {
 
 type Props = {
   busy: boolean;
+  /** The open silo's name: a new copy's folder starts with it. */
+  siloName?: string | null;
   /** Unix ms of the last pass that reached the storage, from the app shell. */
   lastSyncAt: number | null;
   /** Lets the shell's status bar refresh right away instead of on its timer. */
@@ -169,6 +171,7 @@ const IDLE: Status = { kind: "idle" };
 
 export function BackupPanel({
   busy,
+  siloName,
   lastSyncAt,
   onActivity,
   missingCount,
@@ -197,7 +200,7 @@ export function BackupPanel({
   /// and a slipped click on a red button silently ended the backup.
   const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
   const [pending, setPending] = useState(0);
-  const [draft, setDraft] = useState<StoreDraft>(EMPTY_STORE_DRAFT);
+  const [draft, setDraft] = useState<StoreDraft>(() => storeDraftFor(siloName));
   /// The saved connection as the backend reports it, for the read-only
   /// summary. There is exactly one per silo: saving replaces it wholesale,
   /// which is what keeps "a folder and a bucket both active" impossible.
@@ -371,7 +374,7 @@ export function BackupPanel({
       await invoke("s3_disconnect");
       setConnected(false);
       setStored(null);
-      setDraft(EMPTY_STORE_DRAFT);
+      setDraft(storeDraftFor(siloName));
       setWhere("");
       setStatus({ kind: "ok", message: t("backup.status_disconnected") });
       onActivity();

@@ -53,11 +53,26 @@ export function cloudFolderHint(kind: CloudKind): string {
   return t(CLOUD_PLACE_TEXT[kind].folderHint);
 }
 
-/**
- * The folder name a new copy starts with. Neutral on purpose: the provider
- * sees it, and a silo's own name ("Medical", "Divorce") can say too much.
- */
+/** The folder name when there is no silo name to go by. */
 export const DEFAULT_CLOUD_FOLDER = "Silo";
+
+/**
+ * A new copy's folder starts with the silo's name, so someone with several
+ * silos can tell their folders apart at the provider and gets the same name
+ * back when setting a silo up from one. The hint under the field says the
+ * provider sees it. Made into a name every provider takes: the characters
+ * OneDrive refuses become "-", no dot or space at either end.
+ */
+export function folderNameFor(siloName: string): string {
+  const name = siloName
+    // eslint-disable-next-line no-control-regex
+    .replace(/["*:<>?/\\|\u0000-\u001f\u007f]/g, "-")
+    .trim()
+    .replace(/^[.\s]+|[.\s]+$/g, "")
+    .slice(0, 100)
+    .trim();
+  return name || DEFAULT_CLOUD_FOLDER;
+}
 
 /**
  * The same rule core applies, checked here so the form can say it before

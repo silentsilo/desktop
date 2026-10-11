@@ -20,7 +20,7 @@ import {
 } from "../lib/copies";
 import {
   discardSignIns,
-  EMPTY_STORE_DRAFT,
+  storeDraftFor,
   missingStoreFields,
   StoreConfigForm,
   storeDraftPayload,
@@ -38,6 +38,8 @@ import { t, useLocale } from "../i18n";
 
 type Props = {
   busy: boolean;
+  /** The open silo's name: a new copy's folder starts with it. */
+  siloName?: string | null;
   /** Whether this computer holds every file, not just the index. */
   fullCopy: boolean;
   /** Lets the shell refresh its status line after a target changes. */
@@ -56,13 +58,13 @@ type Props = {
  */
 const never = () => false;
 
-export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
+export function CopiesPanel({ busy, siloName, fullCopy, onActivity }: Props) {
   useLocale();
   const [targets, setTargets] = useState<BackupTargetView[] | null>(null);
   // Lasting, like the work behind them: see lib/lasting.
   const [error, setError] = useLasting<string | null>("copies.error", null, never);
   const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState<StoreDraft>(EMPTY_STORE_DRAFT);
+  const [draft, setDraft] = useState<StoreDraft>(() => storeDraftFor(siloName));
   const [label, setLabel] = useState("");
   const [archive, setArchive] = useState(false);
   /// What the place says about resisting deletion, once it has been asked.
@@ -143,7 +145,7 @@ export function CopiesPanel({ busy, fullCopy, onActivity }: Props) {
         archive,
       });
       setAdding(false);
-      setDraft(EMPTY_STORE_DRAFT);
+      setDraft(storeDraftFor(siloName));
       setLabel("");
       setArchive(false);
       setProtection(null);

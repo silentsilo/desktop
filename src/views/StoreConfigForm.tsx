@@ -40,6 +40,7 @@ import {
   cloudFoldersHint,
   cloudNoSilo,
   DEFAULT_CLOUD_FOLDER,
+  folderNameFor,
 } from "../lib/cloud";
 import { formatBytes } from "../lib/format";
 import { KDRIVE_DEFAULT_FOLDER, kdriveIdFrom, kdriveUrl } from "../lib/kdrive";
@@ -162,6 +163,19 @@ export const EMPTY_STORE_DRAFT: StoreDraft = {
   },
   icloud: { folder: DEFAULT_CLOUD_FOLDER },
 };
+
+/** An empty form for a silo: every new folder starts with its name. */
+export function storeDraftFor(siloName: string | null | undefined): StoreDraft {
+  if (!siloName) return EMPTY_STORE_DRAFT;
+  const folder = folderNameFor(siloName);
+  const cloud = { ...EMPTY_CLOUD_FORM, folder };
+  return {
+    ...EMPTY_STORE_DRAFT,
+    dav: { ...EMPTY_STORE_DRAFT.dav, kdriveFolder: `${KDRIVE_DEFAULT_FOLDER}/${folder}` },
+    cloud: { onedrive: cloud, dropbox: cloud, "google-drive": cloud },
+    icloud: { folder },
+  };
+}
 
 /** What the backend expects, for whichever kind is selected. */
 export function storeDraftPayload(draft: StoreDraft) {

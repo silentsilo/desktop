@@ -396,6 +396,26 @@ async fn ensure_session_for_enrollment(
     .await
 }
 
+/// What a key is called when nobody names it: the computer's own name for
+/// Windows Hello or Touch ID, since that is where it lives, and "Security
+/// key" for one that travels. A second of the same name gets a number, so
+/// the list never shows two alike.
+fn default_key_label(authenticator: Authenticator, taken: &[String]) -> String {
+    let base = match authenticator {
+        Authenticator::ThisDevice => {
+            silentsilo_shell::system_name().unwrap_or_else(|| "This computer".into())
+        }
+        _ => "Security key".into(),
+    };
+    if !taken.iter().any(|l| l == &base) {
+        return base;
+    }
+    (2..)
+        .map(|n| format!("{base} {n}"))
+        .find(|name| !taken.iter().any(|l| l == name))
+        .unwrap_or(base)
+}
+
 /// Enrols the silo's first key.
 ///
 /// `organisation` marks it as escrow: a company provisioning a silo for an
@@ -504,7 +524,7 @@ pub async fn fido_enroll_primary(
                 public_key: hex_encode(&cred.public_key),
                 key_slot: cred.key_slot,
                 rp_id: cred.rp_id.clone(),
-                label: "Primary".into(),
+                label: default_key_label(authenticator, &[]),
                 wrapped_dek: hex::encode(&envelope_bytes),
                 platform: authenticator == Authenticator::ThisDevice,
                 revoked: false,
@@ -674,7 +694,11 @@ pub async fn fido_add_key(
     };
 
     let envelope_bytes = wrap_dek_bytes(&dek, &unlock.wrap_key).map_err(|e| e.to_string())?;
-    let label = label.unwrap_or_else(|| format!("Key {}", keys.active().count() + 1));
+    let taken: Vec<String> = keys.active().map(|k| k.label.clone()).collect();
+    let label = label
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .unwrap_or_else(|| default_key_label(authenticator, &taken));
 
     let (kind, derivation) = kind_and_derivation(authenticator);
     let stored = StoredFidoCredential {
@@ -1565,6 +1589,22 @@ pub(crate) async fn publish_recovery_envelope(
 
 #[cfg(test)]
 mod authenticator_choice_tests {
+    #[test]
+    fn an_unnamed_security_key_gets_a_name_no_other_key_has() {
+        let taken = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            super::default_key_label(super::Authenticator::SecurityKey, &[]),
+            "Security key"
+        );
+        assert_eq!(
+            super::default_key_label(
+                super::Authenticator::SecurityKey,
+                &taken(&["Security key", "Security key 2"])
+            ),
+            "Security key 3"
+        );
+    }
+
     use super::preferred_authenticator;
     use silentsilo_fido::Authenticator;
     use silentsilo_vault::{StoredFidoCredential, StoredFidoKeys};

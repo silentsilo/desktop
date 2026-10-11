@@ -4405,6 +4405,7 @@ export default function App() {
             backupPanel={
               <BackupPanel
                 busy={busy("transfer", "silo")}
+                siloName={bootstrap.silo.name}
                 lastSyncAt={sync.lastSyncAt}
                 syncError={
                   sync.state === "error" ? (sync.lastError ?? t("app.unknown_error")) : null
@@ -4434,6 +4435,7 @@ export default function App() {
                 copies={
                   <CopiesPanel
                     busy={busy("transfer", "silo")}
+                    siloName={bootstrap.silo.name}
                     fullCopy={fullCopy}
                     onActivity={() => void refreshSync()}
                   />

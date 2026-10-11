@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cloudFolderProblem } from "./cloud";
+import { cloudFolderProblem, folderNameFor } from "./cloud";
 import { formatAppError } from "./errors";
 import {
   EMPTY_STORE_DRAFT,
@@ -77,5 +77,23 @@ describe("cloud errors", () => {
         "storage rejected the request: That is a different Dropbox account. Sign in with the one this storage uses.",
       ),
     ).toBe("That is a different Dropbox account. Sign in with the one this storage uses.");
+  });
+});
+
+describe("folderNameFor", () => {
+  it("keeps a plain silo name as it is", () => {
+    expect(folderNameFor("Personal")).toBe("Personal");
+    expect(folderNameFor(" Acte și facturi ")).toBe("Acte și facturi");
+  });
+
+  it("makes a name every provider takes", () => {
+    expect(folderNameFor("Work: 2026/Q1")).toBe("Work- 2026-Q1");
+    expect(folderNameFor(".hidden.")).toBe("hidden");
+    expect(cloudFolderProblem(folderNameFor('a*b?"c<d>|e'))).toBeNull();
+  });
+
+  it("falls back when nothing usable is left", () => {
+    expect(folderNameFor("...")).toBe("Silo");
+    expect(folderNameFor("")).toBe("Silo");
   });
 });
