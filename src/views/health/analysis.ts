@@ -36,6 +36,8 @@ export type HealthFinding = {
    * a reused password is which entries share it. */
   groups?: PasswordEntry[][];
   fix?: HealthFix;
+  /** Times each entry's password was seen in breaches, for the breach finding. */
+  seen?: ReadonlyMap<string, number>;
 };
 
 /** The parts of the silo's state that can be wrong on their own. */
@@ -97,8 +99,28 @@ export function analyseHealth(
   entries: PasswordEntry[],
   silo: SiloHealth,
   now: number = Date.now(),
+  /** From the last breach check: entry id to times seen. Only entries not
+   * changed since the check, so a fixed password drops out at once. */
+  breached: ReadonlyMap<string, number> = new Map(),
 ): HealthFinding[] {
   const findings: HealthFinding[] = [];
+
+  const exposed = entries.filter((e) => e.password && breached.has(e.id)).sort(byService);
+  if (exposed.length > 0) {
+    const passwords = new Set(exposed.map((e) => e.password)).size;
+    findings.push({
+      id: "breached",
+      severity: "high",
+      get title() {
+        return t("dlg.health_breached_title", { count: passwords });
+      },
+      get detail() {
+        return t("dlg.health_breached_detail");
+      },
+      entries: exposed,
+      seen: breached,
+    });
+  }
 
   const reused = collide(entries, (e) => (e.password ? `pw:${e.password}` : null));
   if (reused.length > 0) {

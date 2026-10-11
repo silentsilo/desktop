@@ -185,3 +185,21 @@ describe("summarise", () => {
     expect(summarise(findings)).toEqual({ high: 2, medium: 0, info: 1 });
   });
 });
+
+describe("breached passwords", () => {
+  it("are a high finding naming the entries and how often each was seen", () => {
+    const leaked = entry({ service: "Leaky", password: "hunter2-but-long" });
+    const fine = entry({ service: "Fine" });
+    const findings = analyseHealth([leaked, fine], HEALTHY_SILO, NOW, new Map([[leaked.id, 206]]));
+    const breached = findings.find((f) => f.id === "breached");
+    expect(breached?.severity).toBe("high");
+    expect(breached?.entries.map((e) => e.service)).toEqual(["Leaky"]);
+    expect(breached?.seen?.get(leaked.id)).toBe(206);
+    expect(summarise(findings).high).toBe(1);
+  });
+
+  it("are absent before a check", () => {
+    const findings = analyseHealth([entry()], HEALTHY_SILO, NOW);
+    expect(findings.some((f) => f.id === "breached")).toBe(false);
+  });
+});

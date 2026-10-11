@@ -130,6 +130,25 @@ export function useRunningLasting(scope: string): Map<string, unknown> {
   return useMemo(() => runningLasting(scope), [scope, at]);
 }
 
+/** Reads what a component keeps under `name` for `scope`, without keeping
+ * it alive. `initial` must be stable: it is the snapshot while unset. */
+export function useLastingValue<T>(scope: string, name: string, initial: T): T {
+  const key = lastingKey(scope, name);
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      const set = listeners.get(key) ?? new Set();
+      listeners.set(key, set);
+      set.add(listener);
+      return () => {
+        set.delete(listener);
+      };
+    },
+    [key],
+  );
+  const read = () => readLasting(key, initial);
+  return useSyncExternalStore(subscribe, read, read);
+}
+
 /** `useState`, kept while `running` holds and for one unseen outcome.
  * Components using one `name` share the value. `app` keeps it for the app
  * rather than for the silo on screen. */

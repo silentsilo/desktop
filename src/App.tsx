@@ -64,7 +64,13 @@ import { JoinView } from "./views/JoinView";
 import { EnrollView } from "./views/EnrollView";
 import { FilesExplorer } from "./views/FilesExplorer";
 import { PasswordsPanel } from "./views/passwords/PasswordsPanel";
-import { HealthPanel } from "./views/health/HealthPanel";
+import {
+  BREACHES_IDLE,
+  BREACHES_KEY,
+  breachedEntries,
+  HealthPanel,
+  type BreachState,
+} from "./views/health/HealthPanel";
 import { analyseHealth, type HealthFinding } from "./views/health/analysis";
 import { fingerprint, loadIgnored, saveIgnored, splitIgnored } from "./views/health/ignored";
 import { FavoritesPanel } from "./views/FavoritesPanel";
@@ -94,7 +100,7 @@ import { lastDone } from "./lib/siloMemory";
 import { decodeAppError, formatAppError, plainError } from "./lib/errors";
 import { AppSettingsContext, UpdateCardContext } from "./lib/appSettings";
 import { UpdateCard } from "./views/UpdateCard";
-import { forgetLasting, LastingScope, useRunningLasting } from "./lib/lasting";
+import { forgetLasting, LastingScope, useLastingValue, useRunningLasting } from "./lib/lasting";
 import { secondsToLock, useLockNotice } from "./lib/lockNotice";
 import { LockSoonBar } from "./views/LockSoonBar";
 import { lastingTasks, syncTask, type BackgroundTask, type TaskPlace } from "./lib/backgroundTasks";
@@ -3369,6 +3375,13 @@ export default function App() {
     }
   };
 
+  /// The last breach check, kept by the Health page until the silo locks.
+  const breachCheck = useLastingValue<BreachState>(
+    bootstrap?.silo?.id ?? "",
+    BREACHES_KEY,
+    BREACHES_IDLE,
+  );
+
   /// What is wrong with this silo, computed once for both the page and the
   /// count on its tab. Waits for everything it judges to have been read:
   /// analysing half-loaded state reports problems that are not there, and a
@@ -3376,22 +3389,28 @@ export default function App() {
   const healthFindings = useMemo(
     () =>
       passwordsLoaded && siloFactsLoaded
-        ? analyseHealth(passwordEntries, {
-            backupConfigured: sync.configured,
-            backupFailing: sync.state === "error",
-            backupError: sync.lastError ? formatAppError(sync.lastError) : null,
-            lastTestedAt:
-              Math.max(
-                lastDone(bootstrap?.silo?.id ?? "", "verified") ?? 0,
-                lastDone(bootstrap?.silo?.id ?? "", "restore-tested") ?? 0,
-              ) || null,
-            securityKeyCount: securityKeys.length,
-            recoveryCodeSet: recovery.enabled,
-            freeBytes: diskSpace?.available_bytes ?? null,
-            headroomBytes: diskSpace?.headroom_bytes ?? 0,
-          })
+        ? analyseHealth(
+            passwordEntries,
+            {
+              backupConfigured: sync.configured,
+              backupFailing: sync.state === "error",
+              backupError: sync.lastError ? formatAppError(sync.lastError) : null,
+              lastTestedAt:
+                Math.max(
+                  lastDone(bootstrap?.silo?.id ?? "", "verified") ?? 0,
+                  lastDone(bootstrap?.silo?.id ?? "", "restore-tested") ?? 0,
+                ) || null,
+              securityKeyCount: securityKeys.length,
+              recoveryCodeSet: recovery.enabled,
+              freeBytes: diskSpace?.available_bytes ?? null,
+              headroomBytes: diskSpace?.headroom_bytes ?? 0,
+            },
+            Date.now(),
+            breachedEntries(breachCheck, passwordEntries),
+          )
         : [],
     [
+      breachCheck,
       passwordsLoaded,
       siloFactsLoaded,
       passwordEntries,

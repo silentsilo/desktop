@@ -34,12 +34,34 @@ const FIX_LABELS: Record<HealthFix, Key> = {
   verify: "settings.verify",
 };
 
-/** The breach check, as a state the page can be in. */
-type BreachState =
+/** The breach check, as a state the page can be in. `stamps` holds each
+ * entry's `updated_at` at the check, so an entry changed since is not
+ * reported on a password it no longer has. */
+export type BreachState =
   | { kind: "idle" }
   | { kind: "busy"; done?: number; total?: number }
-  | { kind: "done"; report: PwnedReport }
+  | { kind: "done"; report: PwnedReport; stamps: Record<string, number> }
   | { kind: "unavailable" };
+
+/** Where the check's result is kept until the silo locks; the shell reads
+ * it too, so a breached password counts like any other finding. */
+export const BREACHES_KEY = "health.breaches";
+
+/** The entries a finished check still holds against: id to times seen. */
+export function breachedEntries(
+  state: BreachState,
+  entries: PasswordEntry[],
+): ReadonlyMap<string, number> {
+  const found = new Map<string, number>();
+  if (state.kind !== "done") return found;
+  const now = new Map(entries.map((e) => [e.id, e.updated_at]));
+  for (const exposure of state.report.exposures) {
+    for (const id of exposure.entryIds) {
+      if (now.get(id) === state.stamps[id]) found.set(id, exposure.count);
+    }
+  }
+  return found;
+}
 
 /**
  * What is wrong with this silo, in one place.
@@ -55,7 +77,7 @@ type BreachState =
  * whether to look; the list of entries is the part you act on, one at a
  * time, and expanded lists would bury the next finding under the first.
  */
-const BREACHES_IDLE: BreachState = { kind: "idle" };
+export const BREACHES_IDLE: BreachState = { kind: "idle" };
 
 export function HealthPanel({
   findings,
@@ -73,7 +95,7 @@ export function HealthPanel({
   // Lasting until the silo locks: the check asks the network about every
   // password, and its answer should not vanish on leaving the page.
   const [breaches, setBreaches] = useLasting<BreachState>(
-    "health.breaches",
+    BREACHES_KEY,
     BREACHES_IDLE,
     (b) => b.kind !== "idle",
   );
@@ -95,6 +117,7 @@ export function HealthPanel({
 
   const runBreachCheck = async () => {
     setBreaches({ kind: "busy" });
+    const stamps = Object.fromEntries(entries.map((e) => [e.id, e.updated_at]));
     try {
       const report = await checkPasswords(
         entries,
@@ -106,7 +129,7 @@ export function HealthPanel({
       setBreaches(
         report.checked > 0 && report.unavailable === report.checked
           ? { kind: "unavailable" }
-          : { kind: "done", report },
+          : { kind: "done", report, stamps },
       );
     } catch {
       setBreaches({ kind: "unavailable" });
@@ -214,7 +237,10 @@ export function HealthPanel({
             >
               {breaches.kind === "busy"
                 ? breaches.total
-                  ? t("dlg.health_checking_count", { done: breaches.done ?? 0, total: breaches.total })
+                  ? t("dlg.health_checking_count", {
+                      done: breaches.done ?? 0,
+                      total: breaches.total,
+                    })
                   : t("dlg.health_checking")
                 : t("dlg.health_check_now")}
             </button>
@@ -223,28 +249,17 @@ export function HealthPanel({
           {breaches.kind === "unavailable" && (
             <p className="hint">{t("dlg.health_breach_unavailable")}</p>
           )}
-          {breaches.kind === "done" && (
-            <BreachResults report={breaches.report} entries={entries} onOpenEntry={onOpenEntry} />
-          )}
+          {breaches.kind === "done" && <BreachResults report={breaches.report} />}
         </div>
       </div>
     </div>
   );
 }
 
-function BreachResults({
-  report,
-  entries,
-  onOpenEntry,
-}: {
-  report: PwnedReport;
-  entries: PasswordEntry[];
-  onOpenEntry: (id: string) => void;
-}) {
+/** The check's outcome in one line; what it found is listed as a finding
+ * above, with the other things to fix. */
+function BreachResults({ report }: { report: PwnedReport }) {
   useLocale();
-  const nameOf = (id: string) =>
-    entries.find((e) => e.id === id)?.service || t("dlg.untitled");
-
   if (report.exposures.length === 0) {
     return (
       <p className="hint">
@@ -256,33 +271,9 @@ function BreachResults({
   }
 
   return (
-    <>
-      <p className="health-finding-detail">
-        {t("dlg.health_breach_found", { count: report.exposures.length })}
-      </p>
-      <ul className="health-entry-group">
-        {report.exposures.flatMap((exposure) =>
-          exposure.entryIds.map((id) => (
-            <li key={id}>
-              <button
-                type="button"
-                className="health-entry"
-                onClick={() => onOpenEntry(id)}
-                data-tooltip={t("dlg.health_open_entry", { name: nameOf(id) })}
-              >
-                <span className="health-entry-name">{nameOf(id)}</span>
-                <span className="health-entry-sub">
-                  {t("dlg.health_seen", {
-                    count: exposure.count,
-                    times: exposure.count.toLocaleString(dateLocale()),
-                  })}
-                </span>
-              </button>
-            </li>
-          )),
-        )}
-      </ul>
-    </>
+    <p className="health-finding-detail">
+      {t("dlg.health_breach_found", { count: report.exposures.length })}
+    </p>
   );
 }
 
@@ -309,9 +300,7 @@ function FindingRow({
   const expandable = finding.entries.length > 0;
 
   return (
-    <li
-      className={`health-finding health-${finding.severity}${onShowAgain ? " is-ignored" : ""}`}
-    >
+    <li className={`health-finding health-${finding.severity}${onShowAgain ? " is-ignored" : ""}`}>
       <div className="health-finding-head">
         {expandable ? (
           <button
@@ -363,21 +352,31 @@ function FindingRow({
 
       {open && expandable && (
         <div className="health-finding-body">
-          {finding.groups
-            ? finding.groups.map((group, i) => (
-                <ul key={group[0]?.id ?? i} className="health-entry-group">
-                  {group.map((entry) => (
-                    <EntryButton key={entry.id} entry={entry} onOpen={onOpenEntry} />
-                  ))}
-                </ul>
-              ))
-            : (
-              <ul className="health-entry-group">
-                {finding.entries.map((entry) => (
-                  <EntryButton key={entry.id} entry={entry} onOpen={onOpenEntry} />
+          {finding.groups ? (
+            finding.groups.map((group, i) => (
+              <ul key={group[0]?.id ?? i} className="health-entry-group">
+                {group.map((entry) => (
+                  <EntryButton
+                    key={entry.id}
+                    entry={entry}
+                    seen={finding.seen?.get(entry.id)}
+                    onOpen={onOpenEntry}
+                  />
                 ))}
               </ul>
-            )}
+            ))
+          ) : (
+            <ul className="health-entry-group">
+              {finding.entries.map((entry) => (
+                <EntryButton
+                  key={entry.id}
+                  entry={entry}
+                  seen={finding.seen?.get(entry.id)}
+                  onOpen={onOpenEntry}
+                />
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </li>
@@ -386,13 +385,19 @@ function FindingRow({
 
 function EntryButton({
   entry,
+  seen,
   onOpen,
 }: {
   entry: PasswordEntry;
+  /** Times its password was seen in breaches, shown instead of the subtitle. */
+  seen?: number;
   onOpen: (id: string) => void;
 }) {
   useLocale();
-  const subtitle = subtitleFor(entry);
+  const subtitle =
+    seen !== undefined
+      ? t("dlg.health_seen", { count: seen, times: seen.toLocaleString(dateLocale()) })
+      : subtitleFor(entry);
   return (
     <li>
       <button
