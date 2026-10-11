@@ -1345,6 +1345,14 @@ input[type="range"] {
   flex-shrink: 0;
 }
 
+.btn-sync {
+  flex-shrink: 0;
+}
+
+.btn-sync .is-spinning {
+  animation: spinner-turn 0.9s linear infinite;
+}
+
 /* Settings and theme, out of the way of a centred card, and above the
    atmosphere layer so they stay clickable. Fixed rather than absolute so
    they stay reachable on the tall forms, which scroll past several

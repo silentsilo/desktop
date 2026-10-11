@@ -1147,7 +1147,7 @@ export const start = {
     pl: "Przełącz pasek boczny",
   },
   "start.sync_now": {
-    note: "Tooltip of the sync status in the bottom bar: clicking it syncs with backup storage now.",
+    note: "Tooltip of the sync status in the bottom bar and of the sync button beside the theme button: clicking either syncs with backup storage now.",
     en: "Sync now",
     ro: "Sincronizează acum",
     de: "Jetzt synchronisieren",

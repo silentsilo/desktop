@@ -10,6 +10,7 @@ import {
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
+  RefreshCw,
   ScrollText,
   Settings2,
   Star,
@@ -341,6 +342,24 @@ export function AppShell({
                 aria-label={t("start.toggle_sidebar")}
               >
                 {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+              </button>
+            )}
+
+            {/* Sync where it can be found: the status line at the bottom
+                does the same, but nobody guesses that text is a button. */}
+            {sync.configured && (
+              <button
+                type="button"
+                className="btn-collapse btn-sync"
+                onClick={onSyncNow}
+                disabled={sync.state === "syncing"}
+                data-tooltip={t("start.sync_now")}
+                aria-label={t("start.sync_now")}
+              >
+                <RefreshCw
+                  size={16}
+                  className={sync.state === "syncing" || sync.progress ? "is-spinning" : undefined}
+                />
               </button>
             )}
 
