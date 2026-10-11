@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { platformStrings, type Os } from "../../lib/platformStrings";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFileDialog, save as saveFileDialog } from "../../lib/dialog";
-import { Download, KeyRound, MousePointerClick, ShieldCheck, Upload } from "lucide-react";
+import { Download, FolderInput, KeyRound, MousePointerClick, ShieldCheck, Star, Upload } from "lucide-react";
 import { ViewHeader } from "../../components/ViewHeader";
 import type {
   CredentialType,
@@ -61,7 +61,7 @@ import {
   TYPE_TEXTS,
   typeOf,
 } from "./util";
-import { IconEye, IconEyeOff, IconPlus, IconSearch } from "../../ui/Icons";
+import { IconClose, IconEye, IconEyeOff, IconPlus, IconSearch, IconTrash } from "../../ui/Icons";
 import { t, useLocale, type Key } from "../../i18n";
 import { useLasting } from "../../lib/lasting";
 
@@ -549,6 +549,14 @@ export function PasswordsPanel({
   /// the entry: the user should be answering about this login, not about
   /// whichever one the pane happened to be showing.
   const [pendingDelete, setPendingDelete] = useState<PasswordEntry | null>(null);
+
+  /// Entries ticked for one action on all of them: moved to a category,
+  /// starred, deleted. Kept to what the list shows, so a search or another
+  /// category never leaves an action reaching entries out of sight.
+  const [checked, setChecked] = useState<ReadonlySet<string>>(() => new Set());
+  const checkAnchor = useRef<string | null>(null);
+  const [movingChecked, setMovingChecked] = useState(false);
+  const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
   /// Clearing removes old passwords for good, on every device.
   const [pendingClearHistory, setPendingClearHistory] = useState<PasswordEntry | null>(null);
 
@@ -561,6 +569,77 @@ export function PasswordsPanel({
     },
     [ensureVerified, onSaveEntry]
   );
+
+  const visibleIds = useMemo(() => new Set(filtered.map((e) => e.id)), [filtered]);
+  useEffect(() => {
+    setChecked((prev) => {
+      const kept = [...prev].filter((id) => visibleIds.has(id));
+      return kept.length === prev.size ? prev : new Set(kept);
+    });
+  }, [visibleIds]);
+
+  const checkEntry = useCallback(
+    (id: string, range: boolean) => {
+      setChecked((prev) => {
+        const next = new Set(prev);
+        const from = checkAnchor.current ? filtered.findIndex((e) => e.id === checkAnchor.current) : -1;
+        const to = filtered.findIndex((e) => e.id === id);
+        if (range && from >= 0 && to >= 0) {
+          const [a, b] = from < to ? [from, to] : [to, from];
+          for (const entry of filtered.slice(a, b + 1)) next.add(entry.id);
+        } else if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+        return next;
+      });
+      checkAnchor.current = id;
+    },
+    [filtered]
+  );
+
+  const clearChecked = useCallback(() => {
+    setChecked(new Set());
+    setMovingChecked(false);
+    checkAnchor.current = null;
+  }, []);
+
+  const checkedEntries = useMemo(
+    () => entries.filter((e) => checked.has(e.id)),
+    [checked, entries]
+  );
+  const allStarred = checkedEntries.length > 0 && checkedEntries.every((e) => e.favorite);
+
+  // One at a time: each is its own change in the silo's history.
+  const moveChecked = useCallback(
+    async (category: string) => {
+      setMovingChecked(false);
+      for (const entry of checkedEntries) {
+        if (entry.category !== category) {
+          await onSaveEntry(withEdits(entry, { category }), "arranged");
+        }
+      }
+      clearChecked();
+    },
+    [checkedEntries, clearChecked, onSaveEntry]
+  );
+
+  const starChecked = useCallback(async () => {
+    const favorite = !allStarred;
+    for (const entry of checkedEntries) {
+      if (Boolean(entry.favorite) !== favorite) {
+        await onSaveEntry(withEdits(entry, { favorite }), "arranged");
+      }
+    }
+  }, [allStarred, checkedEntries, onSaveEntry]);
+
+  const confirmBulkDelete = useCallback(() => {
+    for (const entry of checkedEntries) onDeleteEntry(entry.id);
+    if (selectedId && checked.has(selectedId)) setSelectedId(null);
+    setPendingBulkDelete(false);
+    clearChecked();
+  }, [checked, checkedEntries, clearChecked, onDeleteEntry, selectedId]);
 
   const confirmDelete = useCallback(() => {
     if (!pendingDelete) return;
@@ -1110,9 +1189,78 @@ export function PasswordsPanel({
                 }}
                 onCopyUsername={(entry) => void copyUsername(entry)}
                 onCopyPassword={(entry) => void copyPassword(entry)}
+                checked={checked}
+                onCheck={checkEntry}
+                onClearChecked={clearChecked}
               />
             )}
           </div>
+
+          {/* The same bar Files shows for a selection, with what applies to
+              logins: a category, a star, deletion. */}
+          {checked.size > 0 && (
+            <div className="selection-toolbar">
+              <span className="selection-toolbar-count">
+                {t("trash.selected", { count: checked.size })}
+              </span>
+              <div className="selection-toolbar-actions">
+                <div className="pw-bulk-move">
+                  <button
+                    type="button"
+                    className="selection-toolbar-btn"
+                    disabled={busy}
+                    aria-expanded={movingChecked}
+                    onClick={() => setMovingChecked((open) => !open)}
+                  >
+                    <FolderInput size={14} /> {t("pw.bulk_move")}
+                  </button>
+                  {movingChecked && (
+                    <div className="pw-bulk-menu" role="menu">
+                      {categories.map((c) => (
+                        <button
+                          key={c.name}
+                          type="button"
+                          role="menuitem"
+                          onClick={() => void moveChecked(c.name)}
+                        >
+                          <span
+                            className="pw-bulk-dot"
+                            style={{ background: colorFor(c.name) }}
+                            aria-hidden
+                          />
+                          {c.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="selection-toolbar-btn"
+                  disabled={busy}
+                  onClick={() => void starChecked()}
+                >
+                  <Star size={14} /> {allStarred ? t("pw.bulk_unfavorite") : t("pw.bulk_favorite")}
+                </button>
+                <button
+                  type="button"
+                  className="selection-toolbar-btn danger"
+                  disabled={busy}
+                  onClick={() => setPendingBulkDelete(true)}
+                >
+                  <IconTrash size={14} /> {t("pw.delete")}
+                </button>
+                <button
+                  type="button"
+                  className="selection-toolbar-btn"
+                  onClick={clearChecked}
+                  data-tooltip={t("files.clear_selection")}
+                >
+                  <IconClose size={14} /> {t("trash.clear")}
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="pw-detail-pane">
             {editing ? (
@@ -1215,6 +1363,31 @@ export function PasswordsPanel({
           busy={busy}
           onConfirm={confirmDelete}
           onCancel={() => setPendingDelete(null)}
+        />
+      )}
+
+      {pendingBulkDelete && (
+        <ConfirmDialog
+          title={t("pw.bulk_delete_title", { count: checkedEntries.length })}
+          message={[
+            backedUp ? t("pw.bulk_delete_synced") : t("pw.bulk_delete_local"),
+            t("pw.delete_no_trash"),
+            backedUp && checkedEntries.some((e) => (e.attachments ?? []).length > 0)
+              ? t("pw.delete_attachments_kept")
+              : "",
+            !backedUp || archiveTargets === 0
+              ? ""
+              : checkedEntries.some((e) => (e.attachments ?? []).length > 0)
+                ? t("pw.delete_archive_with_files")
+                : t("pw.delete_archive"),
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          confirmLabel={t("pw.bulk_delete_button", { count: checkedEntries.length })}
+          danger
+          busy={busy}
+          onConfirm={confirmBulkDelete}
+          onCancel={() => setPendingBulkDelete(false)}
         />
       )}
 

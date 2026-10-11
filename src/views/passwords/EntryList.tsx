@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Contact, CreditCard, StickyNote, TerminalSquare, User } from "lucide-react";
+import { Check, Contact, CreditCard, Paperclip, StickyNote, TerminalSquare, User } from "lucide-react";
 import type { PasswordEntry } from "../../lib/types";
 import { avatarColor, faviconUrl, inkOn, serviceInitials, subtitleFor, typeOf } from "./util";
 import { IconCopy } from "../../ui/Icons";
@@ -12,6 +12,11 @@ type Props = {
   copiedId: string | null;
   colorFor: (category: string) => string;
   onSelect: (id: string) => void;
+  /** Entries ticked for an action on several at once. */
+  checked: ReadonlySet<string>;
+  /** `range` ticks everything from the last tick to this one. */
+  onCheck: (id: string, range: boolean) => void;
+  onClearChecked: () => void;
   onCopyUsername: (entry: PasswordEntry) => void;
   onCopyPassword: (entry: PasswordEntry) => void;
 };
@@ -31,13 +36,22 @@ export function EntryList({
   copiedId,
   colorFor,
   onSelect,
+  checked,
+  onCheck,
+  onClearChecked,
   onCopyUsername,
   onCopyPassword,
 }: Props) {
   useLocale();
   const [faviconErrorIds, setFaviconErrorIds] = useState<Set<string>>(new Set());
 
+  const picking = checked.size > 0;
+
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape" && picking) {
+      onClearChecked();
+      return;
+    }
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     e.preventDefault();
     if (entries.length === 0) return;
@@ -53,9 +67,10 @@ export function EntryList({
     // Listbox semantics: one focus stop, arrows move the selection — the
     // same contract the file explorer's list keeps.
     <div
-      className="pw-rows"
+      className={`pw-rows${picking ? " is-picking" : ""}`}
       role="listbox"
       aria-label={t("nav.passwords")}
+      aria-multiselectable
       tabIndex={0}
       onKeyDown={onKeyDown}
     >
@@ -64,14 +79,35 @@ export function EntryList({
         const icon =
           type === "login" && showFavicons && entry.url ? faviconUrl(entry.url) : null;
         const showIcon = icon !== null && !faviconErrorIds.has(entry.id);
+        const isChecked = checked.has(entry.id);
+        const name = entry.service || t("pw.untitled_entry");
         return (
           <div
             key={entry.id}
             role="option"
-            aria-selected={entry.id === selectedId}
-            className={`pw-row${entry.id === selectedId ? " is-selected" : ""}`}
-            onClick={() => onSelect(entry.id)}
+            aria-selected={isChecked || entry.id === selectedId}
+            className={`pw-row${entry.id === selectedId ? " is-selected" : ""}${isChecked ? " is-checked" : ""}`}
+            // Ctrl or Cmd ticks a row, Shift ticks a run, as in Files; the
+            // box ticks too. A plain click opens the entry and keeps the ticks.
+            onClick={(e) => {
+              if (e.shiftKey) onCheck(entry.id, true);
+              else if (e.ctrlKey || e.metaKey) onCheck(entry.id, false);
+              else onSelect(entry.id);
+            }}
           >
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={isChecked}
+              aria-label={t("pw.select_entry", { name })}
+              className="pw-row-check"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCheck(entry.id, e.shiftKey);
+              }}
+            >
+              {isChecked && <Check size={12} strokeWidth={3} aria-hidden />}
+            </button>
             <div
               className={`pw-row-avatar${showIcon ? " has-favicon" : ""}`}
               style={
@@ -103,7 +139,17 @@ export function EntryList({
               )}
             </div>
             <div className="pw-row-text">
-              <span className="pw-row-service">{entry.service || t("pw.untitled")}</span>
+              <span className="pw-row-service">
+                {entry.service || t("pw.untitled")}
+                {(entry.attachments ?? []).length > 0 && (
+                  <Paperclip
+                    size={12}
+                    className="pw-row-attached"
+                    aria-label={t("pw.has_attachments")}
+                    data-tooltip={t("pw.has_attachments")}
+                  />
+                )}
+              </span>
               <span className="pw-row-username">{subtitleFor(entry) || " "}</span>
             </div>
             {/* Quick copies without opening the entry — the two things done
