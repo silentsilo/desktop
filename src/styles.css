@@ -7511,6 +7511,20 @@ button.link.pw-history-clear {
   grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
 }
 
+/* A name and an icon, no description: centred in the tile. */
+.store-kind-grid.is-accounts .option-tile {
+  align-items: center;
+  justify-content: center;
+}
+
+.store-kind-grid.is-accounts .option-tile-icon {
+  margin-top: 0;
+}
+
+.store-kind-grid.is-accounts .option-tile-text {
+  padding-right: 0;
+}
+
 @media (max-width: 720px) {
   .store-kind-grid,
   .store-kind-grid.is-accounts {
