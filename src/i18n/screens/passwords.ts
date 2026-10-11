@@ -912,6 +912,17 @@ export const passwords = {
     "pt-BR": "Escolher uma exportação",
     pl: "Wybierz eksport",
   },
+  "pw.export_selected_title": {
+    note: "Bold first line of the export choice panel when it was opened from the selection bar: only the ticked entries are written. {count} is how many.",
+    en: { one: "Export the selected entry to a KeePass file or to CSV.", other: "Export the {count} selected entries to a KeePass file or to CSV." },
+    ro: { one: "Exportă intrarea selectată într-un fișier KeePass sau în CSV.", few: "Exportă cele {count} intrări selectate într-un fișier KeePass sau în CSV.", other: "Exportă cele {count} de intrări selectate într-un fișier KeePass sau în CSV." },
+    de: { one: "Den ausgewählten Eintrag in eine KeePass-Datei oder als CSV exportieren.", other: "Die {count} ausgewählten Einträge in eine KeePass-Datei oder als CSV exportieren." },
+    fr: { one: "Exporter l’entrée sélectionnée vers un fichier KeePass ou en CSV.", many: "Exporter les {count} d’entrées sélectionnées vers un fichier KeePass ou en CSV.", other: "Exporter les {count} entrées sélectionnées vers un fichier KeePass ou en CSV." },
+    es: { one: "Exportar la entrada seleccionada a un archivo de KeePass o a CSV.", many: "Exportar los {count} de entradas seleccionadas a un archivo de KeePass o a CSV.", other: "Exportar las {count} entradas seleccionadas a un archivo de KeePass o a CSV." },
+    it: { one: "Esporta la voce selezionata in un file KeePass o in CSV.", many: "Esporta le {count} di voci selezionate in un file KeePass o in CSV.", other: "Esporta le {count} voci selezionate in un file KeePass o in CSV." },
+    "pt-BR": { one: "Exportar a entrada selecionada para um arquivo KeePass ou para CSV.", many: "Exportar as {count} de entradas selecionadas para um arquivo KeePass ou para CSV.", other: "Exportar as {count} entradas selecionadas para um arquivo KeePass ou para CSV." },
+    pl: { one: "Eksportuj zaznaczony wpis do pliku KeePass lub do CSV.", few: "Eksportuj {count} zaznaczone wpisy do pliku KeePass lub do CSV.", many: "Eksportuj {count} zaznaczonych wpisów do pliku KeePass lub do CSV.", other: "Eksportuj {count} zaznaczonego wpisu do pliku KeePass lub do CSV." },
+  },
   "pw.export_title": {
     note: "Bold first line of the export choice panel.",
     en: "Export to a KeePass file or to CSV.",

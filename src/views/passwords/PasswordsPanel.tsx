@@ -2,7 +2,16 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { platformStrings, type Os } from "../../lib/platformStrings";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFileDialog, save as saveFileDialog } from "../../lib/dialog";
-import { Download, FolderInput, KeyRound, MousePointerClick, ShieldCheck, Star, Upload } from "lucide-react";
+import {
+  Download,
+  FolderInput,
+  KeyRound,
+  ListChecks,
+  MousePointerClick,
+  ShieldCheck,
+  Star,
+  Upload,
+} from "lucide-react";
 import { ViewHeader } from "../../components/ViewHeader";
 import type {
   CredentialType,
@@ -191,6 +200,10 @@ export function PasswordsPanel({
     never,
   );
   const [confirmingExport, setConfirmingExport] = useState(false);
+  /// The ticked entries when the export was asked for from the selection
+  /// bar; null exports the whole store.
+  const [exportOnly, setExportOnly] = useState<PasswordEntry[] | null>(null);
+  const toExport = exportOnly ?? entries;
   /** Parsed and counted, waiting for the user to say where it gets filed. */
   const [pendingImport, setPendingImport] = useLasting<{
     imported: PasswordEntry[];
@@ -599,6 +612,9 @@ export function PasswordsPanel({
     [filtered]
   );
 
+  /// Every entry the list shows now, after the search and the filters.
+  const checkAll = useCallback(() => setChecked(new Set(filtered.map((e) => e.id))), [filtered]);
+
   const clearChecked = useCallback(() => {
     setChecked(new Set());
     setMovingChecked(false);
@@ -833,13 +849,13 @@ export function PasswordsPanel({
   const startKdbxExport = useCallback(async () => {
     setTransferError(null);
     setConfirmingExport(false);
-    if (exportNeedsTouch(entries)) {
-      const asking = entries.find((e) => e.require_reauth)!;
+    if (exportNeedsTouch(toExport)) {
+      const asking = toExport.find((e) => e.require_reauth)!;
       if (!(await ensureVerified(asking, "export"))) return;
     }
     setKdbxError(null);
     setKdbx({ mode: "export", path: "" });
-  }, [ensureVerified, entries, setTransferError]);
+  }, [ensureVerified, toExport, setTransferError]);
 
   const finishKdbxExport = useCallback(
     async (password: string) => {
@@ -851,23 +867,24 @@ export function PasswordsPanel({
         });
         if (!path) return;
         setTransferBusy(true);
-        await invoke("passwords_write_kdbx", { path, password, entries: JSON.stringify(entries) });
+        await invoke("passwords_write_kdbx", { path, password, entries: JSON.stringify(toExport) });
         setKdbx(null);
-        setTransferNotice(t("pw.kdbx_exported", { count: entries.length }));
+        setExportOnly(null);
+        setTransferNotice(t("pw.kdbx_exported", { count: toExport.length }));
       } catch (e) {
         setKdbxError(formatAppError(e));
       } finally {
         setTransferBusy(false);
       }
     },
-    [entries, setTransferBusy, setTransferNotice]
+    [toExport, setTransferBusy, setTransferNotice]
   );
 
   const handleExport = useCallback(async () => {
     setTransferError(null);
 
     // The CSV dialect other managers read has columns for logins only.
-    const logins = entries.filter((e) => typeOf(e) === "login");
+    const logins = toExport.filter((e) => typeOf(e) === "login");
 
     // An export writes every one of these into a plaintext file, which is
     // the broadest reveal in the app. Entries marked "ask again before
@@ -895,7 +912,7 @@ export function PasswordsPanel({
         contents: entriesToCsv(logins),
         count: logins.length,
       });
-      const leftOut = entries.length - logins.length;
+      const leftOut = toExport.length - logins.length;
       setTransferNotice(
         [
           t("pw.csv_exported", { count: logins.length }),
@@ -909,8 +926,9 @@ export function PasswordsPanel({
     } finally {
       setTransferBusy(false);
       setConfirmingExport(false);
+      setExportOnly(null);
     }
-  }, [ensureVerified, entries, setTransferBusy, setTransferError, setTransferNotice]);
+  }, [ensureVerified, toExport, setTransferBusy, setTransferError, setTransferNotice]);
 
   return (
     <div className="pw-view">
@@ -958,6 +976,7 @@ export function PasswordsPanel({
           onClick={() => {
             setTransferError(null);
             setTransferNotice(null);
+            setExportOnly(null);
             setConfirmingExport(true);
           }}
           data-tooltip={t("pw.export_tip")}
@@ -1021,14 +1040,21 @@ export function PasswordsPanel({
           onSubmit={(password, keyFile) =>
             void (kdbx.mode === "open" ? openKdbx(password, keyFile) : finishKdbxExport(password))
           }
-          onCancel={() => setKdbx(null)}
+          onCancel={() => {
+            setKdbx(null);
+            if (kdbx.mode === "export") setExportOnly(null);
+          }}
         />
       )}
 
       {confirmingExport && (
         <div className="pw-export-warning" role="alertdialog" aria-label={t("pw.export_choose_label")}>
           <div>
-            <strong>{t("pw.export_title")}</strong>
+            <strong>
+              {exportOnly
+                ? t("pw.export_selected_title", { count: exportOnly.length })
+                : t("pw.export_title")}
+            </strong>
             <p>{t("pw.export_kdbx_body")}</p>
             <p>{t("pw.export_csv_body")}</p>
           </div>
@@ -1036,7 +1062,10 @@ export function PasswordsPanel({
             <button
               type="button"
               className="btn-secondary"
-              onClick={() => setConfirmingExport(false)}
+              onClick={() => {
+                setConfirmingExport(false);
+                setExportOnly(null);
+              }}
             >
               {t("common.cancel")}
             </button>
@@ -1244,19 +1273,33 @@ export function PasswordsPanel({
                 </button>
                 <button
                   type="button"
+                  className="selection-toolbar-btn"
+                  disabled={busy || transferBusy}
+                  onClick={() => {
+                    setTransferError(null);
+                    setTransferNotice(null);
+                    setExportOnly(checkedEntries);
+                    setConfirmingExport(true);
+                  }}
+                >
+                  <Download size={14} /> {t("pw.export")}
+                </button>
+                <button
+                  type="button"
                   className="selection-toolbar-btn danger"
                   disabled={busy}
                   onClick={() => setPendingBulkDelete(true)}
                 >
                   <IconTrash size={14} /> {t("pw.delete")}
                 </button>
-                <button
-                  type="button"
-                  className="selection-toolbar-btn"
-                  onClick={clearChecked}
-                  data-tooltip={t("files.clear_selection")}
-                >
-                  <IconClose size={14} /> {t("trash.clear")}
+                <span className="selection-toolbar-sep" aria-hidden />
+                {checked.size < filtered.length && (
+                  <button type="button" className="selection-toolbar-btn" onClick={checkAll}>
+                    <ListChecks size={14} /> {t("trash.select_all")}
+                  </button>
+                )}
+                <button type="button" className="selection-toolbar-btn" onClick={clearChecked}>
+                  <IconClose size={14} /> {t("files.clear_selection")}
                 </button>
               </div>
             </div>

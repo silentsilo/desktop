@@ -4634,6 +4634,14 @@ tr.is-moving {
   gap: 0.5rem;
 }
 
+/* Between what acts on the ticked entries and what changes the ticks. */
+.selection-toolbar-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 0.15rem 0.2rem;
+  background: var(--border-subtle);
+}
+
 .selection-toolbar-btn {
   white-space: nowrap;
   background: transparent;
