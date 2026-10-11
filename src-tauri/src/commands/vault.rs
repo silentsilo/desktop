@@ -127,6 +127,7 @@ fn encrypt_import(
     root: &Path,
     kek: &silentsilo_crypto::ContentKek,
     source: &Path,
+    stop: Option<&std::sync::atomic::AtomicBool>,
 ) -> Result<EncryptedImport, String> {
     if !source.is_file() {
         return Err(crate::err::coded_with(
@@ -156,8 +157,22 @@ fn encrypt_import(
     let blob_key =
         silentsilo_crypto::wrap_content_key(&content_key, kek).map_err(|e| e.to_string())?;
     let _watch = ImportBytes::start(app, source, &file_name, &blob_path);
-    let result = encrypt_file(source, &blob_path, &content_key, file_id, blob_id)
-        .map_err(|e| e.to_string())?;
+    // Read through the stop flag, so Stop lands inside a large file rather
+    // than after it: a 2 GB video went on to the end. The half-written blob
+    // is removed by the encryption itself.
+    let mut reader = Stoppable {
+        file: std::fs::File::open(source).map_err(|e| e.to_string())?,
+        stop,
+    };
+    let result =
+        silentsilo_crypto::encrypt_stream(&mut reader, &blob_path, &content_key, file_id, blob_id)
+            .map_err(|e| {
+                if stop.is_some_and(|s| s.load(Ordering::Relaxed)) {
+                    IMPORT_CANCELLED.to_string()
+                } else {
+                    e.to_string()
+                }
+            })?;
     let _ = silentsilo_vault::record_blob_present(root, blob_id, result.size_bytes as i64, false);
 
     Ok(EncryptedImport {
@@ -170,6 +185,21 @@ fn encrypt_import(
         mime: silentsilo_vfs::guess_mime(source),
         blob_key,
     })
+}
+
+/// A source file that stops being readable once the import is stopped.
+struct Stoppable<'a> {
+    file: std::fs::File,
+    stop: Option<&'a std::sync::atomic::AtomicBool>,
+}
+
+impl std::io::Read for Stoppable<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.stop.is_some_and(|s| s.load(Ordering::Relaxed)) {
+            return Err(std::io::Error::other(IMPORT_CANCELLED));
+        }
+        self.file.read(buf)
+    }
 }
 
 /// A large file's encryption, reported by the size of the `.part` it is
@@ -240,13 +270,16 @@ fn commit_import(
 /// Both halves, against a pinned silo: encrypt with no lock held, then a
 /// short lock for the row. The pin is what keeps a batch import writing
 /// into the silo it started on if the user switches silos part-way.
+/// `stop` is the flag Stop sets, for the imports that have one; the queue
+/// from Explorer and the auto-import folders run to their end.
 fn import_one(
     app: &AppHandle,
     snapshot: &crate::state::SessionSnapshot,
     folder_id: Uuid,
     source: &Path,
+    stop: Option<&std::sync::atomic::AtomicBool>,
 ) -> Result<FileEntry, String> {
-    let encrypted = encrypt_import(app, &snapshot.root, &snapshot.kek, source)?;
+    let encrypted = encrypt_import(app, &snapshot.root, &snapshot.kek, source, stop)?;
     crate::state::with_session_id(&app.state::<AppState>(), snapshot.id, |_session, vfs| {
         commit_import(vfs, folder_id, &encrypted)
     })
@@ -413,8 +446,9 @@ fn import_folder_recursive(
                 },
             );
             // Keep going if a single file fails (locked/system files, etc.).
-            match import_one(app, snapshot, parent_folder_id, &path) {
+            match import_one(app, snapshot, parent_folder_id, &path, Some(cancelled)) {
                 Ok(_) => counters.added = counters.added.saturating_add(1),
+                Err(e) if e == IMPORT_CANCELLED => return Err(e),
                 Err(e) => {
                     counters.skipped = counters.skipped.saturating_add(1);
                     crate::diagnostics::warn("import", format_args!("skipped a file: {e}"));
@@ -590,7 +624,7 @@ pub(crate) fn process_shell_upload_queue(app: &AppHandle) -> Result<u32, String>
     let mut requeue = Vec::new();
     for path in paths {
         let source = PathBuf::from(&path);
-        match import_one(app, &snapshot, inbox_id, &source) {
+        match import_one(app, &snapshot, inbox_id, &source, None) {
             Ok(file) => {
                 imported += 1;
                 added.push(file);
@@ -1128,8 +1162,15 @@ pub async fn vault_import_files_to_folder(
                 return Err(SILO_CLOSED.to_string());
             }
             let source = PathBuf::from(&path);
-            match import_one(&app, &snapshot, folder_id, &source) {
+            match import_one(
+                &app,
+                &snapshot,
+                folder_id,
+                &source,
+                Some(&state.import_cancelled),
+            ) {
                 Ok(file) => imported.push(file),
+                Err(e) if e == IMPORT_CANCELLED => break,
                 Err(e) => {
                     log_added(
                         &app,
@@ -1221,11 +1262,18 @@ pub async fn vault_paste_paths(
                     Err(e) => result.failed.push(format!("{name}: {e}")),
                 }
             } else if source.is_file() {
-                match import_one(&app, &snapshot, folder_uuid, &source) {
+                match import_one(
+                    &app,
+                    &snapshot,
+                    folder_uuid,
+                    &source,
+                    Some(&state.import_cancelled),
+                ) {
                     Ok(file) => {
                         result.imported_files += 1;
                         pasted.push(file);
                     }
+                    Err(e) if e == IMPORT_CANCELLED => break,
                     Err(e) => result.failed.push(format!("{name}: {e}")),
                 }
             }
@@ -1485,7 +1533,14 @@ pub async fn vault_import_file(
 
     run_blocking(move || {
         let snapshot = crate::state::snapshot_focused_session(&app.state::<AppState>())?;
-        let file = import_one(&app, &snapshot, folder_id, &source)?;
+        let state = app.state::<AppState>();
+        let file = import_one(
+            &app,
+            &snapshot,
+            folder_id,
+            &source,
+            Some(&state.import_cancelled),
+        )?;
         log_added(&app, snapshot.id, folder_id, std::slice::from_ref(&file), 1);
         Ok(file)
     })
@@ -3125,7 +3180,7 @@ pub async fn protected_folders_scan(app: AppHandle) -> Result<ProtectedScanRepor
                 report.skipped += 1;
                 continue;
             };
-            match import_one(&app, &snapshot, target, &item.source) {
+            match import_one(&app, &snapshot, target, &item.source, None) {
                 Ok(_) => {
                     // Marked after the import, never before: the other order
                     // would skip a file that never arrived and leave it

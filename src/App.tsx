@@ -1969,6 +1969,9 @@ export default function App() {
     };
 
     uploadCancelRef.current = false;
+    // Stop now also reaches inside a large file, through this flag, so one
+    // left set by an earlier stop would end this import before it starts.
+    await invoke("reset_import_cancel").catch(() => {});
     setUploadCancelable(true);
     setUploadCancelling(false);
     begin("transfer");
@@ -1990,6 +1993,8 @@ export default function App() {
           await showLanded();
           refreshProgress();
         } catch (e) {
+          // Stopped part way through: not a failure, and not added.
+          if (uploadCancelRef.current && String(e) === "cancelled") return;
           counters.failed += 1;
           failed.push(`${name}: ${formatAppError(e)}`);
           refreshProgress();
