@@ -6099,11 +6099,6 @@ tr.is-moving {
   white-space: nowrap;
 }
 
-.pw-detail-heading {
-  margin: 0 0 1.1rem;
-  font-size: var(--fs-14);
-}
-
 .pw-field-notes {
   align-items: flex-start;
 }
@@ -6123,9 +6118,13 @@ tr.is-moving {
   align-items: center;
   justify-content: flex-end;
   gap: 0.6rem;
-  margin-top: 1.25rem;
-  padding-top: 1rem;
+  padding: 0.85rem 0 1rem;
   border-top: 1px solid var(--border-subtle);
+  /* Save stays in reach however long the form gets. */
+  position: sticky;
+  bottom: -1rem;
+  z-index: 2;
+  background: var(--surface);
 }
 
 /* The "still needed" note sits opposite the buttons, so the reason and the
@@ -6652,6 +6651,111 @@ button.link.pw-history-clear {
 
 .pw-form .field-full {
   grid-column: 1 / -1;
+}
+
+/* The editor in titled groups with a hairline between them: the headings
+   do the separating, without a box around each. */
+.pw-form-section {
+  padding: 1.35rem 0;
+}
+
+.pw-form-section:first-of-type {
+  padding-top: 0.25rem;
+}
+
+.pw-form-section + .pw-form-section {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.pw-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  margin-bottom: 0.85rem;
+}
+
+.pw-section-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.pw-section-title {
+  min-width: 0;
+  padding-top: 0.2rem;
+}
+
+.pw-section-title h4 {
+  margin: 0;
+  font-size: var(--fs-13);
+  font-weight: 650;
+  color: var(--text);
+}
+
+.pw-section-title p {
+  margin: 0.2rem 0 0;
+  font-size: var(--fs-12);
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+/* Inside the editor the panels carry the headings, so the field labels step
+   down to plain small text instead of capitals. */
+.pw-editor .field > span {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+
+.pw-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+}
+
+.pw-editor-head h3 {
+  margin: 0;
+  font-size: var(--fs-16);
+  font-weight: 700;
+}
+
+.pw-editor-type {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-md);
+  background: var(--accent);
+  color: #fff;
+}
+
+/* The section already frames it; a second box inside read as clutter. */
+.pw-form-section .pw-totp-panel {
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+.pw-form-section .pw-attach-btn {
+  align-self: flex-start;
+  padding: 0.35rem 0.55rem;
+  margin-left: -0.55rem;
+  border: 0;
+  color: var(--accent-text);
+}
+
+.pw-form-section .pw-attach-btn:hover:not(:disabled) {
+  color: var(--accent-text);
+  background: var(--accent-soft);
 }
 
 /* Hints inside form fields hug the control they explain instead of

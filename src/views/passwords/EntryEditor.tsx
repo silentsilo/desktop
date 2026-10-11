@@ -1,15 +1,29 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { platformStrings, type Os } from "../../lib/platformStrings";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFileDialog } from "../../lib/dialog";
-import { ChevronDown, ChevronRight, Paperclip } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  ListPlus,
+  NotebookPen,
+  Paperclip,
+  ShieldCheck,
+  type LucideIcon,
+} from "lucide-react";
 import type {
   CustomField,
   PasswordAttachment,
   PasswordCategory,
   PasswordEntry,
 } from "../../lib/types";
-import { parseTotpInput, DEFAULT_TOTP_ALGORITHM, DEFAULT_TOTP_DIGITS, DEFAULT_TOTP_PERIOD } from "../../lib/totp";
+import {
+  parseTotpInput,
+  DEFAULT_TOTP_ALGORITHM,
+  DEFAULT_TOTP_DIGITS,
+  DEFAULT_TOTP_PERIOD,
+} from "../../lib/totp";
 import { formatBytes } from "../../lib/format";
 import { formatAppError } from "../../lib/errors";
 import { TotpDisplay } from "./TotpDisplay";
@@ -24,6 +38,7 @@ import {
   type PasswordGenOptions,
 } from "./util";
 import { SshAgentOption } from "./SshAgentOption";
+import { TYPE_ICONS } from "./CategoryRail";
 import {
   IconClose,
   IconCopy,
@@ -47,6 +62,34 @@ type Props = {
   onSave: (entry: PasswordEntry) => Promise<boolean>;
   onCancel: () => void;
 };
+
+/** One group of the editor: a titled panel, its explanation under the title. */
+function Section({
+  icon: Icon,
+  title,
+  hint,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="pw-form-section">
+      <header className="pw-section-head">
+        <span className="pw-section-icon" aria-hidden>
+          <Icon size={15} />
+        </span>
+        <div className="pw-section-title">
+          <h4>{title}</h4>
+          {hint && <p>{hint}</p>}
+        </div>
+      </header>
+      <div className="pw-form">{children}</div>
+    </section>
+  );
+}
 
 /**
  * The create/edit form, filling the detail pane rather than a modal.
@@ -180,6 +223,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
   const strength = passwordStrength(draft.password);
   const type = typeOf(draft);
   const heading = t(creating ? TYPE_TEXTS[type].add : TYPE_TEXTS[type].edit);
+  const TypeIcon = TYPE_ICONS[type];
 
   const [sshBusy, setSshBusy] = useState(false);
   const [sshError, setSshError] = useState<string | null>(null);
@@ -188,7 +232,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
     setSshBusy(true);
     try {
       const pair = await invoke<{ private_key: string; public_key: string; fingerprint: string }>(
-        "ssh_generate_keypair"
+        "ssh_generate_keypair",
       );
       setDraft((d) => ({
         ...d,
@@ -233,12 +277,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
           second: missingForSave.slice(1).join(", "),
         });
 
-  const field = (
-    label: string,
-    key: keyof PasswordEntry,
-    placeholder = "",
-    full = false
-  ) => (
+  const field = (label: string, key: keyof PasswordEntry, placeholder = "", full = false) => (
     <label className={`field${full ? " field-full" : ""}`}>
       <span>{label}</span>
       <input
@@ -253,288 +292,309 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
 
   return (
     <div className="pw-editor" role="form" aria-label={heading}>
-      <h3 className="pw-detail-heading">{heading}</h3>
-      <div className="pw-form">
-        <label className="field">
-          <span>{type === "login" ? t("pw.field_service") : t("pw.field_name")}</span>
-          <input
-            type="text"
-            autoComplete="off"
-            placeholder={
-              type === "login"
-                ? t("pw.placeholder_login")
-                : type === "card"
-                  ? t("pw.placeholder_card")
-                  : type === "identity"
-                    ? t("pw.placeholder_identity")
-                    : t("pw.placeholder_other")
-            }
-            autoFocus
-            value={draft.service}
-            onChange={(e) => setDraft({ ...draft, service: e.target.value })}
-          />
-        </label>
-
-        {type === "card" && (
-          <>
-            {field(t("pw.field_cardholder"), "card_holder", t("pw.placeholder_cardholder"))}
-            {field(t("pw.field_number"), "card_number", "1234 5678 9012 3456", true)}
-            {field(t("pw.field_expiry_month"), "card_exp_month", t("pw.placeholder_month"))}
-            {field(t("pw.field_expiry_year"), "card_exp_year", t("pw.placeholder_year"))}
-            {field(t("pw.field_security_code"), "card_code", "CVC")}
-            {field(t("pw.field_brand"), "card_brand", t("pw.placeholder_brand"))}
-          </>
-        )}
-
-        {type === "identity" && (
-          <>
-            {field(t("pw.field_full_name"), "id_full_name", t("pw.placeholder_full_name"))}
-            {field(t("pw.field_company"), "id_company")}
-            {field(t("pw.field_email"), "id_email")}
-            {field(t("pw.field_phone"), "id_phone")}
-            {field(t("pw.field_address"), "id_address", t("pw.placeholder_address"), true)}
-            {field(t("pw.field_city"), "id_city")}
-            {field(t("pw.field_state"), "id_state")}
-            {field(t("pw.field_postal_code"), "id_zip")}
-            {field(t("pw.field_country"), "id_country")}
-          </>
-        )}
-
-        {type === "ssh_key" && (
-          <>
-            <div className="field field-full">
-              <span>{t("pw.field_key_pair")}</span>
-              {(draft.ssh_private_key ?? "").trim() === "" ? (
-                <div className="pw-attachments">
-                  <button
-                    type="button"
-                    className="pw-attach-btn"
-                    disabled={sshBusy}
-                    onClick={() => void generateSshKey()}
-                  >
-                    <IconGenerate size={14} />
-                    <span>{sshBusy ? t("pw.ssh_generating") : t("pw.ssh_generate")}</span>
-                  </button>
-                </div>
-              ) : (
-                <p className="hint">{t("pw.ssh_clear_to_generate")}</p>
-              )}
-              {sshError && <p className="hint is-error">{sshError}</p>}
-            </div>
-            <label className="field field-full">
-              <span>{t("pw.field_private_key")}</span>
-              <textarea
-                rows={5}
-                autoComplete="off"
-                placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
-                spellCheck={false}
-                value={draft.ssh_private_key ?? ""}
-                onChange={(e) => setDraft({ ...draft, ssh_private_key: e.target.value })}
-              />
-            </label>
-            <label className="field field-full">
-              <span>{t("pw.field_public_key")}</span>
-              <textarea
-                rows={2}
-                autoComplete="off"
-                placeholder="ssh-ed25519 …"
-                spellCheck={false}
-                value={draft.ssh_public_key ?? ""}
-                onChange={(e) => setDraft({ ...draft, ssh_public_key: e.target.value })}
-              />
-            </label>
-            {field(t("pw.field_fingerprint"), "ssh_fingerprint", "SHA256:…", true)}
-            <SshAgentOption
-              draft={draft}
-              onChange={(changes) => setDraft((d) => ({ ...d, ...changes }))}
-            />
-          </>
-        )}
-
-        {type === "login" && (
-          <>
-        <label className="field">
-          <span>{t("pw.field_username_or_email")}</span>
-          <input
-            type="text"
-            autoComplete="off"
-            placeholder="your@email.com"
-            value={draft.username}
-            onChange={(e) => setDraft({ ...draft, username: e.target.value })}
-          />
-        </label>
-        <label className="field field-full">
-          <span>{t("pw.field_password")}</span>
-          <div className="pw-password-input-row">
+      <div className="pw-editor-head">
+        <span className="pw-editor-type" aria-hidden>
+          <TypeIcon size={18} />
+        </span>
+        <h3>{heading}</h3>
+      </div>
+      <section className="pw-form-section">
+        <div className="pw-form">
+          <label className="field">
+            <span>{type === "login" ? t("pw.field_service") : t("pw.field_name")}</span>
             <input
-              type={passwordVisible ? "text" : "password"}
+              type="text"
               autoComplete="off"
-              value={draft.password}
-              onChange={(e) => setDraft({ ...draft, password: e.target.value })}
+              placeholder={
+                type === "login"
+                  ? t("pw.placeholder_login")
+                  : type === "card"
+                    ? t("pw.placeholder_card")
+                    : type === "identity"
+                      ? t("pw.placeholder_identity")
+                      : t("pw.placeholder_other")
+              }
+              autoFocus
+              value={draft.service}
+              onChange={(e) => setDraft({ ...draft, service: e.target.value })}
             />
-            <button
-              type="button"
-              className="pw-gen-btn"
-              data-tooltip={passwordVisible ? t("pw.hide") : t("pw.show")}
-              aria-label={passwordVisible ? t("pw.hide") : t("pw.show")}
-              onClick={() => setPasswordVisible((v) => !v)}
-            >
-              {passwordVisible ? <IconEyeOff size={15} /> : <IconEye size={15} />}
-            </button>
-            <button
-              type="button"
-              className="pw-gen-btn"
-              data-tooltip={t("pw.copy_password")}
-              aria-label={t("pw.copy_password")}
-              onClick={() => void copySecret(draft.password, "password")}
-            >
-              <IconCopy size={15} />
-            </button>
-            <button
-              type="button"
-              className="pw-gen-btn accent"
-              data-tooltip={t("pw.generate_password")}
-              aria-label={t("pw.generate_password")}
-              onClick={() => setDraft({ ...draft, password: generatePassword(genOptions) })}
-            >
-              <IconGenerate size={15} />
-            </button>
-          </div>
+          </label>
 
-          <div className="pw-strength">
-            <div className="pw-strength-track">
-              <div
-                className="pw-strength-fill"
-                style={{ width: `${(strength.score / 4) * 100}%`, background: strength.color }}
-              />
-            </div>
-            <span className="pw-strength-label" style={{ color: strength.color }}>
-              {strength.label}
-            </span>
-            {/* `link` carries the full reset for the global button rule
-                (background, shadow, min-height); without it this rendered
-                as a dark unreadable capsule. */}
-            <button
-              type="button"
-              className="link pw-gen-toggle"
-              aria-expanded={genOpen}
-              onClick={() => setGenOpen((v) => !v)}
-            >
-              {genOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-              {t("pw.generator_options")}
-            </button>
-          </div>
-
-          {genOpen && (
-            <div className="pw-gen-panel">
-              <div className="pw-gen-panel-header">
-                <span>{t("pw.generator")}</span>
-                <span className="pw-gen-length-value">
-                  {t("pw.generator_length", { count: genOptions.length })}
-                </span>
-              </div>
-              <input
-                type="range"
-                min={8}
-                max={64}
-                value={genOptions.length}
-                onChange={(e) => setGenOptions({ ...genOptions, length: Number(e.target.value) })}
-                className="pw-gen-slider"
-              />
-              <div className="pw-gen-chips">
-                {(
-                  [
-                    ["upper", "A-Z"],
-                    ["lower", "a-z"],
-                    ["digits", "0-9"],
-                    ["symbols", "!@#$"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className={`pw-gen-chip${genOptions[key] ? " active" : ""}`}
-                    onClick={() => setGenOptions({ ...genOptions, [key]: !genOptions[key] })}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
+          {type === "card" && (
+            <>
+              {field(t("pw.field_cardholder"), "card_holder", t("pw.placeholder_cardholder"))}
+              {field(t("pw.field_number"), "card_number", "1234 5678 9012 3456", true)}
+              {field(t("pw.field_expiry_month"), "card_exp_month", t("pw.placeholder_month"))}
+              {field(t("pw.field_expiry_year"), "card_exp_year", t("pw.placeholder_year"))}
+              {field(t("pw.field_security_code"), "card_code", "CVC")}
+              {field(t("pw.field_brand"), "card_brand", t("pw.placeholder_brand"))}
+            </>
           )}
-        </label>
 
-        <label className="field field-full">
-          <span>{t("pw.field_totp")}</span>
-          <div className="pw-totp-panel">
-            {draft.totp_secret && !totpError && !totpTyping ? (
-              <>
-                <TotpDisplay
-                  entry={draft}
-                  now={now}
-                  copied={false}
-                  onCopy={(code) => void copySecret(code, "one-time code")}
+          {type === "identity" && (
+            <>
+              {field(t("pw.field_full_name"), "id_full_name", t("pw.placeholder_full_name"))}
+              {field(t("pw.field_company"), "id_company")}
+              {field(t("pw.field_email"), "id_email")}
+              {field(t("pw.field_phone"), "id_phone")}
+              {field(t("pw.field_address"), "id_address", t("pw.placeholder_address"), true)}
+              {field(t("pw.field_city"), "id_city")}
+              {field(t("pw.field_state"), "id_state")}
+              {field(t("pw.field_postal_code"), "id_zip")}
+              {field(t("pw.field_country"), "id_country")}
+            </>
+          )}
+
+          {type === "ssh_key" && (
+            <>
+              <div className="field field-full">
+                <span>{t("pw.field_key_pair")}</span>
+                {(draft.ssh_private_key ?? "").trim() === "" ? (
+                  <div className="pw-attachments">
+                    <button
+                      type="button"
+                      className="pw-attach-btn"
+                      disabled={sshBusy}
+                      onClick={() => void generateSshKey()}
+                    >
+                      <IconGenerate size={14} />
+                      <span>{sshBusy ? t("pw.ssh_generating") : t("pw.ssh_generate")}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <p className="hint">{t("pw.ssh_clear_to_generate")}</p>
+                )}
+                {sshError && <p className="hint is-error">{sshError}</p>}
+              </div>
+              <label className="field field-full">
+                <span>{t("pw.field_private_key")}</span>
+                <textarea
+                  rows={5}
+                  autoComplete="off"
+                  placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                  spellCheck={false}
+                  value={draft.ssh_private_key ?? ""}
+                  onChange={(e) => setDraft({ ...draft, ssh_private_key: e.target.value })}
                 />
-                <button type="button" className="pw-totp-remove-btn" onClick={() => applyTotpInput("")}>
-                  <IconClose size={13} />
-                  <span>{t("pw.remove")}</span>
-                </button>
-              </>
-            ) : (
-              <>
+              </label>
+              <label className="field field-full">
+                <span>{t("pw.field_public_key")}</span>
+                <textarea
+                  rows={2}
+                  autoComplete="off"
+                  placeholder="ssh-ed25519 …"
+                  spellCheck={false}
+                  value={draft.ssh_public_key ?? ""}
+                  onChange={(e) => setDraft({ ...draft, ssh_public_key: e.target.value })}
+                />
+              </label>
+              {field(t("pw.field_fingerprint"), "ssh_fingerprint", "SHA256:…", true)}
+              <SshAgentOption
+                draft={draft}
+                onChange={(changes) => setDraft((d) => ({ ...d, ...changes }))}
+              />
+            </>
+          )}
+
+          {type === "login" && (
+            <>
+              <label className="field">
+                <span>{t("pw.field_username_or_email")}</span>
                 <input
                   type="text"
-                  placeholder={t("pw.totp_placeholder")}
-                  value={totpInput}
-                  onChange={(e) => applyTotpInput(e.target.value)}
-                  onFocus={() => setTotpTyping(true)}
-                  onBlur={() => setTotpTyping(false)}
-                  aria-invalid={totpError ? true : undefined}
                   autoComplete="off"
-                  spellCheck={false}
+                  placeholder="your@email.com"
+                  value={draft.username}
+                  onChange={(e) => setDraft({ ...draft, username: e.target.value })}
                 />
-                <p className={`hint pw-totp-hint${totpError ? " pw-totp-hint-error" : ""}`}>
-                  {totpError ? t("pw.totp_invalid") : t("pw.totp_hint")}
-                </p>
-              </>
-            )}
-          </div>
-        </label>
+              </label>
+              <label className="field field-full">
+                <span>{t("pw.field_password")}</span>
+                <div className="pw-password-input-row">
+                  <input
+                    type={passwordVisible ? "text" : "password"}
+                    autoComplete="off"
+                    value={draft.password}
+                    onChange={(e) => setDraft({ ...draft, password: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className="pw-gen-btn"
+                    data-tooltip={passwordVisible ? t("pw.hide") : t("pw.show")}
+                    aria-label={passwordVisible ? t("pw.hide") : t("pw.show")}
+                    onClick={() => setPasswordVisible((v) => !v)}
+                  >
+                    {passwordVisible ? <IconEyeOff size={15} /> : <IconEye size={15} />}
+                  </button>
+                  <button
+                    type="button"
+                    className="pw-gen-btn"
+                    data-tooltip={t("pw.copy_password")}
+                    aria-label={t("pw.copy_password")}
+                    onClick={() => void copySecret(draft.password, "password")}
+                  >
+                    <IconCopy size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    className="pw-gen-btn accent"
+                    data-tooltip={t("pw.generate_password")}
+                    aria-label={t("pw.generate_password")}
+                    onClick={() => setDraft({ ...draft, password: generatePassword(genOptions) })}
+                  >
+                    <IconGenerate size={15} />
+                  </button>
+                </div>
 
-        <label className="field">
-          <span>{t("pw.field_website")}</span>
-          <input
-            type="url"
-            autoComplete="off"
-            placeholder="https://example.com"
-            value={draft.url}
-            onChange={(e) => setDraft({ ...draft, url: e.target.value })}
-          />
-        </label>
-          </>
-        )}
+                <div className="pw-strength">
+                  <div className="pw-strength-track">
+                    <div
+                      className="pw-strength-fill"
+                      style={{
+                        width: `${(strength.score / 4) * 100}%`,
+                        background: strength.color,
+                      }}
+                    />
+                  </div>
+                  <span className="pw-strength-label" style={{ color: strength.color }}>
+                    {strength.label}
+                  </span>
+                  {/* `link` carries the full reset for the global button rule
+                (background, shadow, min-height); without it this rendered
+                as a dark unreadable capsule. */}
+                  <button
+                    type="button"
+                    className="link pw-gen-toggle"
+                    aria-expanded={genOpen}
+                    onClick={() => setGenOpen((v) => !v)}
+                  >
+                    {genOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                    {t("pw.generator_options")}
+                  </button>
+                </div>
 
-        <label className="field">
-          <span>{t("pw.field_category")}</span>
-          <select
-            value={draft.category}
-            onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-          >
-            {/* The entry's own category stays choosable even if it has been
+                {genOpen && (
+                  <div className="pw-gen-panel">
+                    <div className="pw-gen-panel-header">
+                      <span>{t("pw.generator")}</span>
+                      <span className="pw-gen-length-value">
+                        {t("pw.generator_length", { count: genOptions.length })}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={8}
+                      max={64}
+                      value={genOptions.length}
+                      onChange={(e) =>
+                        setGenOptions({ ...genOptions, length: Number(e.target.value) })
+                      }
+                      className="pw-gen-slider"
+                    />
+                    <div className="pw-gen-chips">
+                      {(
+                        [
+                          ["upper", "A-Z"],
+                          ["lower", "a-z"],
+                          ["digits", "0-9"],
+                          ["symbols", "!@#$"],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          className={`pw-gen-chip${genOptions[key] ? " active" : ""}`}
+                          onClick={() => setGenOptions({ ...genOptions, [key]: !genOptions[key] })}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </label>
+
+              <label className="field">
+                <span>{t("pw.field_website")}</span>
+                <input
+                  type="url"
+                  autoComplete="off"
+                  placeholder="https://example.com"
+                  value={draft.url}
+                  onChange={(e) => setDraft({ ...draft, url: e.target.value })}
+                />
+              </label>
+            </>
+          )}
+
+          <label className="field">
+            <span>{t("pw.field_category")}</span>
+            <select
+              value={draft.category}
+              onChange={(e) => setDraft({ ...draft, category: e.target.value })}
+            >
+              {/* The entry's own category stays choosable even if it has been
                 deleted from the list since; anything else would silently
                 reassign the entry just by opening the editor. */}
-            {[...new Set([...categoryChoices(categories), draft.category])]
-              .filter(Boolean)
-              .map((cat) => (
-                <option key={cat} value={cat}>
-                  {categoryLabel(cat)}
-                </option>
-              ))}
-          </select>
-        </label>
+              {[...new Set([...categoryChoices(categories), draft.category])]
+                .filter(Boolean)
+                .map((cat) => (
+                  <option key={cat} value={cat}>
+                    {categoryLabel(cat)}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </div>
+      </section>
 
+      {type === "login" && (
+        <Section icon={Clock} title={t("pw.field_totp")}>
+          <div className="field field-full">
+            <div className="pw-totp-panel">
+              {draft.totp_secret && !totpError && !totpTyping ? (
+                <>
+                  <TotpDisplay
+                    entry={draft}
+                    now={now}
+                    copied={false}
+                    onCopy={(code) => void copySecret(code, "one-time code")}
+                  />
+                  <button
+                    type="button"
+                    className="pw-totp-remove-btn"
+                    onClick={() => applyTotpInput("")}
+                  >
+                    <IconClose size={13} />
+                    <span>{t("pw.remove")}</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    aria-label={t("pw.field_totp")}
+                    placeholder={t("pw.totp_placeholder")}
+                    value={totpInput}
+                    onChange={(e) => applyTotpInput(e.target.value)}
+                    onFocus={() => setTotpTyping(true)}
+                    onBlur={() => setTotpTyping(false)}
+                    aria-invalid={totpError ? true : undefined}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <p className={`hint pw-totp-hint${totpError ? " pw-totp-hint-error" : ""}`}>
+                    {totpError ? t("pw.totp_invalid") : t("pw.totp_hint")}
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        </Section>
+      )}
+
+      <Section icon={ListPlus} title={t("pw.field_custom_fields")} hint={t("pw.custom_hint")}>
         <div className="field field-full">
-          <span>{t("pw.field_custom_fields")}</span>
           <div className="pw-custom-fields">
             {(draft.fields ?? []).map((field, i) => {
               const update = (change: Partial<CustomField>) =>
@@ -608,11 +668,10 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
               <span>{t("pw.custom_add")}</span>
             </button>
           </div>
-          <p className="hint">{t("pw.custom_hint")}</p>
         </div>
-
+      </Section>
+      <Section icon={Paperclip} title={t("pw.field_attached_files")} hint={t("pw.attach_hint")}>
         <div className="field field-full">
-          <span>{t("pw.field_attached_files")}</span>
           <div className="pw-attachments">
             {(draft.attachments ?? []).map((a) => (
               <div key={a.blob_id} className="pw-attachment-row">
@@ -641,11 +700,10 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
             </button>
           </div>
           {attachError && <p className="hint is-error">{attachError}</p>}
-          <p className="hint">{t("pw.attach_hint")}</p>
         </div>
-
+      </Section>
+      <Section icon={ShieldCheck} title={t("pw.field_protection")} hint={t("pw.reauth_hint")}>
         <div className="field field-full">
-          <span>{t("pw.field_protection")}</span>
           <label className="pw-reauth-toggle">
             <input
               type="checkbox"
@@ -660,26 +718,22 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
                 : t("pw.reauth_option")}
             </span>
           </label>
-          <p className="hint">{t("pw.reauth_hint")}</p>
         </div>
-
-        <label className="field field-full">
-          <span>{t("pw.field_notes")}</span>
+      </Section>
+      <Section icon={NotebookPen} title={t("pw.field_notes")}>
+        <div className="field field-full">
           <textarea
+            aria-label={t("pw.field_notes")}
             rows={type === "note" ? 10 : 6}
             autoComplete="off"
-            placeholder={
-              type === "note" ? t("pw.placeholder_note") : t("pw.placeholder_notes")
-            }
+            placeholder={type === "note" ? t("pw.placeholder_note") : t("pw.placeholder_notes")}
             value={draft.notes}
             onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
           />
-        </label>
-      </div>
+        </div>
+      </Section>
       <div className="pw-editor-actions">
-        {!canSave && (
-          <span className="hint">{stillNeeded}</span>
-        )}
+        {!canSave && <span className="hint">{stillNeeded}</span>}
         <button type="button" className="btn-secondary" onClick={handleCancel}>
           {t("common.cancel")}
         </button>
