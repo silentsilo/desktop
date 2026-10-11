@@ -41,6 +41,7 @@ import { AppSettingsSection, formatMinutes, useUpdater } from "./settings/AppSet
 import { OverviewPanel } from "./settings/OverviewPanel";
 import { SettingList, SettingRow } from "../components/Setting";
 import { t, tx, useLocale } from "../i18n";
+import { RecoveryCodeGroups } from "../components/RecoveryCodeGroups";
 import { showBackupCheck } from "./VerifyPanel";
 
 type Props = {
@@ -290,7 +291,7 @@ export function SettingsPanel(props: Props) {
                   <AlertTriangle size={14} />
                   {t("recovery.shown_once")}
                 </p>
-                <code className="recovery-code">{recoveryCode}</code>
+                <RecoveryCodeGroups code={recoveryCode} />
                 {/* The consequence belongs next to the code itself, where
                     someone is deciding how carefully to store it, rather
                     than only on the setup screen they saw once. */}

@@ -28,8 +28,9 @@ test("a new silo is backed up, passes its backup test and survives a lock", asyn
   await sees(driver, "Security key enrolled. It opens this silo from now on.");
 
   await click(driver, "Create a recovery code");
-  const shown = await driver.wait(until.elementLocated(By.css("code.recovery-code")), 20_000);
-  const code = await shown.getText();
+  const shown = await driver.wait(until.elementLocated(By.css(".recovery-groups")), 20_000);
+  // Eight groups, one per box: joined back the way the code is written.
+  const code = (await shown.getText()).trim().split(/\s+/).join("-");
   writeFileSync(join(shared, "code.txt"), code);
   await click(driver, "I've written it down");
 

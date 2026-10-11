@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AlertTriangle, CloudUpload, Copy, LifeBuoy } from "lucide-react";
 import { AuthShell } from "../layout/AuthShell";
 import { EmergencyKitPanel } from "./EmergencyKitPanel";
+import { RecoveryCodeGroups } from "../components/RecoveryCodeGroups";
 import { t, useLocale } from "../i18n";
 
 type Props = {
@@ -20,7 +21,14 @@ type Props = {
  * key: a recovery code, then backup storage. Either can wait, and the
  * screen says what waiting means.
  */
-export function FirstRunView({ siloId, siloName, busy, onCreateCode, onCopyCode, onFinish }: Props) {
+export function FirstRunView({
+  siloId,
+  siloName,
+  busy,
+  onCreateCode,
+  onCopyCode,
+  onFinish,
+}: Props) {
   useLocale();
   const [step, setStep] = useState<"code" | "backup">("code");
   const [code, setCode] = useState<string | null>(null);
@@ -29,31 +37,42 @@ export function FirstRunView({ siloId, siloName, busy, onCreateCode, onCopyCode,
   if (step === "code") {
     return (
       <AuthShell subtitle={t("first.subtitle_code", { name: siloName })}>
-        <section className="card auth-card">
+        {/* Wide once the code is out: the code and the way on beside the
+            kit, rather than one column the length of a printed page with
+            the way on at its foot. One column again in a narrow window. */}
+        <section className={`card auth-card${code ? " is-recovery" : ""}`}>
           <h2>
             <LifeBuoy size={18} /> {t("first.code_title")}
           </h2>
-          <p className="hint">{t("first.step1")}</p>
+          <p className="hint first-step">{t("first.step1")}</p>
           {code ? (
-            <>
-              <p className="hint is-error">
-                <AlertTriangle size={14} />
-                {t("first.shown_once")}
-              </p>
-              <code className="recovery-code">{code}</code>
-              <div className="actions">
-                <button type="button" className="btn-secondary" onClick={() => onCopyCode(code)}>
-                  <Copy size={15} />
-                  {t("first.copy")}
-                </button>
+            <div className="first-code">
+              <div className="first-code-side">
+                <div className="first-code-main">
+                  <p className="hint is-error">
+                    <AlertTriangle size={14} />
+                    {t("first.shown_once")}
+                  </p>
+                  <RecoveryCodeGroups code={code} />
+                  <div className="actions">
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => onCopyCode(code)}
+                    >
+                      <Copy size={15} />
+                      {t("first.copy")}
+                    </button>
+                  </div>
+                </div>
+                <div className="auth-primary first-code-next">
+                  <button className="btn-primary" type="button" onClick={() => setStep("backup")}>
+                    {t("first.written")}
+                  </button>
+                </div>
               </div>
               <EmergencyKitPanel busy={busy} siloId={siloId} siloName={siloName} freshCode={code} />
-              <div className="auth-primary">
-                <button className="btn-primary" type="button" onClick={() => setStep("backup")}>
-                  {t("first.written")}
-                </button>
-              </div>
-            </>
+            </div>
           ) : (
             <>
               <p>{t("first.code_intro")}</p>
@@ -99,11 +118,9 @@ export function FirstRunView({ siloId, siloName, busy, onCreateCode, onCopyCode,
         <h2>
           <CloudUpload size={18} /> {t("first.backup_title")}
         </h2>
-        <p className="hint">{t("first.step2")}</p>
+        <p className="hint first-step">{t("first.step2")}</p>
         <p>{t("first.backup_intro")}</p>
-        {skippedCode && (
-          <p className="hint">{t("first.skipped_code")}</p>
-        )}
+        {skippedCode && <p className="hint">{t("first.skipped_code")}</p>}
         <div className="auth-primary">
           <button className="btn-primary" type="button" onClick={() => onFinish("backup")}>
             <CloudUpload size={17} />

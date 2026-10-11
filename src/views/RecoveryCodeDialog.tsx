@@ -1,5 +1,6 @@
 import { AlertTriangle, LifeBuoy } from "lucide-react";
 import { useModal } from "../hooks/useModal";
+import { RecoveryCodeGroups } from "../components/RecoveryCodeGroups";
 import { t, tx, useLocale } from "../i18n";
 
 type Props = {
@@ -39,7 +40,7 @@ export function RecoveryCodeDialog({ code, siloName, onDone }: Props) {
               ? tx("recovery_new.body_named", { name: <strong>{siloName}</strong> })
               : t("recovery_new.body")}
           </p>
-          <code className="recovery-code">{code}</code>
+          <RecoveryCodeGroups code={code} />
           <p className="hint is-error">
             <AlertTriangle size={14} />
             {t("recovery_new.warning")}

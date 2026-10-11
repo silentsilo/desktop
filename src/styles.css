@@ -3672,6 +3672,12 @@ input[type="range"] {
     display: none;
   }
 
+  /* Except the step a new silo is at, which then moves into the card.
+     More specific than the rule that hides it, which comes later. */
+  .auth-card .first-step {
+    display: block;
+  }
+
   .card.auth-card {
     padding: 1.3rem 1.5rem 1.2rem;
   }
@@ -6731,20 +6737,105 @@ button.link.pw-history-clear {
   gap: 0.75rem;
 }
 
-.recovery-code {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: var(--fs-16);
-  /* Wide tracking is the point: 0/O and 1/l are excluded from the alphabet,
-     but the eye still needs room to land on each group. */
-  letter-spacing: 0.08em;
-  line-height: 1.7;
-  word-break: break-all;
-  padding: 0.85rem 1rem;
+/* The code in the eight groups it is printed in: two rows of four, the
+   shape of the kit's boxes, and two columns in a narrow window. A group never
+   breaks across lines, which a single wrapping string did. */
+.recovery-groups {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0.75rem;
   border-radius: var(--r-md);
   border: 1px solid var(--border);
   background: var(--surface-sunken);
   user-select: all;
+}
+
+.recovery-group {
+  font-family: var(--font-mono);
+  font-size: var(--fs-16);
+  font-weight: 600;
+  /* Wide tracking is the point: the eye needs room to land on each letter. */
+  letter-spacing: 0.14em;
+  text-align: center;
+  padding: 0.55rem 0.25rem;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+}
+
+@media (max-width: 480px) {
+  .recovery-groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* A new silo's code and its kit. One column: the code, the kit, the way on.
+   In a wide window the code and the way on sit beside the kit, so the button
+   is not a printed page's length below the code it is about. */
+.card.auth-card.is-recovery {
+  width: min(1000px, 100%);
+}
+
+.first-code {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "main" "kit" "next";
+  gap: 1rem;
+}
+
+/* The step is in the subtitle above the card; the card repeats it only
+   where a short window hides that subtitle. */
+.first-step {
+  display: none;
+}
+
+/* Only a box in the wide layout; in one column its two parts take their
+   own places around the kit. */
+.first-code-side {
+  display: contents;
+}
+
+.first-code-main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.first-code .kit-block {
+  grid-area: kit;
+}
+
+.first-code-next {
+  grid-area: next;
+}
+
+@media (min-width: 920px) {
+  .first-code {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    grid-template-areas: "side kit";
+    column-gap: 2.25rem;
+    align-items: start;
+  }
+
+  /* Stays in view while the kit beside it scrolls. */
+  .first-code-side {
+    grid-area: side;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    position: sticky;
+    top: 1rem;
+  }
+
+  .first-code .kit-block {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+    padding-left: 2.25rem;
+    border-left: 1px solid var(--border-subtle);
+  }
 }
 
 /* Drag & drop target. Covers the window rather than the file list, because
