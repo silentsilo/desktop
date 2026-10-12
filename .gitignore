@@ -40,3 +40,7 @@ private/
 # The browser extension's native host, copied here by build-release-local.ps1
 # for Tauri to bundle and sign as an externalBin. A build product.
 src-tauri/binaries/
+
+# Written by a build on macOS or Linux; only the Windows one is kept.
+src-tauri/gen/schemas/macOS-schema.json
+src-tauri/gen/schemas/linux-schema.json
