@@ -55,6 +55,24 @@ cargo_version=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head 
 git tag --points-at HEAD | grep -qx "$tag" || { echo "HEAD is not tagged $tag."; exit 1; }
 node scripts/check-lockfile.mjs
 
+# No signing key belongs on GitHub: anyone who can push a tag and a changed
+# workflow can read a secret there. Checked by name, on the repository and
+# each of its environments, before anything is built or signed.
+command -v gh > /dev/null || { echo "gh is needed (brew install gh, then gh auth login)."; exit 1; }
+repo=silentsilo/desktop
+pattern='^(TAURI_SIGNING_|APPLE_)|SIGN|CERTIFICATE|PRIVATE_KEY|KEYSTORE|(^|_)P12($|_)'
+found=$(gh secret list --repo "$repo" --json name --jq '.[].name' | grep -E "$pattern" | sed 's/$/ (repository)/' || true)
+for env in $(gh api "repos/$repo/environments" --jq '.environments[].name'); do
+  found="$found$(gh secret list --repo "$repo" --env "$env" --json name --jq '.[].name' \
+    | grep -E "$pattern" | sed "s/\$/ (environment $env)/" || true)"
+done
+if [ -n "$found" ]; then
+  echo "Signing secrets are on GitHub, where a pushed tag can read them:"
+  echo "$found"
+  echo "Delete them, then build."
+  exit 1
+fi
+
 secret_file="$HOME/.silentsilo-release/google-client-secret.txt"
 if [ -z "${SILENTSILO_GOOGLE_CLIENT_SECRET:-}" ]; then
   SILENTSILO_GOOGLE_CLIENT_SECRET=$(launchctl getenv SILENTSILO_GOOGLE_CLIENT_SECRET || true)

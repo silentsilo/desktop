@@ -135,6 +135,29 @@ if ((git tag --points-at HEAD) -notcontains $tag) {
     throw "HEAD is not tagged $tag. Tag first (see TUTORIAL-RELEASE.md), then build."
 }
 
+# No signing key belongs on GitHub: anyone who can push a tag and a changed
+# workflow can read a secret there. Checked by name, on the repository and
+# each of its environments, before anything is built or signed.
+function Assert-NoSigningSecretsOnGitHub {
+    param([string]$Repo)
+    $pattern = '^(TAURI_SIGNING_|APPLE_)|SIGN|CERTIFICATE|PRIVATE_KEY|KEYSTORE|\bP12\b'
+    $found = @()
+    $names = gh secret list --repo $Repo --json name --jq '.[].name'
+    if (-not $?) { throw "could not list the secrets of $Repo" }
+    $found += $names | Where-Object { $_ -match $pattern } | ForEach-Object { "$_ (repository)" }
+    $envs = gh api "repos/$Repo/environments" --jq '.environments[].name'
+    if (-not $?) { throw "could not list the environments of $Repo" }
+    foreach ($env in $envs) {
+        $names = gh secret list --repo $Repo --env $env --json name --jq '.[].name'
+        if (-not $?) { throw "could not list the secrets of $Repo, environment $env" }
+        $found += $names | Where-Object { $_ -match $pattern } | ForEach-Object { "$_ (environment $env)" }
+    }
+    if ($found) {
+        throw "Signing secrets are on GitHub, where a pushed tag can read them: $($found -join ', '). Delete them, then build."
+    }
+}
+Assert-NoSigningSecretsOnGitHub -Repo $slug
+
 # The updater signer, built before npm or cargo touch the app, from its own
 # lockfile, and hashed now so the copy that gets the password is this one.
 Write-Host "`n== Updater signer ==" -ForegroundColor Cyan
