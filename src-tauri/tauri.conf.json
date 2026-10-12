@@ -19,6 +19,7 @@
         "height": 800,
         "minWidth": 800,
         "minHeight": 600,
+        "contentProtected": true,
         "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disable-crash-reporter --disable-breakpad"
       }
     ],

@@ -77,6 +77,9 @@ export async function checkPasswords(
   fetchRange: (prefix: string) => Promise<string>,
   /** Ranges answered so far, of all to ask. */
   onProgress?: (done: number, total: number) => void,
+  /** True once the check should stop: the silo locked. Nothing more is
+   * asked, and the check ends with an error rather than a report. */
+  stopped?: () => boolean,
 ): Promise<PwnedReport> {
   // Distinct passwords, remembering which entries carry each.
   const byPassword = new Map<string, string[]>();
@@ -105,6 +108,7 @@ export async function checkPasswords(
   let answered = 0;
   onProgress?.(0, prefixes.length);
   await mapPool(prefixes, RANGE_CONCURRENCY, async (prefix) => {
+    if (stopped?.()) return;
     try {
       ranges.set(prefix, parseRange(await fetchRange(prefix)));
     } catch {
@@ -113,6 +117,8 @@ export async function checkPasswords(
     }
     onProgress?.(++answered, prefixes.length);
   });
+
+  if (stopped?.()) throw new Error("stopped");
 
   const exposures: Exposure[] = [];
   let unavailable = 0;

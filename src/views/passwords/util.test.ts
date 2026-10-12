@@ -5,7 +5,6 @@ import {
   AVATAR_PALETTE,
   avatarColor,
   copyKindFor,
-  exportNeedsTouch,
   faviconUrl,
   hashColor,
   inkOn,
@@ -102,6 +101,14 @@ describe("faviconUrl", () => {
     expect(faviconUrl("fdn.fr")).toBe("https://fdn.fr/favicon.ico");
     expect(faviconUrl("[2606:4700::1111]")).toBe("https://[2606:4700::1111]/favicon.ico");
   });
+
+  it("refuses what resolves to this machine or a shared carrier network", () => {
+    expect(faviconUrl("http://router.localhost")).toBeNull();
+    expect(faviconUrl("http://100.64.0.1")).toBeNull();
+    expect(faviconUrl("http://100.127.255.254")).toBeNull();
+    expect(faviconUrl("http://100.128.0.1")).toBe("https://100.128.0.1/favicon.ico");
+    expect(faviconUrl("http://100.63.0.1")).toBe("https://100.63.0.1/favicon.ico");
+  });
 });
 
 describe("what the entry's own re-auth flag covers", () => {
@@ -111,7 +118,6 @@ describe("what the entry's own re-auth flag covers", () => {
     // the notes field, which is often just context under a login.
     expect(notesAreSecret(entry())).toBe(false);
     expect(notesAreSecret(entry({ require_reauth: false }))).toBe(false);
-    expect(exportNeedsTouch([entry(), entry({ id: "e2" })])).toBe(false);
   });
 
   it("covers the notes of an entry that asked to be protected", () => {
@@ -123,14 +129,6 @@ describe("what the entry's own re-auth flag covers", () => {
 
   it("covers a note-type entry, which is nothing but its note", () => {
     expect(notesAreSecret(entry({ type: "note", require_reauth: true }))).toBe(true);
-  });
-
-  it("makes an export ask once when any entry in it asked to be protected", () => {
-    // The broadest reveal in the app, and the one place the flag did not
-    // reach: copying, editing and opening an attachment all asked, and then
-    // the export wrote every password into a plaintext file untouched.
-    expect(exportNeedsTouch([entry(), entry({ id: "e2", require_reauth: true })])).toBe(true);
-    expect(exportNeedsTouch([])).toBe(false);
   });
 });
 

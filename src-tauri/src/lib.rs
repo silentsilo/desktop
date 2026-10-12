@@ -8,6 +8,7 @@ mod e2e;
 mod err;
 mod front;
 mod pin;
+mod screen_capture;
 mod ssh_agent;
 mod state;
 
@@ -232,6 +233,8 @@ pub fn run() {
             audit_closes: std::sync::atomic::AtomicU64::new(0),
             opened_copies: Mutex::new(std::collections::HashMap::new()),
             open_cancelled: Mutex::new(std::collections::HashSet::new()),
+            revealed: Mutex::new(std::collections::HashMap::new()),
+            export_confirmed: Mutex::new(None),
         })
         .manage(browser::BrowserBridge::default())
         .manage(autotype::AutoType::default())
@@ -272,6 +275,8 @@ pub fn run() {
             ssh_agent::start_if_enabled(app.handle());
             // Only when auto-type is on under Settings > General.
             autotype::start(app.handle());
+            // Out of screenshots and screen sharing unless turned off.
+            screen_capture::start(app.handle());
 
             // Locking the workstation and walking away is the common way a
             // silo is left unattended, and the idle timer only notices
@@ -328,6 +333,8 @@ pub fn run() {
             autotype::autotype_pending,
             autotype::autotype_cancel,
             autotype::autotype_confirm,
+            screen_capture::screen_capture_status,
+            screen_capture::screen_capture_set,
             commands::vault::app_set_lock_notice,
             commands::silo::silo_blur,
             commands::silo::silo_rename,
@@ -355,6 +362,7 @@ pub fn run() {
             commands::vault::vault_activity,
             commands::vault::vault_disk_space,
             commands::vault::full_copy_status,
+            commands::vault::health_ignore_key,
             commands::vault::set_full_copy,
             commands::vault::protected_folders_list,
             commands::vault::protected_folders_add,
@@ -392,6 +400,8 @@ pub fn run() {
             commands::vault::export_clashes,
             commands::vault::vault_read_passwords,
             commands::vault::vault_upsert_password,
+            commands::vault::vault_arrange_password,
+            commands::vault::passwords_for_export,
             commands::vault::vault_delete_password,
             commands::vault::fido_reverify,
             commands::vault::ssh_generate_keypair,

@@ -42,7 +42,7 @@ import {
   type ImportExtras,
 } from "../../lib/passwordImport";
 import { withEdits } from "../../lib/passwordEntry";
-import { restoredFrom, withoutHistory } from "../../lib/entryHistory";
+import { restoredFrom, withBaseFields, withoutHistory } from "../../lib/entryHistory";
 import { formatAppError } from "../../lib/errors";
 import { runsOnOpen } from "../../lib/executable";
 import { ConfirmDialog } from "../ConfirmDialog";
@@ -58,7 +58,6 @@ import {
   copyKindFor,
   CREDENTIAL_TYPES,
   DEFAULT_GEN_OPTIONS,
-  exportNeedsTouch,
   FALLBACK_CATEGORY,
   generatePassword,
   makeColorFor,
@@ -72,7 +71,7 @@ import {
 } from "./util";
 import { IconClose, IconEye, IconEyeOff, IconPlus, IconSearch, IconTrash } from "../../ui/Icons";
 import { t, useLocale, type Key } from "../../i18n";
-import { useLasting } from "../../lib/lasting";
+import { useLasting, useLastingCheck } from "../../lib/lasting";
 
 type Props = {
   entries: PasswordEntry[];
@@ -94,7 +93,10 @@ type Props = {
   /** Creates or replaces one entry. */
   /** Resolves to whether the entry was stored. */
   onSaveEntry: (entry: PasswordEntry, change?: EntryChange) => Promise<boolean>;
-  onDeleteEntry: (id: string) => void;
+  onDeleteEntry: (entry: PasswordEntry) => void;
+  /** Protected entries a key touch just let through, whole, to hold in
+   * place of the copies read without their secrets. */
+  onRevealed: (entries: PasswordEntry[]) => void;
   onImportEntries: (entries: PasswordEntry[], source: string) => void;
   /** Replaces the category list as a whole. */
   onSaveCategories: (categories: PasswordCategory[]) => void;
@@ -172,6 +174,7 @@ export function PasswordsPanel({
   focusEntryId,
   onSaveEntry,
   onDeleteEntry,
+  onRevealed,
   onImportEntries,
   onSaveCategories,
   onConfirmRun,
@@ -222,6 +225,9 @@ export function PasswordsPanel({
    * being asked for. */
   const [kdbx, setKdbx] = useState<{ mode: "open" | "export"; path: string } | null>(null);
   const [kdbxError, setKdbxError] = useState<string | null>(null);
+  /// An import read before a lock must not land after it: what it parsed
+  /// is passwords in clear.
+  const startedFor = useLastingCheck();
   /// Whether the "finish editing first" notice is up. Clicking another row
   /// mid-edit does nothing on purpose, and doing nothing silently read as
   /// the list being broken.
@@ -399,28 +405,69 @@ export function PasswordsPanel({
   /// into one site, short enough that walking away closes the window.
   const REAUTH_GRACE_MS = 3 * 60_000;
 
-  /// Gate for everything a protected entry keeps behind a fresh touch.
-  /// Entries without the flag pass straight through.
-  const ensureVerified = useCallback(
-    async (entry: PasswordEntry, purpose?: "export"): Promise<boolean> => {
-      if (!entry.require_reauth) return true;
-      const last = verifiedAtRef.current.get(entry.id);
-      if (last !== undefined && Date.now() - last < REAUTH_GRACE_MS) return true;
-
+  /// The key touch for protected entries. The backend hands them back
+  /// whole, since the list it gives the window holds them without their
+  /// secrets. Null when the touch did not happen.
+  const reveal = useCallback(
+    async (asking: PasswordEntry[], purpose?: "change"): Promise<PasswordEntry[] | null> => {
       setTransferError(null);
       setVerifying(true);
       try {
-        await invoke("fido_reverify", { purpose: purpose ?? null });
-        verifiedAtRef.current.set(entry.id, Date.now());
-        return true;
+        const rows = await invoke<string[]>("fido_reverify", {
+          purpose: purpose ?? null,
+          entries: asking.map((e) => e.id),
+        });
+        const whole = rows.map((row) => withBaseFields(JSON.parse(row) as PasswordEntry));
+        const now = Date.now();
+        for (const entry of asking) verifiedAtRef.current.set(entry.id, now);
+        if (whole.length > 0) onRevealed(whole);
+        const byId = new Map(whole.map((e) => [e.id, e]));
+        return asking.map((e) => byId.get(e.id) ?? e);
       } catch (e) {
         setTransferError(formatAppError(e));
-        return false;
+        return null;
       } finally {
         setVerifying(false);
       }
     },
-    [REAUTH_GRACE_MS, setTransferError]
+    [onRevealed, setTransferError]
+  );
+
+  /// Whether a protected entry is still covered by its last touch, and
+  /// held whole.
+  const coveredNow = useCallback(
+    (entry: PasswordEntry): boolean => {
+      if (!entry.require_reauth) return true;
+      const last = verifiedAtRef.current.get(entry.id);
+      return !entry.withheld && last !== undefined && Date.now() - last < REAUTH_GRACE_MS;
+    },
+    [REAUTH_GRACE_MS]
+  );
+
+  /// Gate for everything a protected entry keeps behind a fresh touch.
+  /// Entries without the flag pass straight through. Resolves to the entry
+  /// whole, or null when the touch did not happen.
+  const ensureVerified = useCallback(
+    async (entry: PasswordEntry): Promise<PasswordEntry | null> => {
+      if (coveredNow(entry)) return entry;
+      const whole = await reveal([entry]);
+      return whole?.[0] ?? null;
+    },
+    [coveredNow, reveal]
+  );
+
+  /// The same for several entries at once, for one act on all of them
+  /// (deleting, moving): one touch covers the protected ones among them.
+  const ensureVerifiedAll = useCallback(
+    async (list: PasswordEntry[]): Promise<PasswordEntry[] | null> => {
+      const asking = list.filter((e) => !coveredNow(e));
+      if (asking.length === 0) return list;
+      const whole = await reveal(asking, "change");
+      if (!whole) return null;
+      const byId = new Map(whole.map((e) => [e.id, e]));
+      return list.map((e) => byId.get(e.id) ?? e);
+    },
+    [coveredNow, reveal]
   );
 
   /// Showing an entry's secrets: the gate, then the activity log, which an
@@ -459,11 +506,18 @@ export function PasswordsPanel({
   );
 
   /// A secret belonging to `entry`: passes the entry's re-auth gate, then
-  /// goes through the clearing clipboard.
+  /// goes through the clearing clipboard. `pick` reads it from the entry
+  /// whole, which a protected one only is after the touch.
   const copySecretField = useCallback(
-    async (entry: PasswordEntry, key: string, text: string, field: string) => {
-      if (!(await ensureVerified(entry))) return;
-      await copySecret(entry, text, field);
+    async (
+      entry: PasswordEntry,
+      key: string,
+      pick: (whole: PasswordEntry) => string,
+      field: string,
+    ) => {
+      const whole = await ensureVerified(entry);
+      if (!whole) return;
+      await copySecret(whole, pick(whole), field);
       flashCopied(key);
     },
     [copySecret, ensureVerified, flashCopied]
@@ -482,7 +536,7 @@ export function PasswordsPanel({
       // clipboard on Windows writes what it holds to Clipboard History on
       // disk and syncs it to their other machines.
       if (copyKindFor(entry) === "secret") {
-        await copySecretField(entry, entry.id, value, oneClickField(entry));
+        await copySecretField(entry, entry.id, oneClickCopyValue, oneClickField(entry));
       } else {
         await copyPlain(entry.id, value);
       }
@@ -536,8 +590,9 @@ export function PasswordsPanel({
   /// would otherwise be a one-click detour around the reveal gate.
   const startEdit = useCallback(
     async (entry: PasswordEntry) => {
-      if (!(await ensureVerified(entry))) return;
-      setEditing({ entry: { ...entry }, creating: false });
+      const whole = await ensureVerified(entry);
+      if (!whole) return;
+      setEditing({ entry: { ...whole }, creating: false });
     },
     [ensureVerified]
   );
@@ -570,15 +625,17 @@ export function PasswordsPanel({
   const checkAnchor = useRef<string | null>(null);
   const [movingChecked, setMovingChecked] = useState(false);
   const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
-  /// Clearing removes old passwords for good, on every device.
+  /// Clearing takes old passwords out of the entry on every device; older
+  /// records of the silo keep them until those are cleared.
   const [pendingClearHistory, setPendingClearHistory] = useState<PasswordEntry | null>(null);
 
   /// A restore changes the secret, so it is gated like an edit. Not asked
   /// about: the current version goes into the history, so it can be undone.
   const restoreVersion = useCallback(
     async (entry: PasswordEntry, version: HistoryVersion) => {
-      if (!(await ensureVerified(entry))) return;
-      await onSaveEntry(restoredFrom(entry, version, Date.now()), "restored");
+      const whole = await ensureVerified(entry);
+      if (!whole) return;
+      await onSaveEntry(restoredFrom(whole, version, Date.now()), "restored");
     },
     [ensureVerified, onSaveEntry]
   );
@@ -627,18 +684,19 @@ export function PasswordsPanel({
   );
   const allStarred = checkedEntries.length > 0 && checkedEntries.every((e) => e.favorite);
 
-  // One at a time: each is its own change in the silo's history.
+  // One at a time: each is its own change in the silo's history. A
+  // protected entry among them asks for the key first, once for all.
   const moveChecked = useCallback(
     async (category: string) => {
       setMovingChecked(false);
-      for (const entry of checkedEntries) {
-        if (entry.category !== category) {
-          await onSaveEntry(withEdits(entry, { category }), "arranged");
-        }
+      const moving = checkedEntries.filter((entry) => entry.category !== category);
+      if (!(await ensureVerifiedAll(moving))) return;
+      for (const entry of moving) {
+        await onSaveEntry(withEdits(entry, { category }), "arranged");
       }
       clearChecked();
     },
-    [checkedEntries, clearChecked, onSaveEntry]
+    [checkedEntries, clearChecked, ensureVerifiedAll, onSaveEntry]
   );
 
   const starChecked = useCallback(async () => {
@@ -650,24 +708,31 @@ export function PasswordsPanel({
     }
   }, [allStarred, checkedEntries, onSaveEntry]);
 
-  const confirmBulkDelete = useCallback(() => {
-    for (const entry of checkedEntries) onDeleteEntry(entry.id);
-    if (selectedId && checked.has(selectedId)) setSelectedId(null);
+  /// A protected entry is deleted only after the key: there is no trash
+  /// to bring it back from.
+  const confirmBulkDelete = useCallback(async () => {
     setPendingBulkDelete(false);
+    const going = await ensureVerifiedAll(checkedEntries);
+    if (!going) return;
+    for (const entry of going) onDeleteEntry(entry);
+    if (selectedId && checked.has(selectedId)) setSelectedId(null);
     clearChecked();
-  }, [checked, checkedEntries, clearChecked, onDeleteEntry, selectedId]);
+  }, [checked, checkedEntries, clearChecked, ensureVerifiedAll, onDeleteEntry, selectedId]);
 
-  const confirmDelete = useCallback(() => {
+  const confirmDelete = useCallback(async () => {
     if (!pendingDelete) return;
-    onDeleteEntry(pendingDelete.id);
     setPendingDelete(null);
+    const going = await ensureVerifiedAll([pendingDelete]);
+    if (!going) return;
+    onDeleteEntry(going[0]!);
     setSelectedId(null);
-  }, [onDeleteEntry, pendingDelete]);
+  }, [ensureVerifiedAll, onDeleteEntry, pendingDelete]);
 
   /// Bitwarden's ".zip (With Attachments)": its JSON, as any Bitwarden
   /// import, with the files already encrypted into the silo.
   const importBitwardenZip = useCallback(async (path: string) => {
     setTransferBusy(true);
+    const current = startedFor();
     let blobs: string[] = [];
     try {
       const read = await invoke<{ json: string; files: ZipFile[] }>(
@@ -675,6 +740,7 @@ export function PasswordsPanel({
         { path },
       );
       blobs = read.files.map((f) => f.attachment.blob_id);
+      if (!current()) return;
       const parsed = bitwardenJsonToEntries(read.json);
       const { entries: imported, unmatched } = attachZipFiles(parsed.entries, read.files);
       setPendingImport({
@@ -694,7 +760,7 @@ export function PasswordsPanel({
     } finally {
       setTransferBusy(false);
     }
-  }, [setPendingImport, setTransferBusy, setTransferError]);
+  }, [setPendingImport, setTransferBusy, setTransferError, startedFor]);
 
   const handleImport = useCallback(async () => {
     setTransferError(null);
@@ -721,8 +787,10 @@ export function PasswordsPanel({
     }
 
     setTransferBusy(true);
+    const current = startedFor();
     try {
       const text = await invoke<string>("passwords_read_import_csv", { path });
+      if (!current()) return;
       let imported: PasswordEntry[];
       let skipped: number;
       let source: string;
@@ -753,7 +821,7 @@ export function PasswordsPanel({
     } finally {
       setTransferBusy(false);
     }
-  }, [importBitwardenZip, setPendingImport, setTransferBusy, setTransferError]);
+  }, [importBitwardenZip, setPendingImport, setTransferBusy, setTransferError, startedFor]);
 
   /// Content a KeePass import encrypted for entries that will not be stored.
   const dropBlobs = useCallback((blobIds: string[]) => {
@@ -769,12 +837,14 @@ export function PasswordsPanel({
       if (!kdbx) return;
       setTransferBusy(true);
       setKdbxError(null);
+      const current = startedFor();
       try {
         const read = await invoke<KdbxEntry[]>("passwords_read_kdbx", {
           path: kdbx.path,
           password: password || null,
           keyFile,
         });
+        if (!current()) return;
         const { entries: imported, skipped } = kdbxToEntries(read, loadHistoryPolicy());
         dropBlobs(attachmentBlobs(skipped));
         setKdbx(null);
@@ -793,7 +863,7 @@ export function PasswordsPanel({
         setTransferBusy(false);
       }
     },
-    [dropBlobs, kdbx, setPendingImport, setTransferBusy]
+    [dropBlobs, kdbx, setPendingImport, setTransferBusy, startedFor]
   );
 
   const cancelImport = useCallback(() => {
@@ -844,18 +914,35 @@ export function PasswordsPanel({
     [dropBlobs, entries, onImportEntries, pendingImport, setPendingImport, setTransferNotice]
   );
 
-  /// Every entry, every kind, encrypted: the file KeePassXC and KeePassDX
-  /// open. Entries that ask again before revealing ask once, for the batch.
-  const startKdbxExport = useCallback(async () => {
+  /// Every export asks for the key, each time, whatever was touched a
+  /// moment ago for one entry: a file of every password is a broader thing
+  /// to hand over. The backend asks too when it was not asked here; here it
+  /// is asked before the file is chosen, so somebody who cannot produce the
+  /// key is not first made to pick where a file that will not be written
+  /// goes. A silo with no key has nothing to ask.
+  const confirmExport = useCallback(async (): Promise<boolean> => {
     setTransferError(null);
-    setConfirmingExport(false);
-    if (exportNeedsTouch(toExport)) {
-      const asking = toExport.find((e) => e.require_reauth)!;
-      if (!(await ensureVerified(asking, "export"))) return;
+    setVerifying(true);
+    try {
+      await invoke("fido_reverify", { purpose: "export" });
+      return true;
+    } catch (e) {
+      setTransferError(formatAppError(e));
+      return false;
+    } finally {
+      setVerifying(false);
     }
+  }, [setTransferError]);
+
+  /// Every entry, every kind, encrypted: the file KeePassXC and KeePassDX
+  /// open. Protected entries go as the window holds them; the backend puts
+  /// in what it held back.
+  const startKdbxExport = useCallback(async () => {
+    setConfirmingExport(false);
+    if (!(await confirmExport())) return;
     setKdbxError(null);
     setKdbx({ mode: "export", path: "" });
-  }, [ensureVerified, toExport, setTransferError]);
+  }, [confirmExport]);
 
   const finishKdbxExport = useCallback(
     async (password: string) => {
@@ -887,17 +974,8 @@ export function PasswordsPanel({
     const logins = toExport.filter((e) => typeOf(e) === "login");
 
     // An export writes every one of these into a plaintext file, which is
-    // the broadest reveal in the app. Entries marked "ask again before
-    // revealing" were the one thing it did not ask about: the flag covered
-    // copying, editing and opening an attachment, and then the export
-    // handed the same secrets over with no touch at all. Asked once for the
-    // batch rather than per entry, and asked before the file dialog, so
-    // somebody who cannot produce the key is not first made to choose where
-    // to put a file that is not going to be written.
-    if (exportNeedsTouch(logins)) {
-      const asking = logins.find((e) => e.require_reauth)!;
-      if (!(await ensureVerified(asking, "export"))) return;
-    }
+    // the broadest reveal in the app, so it asks for the key every time.
+    if (!(await confirmExport())) return;
 
     const path = await saveFileDialog({
       defaultPath: "silentsilo-passwords.csv",
@@ -907,9 +985,18 @@ export function PasswordsPanel({
 
     setTransferBusy(true);
     try {
+      // Protected entries come whole only now, for the confirmed export.
+      const withheld = logins.filter((e) => e.withheld).map((e) => e.id);
+      const whole = new Map<string, PasswordEntry>();
+      if (withheld.length > 0) {
+        const json = await invoke<string>("passwords_for_export", { ids: withheld });
+        for (const entry of JSON.parse(json) as PasswordEntry[]) {
+          whole.set(entry.id, withBaseFields(entry));
+        }
+      }
       await invoke("passwords_write_export_csv", {
         path,
-        contents: entriesToCsv(logins),
+        contents: entriesToCsv(logins.map((e) => whole.get(e.id) ?? e)),
         count: logins.length,
       });
       const leftOut = toExport.length - logins.length;
@@ -928,7 +1015,7 @@ export function PasswordsPanel({
       setConfirmingExport(false);
       setExportOnly(null);
     }
-  }, [ensureVerified, toExport, setTransferBusy, setTransferError, setTransferNotice]);
+  }, [confirmExport, toExport, setTransferBusy, setTransferError, setTransferNotice]);
 
   return (
     <div className="pw-view">
@@ -1056,7 +1143,9 @@ export function PasswordsPanel({
                 : t("pw.export_title")}
             </strong>
             <p>{t("pw.export_kdbx_body")}</p>
-            <p>{t("pw.export_csv_body")}</p>
+            <p>
+              {t("pw.export_csv_body")} {t("pw.export_csv_formula")}
+            </p>
           </div>
           <div className="pw-export-warning-actions">
             <button
@@ -1335,8 +1424,8 @@ export function PasswordsPanel({
                 onCopyUsername={(entry) => void copyUsername(entry)}
                 onCopyTotp={(entry, code) => void copyTotp(entry, code)}
                 onCopyPlain={(key, text) => void copyPlain(key, text)}
-                onCopySecretField={(entry, key, text, field) =>
-                  void copySecretField(entry, key, text, field)
+                onCopySecretField={(entry, key, pick, field) =>
+                  void copySecretField(entry, key, pick, field)
                 }
                 onOpenAttachment={(attachment) => void openAttachment(selected, attachment)}
                 onRequestReveal={requestReveal}
@@ -1389,6 +1478,7 @@ export function PasswordsPanel({
             backedUp
               ? t("pw.delete_synced", { name: pendingDelete.service })
               : t("pw.delete_local", { name: pendingDelete.service }),
+            t("pw.records_cleared_later"),
             t("pw.delete_no_trash"),
             backedUp && (pendingDelete.attachments ?? []).length > 0
               ? t("pw.delete_attachments_kept")
@@ -1404,7 +1494,7 @@ export function PasswordsPanel({
           confirmLabel={t("pw.delete")}
           danger
           busy={busy}
-          onConfirm={confirmDelete}
+          onConfirm={() => void confirmDelete()}
           onCancel={() => setPendingDelete(null)}
         />
       )}
@@ -1414,6 +1504,7 @@ export function PasswordsPanel({
           title={t("pw.bulk_delete_title", { count: checkedEntries.length })}
           message={[
             backedUp ? t("pw.bulk_delete_synced") : t("pw.bulk_delete_local"),
+            t("pw.records_cleared_later"),
             t("pw.delete_no_trash"),
             backedUp && checkedEntries.some((e) => (e.attachments ?? []).length > 0)
               ? t("pw.delete_attachments_kept")
@@ -1429,7 +1520,7 @@ export function PasswordsPanel({
           confirmLabel={t("pw.bulk_delete_button", { count: checkedEntries.length })}
           danger
           busy={busy}
-          onConfirm={confirmBulkDelete}
+          onConfirm={() => void confirmBulkDelete()}
           onCancel={() => setPendingBulkDelete(false)}
         />
       )}
@@ -1441,6 +1532,7 @@ export function PasswordsPanel({
             backedUp
               ? t("pw.clear_history_synced", { name: pendingClearHistory.service })
               : t("pw.clear_history_local", { name: pendingClearHistory.service }),
+            t("pw.records_cleared_later"),
             backedUp && archiveTargets > 0 ? t("pw.clear_history_archive") : "",
           ]
             .filter(Boolean)

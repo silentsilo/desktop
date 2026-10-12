@@ -7,7 +7,8 @@ import { t, useLocale } from "../i18n";
 
 type Props = {
   version: string;
-  update: Update;
+  /** Null when an earlier run found it: Install asks for it first. */
+  update: Update | null;
   /** Hides the card until the next start. */
   onLater: () => void;
   onFailedAfterLock: (message: string) => void;

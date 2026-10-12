@@ -363,6 +363,9 @@ function isPrivateIpv4(h: string): boolean {
   if (a === 172 && b >= 16 && b <= 31) return true;
   if (a === 192 && b === 168) return true;
   if (a === 169 && b === 254) return true;
+  // 100.64.0.0/10, shared address space: a carrier's network, or a
+  // Tailscale-style overlay of the user's own machines.
+  if (a === 100 && b >= 64 && b <= 127) return true;
   return false;
 }
 
@@ -388,7 +391,14 @@ function isPrivateIpv6(ip: string): boolean {
 
 function isPublicHostname(hostname: string): boolean {
   const h = hostname.toLowerCase();
-  if (h === "localhost" || h.endsWith(".local") || h.endsWith(".internal")) return false;
+  if (
+    h === "localhost" ||
+    h.endsWith(".localhost") ||
+    h.endsWith(".local") ||
+    h.endsWith(".internal")
+  ) {
+    return false;
+  }
 
   // A URL keeps the brackets around an IPv6 literal, so `::1` never arrives
   // bare. Matching it as a plain string let every private v6 address through,
@@ -562,19 +572,6 @@ export function copyKindFor(entry: PasswordEntry): CopyKind {
     case "ssh_key":
       return "plain";
   }
-}
-
-/**
- * Whether writing these entries out as a plaintext CSV has to ask first.
- *
- * An export is the broadest reveal the app performs, and it was the one
- * place the "ask again before revealing" flag did not reach: it covered
- * copying, editing and opening an attachment, then the export handed the
- * same secrets over untouched. One touch for the batch, because the user is
- * performing one act.
- */
-export function exportNeedsTouch(entries: PasswordEntry[]): boolean {
-  return entries.some((entry) => entry.require_reauth === true);
 }
 
 /**

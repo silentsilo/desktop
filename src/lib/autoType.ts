@@ -48,13 +48,14 @@ export function matchScore(entry: PasswordEntry, target: AutoTypeTarget): number
 }
 
 /** The logins auto-type can type (a password to type), best match first,
- * then by name. */
+ * then by name. A protected login is held without its password, and the
+ * backend reads it at the time: it is offered as well. */
 export function rankForAutoType(
   entries: PasswordEntry[],
   target: AutoTypeTarget,
 ): { entry: PasswordEntry; score: number }[] {
   return entries
-    .filter((e) => (e.type ?? "login") === "login" && e.password !== "")
+    .filter((e) => (e.type ?? "login") === "login" && (e.password !== "" || e.withheld))
     .map((entry) => ({ entry, score: matchScore(entry, target) }))
     .sort((a, b) => b.score - a.score || a.entry.service.localeCompare(b.entry.service));
 }

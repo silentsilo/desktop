@@ -948,6 +948,11 @@ const handlers: Record<string, Handler> = {
     return { supported: true, ...mockAutoType, taken: false, access: !flag("noaccess") };
   },
   autotype_open_access: () => null,
+  screen_capture_status: () => ({ supported: true, protected: mockCaptureProtected }),
+  screen_capture_set: (args) => {
+    mockCaptureProtected = Boolean(args.protected);
+    return { supported: true, protected: mockCaptureProtected };
+  },
   autotype_pending: () =>
     flag("autotype")
       ? { request_id: "at-1", title: "GitHub Desktop", program: "GitHubDesktop.exe", elevated: flag("elevated") }
@@ -1283,7 +1288,11 @@ const handlers: Record<string, Handler> = {
   }),
   password_open_attachment: () => null,
   password_delete_attachment: () => null,
-  fido_reverify: () => null,
+  // Whole entries come back for the ids asked; the mock holds none back.
+  fido_reverify: () => [],
+  passwords_for_export: () => "[]",
+  vault_arrange_password: () => null,
+  health_ignore_key: () => "0".repeat(64),
   fido_rename_key: () => null,
   vault_paste_paths: () => ({ imported_files: 1, imported_folders: 1, failed: [] }),
   shell_upload_queue_pending: () =>
@@ -1499,6 +1508,7 @@ function nextMinor(version: string): string {
 
 /** Auto-type's settings, as Rust keeps them. */
 let mockAutoType = { enabled: false, enter: true };
+let mockCaptureProtected = true;
 
 /** When the first silo was last used, for `?locksoon`. */
 let mockIdleSince = Date.now() - 250_000;

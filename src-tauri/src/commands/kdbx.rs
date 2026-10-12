@@ -31,15 +31,25 @@ use crate::state::AppState;
 const MAX_KDBX_BYTES: u64 = 512 * 1024 * 1024;
 
 /// One field the database names beyond the standard five.
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, PartialEq)]
 pub struct KdbxField {
     name: String,
     value: String,
     protected: bool,
 }
 
+/// Without the value, which may be a secret.
+impl std::fmt::Debug for KdbxField {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KdbxField")
+            .field("name", &self.name)
+            .field("protected", &self.protected)
+            .finish_non_exhaustive()
+    }
+}
+
 /// What one version of an entry says.
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, PartialEq)]
 pub struct KdbxVersion {
     title: String,
     username: String,
@@ -50,6 +60,17 @@ pub struct KdbxVersion {
     fields: Vec<KdbxField>,
     /// Milliseconds since the epoch, when the database says.
     modified: Option<i64>,
+}
+
+/// Names and dates only: the rest is what the database keeps secret.
+impl std::fmt::Debug for KdbxVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KdbxVersion")
+            .field("title", &self.title)
+            .field("fields", &self.fields)
+            .field("modified", &self.modified)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Serialize)]
@@ -132,11 +153,138 @@ fn version_of(entry: &Entry) -> KdbxVersion {
     }
 }
 
+/// The most a database's key derivation may ask before it is opened. A file
+/// names its own cost, and one asking for hours of work or more memory than
+/// the machine has would hang or crash the app. KeePassXC's defaults sit far
+/// below these.
+const MAX_ARGON2_MEMORY: u64 = 2 * 1024 * 1024 * 1024;
+/// Iterations times memory, in bytes: 32 passes over 2 GiB.
+const MAX_ARGON2_WORK: u64 = 64 * 1024 * 1024 * 1024;
+const MAX_ARGON2_LANES: u64 = 64;
+const MAX_AES_ROUNDS: u64 = 300_000_000;
+
+const KDF_TOO_COSTLY: &str = crate::err::coded!(
+    "err.kdbx_kdf_too_costly",
+    "This database asks for more memory or time to open than SilentSilo allows. Lower its encryption settings in KeePass, then try again."
+);
+const NOT_KEEPASS: &str = "This is not a KeePass database SilentSilo can read.";
+
+/// Refuses a database whose key derivation costs more than the limits
+/// above, read from its header before anything is derived. A header this
+/// cannot read is refused too: the library would read it otherwise.
+///
+/// The decompressed size has no such check: the library inflates the whole
+/// payload in one call. It does so only after the key has proved itself
+/// (KDBX 4 checks the header's HMAC first), so it needs a file and the
+/// password that opens it.
+fn kdf_within_limits(bytes: &[u8]) -> Result<(), String> {
+    let u16_at = |at: usize| -> Option<u64> {
+        Some(u16::from_le_bytes(bytes.get(at..at + 2)?.try_into().ok()?).into())
+    };
+    let u32_at = |at: usize| -> Option<u64> {
+        Some(u32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?).into())
+    };
+    let signature = (u32_at(0), u32_at(4));
+    match signature {
+        // KeePass 1: the rounds sit at a fixed place in the header.
+        (Some(0x9AA2_D903), Some(0xB54B_FB65)) => {
+            let rounds = u32_at(120).ok_or(NOT_KEEPASS)?;
+            return if rounds > MAX_AES_ROUNDS {
+                Err(KDF_TOO_COSTLY.into())
+            } else {
+                Ok(())
+            };
+        }
+        (Some(0x9AA2_D903), Some(0xB54B_FB67)) => {}
+        // Not ours to judge: the library refuses what it cannot read.
+        _ => return Ok(()),
+    }
+    let major = u16_at(10).ok_or(NOT_KEEPASS)?;
+    let wide = major >= 4;
+    let mut at = 12;
+    loop {
+        let id = *bytes.get(at).ok_or(NOT_KEEPASS)?;
+        let (len, start) = if wide {
+            (u32_at(at + 1).ok_or(NOT_KEEPASS)? as usize, at + 5)
+        } else {
+            (u16_at(at + 1).ok_or(NOT_KEEPASS)? as usize, at + 3)
+        };
+        let value = bytes.get(start..start + len).ok_or(NOT_KEEPASS)?;
+        match id {
+            0 => return Err(NOT_KEEPASS.into()),
+            // KDBX 3: AES-KDF rounds.
+            6 if !wide => {
+                let rounds = u64::from_le_bytes(value.try_into().map_err(|_| NOT_KEEPASS)?);
+                return if rounds > MAX_AES_ROUNDS {
+                    Err(KDF_TOO_COSTLY.into())
+                } else {
+                    Ok(())
+                };
+            }
+            // KDBX 4: the key derivation's parameters.
+            11 if wide => return kdf_parameters_within_limits(value),
+            _ => {}
+        }
+        at = start + len;
+    }
+}
+
+/// The KDBX 4 key derivation parameters, a KeePass variant dictionary:
+/// `R` rounds for AES-KDF, `I` iterations, `M` memory and `P` lanes for
+/// Argon2.
+fn kdf_parameters_within_limits(dict: &[u8]) -> Result<(), String> {
+    let mut at = 2;
+    let (mut rounds, mut iterations, mut memory, mut lanes) = (0u64, 0u64, 0u64, 0u64);
+    loop {
+        let kind = *dict.get(at).ok_or(NOT_KEEPASS)?;
+        if kind == 0 {
+            break;
+        }
+        let len_at = |at: usize| -> Result<usize, String> {
+            let raw: [u8; 4] = dict
+                .get(at..at + 4)
+                .and_then(|b| b.try_into().ok())
+                .ok_or(NOT_KEEPASS)?;
+            usize::try_from(i32::from_le_bytes(raw)).map_err(|_| NOT_KEEPASS.to_string())
+        };
+        let key_len = len_at(at + 1)?;
+        let key = dict.get(at + 5..at + 5 + key_len).ok_or(NOT_KEEPASS)?;
+        let value_len = len_at(at + 5 + key_len)?;
+        let start = at + 9 + key_len;
+        let value = dict.get(start..start + value_len).ok_or(NOT_KEEPASS)?;
+        let number = match value.len() {
+            4 => u64::from(u32::from_le_bytes(
+                value.try_into().map_err(|_| NOT_KEEPASS)?,
+            )),
+            8 => u64::from_le_bytes(value.try_into().map_err(|_| NOT_KEEPASS)?),
+            _ => 0,
+        };
+        match key {
+            b"R" => rounds = number,
+            b"I" => iterations = number,
+            b"M" => memory = number,
+            b"P" => lanes = number,
+            _ => {}
+        }
+        at = start + value_len;
+    }
+    let too_costly = rounds > MAX_AES_ROUNDS
+        || memory > MAX_ARGON2_MEMORY
+        || lanes > MAX_ARGON2_LANES
+        || iterations.saturating_mul(memory.max(1)) > MAX_ARGON2_WORK;
+    if too_costly {
+        Err(KDF_TOO_COSTLY.into())
+    } else {
+        Ok(())
+    }
+}
+
 fn open_database(
     bytes: &[u8],
     password: Option<&str>,
     key_file: Option<&str>,
 ) -> Result<Database, String> {
+    kdf_within_limits(bytes)?;
     let mut key = DatabaseKey::new();
     if let Some(password) = password.filter(|p| !p.is_empty()) {
         key = key.with_password(password);
@@ -497,8 +645,44 @@ fn wipe(value: &mut Json) {
     }
 }
 
+/// Puts the stored entry in place of one the window holds without its
+/// secrets, so the export carries what the silo does.
+async fn whole_where_withheld(app: &AppHandle, entries: &mut [Json]) -> Result<(), String> {
+    let wanted: std::collections::HashSet<Uuid> = entries
+        .iter()
+        .filter(|e| e.get("withheld").is_some())
+        .filter_map(|e| e.get("id").and_then(Json::as_str))
+        .filter_map(|id| Uuid::parse_str(id).ok())
+        .collect();
+    if wanted.is_empty() {
+        return Ok(());
+    }
+    let app = app.clone();
+    let stored =
+        run_blocking(move || crate::commands::vault::stored_entries(&app, &wanted)).await?;
+    let mut by_id: HashMap<String, Json> = HashMap::new();
+    for mut row in stored {
+        let parsed: Result<Json, _> = serde_json::from_str(&row);
+        zeroize::Zeroize::zeroize(&mut row);
+        if let Ok(parsed) = parsed
+            && let Some(id) = parsed.get("id").and_then(Json::as_str)
+        {
+            by_id.insert(id.to_string(), parsed);
+        }
+    }
+    for entry in entries.iter_mut().filter(|e| e.get("withheld").is_some()) {
+        let id = text(entry, "id").to_string();
+        let whole = by_id
+            .remove(&id)
+            .ok_or("An entry to export is no longer in the silo.")?;
+        *entry = whole;
+    }
+    Ok(())
+}
+
 /// Writes `entries` (the silo's, as the window holds them) to `path` as a
-/// KDBX 4 database under `password`.
+/// KDBX 4 database under `password`, readable by this user alone. Every
+/// export asks for the key, here or just before the file was chosen.
 #[tauri::command]
 pub async fn passwords_write_kdbx(
     app: AppHandle,
@@ -515,8 +699,11 @@ pub async fn passwords_write_kdbx(
         )
         .into());
     }
+    crate::state::unlocked_silo(&app)?;
+    crate::commands::vault::take_export_confirmation(&app).await?;
     let mut entries: Vec<Json> = serde_json::from_str(&text_in).map_err(|e| e.to_string())?;
     drop(text_in);
+    whole_where_withheld(&app, &mut entries).await?;
 
     // Every attached file has to be here before it can be written out.
     let blob_ids: Vec<Uuid> = entries
@@ -559,7 +746,7 @@ pub async fn passwords_write_kdbx(
                     &[("detail", &e)],
                 )
             })?;
-        std::fs::write(&path, &*out).map_err(|e| e.to_string())
+        crate::commands::vault::write_owner_only(std::path::Path::new(&path), &out)
     })
     .await
 }
@@ -688,6 +875,76 @@ mod tests {
         assert!(number.is_protected());
         assert_eq!(number.get(), "4111111111111111");
         assert!(visa.fields.get("Security code").unwrap().is_protected());
+    }
+
+    /// A KDBX 4 header naming only its key derivation, which is all the
+    /// limits read.
+    fn header_with(params: &[(&str, Vec<u8>)]) -> Vec<u8> {
+        let mut dict = vec![0x00, 0x01];
+        for (key, value) in params {
+            dict.push(if value.len() == 4 { 0x04 } else { 0x05 });
+            dict.extend((key.len() as i32).to_le_bytes());
+            dict.extend(key.as_bytes());
+            dict.extend((value.len() as i32).to_le_bytes());
+            dict.extend(value);
+        }
+        dict.push(0);
+        let mut out = Vec::new();
+        out.extend(0x9AA2_D903u32.to_le_bytes());
+        out.extend(0xB54B_FB67u32.to_le_bytes());
+        out.extend(1u16.to_le_bytes());
+        out.extend(4u16.to_le_bytes());
+        out.push(11);
+        out.extend((dict.len() as u32).to_le_bytes());
+        out.extend(dict);
+        out.push(0);
+        out.extend(0u32.to_le_bytes());
+        out
+    }
+
+    fn argon2(iterations: u64, memory: u64, lanes: u32) -> Vec<u8> {
+        header_with(&[
+            ("I", iterations.to_le_bytes().to_vec()),
+            ("M", memory.to_le_bytes().to_vec()),
+            ("P", lanes.to_le_bytes().to_vec()),
+        ])
+    }
+
+    #[test]
+    fn a_database_asking_too_much_to_open_is_refused_before_anything_is_derived() {
+        assert!(kdf_within_limits(&argon2(10, 64 << 20, 2)).is_ok());
+        let too_costly = Err(KDF_TOO_COSTLY.to_string());
+        assert_eq!(kdf_within_limits(&argon2(2, 16 << 30, 2)), too_costly);
+        assert_eq!(
+            kdf_within_limits(&argon2(1_000_000, 64 << 20, 2)),
+            too_costly
+        );
+        assert_eq!(kdf_within_limits(&argon2(10, 64 << 20, 1024)), too_costly);
+        let aes = |rounds: u64| header_with(&[("R", rounds.to_le_bytes().to_vec())]);
+        assert!(kdf_within_limits(&aes(60_000)).is_ok());
+        assert_eq!(kdf_within_limits(&aes(u64::MAX)), too_costly);
+    }
+
+    #[test]
+    fn a_header_cut_short_is_refused() {
+        let whole = argon2(10, 64 << 20, 2);
+        assert!(kdf_within_limits(&whole[..20]).is_err());
+    }
+
+    #[test]
+    fn what_this_app_writes_opens_within_the_limits() {
+        let KdfConfig::Argon2id {
+            iterations,
+            memory,
+            parallelism,
+            ..
+        } = export_config().kdf_config
+        else {
+            panic!("the export uses Argon2id");
+        };
+        assert!(memory <= MAX_ARGON2_MEMORY);
+        assert!(iterations * memory <= MAX_ARGON2_WORK);
+        assert!(u64::from(parallelism) <= MAX_ARGON2_LANES);
     }
 
     #[test]

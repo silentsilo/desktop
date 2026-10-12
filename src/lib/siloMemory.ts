@@ -34,3 +34,21 @@ export function markDone(siloId: string, event: SiloEvent, at: number = Date.now
 export function isDue(at: number | null, days: number, now: number = Date.now()): boolean {
   return at === null || now - at > days * 24 * 60 * 60 * 1000;
 }
+
+/**
+ * Removes everything this computer's web storage keeps for a silo, found by
+ * its id: the reminders above, ignored Health findings, offers already made.
+ * For a silo taken off the list, which should leave nothing of itself here.
+ */
+export function forgetSiloStorage(siloId: string): void {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.includes(siloId)) keys.push(key);
+    }
+    for (const key of keys) localStorage.removeItem(key);
+  } catch {
+    // Storage that cannot be read holds nothing to remove either.
+  }
+}

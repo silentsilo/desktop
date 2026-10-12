@@ -602,6 +602,16 @@ fn silo_forget_impl(app: &AppHandle, id: String, delete_files: bool) -> Result<(
         crate::err::coded!("err.silo_gone", "That silo is no longer in the list.").to_string()
     })?;
 
+    // Deleting the files takes the silo away for good, so it is done only
+    // from a silo that is unlocked here, never from the list alone.
+    if delete_files && !crate::state::session_is_open(&state, id) {
+        return Err(crate::err::coded!(
+            "err.unlock_to_delete",
+            "Unlock this silo before deleting its files. Removing it from the list works while it is locked."
+        )
+        .into());
+    }
+
     // Closed first: deleting the files of a silo whose database is open
     // would fail on Windows and corrupt it everywhere else.
     //

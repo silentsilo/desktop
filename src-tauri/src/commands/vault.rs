@@ -451,6 +451,10 @@ fn import_folder_recursive(
                 Err(e) if e == IMPORT_CANCELLED => return Err(e),
                 Err(e) => {
                     counters.skipped = counters.skipped.saturating_add(1);
+                    // Without the path: where a file came from stays off the
+                    // log. The English only, since the values repeat it.
+                    let english = e.split(crate::err::SEP).next().unwrap_or_default();
+                    let e = english.replace(&path.display().to_string(), "…");
                     crate::diagnostics::warn("import", format_args!("skipped a file: {e}"));
                 }
             }
@@ -704,7 +708,13 @@ fn unlock_prompt(wanted: Option<silentsilo_fido::Authenticator>) -> Prompt {
 /// What a presence check is for, said in the prompt that asks for it.
 pub(crate) enum Presence {
     ShowEntry,
+    ChangeEntries,
     ExportLogins,
+    RecoveryCode,
+    RecoveryOff,
+    AddKey,
+    RemoveKey,
+    AddCopy,
     FillLogin { label: String, site: String },
     FillAny,
     SshSign { key: String },
@@ -715,7 +725,13 @@ impl Presence {
     fn prompt(&self, built_in: bool) -> Prompt {
         let (code, purpose) = match self {
             Presence::ShowEntry => ("show_entry", "show this entry".to_string()),
+            Presence::ChangeEntries => ("change", "change protected entries".to_string()),
             Presence::ExportLogins => ("export", "export your logins".to_string()),
+            Presence::RecoveryCode => ("recovery_new", "create a new recovery code".to_string()),
+            Presence::RecoveryOff => ("recovery_off", "turn off the recovery code".to_string()),
+            Presence::AddKey => ("key_add", "add a key to this silo".to_string()),
+            Presence::RemoveKey => ("key_remove", "remove a key from this silo".to_string()),
+            Presence::AddCopy => ("copy_add", "add a backup copy".to_string()),
             Presence::FillLogin { label, site } => {
                 ("fill", format!("fill your {label} login on {site}"))
             }
@@ -2173,6 +2189,9 @@ pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), Stri
                 silentsilo_vault::VaultPaths::new(snapshot.root.clone()).blob_path(blob_id);
             decrypt_blob(&blob_path, &target, &key, blob_id).map_err(|e| e.to_string())?;
             crate::state::discard_if_locked(&app2.state::<AppState>(), snapshot.id, &target)?;
+            // Whoever can write to the silo chose these bytes: Windows warns
+            // before running them, as it does for a download.
+            silentsilo_shell::mark_from_elsewhere(&target);
             silentsilo_vault::seal_readonly(&target);
             let _ = touch_blob_access(&snapshot.root, blob_id);
             Ok(())
@@ -2306,15 +2325,47 @@ fn remove_opened(path: &Path) {
 /// Entries live as rows in the encrypted index rather than as a file in the
 /// tree. Nothing decrypted touches the disk on this path: the rows come
 /// straight out of the open database.
+///
+/// An entry marked "ask again before revealing" comes without its secrets
+/// (see [`withheld`]) unless a key check let it through a moment ago
+/// (`fido_reverify`). The check is made here, so a script in the window
+/// cannot skip it. A silo with no key keeps its entries whole: it has
+/// nothing to ask.
 #[tauri::command(async)]
-pub fn vault_read_passwords(state: State<AppState>) -> Result<String, String> {
-    let session_guard = state.focused_session()?;
-    let session = session_guard
-        .as_ref()
-        .ok_or_else(|| CoreError::VaultLocked.to_string())?;
-    let entries = Vfs::new(session)
-        .list_passwords()
-        .map_err(|e| e.to_string())?;
+pub fn vault_read_passwords(app: AppHandle, state: State<AppState>) -> Result<String, String> {
+    let entries = {
+        let session_guard = state.focused_session()?;
+        let session = session_guard
+            .as_ref()
+            .ok_or_else(|| CoreError::VaultLocked.to_string())?;
+        Vfs::new(session)
+            .list_passwords()
+            .map_err(|e| e.to_string())?
+    };
+    let entries: Vec<String> = if presence_check_enrolled(&app) {
+        let revealed: HashSet<Uuid> = crate::state::lock_recovering(&state.revealed)
+            .iter()
+            .filter(|(_, at)| at.elapsed() < REVEAL_FOR)
+            .map(|(id, _)| *id)
+            .collect();
+        entries
+            .into_iter()
+            .map(|mut row| {
+                if row_id(&row).is_some_and(|id| revealed.contains(&id)) {
+                    return row;
+                }
+                match withheld(&row) {
+                    Some(shown) => {
+                        zeroize::Zeroize::zeroize(&mut row);
+                        shown
+                    }
+                    None => row,
+                }
+            })
+            .collect()
+    } else {
+        entries
+    };
 
     // Each row is already JSON, so the array is assembled rather than
     // re-serialised through a struct this layer would have to know.
@@ -2381,6 +2432,10 @@ pub fn vault_upsert_password(
         Some(_) => return Err("The entry id does not match the entry.".into()),
         None => return Err("The entry has no id.".into()),
     }
+    // Saved whole, it would replace the secrets with the blanks it carries.
+    if parsed.get("withheld").is_some() {
+        return Err(WITHHELD_SAVE.into());
+    }
 
     // The category list is a row of its own, not an entry anyone edited.
     let is_entry = !parsed
@@ -2403,6 +2458,77 @@ pub fn vault_upsert_password(
     Vfs::new(session)
         .upsert_password(id, &json)
         .map_err(|e| e.to_string())
+}
+
+const WITHHELD_SAVE: &str = crate::err::coded!(
+    "err.entry_withheld",
+    "Show this entry first, then save it again."
+);
+
+/// Where an entry is filed and whether it is starred, changed on the entry
+/// as it is stored now. A move or a star sent the window's whole copy back,
+/// which undid a change another device made since the list was read, and a
+/// protected entry the window holds without its secrets cannot be sent whole.
+#[tauri::command(async)]
+pub fn vault_arrange_password(
+    id: String,
+    category: Option<String>,
+    favorite: Option<bool>,
+    state: State<AppState>,
+) -> Result<(), String> {
+    let id = Uuid::parse_str(&id).map_err(|e| format!("That entry id is not valid: {e}"))?;
+    with_vfs(&state, |_, vfs| {
+        let rows = vfs.list_passwords()?;
+        let Some(mut row) = rows.into_iter().find(|row| row_id(row) == Some(id)) else {
+            return Err(CoreError::NotFound(id.to_string()));
+        };
+        let arranged = arranged(&row, category.as_deref(), favorite);
+        zeroize::Zeroize::zeroize(&mut row);
+        let Some(mut arranged) = arranged else {
+            return Ok(());
+        };
+        let saved = vfs.upsert_password(id, &arranged);
+        zeroize::Zeroize::zeroize(&mut arranged);
+        saved
+    })
+}
+
+/// `row` with its category or star changed, or `None` when neither changes.
+fn arranged(row: &str, category: Option<&str>, favorite: Option<bool>) -> Option<String> {
+    let mut value: serde_json::Value = serde_json::from_str(row).ok()?;
+    let fields = value.as_object_mut()?;
+    let mut changed = false;
+    if let Some(category) = category
+        && fields.get("category").and_then(serde_json::Value::as_str) != Some(category)
+    {
+        fields.insert("category".into(), category.into());
+        changed = true;
+    }
+    if let Some(favorite) = favorite {
+        let now = fields.get("favorite").and_then(serde_json::Value::as_bool) == Some(true);
+        if now != favorite {
+            // Absent means no, as every entry written before stars said.
+            if favorite {
+                fields.insert("favorite".into(), true.into());
+            } else {
+                fields.remove("favorite");
+            }
+            changed = true;
+        }
+    }
+    let out = changed.then(|| value.to_string());
+    wipe_json(&mut value);
+    out
+}
+
+/// Overwrites every string in `value`: an entry in clear.
+fn wipe_json(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::String(s) => zeroize::Zeroize::zeroize(s),
+        serde_json::Value::Array(items) => items.iter_mut().for_each(wipe_json),
+        serde_json::Value::Object(fields) => fields.values_mut().for_each(wipe_json),
+        _ => {}
+    }
 }
 
 /// Copies a secret to the clipboard, kept out of Windows Clipboard History
@@ -2513,13 +2639,198 @@ pub fn vault_delete_password(
 /// this silo's DEK; a bare presence check would accept any FIDO key in the
 /// drawer. Used by entries marked "ask again before revealing". `purpose`
 /// picks the prompt's wording from a fixed list, never free text.
+///
+/// `entries` are the protected entries the touch is for. They are let
+/// through for [`REVEAL_FOR`] and come back whole, as JSON: the list the
+/// window reads holds them without their secrets. "export" asks for the
+/// export that follows, which takes the confirmation when it writes.
 #[tauri::command]
-pub async fn fido_reverify(app: AppHandle, purpose: Option<String>) -> Result<(), String> {
+pub async fn fido_reverify(
+    app: AppHandle,
+    purpose: Option<String>,
+    entries: Option<Vec<String>>,
+) -> Result<Vec<String>, String> {
     let why = match purpose.as_deref() {
-        Some("export") => Presence::ExportLogins,
+        Some("export") => {
+            confirm_export(&app).await?;
+            return Ok(Vec::new());
+        }
+        Some("change") => Presence::ChangeEntries,
         _ => Presence::ShowEntry,
     };
-    verify_presence(&app, why).await
+    let ids = entries
+        .unwrap_or_default()
+        .iter()
+        .map(|id| Uuid::parse_str(id).map_err(|e| e.to_string()))
+        .collect::<Result<Vec<_>, _>>()?;
+    let silo = crate::state::focused_id(&app.state::<AppState>())?;
+    verify_presence(&app, why).await?;
+    let state = app.state::<AppState>();
+    // The touch was for the silo on screen when it was asked.
+    if crate::state::focused_id(&state)? != silo {
+        return Err(crate::err::coded!(
+            "err.focus_changed",
+            "The silo on screen changed while this one was opening. Open it again."
+        )
+        .into());
+    }
+    let now = std::time::Instant::now();
+    {
+        let mut revealed = crate::state::lock_recovering(&state.revealed);
+        for id in &ids {
+            revealed.insert(*id, now);
+        }
+    }
+    let wanted: HashSet<Uuid> = ids.into_iter().collect();
+    run_blocking(move || stored_entries(&app, &wanted)).await
+}
+
+/// The stored JSON of the entries `wanted` names, whole.
+pub(crate) fn stored_entries(
+    app: &AppHandle,
+    wanted: &HashSet<Uuid>,
+) -> Result<Vec<String>, String> {
+    let rows = with_vfs(&app.state::<AppState>(), |_, vfs| vfs.list_passwords())?;
+    Ok(rows
+        .into_iter()
+        .filter(|row| row_id(row).is_some_and(|id| wanted.contains(&id)))
+        .collect())
+}
+
+/// How long a key check lets a protected entry through: as long as the
+/// window lets one touch cover copying its username, password and code.
+pub(crate) const REVEAL_FOR: std::time::Duration = std::time::Duration::from_secs(180);
+/// How long a confirmed export waits for its file to be chosen and written.
+const EXPORT_FOR: std::time::Duration = std::time::Duration::from_secs(300);
+
+/// What a protected entry shows before a key check: who and where, never
+/// what. Anything else, a field a newer version added included, stays out.
+const SHOWN_WHEN_WITHHELD: &[&str] = &[
+    "id",
+    "service",
+    "username",
+    "url",
+    "category",
+    "created_at",
+    "updated_at",
+    "type",
+    "favorite",
+    "require_reauth",
+    "card_holder",
+    "card_brand",
+    "card_exp_month",
+    "card_exp_year",
+    "id_full_name",
+    "id_company",
+    "id_email",
+    "id_phone",
+    "id_address",
+    "id_city",
+    "id_state",
+    "id_zip",
+    "id_country",
+    "ssh_public_key",
+    "ssh_fingerprint",
+    "ssh_agent",
+];
+
+/// The id an entry's JSON names.
+fn row_id(row: &str) -> Option<Uuid> {
+    let value: serde_json::Value = serde_json::from_str(row).ok()?;
+    Uuid::parse_str(value.get("id")?.as_str()?).ok()
+}
+
+/// A protected entry without its secrets, marked `withheld`, or `None` for
+/// an entry that is not protected.
+fn withheld(row: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(row).ok()?;
+    if value
+        .get("require_reauth")
+        .and_then(serde_json::Value::as_bool)
+        != Some(true)
+    {
+        return None;
+    }
+    let fields = value.as_object()?;
+    let mut kept = serde_json::Map::new();
+    for key in SHOWN_WHEN_WITHHELD {
+        if let Some(v) = fields.get(*key) {
+            kept.insert((*key).to_string(), v.clone());
+        }
+    }
+    // Every reader expects these two as strings.
+    kept.insert("password".into(), "".into());
+    kept.insert("notes".into(), "".into());
+    kept.insert("withheld".into(), true.into());
+    Some(serde_json::Value::Object(kept).to_string())
+}
+
+/// Asks for a key before a change that gives or takes lasting access: a
+/// recovery code made or turned off, a key added or removed, a new backup
+/// copy, an export. A silo with no key has nothing to ask. Nor does one the
+/// recovery code opened in this session: that is the way in when the keys
+/// are lost, and the code was just typed.
+///
+/// `Ok(true)` when a key was asked.
+pub(crate) async fn confirm_lasting_change(
+    app: &AppHandle,
+    purpose: Presence,
+) -> Result<bool, String> {
+    if !presence_check_enrolled(app) {
+        return Ok(false);
+    }
+    let silo = crate::state::focused_id(&app.state::<AppState>())?;
+    if crate::audit::opened_with_recovery_code(silo) {
+        return Ok(false);
+    }
+    verify_presence(app, purpose).await.map(|()| true)
+}
+
+/// Confirms an export, for the export command that follows.
+async fn confirm_export(app: &AppHandle) -> Result<(), String> {
+    crate::state::unlocked_silo(app)?;
+    confirm_lasting_change(app, Presence::ExportLogins).await?;
+    *crate::state::lock_recovering(&app.state::<AppState>().export_confirmed) =
+        Some(std::time::Instant::now());
+    Ok(())
+}
+
+/// Whether an export was confirmed a moment ago, without using it up.
+fn export_confirmed(app: &AppHandle) -> bool {
+    crate::state::lock_recovering(&app.state::<AppState>().export_confirmed)
+        .is_some_and(|at| at.elapsed() < EXPORT_FOR)
+}
+
+/// Takes the confirmation an export needs: the one asked for before the
+/// file was chosen, or a key check now. Each export asks once.
+pub(crate) async fn take_export_confirmation(app: &AppHandle) -> Result<(), String> {
+    let confirmed = crate::state::lock_recovering(&app.state::<AppState>().export_confirmed)
+        .take()
+        .is_some_and(|at| at.elapsed() < EXPORT_FOR);
+    if confirmed {
+        return Ok(());
+    }
+    confirm_lasting_change(app, Presence::ExportLogins)
+        .await
+        .map(|_| ())
+}
+
+/// The entries an export writes, whole, once the export was confirmed.
+/// `ids` names them; the confirmation stays for the write.
+#[tauri::command]
+pub async fn passwords_for_export(app: AppHandle, ids: Vec<String>) -> Result<String, String> {
+    if !export_confirmed(&app) {
+        confirm_export(&app).await?;
+    }
+    let wanted: HashSet<Uuid> = ids
+        .iter()
+        .map(|id| Uuid::parse_str(id).map_err(|e| e.to_string()))
+        .collect::<Result<_, _>>()?;
+    run_blocking(move || {
+        let rows = stored_entries(&app, &wanted)?;
+        Ok(format!("[{}]", rows.join(",")))
+    })
+    .await
 }
 
 /// Whether the focused silo has a security key or Windows Hello enrolled,
@@ -2798,6 +3109,7 @@ pub async fn password_open_attachment(
         decrypt_blob(&blob_path, &dest, &key, blob_id).map_err(|e| e.to_string())?;
         crate::state::discard_if_locked(&app2.state::<AppState>(), snapshot.id, &dest)?;
 
+        silentsilo_shell::mark_from_elsewhere(&dest);
         silentsilo_vault::seal_readonly(&dest);
         let _ = touch_blob_access(&snapshot.root, blob_id);
         Ok(dest)
@@ -2866,9 +3178,9 @@ pub async fn passwords_read_import_csv(app: AppHandle, path: String) -> Result<S
 ///
 /// The plaintext is the point — every other manager's importer expects an
 /// unencrypted CSV, and a vault you can't leave is a trap. The UI warns
-/// before calling this. On Unix the file is created 0600 so it isn't
-/// world-readable for the window between writing it and the user moving or
-/// deleting it.
+/// before calling this. The file is this user's alone (`write_owner_only`)
+/// for the time between writing it and the user moving or deleting it.
+/// Every export asks for the key, here or just before the file was chosen.
 #[tauri::command]
 pub async fn passwords_write_export_csv(
     app: AppHandle,
@@ -2876,6 +3188,9 @@ pub async fn passwords_write_export_csv(
     contents: String,
     count: Option<u32>,
 ) -> Result<(), String> {
+    let contents = zeroize::Zeroizing::new(contents);
+    crate::state::unlocked_silo(&app)?;
+    take_export_confirmation(&app).await?;
     run_blocking(move || {
         let state = app.state::<AppState>();
         let session_guard = state.focused_session()?;
@@ -3365,6 +3680,19 @@ fn full_copy_status_impl(app: &AppHandle) -> Result<FullCopyStatus, String> {
     })
 }
 
+/// A key the window names set-aside Health findings with, so what it keeps
+/// in its own storage says nothing without the silo: which entries share a
+/// password, which are weak. Derived from the silo's content key, so it is
+/// the same at every unlock and on every device, and differs between silos.
+#[tauri::command(async)]
+pub fn health_ignore_key(state: State<AppState>) -> Result<String, String> {
+    let snapshot = crate::state::snapshot_focused_session(&state)?;
+    Ok(hex::encode(blake3::derive_key(
+        "SilentSilo desktop 2026-10 health findings set aside",
+        snapshot.kek.as_bytes(),
+    )))
+}
+
 /// Turns the full copy on or off for this device.
 ///
 /// Turning it off keeps whatever is already here. It stops promising, it does
@@ -3372,7 +3700,8 @@ fn full_copy_status_impl(app: &AppHandle) -> Result<FullCopyStatus, String> {
 /// a trap, and the space is reclaimed by the cache limit in its own time.
 #[tauri::command(async)]
 pub fn set_full_copy(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let silo = crate::state::active_silo(&app)?;
+    // A setting of the open silo, like everything under its Settings.
+    let silo = crate::state::unlocked_silo(&app)?;
     silentsilo_vault::set_keep_full_copy(&silo.path, enabled).map_err(|e| e.to_string())
 }
 
@@ -3560,26 +3889,10 @@ mod unlock_rule_tests {
     }
 }
 
-/// Writes an export only its owner can read where the system has such a
-/// thing: it is in clear. A file already there is made so too.
+/// Writes an export only its owner can read: it is in clear. A file already
+/// there is made so too (`silentsilo_shell::write_private_file`).
 pub(crate) fn write_owner_only(path: &std::path::Path, bytes: &[u8]) -> Result<(), String> {
-    #[cfg(unix)]
-    {
-        use std::io::Write;
-        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(path)
-            .map_err(|e| e.to_string())?;
-        file.set_permissions(std::fs::Permissions::from_mode(0o600))
-            .map_err(|e| e.to_string())?;
-        file.write_all(bytes).map_err(|e| e.to_string())
-    }
-    #[cfg(not(unix))]
-    std::fs::write(path, bytes).map_err(|e| e.to_string())
+    silentsilo_shell::write_private_file(path, bytes).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -3675,5 +3988,74 @@ mod entry_change_tests {
         assert_eq!(code("history_cleared"), Some(codes::HISTORY_CLEARED));
         assert_eq!(code("imported"), None);
         assert_eq!(code("arranged"), None);
+    }
+}
+
+#[cfg(test)]
+mod withheld_tests {
+    use super::{arranged, row_id, withheld};
+    use serde_json::{Value, json};
+
+    fn protected() -> Value {
+        json!({
+            "id": "6f1c2a9e-1b7d-4e2a-9c3e-0d4b5a6c7e8f",
+            "service": "Bank", "username": "ana", "password": "hunter2",
+            "url": "https://bank.example", "notes": "codes: 1234",
+            "category": "Money", "created_at": 1, "updated_at": 2,
+            "require_reauth": true, "totp_secret": "JBSWY3DPEHPK3PXP",
+            "card_number": "4111111111111111",
+            "fields": [{ "name": "PIN", "value": "0000", "hidden": true }],
+            "history": [{ "saved_at": 1, "password": "older" }],
+            "attachments": [{ "blob_id": "b", "name": "f", "blob_key": "k" }],
+            "from_a_newer_version": "kept out too"
+        })
+    }
+
+    #[test]
+    fn a_protected_entry_goes_out_without_its_secrets() {
+        let shown: Value =
+            serde_json::from_str(&withheld(&protected().to_string()).unwrap()).unwrap();
+        assert_eq!(shown["service"], "Bank");
+        assert_eq!(shown["username"], "ana");
+        assert_eq!(shown["withheld"], true);
+        assert_eq!(shown["password"], "");
+        assert_eq!(shown["notes"], "");
+        let text = shown.to_string();
+        for secret in [
+            "hunter2", "1234", "JBSWY3DP", "4111", "0000", "older", "\"k\"", "newer",
+        ] {
+            assert!(!text.contains(secret), "{secret} left in {text}");
+        }
+        assert_eq!(
+            row_id(&shown.to_string())
+                .map(|id| id.to_string())
+                .as_deref(),
+            Some("6f1c2a9e-1b7d-4e2a-9c3e-0d4b5a6c7e8f")
+        );
+    }
+
+    #[test]
+    fn an_ordinary_entry_is_not_touched() {
+        let mut entry = protected();
+        entry["require_reauth"] = json!(false);
+        assert!(withheld(&entry.to_string()).is_none());
+    }
+
+    #[test]
+    fn filing_changes_only_what_it_names() {
+        let row = protected().to_string();
+        let moved: Value =
+            serde_json::from_str(&arranged(&row, Some("Work"), None).unwrap()).unwrap();
+        assert_eq!(moved["category"], "Work");
+        assert_eq!(moved["password"], "hunter2", "the stored entry, whole");
+        assert_eq!(moved["history"][0]["password"], "older");
+        let starred: Value =
+            serde_json::from_str(&arranged(&row, None, Some(true)).unwrap()).unwrap();
+        assert_eq!(starred["favorite"], true);
+        assert_eq!(starred["category"], "Money");
+        assert!(
+            arranged(&row, Some("Money"), Some(false)).is_none(),
+            "nothing changed"
+        );
     }
 }

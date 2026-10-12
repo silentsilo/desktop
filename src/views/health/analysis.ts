@@ -154,7 +154,12 @@ export function analyseHealth(
     });
   }
 
-  const duplicates = collide(entries, entryFingerprint);
+  // A protected entry is held without its secrets, which would make two of
+  // them look alike.
+  const duplicates = collide(
+    entries.filter((e) => !e.withheld),
+    entryFingerprint,
+  );
   if (duplicates.length > 0) {
     findings.push({
       id: "duplicates",

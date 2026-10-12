@@ -54,6 +54,12 @@ pub struct AppState {
     pub opened_copies: Mutex<std::collections::HashMap<std::path::PathBuf, OpenedCopy>>,
     /// Files whose opening the person cancelled while it was made ready.
     pub open_cancelled: Mutex<std::collections::HashSet<uuid::Uuid>>,
+    /// Protected entries a key check just let through, with when. For one
+    /// unlock: the epoch moving forgets them.
+    pub revealed: Mutex<HashMap<Uuid, Instant>>,
+    /// When an export was confirmed with a key, for the one export that
+    /// follows. Forgotten with the epoch as well.
+    pub export_confirmed: Mutex<Option<Instant>>,
 }
 
 /// A decrypted copy as this app wrote it, to tell it from one changed since.
@@ -384,6 +390,8 @@ impl AppState {
         // Held for one unlock of one silo: whatever moved the epoch ended it.
         *lock_recovering(&self.audit_page) = None;
         lock_recovering(&self.opened_copies).clear();
+        lock_recovering(&self.revealed).clear();
+        *lock_recovering(&self.export_confirmed) = None;
     }
 
     /// Locks `active_silo` before `sessions`, and never the other way
@@ -542,7 +550,10 @@ pub fn open_focused_session(app: &AppHandle, session: VaultSession) -> Result<()
             .get(evicted)
             .map(|e| e.name.clone())
             .unwrap_or_default();
-        let _ = app.emit("silo-auto-locked", serde_json::json!({ "name": name }));
+        let _ = app.emit(
+            "silo-auto-locked",
+            serde_json::json!({ "name": name, "id": evicted.to_string() }),
+        );
     }
     // Whoever opened it names the key afterwards, if there was one.
     crate::audit::set_unlocked_with(id, None);

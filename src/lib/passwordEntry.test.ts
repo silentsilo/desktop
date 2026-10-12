@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { serializeEntry, withEdits } from "./passwordEntry";
+import { arrangedChanges, keepRevealed, serializeEntry, withEdits } from "./passwordEntry";
 import type { PasswordEntry } from "./types";
 
 /**
@@ -50,5 +50,39 @@ describe("withEdits", () => {
     const reloaded = JSON.parse(saved) as Record<string, unknown>;
     expect(reloaded.updated_at).toBe(99);
     expect(reloaded.passkey_credential).toEqual({ id: "abc", private_key: "def" });
+  });
+});
+
+describe("protected entries read without their secrets", () => {
+  const whole = { ...fromTheFuture(), require_reauth: true };
+  const withheld: PasswordEntry = {
+    id: whole.id,
+    service: whole.service,
+    username: whole.username,
+    password: "",
+    url: whole.url,
+    notes: "",
+    category: whole.category,
+    created_at: whole.created_at,
+    updated_at: whole.updated_at,
+    require_reauth: true,
+    withheld: true,
+  };
+
+  it("keep the whole copy the window holds while it is current", () => {
+    expect(keepRevealed([withheld], [whole])).toEqual([whole]);
+  });
+
+  it("take the new read once the entry changed elsewhere", () => {
+    const changed = { ...withheld, updated_at: whole.updated_at + 1 };
+    expect(keepRevealed([changed], [whole])).toEqual([changed]);
+  });
+
+  it("send only what filing changed", () => {
+    expect(arrangedChanges(withheld, { ...withheld, favorite: true })).toEqual({ favorite: true });
+    expect(arrangedChanges(withheld, { ...withheld, category: "Work" })).toEqual({
+      category: "Work",
+    });
+    expect(arrangedChanges(withheld, withheld)).toEqual({});
   });
 });

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  forgetEverySilo,
   forgetLasting,
+  lastingGeneration,
   lastingKey,
   mountLasting,
   readLasting,
@@ -65,5 +67,30 @@ describe("state that outlives its component", () => {
     forgetLasting("silo-a");
     expect(readLasting(key, "idle")).toBe("idle");
     expect(readLasting(other, "idle")).toBe("busy");
+  });
+});
+
+describe("a lock forgets what a silo kept", () => {
+  it("every silo at once, the app's own state aside", () => {
+    const other = lastingKey("silo-b", "pw.pending_import");
+    const app = lastingKey("app", "updater");
+    writeLasting(key, "idle", "done");
+    writeLasting(other, null, "plaintext");
+    writeLasting(app, "idle", "available");
+    forgetEverySilo();
+    expect(readLasting(key, "idle")).toBe("idle");
+    expect(readLasting(other, null)).toBe(null);
+    expect(readLasting(app, "idle")).toBe("available");
+  });
+
+  it("and work started before can tell", () => {
+    const before = lastingGeneration("silo-a");
+    forgetLasting("silo-b");
+    expect(lastingGeneration("silo-a")).toBe(before);
+    forgetLasting("silo-a");
+    expect(lastingGeneration("silo-a")).not.toBe(before);
+    const again = lastingGeneration("silo-a");
+    forgetEverySilo();
+    expect(lastingGeneration("silo-a")).not.toBe(again);
   });
 });

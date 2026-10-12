@@ -39,6 +39,7 @@ import type {
 import { AUTO_LOCK_OPTIONS_MINUTES } from "./lib/types";
 import { moveItems, moveSummary, type MoveDestination, type MoveReport } from "./lib/moves";
 import { withBaseFields, withHistory } from "./lib/entryHistory";
+import { arrangedChanges, keepRevealed } from "./lib/passwordEntry";
 import { loadHistoryPolicy } from "./lib/historySetting";
 import { silosToLock } from "./lib/autoLock";
 import { decideConfirmSlot } from "./lib/confirmSlot";
@@ -50,6 +51,7 @@ import { osOf, platformStrings } from "./lib/platformStrings";
 import { runsOnOpen } from "./lib/executable";
 import { checkForUpdate } from "./lib/updater";
 import {
+  pendingToShow,
   shouldCheckForUpdate,
   UPDATE_POLL_INTERVAL_MS,
 } from "./lib/updateSchedule";
@@ -96,11 +98,17 @@ import { t, translate, useLocale, type Key } from "./i18n";
 import { UnlockView } from "./views/UnlockView";
 import { AppSettingsDrawer } from "./views/settings/AppSettingsView";
 import { FirstRunView } from "./views/FirstRunView";
-import { lastDone } from "./lib/siloMemory";
+import { forgetSiloStorage, lastDone } from "./lib/siloMemory";
 import { decodeAppError, formatAppError, plainError } from "./lib/errors";
 import { AppSettingsContext, UpdateCardContext } from "./lib/appSettings";
 import { UpdateCard } from "./views/UpdateCard";
-import { forgetLasting, LastingScope, useLastingValue, useRunningLasting } from "./lib/lasting";
+import {
+  forgetEverySilo,
+  forgetLasting,
+  LastingScope,
+  useLastingValue,
+  useRunningLasting,
+} from "./lib/lasting";
 import { secondsToLock, useLockNotice } from "./lib/lockNotice";
 import { LockSoonBar } from "./views/LockSoonBar";
 import { lastingTasks, syncTask, type BackgroundTask, type TaskPlace } from "./lib/backgroundTasks";
@@ -326,10 +334,11 @@ export default function App() {
     localStorage.setItem(AUTO_UPDATE_KEY, on ? "on" : "off");
   };
   /// An update the scheduled check found, held so Settings can offer the
-  /// install without asking the endpoint a second time.
+  /// install without asking the endpoint a second time. `update` is null for
+  /// one an earlier run found: Install asks for it then.
   const [backgroundUpdate, setBackgroundUpdate] = useState<{
     version: string;
-    update: Update;
+    update: Update | null;
   } | null>(null);
   /// What the sidebar badges. Only while automatic checks are on: someone
   /// who turned them off asked not to be told, and a manual check shows its
@@ -529,9 +538,14 @@ export default function App() {
   // Rust locks every silo when the workstation locks or suspends. The screen
   // behind that has to follow, or the user comes back to an explorer full of
   // file names belonging to a silo that is no longer open.
+  //
+  // Whatever the pages kept for a silo goes with it, as when Lock is pressed
+  // here: an import waiting to be filed holds passwords in clear, and a
+  // breach check still running stops.
   useEventSubscription(
     () =>
       listen("silos-locked", () => {
+        forgetEverySilo();
         resetExplorer();
         void refreshBootstrap();
         // The picker marks which silos open without a key.
@@ -546,6 +560,7 @@ export default function App() {
   useEventSubscription(
     () =>
       listen<string>("silo-idle-locked", (event) => {
+        forgetLasting(event.payload);
         if (event.payload === focusedSiloRef.current) {
           resetExplorer();
           void refreshBootstrap();
@@ -561,6 +576,7 @@ export default function App() {
   useEventSubscription(
     () =>
       listen<string>("silo-audit-locked", (event) => {
+        forgetLasting(event.payload);
         toasts.errorText(t("app.audit_locked"));
         if (event.payload === focusedSiloRef.current) {
           resetExplorer();
@@ -575,7 +591,8 @@ export default function App() {
   // open at once. That one was not on screen, so nothing else says so.
   useEventSubscription(
     () =>
-      listen<{ name: string }>("silo-auto-locked", (event) => {
+      listen<{ name: string; id?: string }>("silo-auto-locked", (event) => {
+        if (event.payload.id) forgetLasting(event.payload.id);
         const name = event.payload.name;
         toasts.info(
           name ? t("app.auto_locked_named", { name }) : t("app.auto_locked_other"),
@@ -1184,9 +1201,14 @@ export default function App() {
       if (updateCheckInFlight.current) return;
       const raw = localStorage.getItem(UPDATE_LAST_CHECK_KEY);
       const last = raw === null ? null : Number.parseInt(raw, 10);
-      const pendingNotInHand =
-        localStorage.getItem(UPDATE_PENDING_KEY) !== null && !updateInHand.current;
-      if (!shouldCheckForUpdate(last, Date.now(), pendingNotInHand)) return;
+      // Found by an earlier run: shown again from what that check left, so a
+      // restart inside the day asks the server nothing.
+      if (!updateInHand.current) {
+        const pending = pendingToShow(localStorage.getItem(UPDATE_PENDING_KEY), __APP_VERSION__);
+        if (pending) setBackgroundUpdate((held) => held ?? { version: pending, update: null });
+        else localStorage.removeItem(UPDATE_PENDING_KEY);
+      }
+      if (!shouldCheckForUpdate(last, Date.now())) return;
       updateCheckInFlight.current = true;
       try {
         const result = await checkForUpdate();
@@ -1272,16 +1294,20 @@ export default function App() {
     // One question, not two: deleting the files is a box on the same
     // dialog. Asking afterwards meant committing to "Remove" before
     // learning there was a harsher half. The box appears only when the
-    // folder is reachable.
+    // folder is reachable and the silo unlocked: the backend deletes the
+    // files of an unlocked silo only, and a locked one says how.
+    const unlocked = target ? target.unlocked : bootstrap?.locked === false;
+    const canDelete = silo.present && unlocked;
     const { ok, option: alsoDelete } = await askConfirmWith(
       t("app.forget_title"),
       silo.present
-        ? t("app.forget_present", { name: silo.name, path: silo.path })
+        ? t("app.forget_present", { name: silo.name, path: silo.path }) +
+            (unlocked ? "" : ` ${t("app.forget_delete_locked")}`)
         : t("app.forget_absent", { name: silo.name }),
       {
         confirmLabel: t("app.forget_button"),
         danger: true,
-        option: silo.present
+        option: canDelete
           ? {
               label: t("app.forget_delete_files"),
               hint: t("app.forget_delete_files_hint", { path: silo.path }),
@@ -1294,11 +1320,8 @@ export default function App() {
     begin("silo");
     try {
       await invoke("silo_forget", { id: silo.id, deleteFiles: alsoDelete });
-      try {
-        localStorage.removeItem(contentOfferKeyFor(silo.id));
-      } catch {
-        // A leftover flag only hides an offer for a silo that is gone.
-      }
+      forgetLasting(silo.id);
+      forgetSiloStorage(silo.id);
       dropRebuild(silo.id);
       setMeta(null);
       unlockedRef.current = false;
@@ -1655,6 +1678,8 @@ export default function App() {
     begin("silo");
     try {
       await invoke("silo_forget", { id: silo.id, deleteFiles: false });
+      forgetLasting(silo.id);
+      forgetSiloStorage(silo.id);
       setMeta(null);
       unlockedRef.current = false;
       await refreshSilos();
@@ -3159,6 +3184,7 @@ export default function App() {
     } catch (e) {
       toasts.error(e);
     } finally {
+      setFidoProgress(null);
       end("keys");
     }
   };
@@ -3186,6 +3212,7 @@ export default function App() {
     } catch (e) {
       toasts.error(e);
     } finally {
+      setFidoProgress(null);
       end("keys");
     }
   };
@@ -3371,6 +3398,7 @@ export default function App() {
     } catch (e) {
       toasts.error(e);
     } finally {
+      setFidoProgress(null);
       end("keys");
     }
   };
@@ -3382,13 +3410,32 @@ export default function App() {
     BREACHES_IDLE,
   );
 
+  /// The key ignored findings are kept under, from the silo, so what is in
+  /// this computer's web storage names no entry. Fetched at each unlock;
+  /// when the silo cannot give it, one for this session only, and what was
+  /// ignored shows again until it can.
+  const [healthKey, setHealthKey] = useState<string | null>(null);
+  useEffect(() => {
+    setHealthKey(null);
+    if (!meta?.vault_id) return;
+    let current = true;
+    invoke<string>("health_ignore_key")
+      .catch(() => crypto.randomUUID())
+      .then((key) => {
+        if (current) setHealthKey(key);
+      });
+    return () => {
+      current = false;
+    };
+  }, [meta?.vault_id]);
+
   /// What is wrong with this silo, computed once for both the page and the
   /// count on its tab. Waits for everything it judges to have been read:
   /// analysing half-loaded state reports problems that are not there, and a
   /// badge that corrects itself a second later is worse than a late one.
   const healthFindings = useMemo(
     () =>
-      passwordsLoaded && siloFactsLoaded
+      passwordsLoaded && siloFactsLoaded && healthKey !== null
         ? analyseHealth(
             passwordEntries,
             {
@@ -3413,6 +3460,7 @@ export default function App() {
       breachCheck,
       passwordsLoaded,
       siloFactsLoaded,
+      healthKey,
       passwordEntries,
       sync.configured,
       sync.state,
@@ -3439,16 +3487,17 @@ export default function App() {
       splitIgnored(
         healthFindings,
         healthIgnored.silo === healthSiloId ? healthIgnored.set : new Set<string>(),
+        healthKey ?? "",
       ),
-    [healthFindings, healthIgnored, healthSiloId],
+    [healthFindings, healthIgnored, healthSiloId, healthKey],
   );
   const setIgnored = (finding: HealthFinding, ignore: boolean) => {
-    if (!healthSiloId) return;
+    if (!healthSiloId || healthKey === null) return;
     const next = new Set(healthIgnored.silo === healthSiloId ? healthIgnored.set : []);
-    if (ignore) next.add(fingerprint(finding));
-    else next.delete(fingerprint(finding));
+    if (ignore) next.add(fingerprint(finding, healthKey));
+    else next.delete(fingerprint(finding, healthKey));
     // Drop what no longer matches a finding, so the list does not grow forever.
-    const live = new Set(healthFindings.map(fingerprint));
+    const live = new Set(healthFindings.map((f) => fingerprint(f, healthKey)));
     for (const key of next) if (!live.has(key)) next.delete(key);
     saveIgnored(healthSiloId, next);
     setHealthIgnored({ silo: healthSiloId, set: next });
@@ -3678,9 +3727,10 @@ export default function App() {
       const rows = JSON.parse(json) as unknown[];
       const meta_row = rows.find(isCategoriesRow);
       setPasswordCategories(meta_row ? meta_row.categories : null);
-      setPasswordEntries(
-        (rows.filter((r) => !isCategoriesRow(r)) as PasswordEntry[]).map(withBaseFields),
+      const fresh = (rows.filter((r) => !isCategoriesRow(r)) as PasswordEntry[]).map(
+        withBaseFields,
       );
+      setPasswordEntries((held) => keepRevealed(fresh, held));
       setPasswordsLoaded(true);
     } catch (e) {
       if (epoch !== sessionEpoch.current) return;
@@ -3752,6 +3802,42 @@ export default function App() {
     [begin, end, toasts, withPasswordWrite],
   );
 
+  /// A move or a star: only what changed goes, applied by the backend to
+  /// the entry as stored. The whole copy this window holds may be older
+  /// than one another device saved since, or held without its secrets.
+  const arrangePasswordEntry = useCallback(
+    async (previous: PasswordEntry, edited: PasswordEntry): Promise<boolean> => {
+      const changes = arrangedChanges(previous, edited);
+      if (changes.category === undefined && changes.favorite === undefined) return true;
+      setPasswordEntries((prev) => prev.map((x) => (x.id === edited.id ? { ...x, ...changes } : x)));
+      begin("entries");
+      try {
+        await withPasswordWrite(() =>
+          invoke("vault_arrange_password", {
+            id: edited.id,
+            category: changes.category ?? null,
+            favorite: changes.favorite ?? null,
+          }),
+        );
+        return true;
+      } catch (e) {
+        setPasswordEntries((prev) => prev.map((x) => (x.id === edited.id ? previous : x)));
+        toasts.error(e);
+        return false;
+      } finally {
+        end("entries");
+      }
+    },
+    [begin, end, toasts, withPasswordWrite],
+  );
+
+  /// Protected entries a key touch let through, whole, in place of the
+  /// copies read without their secrets.
+  const holdRevealed = useCallback((whole: PasswordEntry[]) => {
+    const byId = new Map(whole.map((e) => [e.id, e]));
+    setPasswordEntries((prev) => prev.map((e) => byId.get(e.id) ?? e));
+  }, []);
+
   /// One entry at a time, because that is what the user changed: rewriting
   /// the whole store meant two devices could not both add a login offline,
   /// the later writer replacing the other's work wholesale. Silent on
@@ -3766,7 +3852,13 @@ export default function App() {
       // changed entry keeps its previous version. Read from the ref: the
       // state update below has not run yet when the entry is sent.
       const previous = passwordEntriesRef.current.find((e) => e.id === edited.id);
-      const entry = withHistory(previous, edited, loadHistoryPolicy());
+      if (change === "arranged" && previous) return arrangePasswordEntry(previous, edited);
+      // A copy read without its secrets is no version to keep.
+      const entry = withHistory(
+        previous?.withheld ? undefined : previous,
+        edited,
+        loadHistoryPolicy(),
+      );
       let before: PasswordEntry | undefined;
       setPasswordEntries((prev) => {
         const idx = prev.findIndex((e) => e.id === entry.id);
@@ -3798,16 +3890,17 @@ export default function App() {
         end("entries");
       }
     },
-    [begin, end, toasts, withPasswordWrite],
+    [arrangePasswordEntry, begin, end, toasts, withPasswordWrite],
   );
 
   const deletePasswordEntry = useCallback(
-    async (id: string) => {
+    async (entry: PasswordEntry) => {
       // The entry is the only thing referencing its attachment blobs, so
       // deleting it is the last chance to reclaim them. Best-effort: a blob
       // that fails to delete is orphaned ciphertext, not a data leak.
-      const removed = passwordEntries.find((e) => e.id === id);
-      const attachments = removed?.attachments ?? [];
+      const id = entry.id;
+      const removed = passwordEntries.find((e) => e.id === id) ?? entry;
+      const attachments = (entry.withheld ? removed : entry).attachments ?? [];
       setPasswordEntries((prev) => prev.filter((e) => e.id !== id));
       begin("entries");
       try {
@@ -4074,6 +4167,7 @@ export default function App() {
           siloId={bootstrap.silo.id}
           siloName={bootstrap.silo.name}
           busy={busy("keys")}
+          progress={fidoProgress}
           onCreateCode={async () => {
             begin("keys");
             try {
@@ -4084,6 +4178,7 @@ export default function App() {
               toasts.error(e);
               return null;
             } finally {
+              setFidoProgress(null);
               end("keys");
             }
           }}
@@ -4320,7 +4415,8 @@ export default function App() {
             busy={busy("entries")}
             focusEntryId={focusEntryId}
             onSaveEntry={savePasswordEntry}
-            onDeleteEntry={(id) => void deletePasswordEntry(id)}
+            onDeleteEntry={(entry) => void deletePasswordEntry(entry)}
+            onRevealed={holdRevealed}
             onImportEntries={(entries, source) => void importPasswordEntries(entries, source)}
             onSaveCategories={(categories) => void savePasswordCategories(categories)}
             onConfirmRun={confirmRun}
@@ -4405,6 +4501,7 @@ export default function App() {
             backupPanel={
               <BackupPanel
                 busy={busy("transfer", "silo")}
+                os={osOf(bootstrap)}
                 siloName={bootstrap.silo.name}
                 lastSyncAt={sync.lastSyncAt}
                 syncError={
@@ -4435,6 +4532,7 @@ export default function App() {
                 copies={
                   <CopiesPanel
                     busy={busy("transfer", "silo")}
+                    os={osOf(bootstrap)}
                     siloName={bootstrap.silo.name}
                     fullCopy={fullCopy}
                     onActivity={() => void refreshSync()}

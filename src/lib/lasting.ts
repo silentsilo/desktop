@@ -34,6 +34,10 @@ const runningOf = new Map<string, (value: unknown) => boolean>();
 /** For the list of what runs: told about every change, whatever the key. */
 const anyListeners = new Set<() => void>();
 let version = 0;
+/** Moves each time a silo's state is forgotten, so work that started
+ * before can tell its result no longer belongs anywhere. */
+const generations = new Map<string, number>();
+let everyGeneration = 0;
 
 /** Which silo the state belongs to. Empty before one is open. */
 export const LastingScope = createContext("");
@@ -87,6 +91,7 @@ export function unmountLasting(key: string, running: (value: unknown) => boolean
 
 /** Drops everything kept for a silo, when it locks or is forgotten. */
 export function forgetLasting(scope: string) {
+  generations.set(scope, (generations.get(scope) ?? 0) + 1);
   for (const key of [...values.keys()]) {
     if (key.startsWith(scope + SEP)) {
       values.delete(key);
@@ -96,12 +101,43 @@ export function forgetLasting(scope: string) {
   }
 }
 
+/** Drops what every silo kept, the app's own state aside: every silo
+ * locked at once. */
+export function forgetEverySilo() {
+  everyGeneration += 1;
+  for (const key of [...values.keys()]) {
+    if (key.slice(0, key.indexOf(SEP)) !== APP_SCOPE) {
+      values.delete(key);
+      unseen.delete(key);
+      notify(key);
+    }
+  }
+}
+
+/** Where `scope` stands: changes whenever its state is forgotten. */
+export function lastingGeneration(scope: string): string {
+  return `${everyGeneration}:${generations.get(scope) ?? 0}`;
+}
+
+/** For work that keeps its result here when it ends: call when it starts,
+ * then ask the returned check before writing. False once the silo locked
+ * or was forgotten meanwhile, when the result must go nowhere. */
+export function useLastingCheck(): () => () => boolean {
+  const scope = useContext(LastingScope);
+  return useCallback(() => {
+    const at = lastingGeneration(scope);
+    return () => lastingGeneration(scope) === at;
+  }, [scope]);
+}
+
 /** For tests. */
 export function resetLasting() {
   values.clear();
   unseen.clear();
   mounts.clear();
   runningOf.clear();
+  generations.clear();
+  everyGeneration = 0;
 }
 
 /** The values still running for a silo and for the app, by name. */

@@ -6,10 +6,62 @@ export type UpdateCheckResult =
   | { available: false }
   | { available: true; version: string; body: string | null; update: Update };
 
+/** Where SilentSilo's releases are published, one folder per tag. */
+const RELEASES = "https://github.com/silentsilo/desktop/releases/download/";
+
+/** Said when an answer points anywhere else. */
+const NOT_OURS =
+  "This update does not come from SilentSilo's releases, so it was not offered.\u001ferr.update_not_ours";
+
+/** Every download address an update answer names, in its platform map or
+ * on its own. */
+export function updateUrls(raw: Record<string, unknown>): string[] {
+  const urls: string[] = [];
+  if (typeof raw.url === "string") urls.push(raw.url);
+  const platforms = raw.platforms;
+  if (platforms && typeof platforms === "object") {
+    for (const entry of Object.values(platforms as Record<string, unknown>)) {
+      const url = (entry as { url?: unknown } | null)?.url;
+      if (typeof url === "string") urls.push(url);
+    }
+  }
+  return urls;
+}
+
+/**
+ * Whether every file an update offers sits in SilentSilo's releases, under
+ * the tag of the version it claims. The signature says who built a file,
+ * not which version it is, so a server answering for the updater could
+ * offer an older signed installer as a newer one. Only the repository's
+ * owners can put a file under a tag, and a tag names its version.
+ */
+export function fromOurReleases(version: string, raw: Record<string, unknown>): boolean {
+  const folder = `${RELEASES}v${version}/`;
+  const urls = updateUrls(raw);
+  return (
+    urls.length > 0 &&
+    urls.every((url) => {
+      let name: string;
+      try {
+        const href = new URL(url).href;
+        if (!href.startsWith(folder)) return false;
+        name = decodeURIComponent(href.slice(folder.length));
+      } catch {
+        return false;
+      }
+      return name.length > 0 && !/[/\\]/.test(name) && !name.includes("..");
+    })
+  );
+}
+
 export async function checkForUpdate(): Promise<UpdateCheckResult> {
-  const update = await check();
+  // Never back to an older version, whatever the server says.
+  const update = await check({ allowDowngrades: false });
   if (!update?.available) {
     return { available: false };
+  }
+  if (!fromOurReleases(update.version, update.rawJson)) {
+    throw new Error(NOT_OURS);
   }
   return { available: true, version: update.version, body: update.body ?? null, update };
 }

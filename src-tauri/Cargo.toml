@@ -67,6 +67,9 @@ keepass = { version = "0.15", features = ["save_kdbx4"] }
 chrono = { version = "0.4", default-features = false }
 # Only for the background sync timer; Tauri already runs on this runtime.
 tokio = { version = "1", features = ["macros", "sync", "time"] }
+# Derives the key Health's set-aside findings are named with. Already in the
+# tree through core.
+blake3 = "1"
 
 # Edge's own autofill and password manager are turned off on the WebView2
 # settings interface, which has no Tauri wrapper. `windows-core` is only for

@@ -122,10 +122,10 @@ function AutoTypeCard({
     setError(null);
     setProgress(null);
     try {
+      // The backend names the login from the silo, not from here.
       await invoke("autotype_confirm", {
         requestId: prompt.request_id,
         entryId: entry.id,
-        label: entry.service,
       });
       onClose();
     } catch (e) {

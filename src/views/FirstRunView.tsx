@@ -9,6 +9,8 @@ type Props = {
   siloId: string;
   siloName: string;
   busy: boolean;
+  /** What the key being asked wants done now, while the code is made. */
+  progress?: string | null;
   /** Makes a recovery code and hands it back, or null when it failed. */
   onCreateCode: () => Promise<string | null>;
   onCopyCode: (code: string) => void;
@@ -25,6 +27,7 @@ export function FirstRunView({
   siloId,
   siloName,
   busy,
+  progress,
   onCreateCode,
   onCopyCode,
   onFinish,
@@ -91,6 +94,11 @@ export function FirstRunView({
                   {t("first.create_code")}
                 </button>
               </div>
+              {busy && progress && (
+                <p className="fido-live" role="status">
+                  {progress}
+                </p>
+              )}
               <div className="auth-alt">
                 <button
                   type="button"

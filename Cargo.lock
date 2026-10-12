@@ -5755,6 +5755,7 @@ name = "silentsilo"
 version = "1.4.0"
 dependencies = [
  "async-trait",
+ "blake3",
  "chrono",
  "hex",
  "keepass",
@@ -5953,6 +5954,7 @@ dependencies = [
  "tokio",
  "windows 0.61.3",
  "winreg",
+ "zbus 5.18.0",
  "zeroize",
 ]
 

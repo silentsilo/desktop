@@ -15,7 +15,7 @@ use zeroize::Zeroizing;
 use super::logins::Login;
 
 /// At most this many answers to a `search`.
-pub const SEARCH_LIMIT: usize = 20;
+pub const SEARCH_LIMIT: usize = 10;
 
 /// A shorter `search` finds nothing: one letter would list most of a silo
 /// in a few requests.
@@ -98,7 +98,7 @@ impl From<Code> for Failure {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub enum Request {
     Status,
     Logins {
@@ -119,6 +119,27 @@ pub enum Request {
         username: Zeroizing<String>,
         password: Zeroizing<String>,
     },
+}
+
+/// A save without what the person typed.
+impl std::fmt::Debug for Request {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Request::Status => f.write_str("Status"),
+            Request::Logins { origin } => f.debug_struct("Logins").field("origin", origin).finish(),
+            Request::Search { query } => f.debug_struct("Search").field("query", query).finish(),
+            Request::Fill { origin, reference } => f
+                .debug_struct("Fill")
+                .field("origin", origin)
+                .field("reference", reference)
+                .finish(),
+            Request::Show => f.write_str("Show"),
+            Request::Save { origin, .. } => f
+                .debug_struct("Save")
+                .field("origin", origin)
+                .finish_non_exhaustive(),
+        }
+    }
 }
 
 /// Parses one request. On failure the id is whatever could be read, empty

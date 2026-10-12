@@ -39,9 +39,16 @@ type Props = {
   onCopyTotp: (entry: PasswordEntry, code: string) => void;
   /** Non-secret text: goes to the ordinary clipboard. */
   onCopyPlain: (key: string, text: string) => void;
-  /** A secret of this entry: re-auth gate, then the clearing clipboard. */
+  /** A secret of this entry: re-auth gate, then the clearing clipboard.
+   * `pick` reads it from the entry whole, which a protected one is only
+   * after the key touch. */
   /// `field` names what was copied, for the silo's activity log.
-  onCopySecretField: (entry: PasswordEntry, key: string, text: string, field: string) => void;
+  onCopySecretField: (
+    entry: PasswordEntry,
+    key: string,
+    pick: (whole: PasswordEntry) => string,
+    field: string,
+  ) => void;
   onOpenAttachment: (attachment: PasswordAttachment) => void;
   /** Resolves true when this entry may be shown: either it is unprotected,
    * or the user just proved presence with an enrolled authenticator. */
@@ -157,7 +164,7 @@ export function EntryDetail({
 
   const secretRow = (
     label: string,
-    value: string,
+    pick: (whole: PasswordEntry) => string,
     shown: string,
     copyKey: string,
     copyLabel: string,
@@ -172,7 +179,7 @@ export function EntryDetail({
         className="pw-inline-btn"
         data-tooltip={copyLabel}
         aria-label={copyLabel}
-        onClick={() => onCopySecretField(entry, copyKey, value, audit)}
+        onClick={() => onCopySecretField(entry, copyKey, pick, audit)}
       >
         {copyBadge(copyKey)}
       </button>
@@ -285,7 +292,7 @@ export function EntryDetail({
               </div>
               {secretRow(
                 t("pw.field_password"),
-                entry.password,
+                (whole) => whole.password,
                 entry.password,
                 entry.id,
                 t("pw.copy_password"),
@@ -314,7 +321,7 @@ export function EntryDetail({
               {plainRow(t("pw.field_brand"), entry.card_brand)}
               {secretRow(
                 t("pw.field_number"),
-                cardDigits(entry),
+                cardDigits,
                 groupCardNumber(cardDigits(entry)),
                 entry.id,
                 t("pw.copy_number"),
@@ -331,7 +338,7 @@ export function EntryDetail({
               {entry.card_code &&
                 secretRow(
                   t("pw.field_security_code"),
-                  entry.card_code,
+                  (whole) => whole.card_code ?? "",
                   entry.card_code,
                   `c-${entry.id}`,
                   t("pw.copy_security_code"),
@@ -398,7 +405,12 @@ export function EntryDetail({
                   data-tooltip={t("pw.copy_private_key")}
                   aria-label={t("pw.copy_private_key")}
                   onClick={() =>
-                    onCopySecretField(entry, entry.id, entry.ssh_private_key ?? "", "private key")
+                    onCopySecretField(
+                      entry,
+                      entry.id,
+                      (whole) => whole.ssh_private_key ?? "",
+                      "private key",
+                    )
                   }
                 >
                   {copyBadge(entry.id)}
@@ -414,7 +426,7 @@ export function EntryDetail({
               {field.hidden
                 ? secretRow(
                     field.name || t("pw.hidden_field"),
-                    field.value,
+                    () => field.value,
                     field.value,
                     `f${i}-${entry.id}`,
                     field.name
@@ -432,6 +444,13 @@ export function EntryDetail({
                   )}
             </Fragment>
           ))}
+
+          {entry.withheld && (
+            <div className="pw-field-row">
+              <span className="pw-field-value hint">{t("pw.withheld_hint")}</span>
+              {revealButton}
+            </div>
+          )}
 
           {entry.url &&
             (() => {
@@ -511,7 +530,9 @@ export function EntryDetail({
                 className="pw-inline-btn"
                 data-tooltip={t("pw.copy_notes")}
                 aria-label={t("pw.copy_notes")}
-                onClick={() => onCopySecretField(entry, `notes-${entry.id}`, entry.notes, "notes")}
+                onClick={() =>
+                  onCopySecretField(entry, `notes-${entry.id}`, (whole) => whole.notes, "notes")
+                }
               >
                 {copyBadge(`notes-${entry.id}`)}
               </button>
@@ -562,7 +583,7 @@ export function EntryDetail({
                                   onCopySecretField(
                                     entry,
                                     `h${i}-${entry.id}`,
-                                    version.password ?? "",
+                                    () => version.password ?? "",
                                     "earlier password",
                                   )
                                 }

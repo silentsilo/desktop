@@ -4,7 +4,8 @@
 //! `silentsilo_shell::ssh_agent_channel` listens and says who connected;
 //! `proto` reads the requests; `keys` is the one module that reads the
 //! vault. Every signature waits for the person in this window, unless they
-//! allowed that key for that server (or for git) until the silo locks. The
+//! allowed that key, for that server (or for git) and that program, until
+//! the silo locks. The
 //! design and its reasons are in docs/ARCHITECTURE.md, "SSH agent".
 
 mod keys;
@@ -69,24 +70,26 @@ enum Destination {
 struct Allowances {
     /// The silo and unlock they were given in; anything else forgets them.
     scope: Option<(Uuid, u64)>,
-    keys: HashSet<(Vec<u8>, Destination)>,
+    /// A key, where it may sign, and the program allowed to ask, by path.
+    keys: HashSet<(Vec<u8>, Destination, String)>,
 }
 
 impl Allowances {
-    fn holds(&mut self, scope: (Uuid, u64), key: &[u8], to: &Destination) -> bool {
+    fn holds(&mut self, scope: (Uuid, u64), key: &[u8], to: &Destination, program: &str) -> bool {
         if self.scope != Some(scope) {
             self.keys.clear();
             self.scope = Some(scope);
         }
-        self.keys.contains(&(key.to_vec(), to.clone()))
+        self.keys
+            .contains(&(key.to_vec(), to.clone(), program.to_string()))
     }
 
-    fn allow(&mut self, scope: (Uuid, u64), key: Vec<u8>, to: Destination) {
+    fn allow(&mut self, scope: (Uuid, u64), key: Vec<u8>, to: Destination, program: String) {
         if self.scope != Some(scope) {
             self.keys.clear();
             self.scope = Some(scope);
         }
-        self.keys.insert((key, to));
+        self.keys.insert((key, to, program));
     }
 }
 
@@ -149,7 +152,8 @@ pub struct SignPrompt {
     /// "git" when Git signs a commit or a tag; another namespace otherwise.
     namespace: Option<String>,
     /// Whether the dialog may offer to remember: only for a known server or
-    /// for git, and never for a key that asks for a touch every time.
+    /// for git, asked by a program named by its path, and never for a key
+    /// that asks for a touch every time.
     can_remember: bool,
     /// The entry asks for Windows Hello or the security key as well.
     require_reauth: bool,
@@ -659,10 +663,14 @@ async fn sign(
     let entry = offered.iter().find(|k| k.blob == key).ok_or(())?;
 
     let agent = app.state::<SshAgent>();
+    // An allowance is for the program that was allowed: another one asking
+    // for the same key and server is asked about, as on the first time.
+    let program = peer.exe.as_ref().map(|p| p.display().to_string());
     let allowed = !entry.require_reauth
         && destination
             .as_ref()
-            .is_some_and(|to| lock(&agent.allowances).holds(scope, &key, to));
+            .zip(program.as_deref())
+            .is_some_and(|(to, program)| lock(&agent.allowances).holds(scope, &key, to, program));
 
     if !allowed {
         if lock(&agent.declined_at).is_some_and(|at| at.elapsed() < COOLDOWN) {
@@ -671,7 +679,7 @@ async fn sign(
         let prompt = SignPrompt {
             request_id: Uuid::new_v4().to_string(),
             key: entry.label.clone(),
-            program: peer.exe.as_ref().map(|p| p.display().to_string()),
+            program: program.clone(),
             parent: peer.parent.as_ref().map(|p| p.display().to_string()),
             host: host.clone(),
             user: match &purpose {
@@ -682,7 +690,7 @@ async fn sign(
                 Purpose::Sshsig { namespace } => Some(namespace.clone()),
                 _ => None,
             },
-            can_remember: destination.is_some() && !entry.require_reauth,
+            can_remember: destination.is_some() && program.is_some() && !entry.require_reauth,
             require_reauth: entry.require_reauth,
         };
         let (reply, decided) = oneshot::channel();
@@ -708,8 +716,8 @@ async fn sign(
         crate::front::Front::raise(app);
 
         let remember = wait(app, decided, scope.1).await?;
-        if remember && let Some(to) = destination.clone() {
-            lock(&agent.allowances).allow(scope, key.clone(), to);
+        if remember && let (Some(to), Some(program)) = (destination.clone(), program.clone()) {
+            lock(&agent.allowances).allow(scope, key.clone(), to, program);
         }
         guard.signed = true;
     }
@@ -775,12 +783,33 @@ mod tests {
         let silo = Uuid::new_v4();
         let mut allowances = Allowances::default();
         let to = Destination::Host("SHA256:abc".into());
-        allowances.allow((silo, 1), b"key".to_vec(), to.clone());
-        assert!(allowances.holds((silo, 1), b"key", &to));
-        assert!(!allowances.holds((silo, 1), b"key", &Destination::Git));
-        assert!(!allowances.holds((silo, 1), b"other", &to));
-        assert!(!allowances.holds((silo, 2), b"key", &to), "locked since");
-        assert!(!allowances.holds((silo, 1), b"key", &to), "and stays gone");
+        let ssh = r"C:\Windows\System32\OpenSSH\ssh.exe";
+        allowances.allow((silo, 1), b"key".to_vec(), to.clone(), ssh.into());
+        assert!(allowances.holds((silo, 1), b"key", &to, ssh));
+        assert!(!allowances.holds((silo, 1), b"key", &Destination::Git, ssh));
+        assert!(!allowances.holds((silo, 1), b"other", &to, ssh));
+        assert!(
+            !allowances.holds((silo, 2), b"key", &to, ssh),
+            "locked since"
+        );
+        assert!(
+            !allowances.holds((silo, 1), b"key", &to, ssh),
+            "and stays gone"
+        );
+    }
+
+    #[test]
+    fn an_allowance_is_for_the_program_that_was_allowed() {
+        let silo = Uuid::new_v4();
+        let mut allowances = Allowances::default();
+        allowances.allow(
+            (silo, 1),
+            b"key".to_vec(),
+            Destination::Git,
+            "/usr/bin/ssh-keygen".into(),
+        );
+        assert!(allowances.holds((silo, 1), b"key", &Destination::Git, "/usr/bin/ssh-keygen"));
+        assert!(!allowances.holds((silo, 1), b"key", &Destination::Git, "/tmp/ssh-keygen"));
     }
 
     #[test]

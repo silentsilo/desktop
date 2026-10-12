@@ -58,7 +58,7 @@ type Props = {
   onAutoUpdateEnabled: (on: boolean) => void;
   /** An update the scheduled check already found, so this panel can offer
    * the install without a second request. */
-  backgroundUpdate: { version: string; update: Update } | null;
+  backgroundUpdate: { version: string; update: Update | null } | null;
   /** An install that failed after locking every silo, which closes this
    * panel before it can show the error. */
   onUpdateFailedAfterLock: (message: string) => void;
@@ -285,6 +285,11 @@ export function SettingsPanel(props: Props) {
               {t("settings.recovery")}
             </h3>
             <p>{t("recovery.intro")}</p>
+            {busy && fidoProgress && (
+              <p className="fido-live" role="status">
+                {fidoProgress}
+              </p>
+            )}
             {recoveryCode ? (
               <div className="recovery-reveal">
                 <p className="hint is-error">

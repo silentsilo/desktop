@@ -1,15 +1,17 @@
 //! macOS pieces of auto-type and of giving focus back: the global shortcut
 //! (Carbon's `RegisterEventHotKey`, which needs no permission), the
-//! application in front, and typing with `CGEventPost`, which macOS lets
-//! through only once the person allows SilentSilo under Privacy & Security,
-//! Accessibility.
+//! application and window in front, and typing with `CGEventPostToPid`,
+//! which macOS lets through only once the person allows SilentSilo under
+//! Privacy & Security, Accessibility.
 
 use std::ffi::c_void;
 use std::sync::Mutex;
 
+use core_foundation::array::CFArray;
 use core_foundation::base::{CFType, TCFType};
 use core_foundation::boolean::CFBoolean;
 use core_foundation::dictionary::CFDictionary;
+use core_foundation::number::CFNumber;
 use core_foundation::string::{CFString, CFStringRef};
 use objc2_app_kit::{NSApplicationActivationOptions, NSRunningApplication, NSWorkspace};
 
@@ -58,7 +60,8 @@ unsafe extern "C" {
     fn CGEventCreateKeyboardEvent(source: *const c_void, key: u16, down: bool) -> *mut c_void;
     fn CGEventKeyboardSetUnicodeString(event: *mut c_void, length: usize, text: *const u16);
     fn CGEventSetFlags(event: *mut c_void, flags: u64);
-    fn CGEventPost(tap: u32, event: *mut c_void);
+    fn CGEventPostToPid(pid: i32, event: *mut c_void);
+    fn CGWindowListCopyWindowInfo(option: u32, relative_to: u32) -> *const c_void;
     fn CGEventSourceFlagsState(state: i32) -> u64;
 }
 
@@ -100,8 +103,10 @@ const KEY_RETURN: u16 = 36;
 const CONTROL_KEY: u32 = 0x1000;
 const OPTION_KEY: u32 = 0x0800;
 const HOT_KEY_PRESSED: u32 = 5;
-const HID_EVENT_TAP: u32 = 0;
 const HID_SYSTEM_STATE: i32 = 1;
+/// `kCGWindowListOptionOnScreenOnly` and `kCGWindowListExcludeDesktopElements`.
+const ON_SCREEN_ONLY: u32 = 1;
+const EXCLUDE_DESKTOP: u32 = 1 << 4;
 const MODIFIER_FLAGS: u64 = 0x0002_0000 | 0x0004_0000 | 0x0008_0000 | 0x0010_0000;
 
 /// Runs `work` on the main thread and waits for it: Carbon's hot keys
@@ -268,9 +273,10 @@ pub fn modifiers_held() -> bool {
     unsafe { CGEventSourceFlagsState(HID_SYSTEM_STATE) & MODIFIER_FLAGS != 0 }
 }
 
-/// Posts one key press and release; with `text`, the event carries those
-/// characters instead of the key's own, so the layout does not matter.
-pub fn post_key(key: u16, text: Option<&[u16]>) -> bool {
+/// Posts one key press and release to process `pid`, whichever window has
+/// the focus; with `text`, the event carries those characters instead of
+/// the key's own, so the layout does not matter.
+pub fn post_key(pid: i32, key: u16, text: Option<&[u16]>) -> bool {
     for down in [true, false] {
         // SAFETY: the event is created, used and released here.
         unsafe {
@@ -284,25 +290,24 @@ pub fn post_key(key: u16, text: Option<&[u16]>) -> bool {
             // Clear, so a modifier the system still counts as down does not
             // turn the character into a shortcut.
             CGEventSetFlags(event, 0);
-            CGEventPost(HID_EVENT_TAP, event);
+            CGEventPostToPid(pid, event);
             CFRelease(event);
         }
     }
     true
 }
 
-pub fn post_text(text: &str) -> bool {
-    let mut units = [0u16; 2];
-    text.chars()
-        .all(|c| post_key(KEY_A as u16, Some(c.encode_utf16(&mut units))))
+/// One character, as the UTF-16 units it takes.
+pub fn post_char(pid: i32, units: &[u16]) -> bool {
+    post_key(pid, KEY_A as u16, Some(units))
 }
 
-pub fn post_tab() -> bool {
-    post_key(KEY_TAB, None)
+pub fn post_tab(pid: i32) -> bool {
+    post_key(pid, KEY_TAB, None)
 }
 
-pub fn post_return() -> bool {
-    post_key(KEY_RETURN, None)
+pub fn post_return(pid: i32) -> bool {
+    post_key(pid, KEY_RETURN, None)
 }
 
 /// The application in front, when it is not this one.
@@ -360,6 +365,38 @@ unsafe fn copy_attribute(element: *mut c_void, name: &'static str) -> Option<CFT
     };
     // SAFETY: a +1 reference from a Copy call.
     (status == 0 && !value.is_null()).then(|| unsafe { CFType::wrap_under_create_rule(value) })
+}
+
+/// The number of the application's window in front, the window server's
+/// own id for it (`kCGWindowNumber`): the first ordinary window of `pid` in
+/// the on-screen list, which runs front to back. 0 when it has none on
+/// screen. Needs no permission: the list names no window titles here.
+pub fn front_window(pid: i32) -> u32 {
+    // SAFETY: the list comes back retained and its wrapper releases it.
+    unsafe {
+        let list = CGWindowListCopyWindowInfo(ON_SCREEN_ONLY | EXCLUDE_DESKTOP, 0);
+        if list.is_null() {
+            return 0;
+        }
+        let list: CFArray<CFDictionary<CFString, CFType>> =
+            CFArray::wrap_under_create_rule(list.cast());
+        for window in list.iter() {
+            let number = |key: &'static str| {
+                window
+                    .find(CFString::from_static_string(key))
+                    .and_then(|value| value.downcast::<CFNumber>())
+                    .and_then(|n| n.to_i64())
+            };
+            if number("kCGWindowLayer") == Some(0)
+                && number("kCGWindowOwnerPID") == Some(i64::from(pid))
+            {
+                return number("kCGWindowNumber")
+                    .and_then(|n| u32::try_from(n).ok())
+                    .unwrap_or(0);
+            }
+        }
+        0
+    }
 }
 
 /// Brings the application forward again.

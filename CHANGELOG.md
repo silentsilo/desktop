@@ -59,6 +59,27 @@ silo from opening needs a major version rather than a note.
   the next start. It used to be one notice per version, which most people
   closed unread. The Settings badge no longer disappears after a restart on
   the same day.
+- An entry that asks for your key before it is shown now stays that way in
+  the app's core too: its password, notes, codes, files and history reach
+  the window only after the key. Deleting or moving such entries asks for
+  the key as well.
+- Every export asks for your key, each time. So do a new or switched-off
+  recovery code, adding or removing a key, and adding a backup copy. A silo
+  opened with its recovery code is not asked, since that is how you get
+  back in when the keys are lost. Exported files are readable by your user
+  alone.
+- A key you do not name is called after what it is (Windows Hello, Touch
+  ID, Security key), never after the computer.
+- The window is kept out of screenshots, screen recordings and screen
+  sharing on Windows and macOS; a switch under General turns that off.
+- On Linux the silos lock when the screen locks or the machine goes to
+  sleep, as on Windows and macOS.
+- Auto-type checks the window before every key and stops if another came
+  in front. A file opened from a silo is marked as downloaded, so Windows
+  warns before running it.
+- An update is offered only from SilentSilo's own releases for the version
+  it claims, and never an older version. The daily check asks once a day
+  even when an update is waiting.
 
 ### Fixed
 

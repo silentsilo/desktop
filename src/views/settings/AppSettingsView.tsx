@@ -20,7 +20,7 @@ type Props = {
   os: Os;
   /** Which tab to open on: Updates when an update is waiting. */
   initial: AppSectionId;
-  backgroundUpdate: { version: string; update: Update } | null;
+  backgroundUpdate: { version: string; update: Update | null } | null;
   autoUpdateEnabled: boolean;
   onAutoUpdateEnabled: (on: boolean) => void;
   defaultAutoLockMinutes: number;

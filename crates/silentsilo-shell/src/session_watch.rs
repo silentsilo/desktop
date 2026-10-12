@@ -3,8 +3,8 @@
 //! and walks off, leaving the silo open for minutes until the timer
 //! expires. Windows announces that through session notifications, macOS
 //! through a distributed notification when the screen locks and a
-//! workspace one when the machine sleeps, so the app can lock at the same
-//! moment the workstation does.
+//! workspace one when the machine sleeps, and Linux through logind on the
+//! system bus, so the app can lock at the same moment the workstation does.
 
 /// What the OS just told us about the user's session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -180,18 +180,104 @@ mod imp {
     }
 }
 
+#[cfg(target_os = "linux")]
+mod imp {
+    use super::SessionEvent;
+    use std::sync::Arc;
+
+    use zbus::blocking::{Connection, Proxy};
+    use zbus::zvariant::OwnedObjectPath;
+
+    type Handler = Arc<dyn Fn(SessionEvent) + Send + Sync>;
+
+    const LOGIN1: &str = "org.freedesktop.login1";
+    const MANAGER_PATH: &str = "/org/freedesktop/login1";
+    const MANAGER: &str = "org.freedesktop.login1.Manager";
+    const SESSION: &str = "org.freedesktop.login1.Session";
+
+    /// Three listeners, each on a thread of its own since each blocks for
+    /// good: the machine about to sleep, this session asked to lock, and
+    /// this session's lock screen up. A desktop without logind (no systemd
+    /// and no elogind) has none of them, and the idle timer is what closes
+    /// the silo there.
+    pub fn watch(handler: Box<dyn Fn(SessionEvent) + Send + Sync>) {
+        let handler: Handler = Arc::from(handler);
+        let sleep = handler.clone();
+        std::thread::spawn(move || {
+            let _ = on_sleep(&sleep);
+        });
+        let lock = handler.clone();
+        std::thread::spawn(move || {
+            let _ = on_lock_request(&lock);
+        });
+        std::thread::spawn(move || {
+            let _ = on_locked_hint(&handler);
+        });
+    }
+
+    /// `PrepareForSleep(true)`, sent before a suspend or a hibernation.
+    fn on_sleep(handler: &Handler) -> zbus::Result<()> {
+        let connection = Connection::system()?;
+        let manager = Proxy::new(&connection, LOGIN1, MANAGER_PATH, MANAGER)?;
+        for signal in manager.receive_signal("PrepareForSleep")? {
+            if signal.body().deserialize::<bool>()? {
+                handler(SessionEvent::UserLeft);
+            }
+        }
+        Ok(())
+    }
+
+    /// `Lock` on this session: `loginctl lock-session`, or the desktop
+    /// asking every screen to lock.
+    fn on_lock_request(handler: &Handler) -> zbus::Result<()> {
+        let connection = Connection::system()?;
+        let session = Proxy::new(&connection, LOGIN1, session_path(&connection)?, SESSION)?;
+        for _ in session.receive_signal("Lock")? {
+            handler(SessionEvent::UserLeft);
+        }
+        Ok(())
+    }
+
+    /// `LockedHint` turning true: GNOME and KDE set it while their lock
+    /// screen is up, however it was locked.
+    fn on_locked_hint(handler: &Handler) -> zbus::Result<()> {
+        let connection = Connection::system()?;
+        let session = Proxy::new(&connection, LOGIN1, session_path(&connection)?, SESSION)?;
+        for change in session.receive_property_changed::<bool>("LockedHint") {
+            if change.get()? {
+                handler(SessionEvent::UserLeft);
+            }
+        }
+        Ok(())
+    }
+
+    /// This process's login session. Signals come from its real path, never
+    /// from the `auto` alias, so it is asked for by id, or by process when
+    /// the environment does not name it.
+    fn session_path(connection: &Connection) -> zbus::Result<OwnedObjectPath> {
+        let manager = Proxy::new(connection, LOGIN1, MANAGER_PATH, MANAGER)?;
+        if let Ok(id) = std::env::var("XDG_SESSION_ID")
+            && let Ok(path) = manager.call("GetSession", &(id.as_str(),))
+        {
+            return Ok(path);
+        }
+        manager.call("GetSessionByPID", &(std::process::id(),))
+    }
+}
+
 /// Calls `handler` whenever the user leaves the machine.
 ///
 /// On Windows this spawns the thread that runs the message loop and never
 /// returns work to the caller. On macOS it registers observers with the
-/// system and returns; call it from the main thread. On platforms without
-/// an implementation it does nothing, and the idle timer remains the only
+/// system and returns; call it from the main thread. On Linux it starts the
+/// threads that listen to logind and returns. On platforms without an
+/// implementation it does nothing, and the idle timer remains the only
 /// thing closing an unattended silo.
 pub fn on_user_left(handler: impl Fn(SessionEvent) + Send + Sync + 'static) {
     #[cfg(windows)]
     std::thread::spawn(move || imp::watch(Box::new(handler)));
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     imp::watch(Box::new(handler));
-    #[cfg(not(any(windows, target_os = "macos")))]
+    #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
     let _ = handler;
 }

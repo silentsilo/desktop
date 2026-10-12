@@ -121,14 +121,15 @@ pub async fn cloud_list_silos(sign_in: String) -> Result<Vec<String>, String> {
 }
 
 /// Gives a copy a new sign-in after the old one stopped working. Refused for
-/// another account: the copy would then point at an empty folder.
+/// another account: the copy would then point at an empty folder. Only
+/// while the silo is unlocked, like adding a copy.
 #[tauri::command]
 pub async fn backup_target_reconnect(
     app: AppHandle,
     id: String,
     sign_in: String,
 ) -> Result<(), String> {
-    let silo = crate::state::active_silo(&app)?;
+    let silo = crate::state::unlocked_silo(&app)?;
     let target = silentsilo_vault::load_targets(silo.id)
         .into_iter()
         .find(|t| t.config.target_id().to_string() == id)

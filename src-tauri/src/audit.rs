@@ -91,6 +91,11 @@ pub fn key_name(key: &silentsilo_vault::StoredFidoCredential) -> String {
 /// What the log calls an unlock with the recovery code.
 pub const VIA_RECOVERY_CODE: &str = "recovery code";
 
+/// Whether silo `id` is open in a session the recovery code opened.
+pub fn opened_with_recovery_code(id: Uuid) -> bool {
+    unlocked_with(id).as_deref() == Some(VIA_RECOVERY_CODE)
+}
+
 /// Records `event` in silo `id`'s log. An `Err` means the silo was locked
 /// and the action must not happen.
 pub fn record_in(app: &AppHandle, id: Uuid, mut event: Event) -> Result<(), String> {

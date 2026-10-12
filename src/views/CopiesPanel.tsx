@@ -34,10 +34,14 @@ import {
   type SeedProgress,
 } from "../lib/types";
 import { CLOUD_NAME } from "../lib/cloud";
+import { describeFidoPrompt, type FidoPrompt } from "../lib/fidoPrompt";
+import { platformStrings, type Os } from "../lib/platformStrings";
 import { t, useLocale } from "../i18n";
 
 type Props = {
   busy: boolean;
+  /** Names the built-in key in what the key check asks. */
+  os?: Os;
   /** The open silo's name: a new copy's folder starts with it. */
   siloName?: string | null;
   /** Whether this computer holds every file, not just the index. */
@@ -58,7 +62,7 @@ type Props = {
  */
 const never = () => false;
 
-export function CopiesPanel({ busy, siloName, fullCopy, onActivity }: Props) {
+export function CopiesPanel({ busy, os, siloName, fullCopy, onActivity }: Props) {
   useLocale();
   const [targets, setTargets] = useState<BackupTargetView[] | null>(null);
   // Lasting, like the work behind them: see lib/lasting.
@@ -130,6 +134,16 @@ export function CopiesPanel({ busy, siloName, fullCopy, onActivity }: Props) {
   // until the page was left and reopened.
   useEventSubscription(() => listen("sync-report", () => queueRefresh()), [queueRefresh]);
 
+  // Adding a copy asks for the key first; what it wants is said here.
+  const [keyPrompt, setKeyPrompt] = useState<string | null>(null);
+  useEventSubscription(
+    () =>
+      listen<FidoPrompt>("fido-progress", (event) => {
+        if (working) setKeyPrompt(describeFidoPrompt(event.payload, platformStrings(os ?? "windows").builtIn));
+      }),
+    [working, os],
+  );
+
   const add = async () => {
     const missing = missingStoreFields(draft, false);
     if (missing.length > 0) {
@@ -137,6 +151,7 @@ export function CopiesPanel({ busy, siloName, fullCopy, onActivity }: Props) {
       return;
     }
     setError(null);
+    setKeyPrompt(null);
     setWorking(true);
     try {
       await invoke("backup_target_add", {
@@ -155,6 +170,7 @@ export function CopiesPanel({ busy, siloName, fullCopy, onActivity }: Props) {
       setError(formatAppError(e));
     } finally {
       setWorking(false);
+      setKeyPrompt(null);
     }
   };
 
@@ -498,6 +514,11 @@ export function CopiesPanel({ busy, siloName, fullCopy, onActivity }: Props) {
               {t("common.cancel")}
             </button>
           </div>
+          {working && keyPrompt && (
+            <p className="fido-live" role="status">
+              {keyPrompt}
+            </p>
+          )}
         </div>
       ) : (
         <div className="actions">

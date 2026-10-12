@@ -5,6 +5,7 @@ import { Globe } from "lucide-react";
 import type { BrowserSavePrompt, EntryChange, PasswordEntry } from "../lib/types";
 import { alreadySaved, existingEntry, savedEntry } from "../lib/browserSave";
 import { formatAppError } from "../lib/errors";
+import { withBaseFields } from "../lib/entryHistory";
 import { useEventSubscription } from "../hooks/useEventSubscription";
 import { useModal } from "../hooks/useModal";
 import { t, useLocale } from "../i18n";
@@ -100,14 +101,22 @@ function SaveCard({
   const save = async () => {
     setBusy(true);
     setError(null);
-    const { entry, updated } = savedEntry(
-      prompt,
-      update ? existing : undefined,
-      label,
-      username.trim(),
-      Date.now(),
-    );
     try {
+      // A protected login is held without its secrets; updating it keeps
+      // the old password in its history, so it is read whole first, with
+      // the key.
+      let base = update ? existing : undefined;
+      if (base?.withheld) {
+        const id = base.id;
+        const rows = await invoke<string[]>("fido_reverify", { purpose: null, entries: [id] });
+        const whole = rows.map((row) => withBaseFields(JSON.parse(row) as PasswordEntry));
+        base = whole.find((e) => e.id === id);
+        if (!base) {
+          setError(t("dlg.save_failed"));
+          return;
+        }
+      }
+      const { entry, updated } = savedEntry(prompt, base, label, username.trim(), Date.now());
       if (!(await onSave(entry, updated ? "edited" : "created"))) {
         setError(t("dlg.save_failed"));
         return;

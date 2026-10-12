@@ -212,13 +212,13 @@ export function csvToEntries(text: string, now: () => number = Date.now): Import
   let skipped = 0;
   const extras = noExtras();
   // Only this app's own file had the guard added, so only there does it
-  // come off. The password and TOTP columns are never guarded.
+  // come off, the password and TOTP columns included.
   const unguard = format === "silentsilo" ? removeFormulaGuard : (value: string) => value;
 
   for (const row of dataRows) {
     const field = (name: string) => unguard(pick(row, index, name));
-    const password = pick(row, index, "password");
-    const totpRaw = pick(row, index, "totp");
+    const password = field("password");
+    const totpRaw = field("totp");
     const service = field("service");
 
     if (!password && !totpRaw) {
@@ -316,11 +316,13 @@ export function removeFormulaGuard(value: string): string {
   return /^'+[=+\-@\t\r]/.test(value) ? value.slice(1) : value;
 }
 
-function escapeCsvField(value: string, exact = false): string {
-  // Prefixing a quote keeps a name like "=HYPERLINK(...)" inert when the
-  // file is opened in Excel. Not for a password or a TOTP secret: another
-  // manager importing the file would store the quote as part of it.
-  const guarded = !exact && needsFormulaGuard(value) ? `'${value}` : value;
+function escapeCsvField(value: string): string {
+  // Prefixing a quote keeps a value like "=HYPERLINK(...)" inert when the
+  // file is opened in Excel. Every column, passwords and TOTP secrets
+  // included: an entry synced from elsewhere can carry one, and the file is
+  // as likely to be opened in a spreadsheet as imported. Another manager
+  // importing the file keeps the quote, which the export panel says.
+  const guarded = needsFormulaGuard(value) ? `'${value}` : value;
   // Quoted when it starts or ends with a space too: readers, this one
   // included, trim an unquoted field, and a password " pass " came back as
   // "pass".
@@ -353,8 +355,8 @@ export function entriesToCsv(entries: PasswordEntry[]): string {
         escapeCsvField(entry.service ?? ""),
         escapeCsvField(entry.url ?? ""),
         escapeCsvField(entry.username ?? ""),
-        escapeCsvField(entry.password ?? "", true),
-        escapeCsvField(entry.totp_secret ?? "", true),
+        escapeCsvField(entry.password ?? ""),
+        escapeCsvField(entry.totp_secret ?? ""),
         escapeCsvField(entry.category ?? ""),
         escapeCsvField(entry.notes ?? ""),
       ].join(","),

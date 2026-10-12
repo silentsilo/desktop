@@ -48,6 +48,11 @@ tokio = { version = "1", features = ["io-util", "macros", "rt-multi-thread"] }
 [target."cfg(unix)".dependencies]
 libc = "0.2"
 
+# logind on the system bus says when the screen locks or the machine is
+# about to sleep. Already in the tree under the notification plugin.
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = "5"
+
 # Only the classes this crate touches: the pasteboard, the workspace, the
 # running applications, the workspace's notification centre and the
 # distributed one. AppKit's default feature set

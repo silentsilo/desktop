@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   CheckCircle2,
@@ -21,6 +21,10 @@ import { detectPreset } from "../lib/s3Presets";
 import { backupHeadline, syncOutcome, type Status, type SyncReport } from "../lib/syncOutcome";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useLasting } from "../lib/lasting";
+import { listen } from "@tauri-apps/api/event";
+import { useEventSubscription } from "../hooks/useEventSubscription";
+import { describeFidoPrompt, type FidoPrompt } from "../lib/fidoPrompt";
+import { platformStrings, type Os } from "../lib/platformStrings";
 import { t, tx, useLocale } from "../i18n";
 import {
   discardSignIns,
@@ -118,6 +122,8 @@ function davFromStored(url: string, username: string): StoreDraft["dav"] {
 
 type Props = {
   busy: boolean;
+  /** Names the built-in key in what the key check asks. */
+  os?: Os;
   /** The open silo's name: a new copy's folder starts with it. */
   siloName?: string | null;
   /** Unix ms of the last pass that reached the storage, from the app shell. */
@@ -171,6 +177,7 @@ const IDLE: Status = { kind: "idle" };
 
 export function BackupPanel({
   busy,
+  os,
   siloName,
   lastSyncAt,
   onActivity,
@@ -195,6 +202,18 @@ export function BackupPanel({
   const [connected, setConnected] = useState(false);
   // Lasting: a sync started here goes on when the page is left.
   const [status, setStatus] = useLasting<Status>("backup.status", IDLE, (s) => s.kind === "busy");
+  // Connecting a new place asks for the key first; what it wants is said in
+  // the status line while the save runs.
+  const savingRef = useRef(false);
+  useEventSubscription(
+    () =>
+      listen<FidoPrompt>("fido-progress", (event) => {
+        if (!savingRef.current) return;
+        const builtIn = platformStrings(os ?? "windows").builtIn;
+        setStatus({ kind: "busy", message: describeFidoPrompt(event.payload, builtIn) });
+      }),
+    [os, setStatus],
+  );
   const [expanded, setExpanded] = useState(false);
   /// Whether the Disconnect question is on screen. One click used to do it,
   /// and a slipped click on a red button silently ended the backup.
@@ -331,6 +350,7 @@ export function BackupPanel({
   const handleSave = async () => {
     if (!guard()) return;
     setStatus({ kind: "busy", message: t("backup.status_saving") });
+    savingRef.current = true;
     try {
       await invoke("s3_save_config", { config: payload() });
       setConnected(true);
@@ -345,6 +365,8 @@ export function BackupPanel({
       onActivity();
     } catch (e) {
       setStatus({ kind: "error", message: formatAppError(e) });
+    } finally {
+      savingRef.current = false;
     }
   };
 

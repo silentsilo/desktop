@@ -22,6 +22,7 @@ import { ExtensionStoreLinks } from "../ExtensionStoreLinks";
 import { HISTORY_POLICIES, type HistoryPolicy } from "../../lib/entryHistory";
 import { SshAgentSettings } from "./SshAgentSettings";
 import { AutoTypeSettings } from "./AutoTypeSettings";
+import { ScreenCaptureSettings } from "./ScreenCaptureSettings";
 import { loadHistoryPolicy, saveHistoryPolicy } from "../../lib/historySetting";
 import { useLasting } from "../../lib/lasting";
 import { setLockNotice, useLockNotice } from "../../lib/lockNotice";
@@ -38,7 +39,8 @@ export type UpdateState =
   | { phase: "idle" }
   | { phase: "checking" }
   | { phase: "up-to-date" }
-  | { phase: "available"; version: string; update: Update }
+  /** `update` is null for one an earlier check found; Install asks for it. */
+  | { phase: "available"; version: string; update: Update | null }
   | {
       phase: "installing";
       version: string;
@@ -52,7 +54,7 @@ const UPDATE_IDLE: UpdateState = { phase: "idle" };
 
 /** The update check and install. */
 export function useUpdater(
-  backgroundUpdate: { version: string; update: Update } | null,
+  backgroundUpdate: { version: string; update: Update | null } | null,
   /** Told when an install failed after locking every silo, which takes
    * this page off screen before it can show the error. */
   onFailedAfterLock?: (message: string) => void,
@@ -94,11 +96,24 @@ export function useUpdater(
     }
   };
 
-  const install = async (update: Update, version: string) => {
+  const install = async (update: Update | null, version: string) => {
     setState({ phase: "installing", version, downloaded: 0, contentLength: null });
     try {
-      await installUpdateAndRelaunch(update, (downloaded, contentLength) => {
-        setState({ phase: "installing", version, downloaded, contentLength });
+      // Known from an earlier run's check, which this run did not repeat:
+      // asked for now, because the person pressed Install.
+      let found = update;
+      let named = version;
+      if (!found) {
+        const result = await checkForUpdate();
+        if (!result.available) {
+          setState({ phase: "up-to-date" });
+          return;
+        }
+        found = result.update;
+        named = result.version;
+      }
+      await installUpdateAndRelaunch(found, (downloaded, contentLength) => {
+        setState({ phase: "installing", version: named, downloaded, contentLength });
       });
     } catch (e) {
       const failure = e instanceof UpdateInstallError ? e : null;
@@ -297,6 +312,8 @@ export function AppSettingsSection({
           >
             <Toggle id="lock-notice" checked={lockNotice} onChange={setLockNotice} />
           </SettingRow>
+
+          <ScreenCaptureSettings />
 
           <SettingRow
             label={t("set.gen_history")}

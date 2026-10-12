@@ -396,16 +396,18 @@ async fn ensure_session_for_enrollment(
     .await
 }
 
-/// What a key is called when nobody names it: the computer's own name for
-/// Windows Hello or Touch ID, since that is where it lives, and "Security
-/// key" for one that travels. A second of the same name gets a number, so
-/// the list never shows two alike.
+/// What a key is called when nobody names it: what kind of key it is,
+/// "Windows Hello" or "Touch ID" for the one built in and "Security key" for
+/// one that travels. Never the computer's name: labels travel with the key
+/// envelopes in storage, readable there, and a computer is often named after
+/// its owner. A second of the same name gets a number, so the list never
+/// shows two alike.
 fn default_key_label(authenticator: Authenticator, taken: &[String]) -> String {
     let base = match authenticator {
-        Authenticator::ThisDevice => {
-            silentsilo_shell::system_name().unwrap_or_else(|| "This computer".into())
-        }
-        _ => "Security key".into(),
+        Authenticator::ThisDevice if cfg!(windows) => "Windows Hello".to_string(),
+        Authenticator::ThisDevice if cfg!(target_os = "macos") => "Touch ID".to_string(),
+        Authenticator::ThisDevice => "This computer".to_string(),
+        _ => "Security key".to_string(),
     };
     if !taken.iter().any(|l| l == &base) {
         return base;
@@ -654,6 +656,19 @@ pub async fn fido_add_key(
         (session.vault_id.to_string(), session.dek.clone())
     };
 
+    // Whoever adds a key shows they hold one already, or the open window
+    // alone would be enough to give a stranger's key a way in. An
+    // organisation key asked above is that proof.
+    if org_reader.is_none()
+        && crate::commands::vault::confirm_lasting_change(
+            &app,
+            crate::commands::vault::Presence::AddKey,
+        )
+        .await?
+    {
+        settle_between_ceremonies().await;
+    }
+
     let challenge = silentsilo_fido::begin_enrollment(&vault_id, slot, authenticator)
         .map_err(|e| e.to_string())?;
 
@@ -863,6 +878,13 @@ pub async fn fido_remove_key(
     {
         Some(prove_organisation_key(&app, &keys, "organisation key").await?)
     } else {
+        // Taking a key away is asked for with a key too, any enrolled one,
+        // the key going included.
+        crate::commands::vault::confirm_lasting_change(
+            &app,
+            crate::commands::vault::Presence::RemoveKey,
+        )
+        .await?;
         None
     };
 
@@ -952,7 +974,7 @@ pub async fn fido_remove_key(
 }
 
 /// What a rotation did, and what it cost.
-#[derive(Debug, serde::Serialize)]
+#[derive(serde::Serialize)]
 pub struct RotateOutcome {
     /// Objects re-sealed across every target that accepts writes.
     pub resealed: usize,
@@ -972,6 +994,19 @@ pub struct RotateOutcome {
     /// Targets the app never deletes from, so their old objects could not be
     /// re-sealed and stay readable with the old key.
     pub unchanged_targets: Vec<String>,
+}
+
+/// Everything but the recovery code.
+impl std::fmt::Debug for RotateOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RotateOutcome")
+            .field("resealed", &self.resealed)
+            .field("unreadable", &self.unreadable)
+            .field("kept", &self.kept)
+            .field("retired", &self.retired)
+            .field("unchanged_targets", &self.unchanged_targets)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Puts a rotation's new key in force, together with the snapshot under it.
@@ -1406,7 +1441,7 @@ pub fn vault_rotation_pending(app: AppHandle) -> Result<bool, String> {
 /// Resuming mints a new one, because the old code unwraps the key that just
 /// stopped being current; a resume that generated it and threw it away left
 /// the silo reporting a recovery code nobody had ever seen.
-#[derive(Debug, serde::Serialize)]
+#[derive(serde::Serialize)]
 pub struct ResumeOutcome {
     pub resealed: usize,
     /// As in [`RotateOutcome`].
@@ -1416,6 +1451,17 @@ pub struct ResumeOutcome {
     /// Targets the app never deletes from, so their copy of the old
     /// recovery envelope stays readable with the old code.
     pub unchanged_targets: Vec<String>,
+}
+
+/// Everything but the recovery code.
+impl std::fmt::Debug for ResumeOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ResumeOutcome")
+            .field("resealed", &self.resealed)
+            .field("unreadable", &self.unreadable)
+            .field("unchanged_targets", &self.unchanged_targets)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Carries an interrupted key change through to the end, always forward:
@@ -1602,6 +1648,23 @@ mod authenticator_choice_tests {
                 &taken(&["Security key", "Security key 2"])
             ),
             "Security key 3"
+        );
+    }
+
+    #[test]
+    fn an_unnamed_built_in_key_is_named_for_its_kind_not_the_computer() {
+        let built_in = super::default_key_label(super::Authenticator::ThisDevice, &[]);
+        let expected = if cfg!(windows) {
+            "Windows Hello"
+        } else if cfg!(target_os = "macos") {
+            "Touch ID"
+        } else {
+            "This computer"
+        };
+        assert_eq!(built_in, expected);
+        assert_eq!(
+            super::default_key_label(super::Authenticator::ThisDevice, &[expected.to_string()]),
+            format!("{expected} 2")
         );
     }
 

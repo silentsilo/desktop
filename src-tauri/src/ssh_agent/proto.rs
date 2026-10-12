@@ -18,7 +18,7 @@ const EXTENSION: u8 = 27;
 pub const RSA_SHA2_256: u32 = 2;
 pub const RSA_SHA2_512: u32 = 4;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub enum Request {
     Identities,
     Sign {
@@ -37,6 +37,26 @@ pub enum Request {
     /// Anything else: adding or removing keys, locking, smartcards,
     /// constraints, other extensions. All refused.
     Other,
+}
+
+/// Sizes, not bytes: what a client asks to sign is its own business.
+impl std::fmt::Debug for Request {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Request::Identities => f.write_str("Identities"),
+            Request::Sign { key, data, flags } => f
+                .debug_struct("Sign")
+                .field("key_len", &key.len())
+                .field("data_len", &data.len())
+                .field("flags", flags)
+                .finish(),
+            Request::SessionBind { forwarding, .. } => f
+                .debug_struct("SessionBind")
+                .field("forwarding", forwarding)
+                .finish_non_exhaustive(),
+            Request::Other => f.write_str("Other"),
+        }
+    }
 }
 
 /// Reads one wire string (a 32-bit big-endian length, then the bytes).

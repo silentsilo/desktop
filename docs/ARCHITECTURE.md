@@ -45,7 +45,7 @@ session map and the event names the frontend listens to. `silentsilo-shell`
 is the only crate here that talks to the operating system, and it is the one
 a port to another desktop platform rewrites.
 
-The 119 commands are the whole contract with the frontend, along with their
+The 165 commands are the whole contract with the frontend, along with their
 parameter names, their event names and payload shapes, and the error strings
 `src/lib/errors.ts` matches on. None of those may change without changing
 the frontend in the same commit.
@@ -247,7 +247,12 @@ at once; a decrypt cannot stop half way, so what it wrote is deleted when it
 ends and nothing opens. A copy decrypted in this unlock and left as it was
 written (same content, size and modified time, `AppState::opened_copies`)
 is opened again without decrypting it again; the epoch moving forgets them
-all, and the lock sweep deletes the files as before.
+all, and the lock sweep deletes the files as before. Every copy handed to
+another program, a file or an attachment, carries the Mark of the Web on
+Windows (`silentsilo_shell::mark_from_elsewhere`, a `Zone.Identifier`
+stream with `ZoneId=3`), written before the copy is made read-only: whoever
+can write to the silo chose those bytes, so Windows and Office treat them as
+a download.
 
 Saving out (`vault_export_file`, `vault_export_folder`) shows on the same
 card through the same event and the same cancel, keyed by the file or folder
@@ -289,9 +294,29 @@ waits on (a check of the copies, a seed, a trial recovery) holds the silo
 open while it runs (`state::hold_open`): idle reads 0, and the work's end
 counts as use, so the result is still on screen when it finishes.
 
+Every lock the window hears of forgets what its pages kept for that silo
+in `lib/lasting` (`forgetLasting`, or `forgetEverySilo` for
+`silos-locked`): an import parsed and waiting to be filed is passwords in
+clear, and a breach check still running stops and keeps nothing. The four
+events are `silos-locked`, `silo-idle-locked`, `silo-audit-locked` and
+`silo-auto-locked`, which names the evicted silo by `id` as well as `name`.
+Work that writes its result when it ends (an import, the breach check)
+asks `useLastingCheck` before writing, so a result that lands after the
+lock goes nowhere.
+
 Removing a silo from the list keeps its ciphered working copy unless the
 files go too: while the folder stays, that copy can hold the only record of
-changes since the last snapshot.
+changes since the last snapshot. Deleting the files is refused for a silo
+that is not unlocked here (`silo_forget`, `err.unlock_to_delete`); taking it
+off the list still works locked. Either way the window removes every key
+its web storage held for that silo (`forgetSiloStorage`): reminders,
+ignored Health findings, offers made.
+
+On Linux the app locks every silo when the session locks or the machine is
+about to sleep, as on Windows and macOS: `silentsilo_shell::session_watch`
+listens to logind on the system bus (`PrepareForSleep`, the session's
+`Lock` signal and its `LockedHint` turning true). A system without logind
+has only the idle timer.
 
 Key operations (enrol, add, remove, rotate, resume), the snapshot rebuild and
 a seed take the sync flag for as long as they run (`sync::hold_sync`), after
@@ -304,6 +329,47 @@ there. The re-wrapped keys and the new recovery envelope commit with the key
 in core (`rotation::commit_rotation_with`); past that commit an error locks
 the silo. A seed runs with the silo's key (`seed_target_checked`), so a copy
 that missed a rotation cannot put the old key back on another.
+
+## Key checks in Rust
+
+The window can be driven by a script, so what a key check guards is checked
+here, not only on screen. `commands::vault::verify_presence` is the one
+ceremony: Windows Hello or a key enrolled on this silo, whose derived key
+must open this silo's DEK.
+
+- **Protected entries** ("ask again before revealing"). `vault_read_passwords`
+  gives the window such an entry without its secrets: the fields in
+  `SHOWN_WHEN_WITHHELD` (name, username, address, filing, the card holder,
+  identity fields, the SSH public key), empty `password` and `notes`, and
+  `withheld: true`. `fido_reverify` with the entries' ids asks for the key
+  and returns them whole; for `REVEAL_FOR` (3 minutes, the window's own
+  grace for one touch) the list read comes with them whole as well, and the
+  epoch moving forgets that. The window keeps a whole copy it holds while the
+  entry has not changed (`keepRevealed`). Saving a withheld entry whole is
+  refused (`err.entry_withheld`); a star or a move goes through
+  `vault_arrange_password`, which changes only that field on the entry as
+  stored, so a stale copy in the window cannot undo another device's edit
+  either. Deleting or moving protected entries asks for the key once for all
+  of them. A silo with no key keeps its entries whole: there is nothing to
+  ask.
+- **Lasting changes** ask for a key at the start of the command
+  (`confirm_lasting_change`): a recovery code made or turned off, a key added
+  (a key already on the silo first) or removed, a backup copy added or the
+  first one pointed at another place (`s3_save_config`; new details for the
+  same place are not asked), an export. All of these refuse a locked silo. Not on a silo with no key, nor in a session the recovery code
+  opened (an unlock or a join with it): that is the way back in when the
+  keys are lost. An organisation's key, where the silo needs one, is the
+  check.
+- **Exports** ask every time. The window asks before the file is chosen
+  (`fido_reverify` with `export`), which stands for `EXPORT_FOR` (5
+  minutes) and is used up by the write (`take_export_confirmation`); a write
+  without it asks then. A CSV is built in the window, so the protected
+  entries in it come whole from `passwords_for_export` after the
+  confirmation; a KeePass export has the backend put them in. Both files are
+  this user's alone (`silentsilo_shell::write_private_file`: 0600, or on
+  Windows a protected access list naming only this user). A CSV puts an
+  apostrophe before any value a spreadsheet would run as a formula, in
+  every column, and this app's own import takes it off again.
 
 ## Security key PIN
 
@@ -565,7 +631,10 @@ flowchart LR
   `search` also has its own of 15 across all connections, one more per 4
   seconds: a search names logins saved for other sites, with usernames, so
   a sweep of two-letter queries would list the silo, and now takes most of
-  an hour. A `search` under two characters finds nothing. `fill` has 3 per connection,
+  an hour. A `search` under two characters finds nothing, one answers at most
+  10 logins, and searches name at most 40 different logins per unlock of a
+  silo (`limits::SearchReach`); past that a search is `busy` until the silo
+  locks or another is focused. `fill` has 3 per connection,
   one more per 20 seconds, and 4 across all connections, one more per 30
   seconds. After a fill ends without a confirmation (declined, timed out, or
   its connection gone), no fill dialog opens for 10 seconds, whoever asks.
@@ -779,9 +848,9 @@ as if they did.
   dialog names the site and the login, says the request came from the
   browser rather than from the extension, and needs Windows Hello or the
   key. Someone who confirms a fill they did not start hands it over.
-- **Labels and usernames can still be listed**, slowly. The rations bound
-  how fast; they do not make the list secret from a process that runs as
-  this user and waits.
+- **Labels and usernames can still be listed**, slowly, and only 40 of them
+  per unlock through `search`. The rations bound how fast; they do not make
+  the logins for a site a process names secret from it.
 - **The install is per-user.** The app, the host and the manifest live in a
   folder this user can write, so a same-user process can replace or patch
   them. The signer check refuses a host that is not signed like the app; it
@@ -834,17 +903,26 @@ The flow:
    after 1.5 seconds without it the type is dropped and said so. A window
    that runs as administrator is refused before typing: Windows silently
    discards input to a process above ours, and typing into nothing would
-   look like success. A Mac remembers the application rather than the
-   window (its process id) and activates it; its window title is read
-   through Accessibility, so it is empty until access is given. Secure
-   keyboard entry in another program (Terminal's option) makes macOS drop
-   typed events, so it is refused with that reason.
+   look like success. A Mac remembers the application (its process id) and
+   which of its windows was in front (its window number, the first ordinary
+   window of that process in the window server's on-screen list), and
+   activates the application; its window title is read through
+   Accessibility, so it is empty until access is given. Secure keyboard
+   entry in another program (Terminal's option) makes macOS drop typed
+   events, so it is refused with that reason.
 6. The shell waits for the shortcut's own keys to be released, then sends
    the text with `SendInput` and `KEYEVENTF_UNICODE`, one character at a
    time, so the keyboard layout does not matter; Tab and Enter go as keys.
-   A Mac posts key events that carry the character
-   (`CGEventKeyboardSetUnicodeString`), with the modifier flags cleared.
-   The password is held in a `Zeroizing` buffer and dropped after typing.
+   Before every key the window is checked again
+   (`silentsilo_shell::autotype::type_into`): one that left the front stops
+   the typing there (`err.autotype_focus_lost`) rather than hand the rest of
+   a password to whatever came up. A Mac posts key events that carry the
+   character (`CGEventKeyboardSetUnicodeString`), with the modifier flags
+   cleared, to the target's process (`CGEventPostToPid`). The password is
+   held in a `Zeroizing` buffer and dropped after typing.
+
+The login is named in the prompt and the log as the silo has it, read by
+id in Rust; the window sends only the entry's id.
 
 Not in 1.5: rules stored on an entry (a window title to match, a custom
 sequence). They would be a field in the password entry JSON, which is a
@@ -904,7 +982,10 @@ KeePassXC, RFC 9987 and OpenSSH's `PROTOCOL.agent`.
   session, and "Sign a git commit" when the data is an SSHSIG for git. The
   dialog can allow that key for as long as the silo stays unlocked, as
   1Password does by default and Bitwarden's "remember until lock": for one
-  server's host key, or for git signatures. A request whose client did not
+  server's host key, or for git signatures, and for the program that asked,
+  by its path. Another program asking for the same key and server is asked
+  about; a client whose path cannot be read is never offered to remember.
+  A request whose client did not
   name the server is asked every time, since allowing it would let any
   program sign with that key for any server. A lock (the idle timeout
   included), a focus change or turning the agent off forgets every
@@ -947,6 +1028,38 @@ KeePassXC, RFC 9987 and OpenSSH's `PROTOCOL.agent`.
   per connection and 60 for all of them, one back every half second; after
   a declined signature no dialog for 5 seconds). The window raising and handing back is
   `front.rs`, shared with the browser's questions.
+
+## Screen capture
+
+The window is created with `contentProtected` (tauri.conf.json): on Windows
+`SetWindowDisplayAffinity` with `WDA_EXCLUDEFROMCAPTURE`, which screenshots,
+recordings, screen sharing and Windows Recall honour; on a Mac the window's
+sharing type is none. Settings > General turns it off for someone who needs
+to show the app in a call (`screen_capture_set`, kept in
+`screen-capture.json`, applied at start by `screen_capture::start`). Linux
+has no such thing and Settings says so.
+
+## Health
+
+What Health finds is computed in the window from the entries it holds; a
+protected entry held without its secrets is left out of the checks that
+read them. Findings set aside with Ignore are kept in this computer's web
+storage as SHA-256 digests under a key the silo gives (`health_ignore_key`,
+derived from its content key with BLAKE3), so the stored list names no
+entry: not which share a password, not which are weak. What an earlier
+version stored in clear is dropped.
+
+## Updates
+
+The window asks the updater with `allowDowngrades: false`, and offers an
+update only when every file the answer names sits under
+`https://github.com/silentsilo/desktop/releases/download/v<version>/`, the
+version it claims (`fromOurReleases`, `err.update_not_ours`). The minisign
+signature says who built a file, not which version it is; a tag on the
+repository names its version and only its owners can put files under it.
+The scheduled check asks at most once a day: an update an earlier run found
+is shown again from what that check left (`pendingToShow`), and Install
+asks for it then.
 
 ## Looks wrong, is deliberate
 

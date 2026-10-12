@@ -424,13 +424,18 @@ describe("entriesToCsv", () => {
     expect(csv).toContain('"say ""hi"""');
   });
 
-  it("neutralises spreadsheet formula injection without changing a password", () => {
-    // A name beginning with = would be evaluated as a formula when the
-    // exported file is opened in Excel or Sheets. A password is exported as
-    // it is: the importer on the other side would keep the quote.
-    const csv = entriesToCsv([entry({ service: "=1+1", password: "=2+2" })]);
+  it("neutralises spreadsheet formula injection in every column", () => {
+    // A value beginning with = would be evaluated as a formula when the
+    // exported file is opened in Excel or Sheets, a password or a TOTP
+    // secret as much as a name.
+    const csv = entriesToCsv([
+      entry({ service: "=1+1", password: "=2+2", totp_secret: "@SUM(1)" }),
+    ]);
     expect(csv).toContain("'=1+1");
-    expect(csv).toContain(",=2+2,");
+    expect(csv).toContain(",'=2+2,");
+    expect(csv).toContain(",'@SUM(1),");
+    const [back] = csvToEntries(csv).entries;
+    expect(back!.password).toBe("=2+2");
   });
 
   it("guards formulas behind +, - and @ but leaves phone numbers and handles alone", () => {

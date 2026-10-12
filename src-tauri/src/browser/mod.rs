@@ -45,6 +45,8 @@ const GONE: &str = crate::err::coded!(
 const TOO_MANY: &str = "Too many requests from the browser. Wait a moment.";
 const COOLING_DOWN: &str = "A fill was just declined. Wait a few seconds before asking again.";
 const SHOWN_JUST_NOW: &str = "The window was just brought forward. Wait a few seconds.";
+const SEARCHED_ENOUGH: &str =
+    "Searches have named as many logins as SilentSilo allows until the silo is locked.";
 
 pub struct BrowserBridge {
     server: Mutex<Option<Server>>,
@@ -58,6 +60,8 @@ pub struct BrowserBridge {
     lookups: Mutex<Bucket>,
     /// `search` alone, across every connection.
     searches: Mutex<Bucket>,
+    /// The logins searches named in this unlock.
+    search_reach: Mutex<limits::SearchReach>,
     /// The last fills that sent a password, newest first, shown under
     /// Settings > Browser extension so one nobody meant stands out. Memory
     /// only: gone when the app quits.
@@ -80,6 +84,7 @@ impl Default for BrowserBridge {
             saving: Mutex::default(),
             lookups: Mutex::new(limits::lookups_overall()),
             searches: Mutex::new(limits::searches_overall()),
+            search_reach: Mutex::default(),
             recent: Mutex::default(),
             cooldown: Mutex::default(),
             fills: Mutex::new(limits::fills_overall()),
@@ -722,6 +727,10 @@ async fn search(app: &AppHandle, id: &str, query: &str) -> Result<Vec<u8>, Failu
     let scope = open(app).await?;
     let logins = read_logins(app, scope.0).await?;
     let found = protocol::search(&logins, query);
+    let ids: Vec<Uuid> = found.iter().map(|login| login.id).collect();
+    if !lock(&app.state::<BrowserBridge>().search_reach).admit(scope, &ids) {
+        return Err(Failure::with(Code::Busy, SEARCHED_ENOUGH));
+    }
     Ok(items_answer(app, id, "search", None, scope, &found))
 }
 

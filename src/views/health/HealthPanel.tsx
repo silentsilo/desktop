@@ -6,9 +6,9 @@ import type { PasswordEntry } from "../../lib/types";
 import { checkPasswords, type PwnedReport } from "../../lib/pwned";
 import { subtitleFor, typeOf, TYPE_LABELS } from "../passwords/util";
 import { summarise, type HealthFinding, type HealthFix } from "./analysis";
-import { canIgnore, fingerprint } from "./ignored";
+import { canIgnore, findingKey } from "./ignored";
 import { dateLocale, t, useLocale, type Key } from "../../i18n";
-import { useLasting } from "../../lib/lasting";
+import { useLasting, useLastingCheck } from "../../lib/lasting";
 
 type Props = {
   /** Computed by the shell, which also badges the count on the tab: one
@@ -94,6 +94,7 @@ export function HealthPanel({
   const [showIgnored, setShowIgnored] = useState(false);
   // Lasting until the silo locks: the check asks the network about every
   // password, and its answer should not vanish on leaving the page.
+  const startedFor = useLastingCheck();
   const [breaches, setBreaches] = useLasting<BreachState>(
     BREACHES_KEY,
     BREACHES_IDLE,
@@ -117,13 +118,19 @@ export function HealthPanel({
 
   const runBreachCheck = async () => {
     setBreaches({ kind: "busy" });
+    // A lock while it runs stops it, and its answer is kept nowhere.
+    const current = startedFor();
     const stamps = Object.fromEntries(entries.map((e) => [e.id, e.updated_at]));
     try {
       const report = await checkPasswords(
         entries,
         (prefix) => invoke<string>("pwned_range", { prefix }),
-        (done, total) => setBreaches({ kind: "busy", done, total }),
+        (done, total) => {
+          if (current()) setBreaches({ kind: "busy", done, total });
+        },
+        () => !current(),
       );
+      if (!current()) return;
       // Every request failing means the service or the network is gone,
       // and "0 exposed" would be the wrong reading of that.
       setBreaches(
@@ -132,7 +139,7 @@ export function HealthPanel({
           : { kind: "done", report, stamps },
       );
     } catch {
-      setBreaches({ kind: "unavailable" });
+      if (current()) setBreaches({ kind: "unavailable" });
     }
   };
 
@@ -211,7 +218,7 @@ export function HealthPanel({
               <ul className="health-list">
                 {ignored.map((finding) => (
                   <FindingRow
-                    key={fingerprint(finding)}
+                    key={findingKey(finding)}
                     finding={finding}
                     open={expanded.has(finding.id)}
                     onToggle={() => toggle(finding.id)}

@@ -32,22 +32,37 @@ fn client_for(app: &AppHandle) -> Option<Box<dyn ObjectStore>> {
 ///
 /// Silent on every ordinary silo, which is the case that must not change: a
 /// silo nobody marked as organisational has no managed keys, so this returns
-/// `Ok` without asking for anything.
-async fn require_org_key_if_controlled(app: &AppHandle, what: &str) -> Result<(), String> {
+/// `Ok(false)` without asking for anything. `Ok(true)` when a key was asked.
+async fn require_org_key_if_controlled(app: &AppHandle, what: &str) -> Result<bool, String> {
     let root = vault_dir(app)?;
     if !silentsilo_vault::is_fido_enrolled(&root) {
-        return Ok(());
+        return Ok(false);
     }
     let Ok(keys) = silentsilo_vault::load_fido_keys(&root) else {
-        return Ok(());
+        return Ok(false);
     };
     if !keys.is_org_controlled() {
-        return Ok(());
+        return Ok(false);
     }
     // The proof is discarded rather than carried: the recovery envelope is a
     // separate file with its own guard here, and nothing below writes the
     // enrolled keys. What matters is that the ceremony happened at all.
     crate::commands::fido::prove_organisation_key(app, &keys, what)
+        .await
+        .map(|_| true)
+}
+
+/// A new code or none is a new way into the silo, or one taken away, so a
+/// key is asked first. An organisation's key, when the silo needs one, is
+/// that check.
+async fn confirm_code_change(
+    app: &AppHandle,
+    purpose: crate::commands::vault::Presence,
+) -> Result<(), String> {
+    if require_org_key_if_controlled(app, "recovery code").await? {
+        return Ok(());
+    }
+    crate::commands::vault::confirm_lasting_change(app, purpose)
         .await
         .map(|_| ())
 }
@@ -73,13 +88,22 @@ pub fn recovery_status(app: AppHandle) -> Result<RecoveryStatus, String> {
 /// envelope had already been replaced, which left the silo reporting a
 /// recovery code that the user had never seen and the paper copy no longer
 /// matching anything.
-#[derive(Debug, serde::Serialize)]
+#[derive(serde::Serialize)]
 pub struct GeneratedRecovery {
     pub code: String,
     /// Targets still carrying an older envelope: append-only ones, which are
     /// never asked, and any the publish could not reach. The written code
     /// opens what is on those until they are written again.
     pub unchanged_targets: Vec<String>,
+}
+
+/// Without the code.
+impl std::fmt::Debug for GeneratedRecovery {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GeneratedRecovery")
+            .field("unchanged_targets", &self.unchanged_targets)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Generates a code and returns it, the only time it exists in readable
@@ -95,7 +119,8 @@ pub async fn recovery_generate(app: AppHandle) -> Result<GeneratedRecovery, Stri
     // a new code invalidates the old one, so an employee could regenerate it
     // and cut off the copy in the company safe. Guarding the organisation key
     // against removal while leaving this open would protect nothing.
-    require_org_key_if_controlled(&app, "recovery code").await?;
+    crate::state::unlocked_silo(&app)?;
+    confirm_code_change(&app, crate::commands::vault::Presence::RecoveryCode).await?;
 
     let (dek, kek, root, silo_id) = {
         let state = app.state::<AppState>();
@@ -132,7 +157,7 @@ pub async fn recovery_generate(app: AppHandle) -> Result<GeneratedRecovery, Stri
         if let Ok(Some(off)) =
             sync::revoked_at(&*target.store, &kek, sync::RECOVERY_MARKER_ID).await
         {
-            envelope.created_at = envelope.created_at.max(off + 1);
+            envelope.created_at = envelope.created_at.max(off.saturating_add(1));
         }
     }
     crate::audit::record_off_thread(
@@ -170,7 +195,7 @@ pub async fn recovery_disable(app: AppHandle) -> Result<Vec<String>, String> {
     let (silo, kek) = crate::state::unlocked_silo_with_kek(&app)?;
     // Same reasoning as regenerating: turning recovery off entirely is the
     // blunter version of the same lockout.
-    require_org_key_if_controlled(&app, "recovery code").await?;
+    confirm_code_change(&app, crate::commands::vault::Presence::RecoveryOff).await?;
     crate::audit::record_off_thread(
         &app,
         silo.id,
@@ -587,7 +612,11 @@ pub async fn vault_join_with_recovery(
     cleanup.done();
     crate::commands::fido::run_blocking(move || {
         let meta = Vfs::new(&session).meta().map_err(|e| e.to_string())?;
+        let silo_id = session.vault_id;
         crate::state::open_focused_session(&app, session)?;
+        // Opened by the code, as an unlock with it is: the keys that came
+        // down with the join may be the ones that were lost.
+        crate::audit::set_unlocked_with(silo_id, Some(crate::audit::VIA_RECOVERY_CODE.into()));
         Ok(meta)
     })
     .await

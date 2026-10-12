@@ -4,7 +4,10 @@
 //! connection, and for lookups and `show` across all of them, since a new
 //! connection is cheap.
 
+use std::collections::HashSet;
 use std::time::{Duration, Instant};
+
+use uuid::Uuid;
 
 /// A token bucket: `capacity` at once, then one more every `refill`.
 #[derive(Debug, Clone)]
@@ -195,6 +198,36 @@ impl Default for ConnectionLimits {
     }
 }
 
+/// How many different logins `search` may name in one unlock of a silo.
+/// A person looking for a login sees a few; a sweep of queries would name
+/// every login with its username, at whatever pace the rations allow.
+pub const SEARCH_NAMES_PER_UNLOCK: usize = 40;
+
+/// The logins `search` has named since the silo was unlocked or focused.
+#[derive(Default)]
+pub struct SearchReach {
+    scope: Option<(Uuid, u64)>,
+    named: HashSet<Uuid>,
+}
+
+impl SearchReach {
+    /// Whether an answer naming `ids` stays within
+    /// [`SEARCH_NAMES_PER_UNLOCK`], counting them if it does. Naming the
+    /// same login again costs nothing.
+    pub fn admit(&mut self, scope: (Uuid, u64), ids: &[Uuid]) -> bool {
+        if self.scope != Some(scope) {
+            self.named.clear();
+            self.scope = Some(scope);
+        }
+        let new: HashSet<&Uuid> = ids.iter().filter(|id| !self.named.contains(id)).collect();
+        if self.named.len() + new.len() > SEARCH_NAMES_PER_UNLOCK {
+            return false;
+        }
+        self.named.extend(ids.iter().copied());
+        true
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -358,5 +391,24 @@ mod tests {
         assert!((0..3).all(|_| limits.fills.take(start)));
         assert!(!limits.fills.take(start + Duration::from_secs(5)));
         assert!(limits.fills.take(start + Duration::from_secs(20)));
+    }
+
+    #[test]
+    fn search_names_only_so_many_logins_per_unlock() {
+        let scope = (Uuid::new_v4(), 1);
+        let ids: Vec<Uuid> = (0..SEARCH_NAMES_PER_UNLOCK + 5)
+            .map(|_| Uuid::new_v4())
+            .collect();
+        let mut reach = SearchReach::default();
+        assert!(reach.admit(scope, &ids[..SEARCH_NAMES_PER_UNLOCK]));
+        assert!(
+            reach.admit(scope, &ids[..3]),
+            "the same logins again cost nothing"
+        );
+        assert!(!reach.admit(scope, &ids[SEARCH_NAMES_PER_UNLOCK..]));
+        assert!(
+            reach.admit((scope.0, 2), &ids[SEARCH_NAMES_PER_UNLOCK..]),
+            "a new unlock starts again"
+        );
     }
 }

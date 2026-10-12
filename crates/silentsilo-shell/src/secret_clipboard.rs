@@ -89,10 +89,11 @@ mod imp {
     use ::windows::Win32::System::Ole::CF_UNICODETEXT;
     use ::windows::core::PCWSTR;
 
-    /// Excludes the value from Clipboard History and from Cloud Clipboard.
-    /// Documented under "Clipboard Formats" as the opt-out a writer of
-    /// sensitive data is expected to set.
+    /// Keep the value out of Clipboard History, out of Cloud Clipboard, and
+    /// away from clipboard monitors. Documented under "Clipboard Formats"
+    /// as the opt-outs a writer of sensitive data is expected to set.
     const EXCLUDE_HISTORY: &str = "CanIncludeInClipboardHistory";
+    const EXCLUDE_CLOUD: &str = "CanUploadToCloudClipboard";
     const EXCLUDE_MONITORING: &str = "ExcludeClipboardContentFromMonitorProcessing";
 
     fn wide(text: &str) -> Vec<u16> {
@@ -138,8 +139,9 @@ mod imp {
             if format == 0 {
                 return;
             }
-            // A single zero byte is the documented "no" for both formats.
-            if let Some(handle) = global_from(&[0u8]) {
+            // A DWORD of zero is the documented "no" for the first two; the
+            // third asks only that the format be there.
+            if let Some(handle) = global_from(&0u32.to_ne_bytes()) {
                 let _ = SetClipboardData(format, Some(HANDLE(handle.0)));
             }
         }
@@ -164,6 +166,7 @@ mod imp {
                 // After the value, so an early failure above leaves nothing
                 // on the clipboard at all rather than a bare set of flags.
                 set_flag(EXCLUDE_HISTORY);
+                set_flag(EXCLUDE_CLOUD);
                 set_flag(EXCLUDE_MONITORING);
                 Ok(())
             })();

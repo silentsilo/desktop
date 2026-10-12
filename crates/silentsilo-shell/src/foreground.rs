@@ -3,14 +3,18 @@
 //! once confirmed, the person wants the page that was filled, not the app.
 
 /// A top-level window of another process. Windows remembers the window; a
-/// Mac remembers the application, which is what it brings forward. Elsewhere
-/// nothing is taken and nothing is given back.
+/// Mac remembers the application, which is what it brings forward, and
+/// which of its windows was in front. Elsewhere nothing is taken and
+/// nothing is given back.
 #[derive(Clone, Copy, Debug)]
 pub struct ForegroundWindow {
     #[cfg(windows)]
     hwnd: isize,
     #[cfg(target_os = "macos")]
     pid: i32,
+    /// `mac_input::front_window`, 0 when it had none on screen.
+    #[cfg(target_os = "macos")]
+    window: u32,
 }
 
 /// The window in front now, when it belongs to another process. Taken by its
@@ -43,7 +47,10 @@ pub fn foreground_window() -> Option<ForegroundWindow> {
     }
     #[cfg(target_os = "macos")]
     {
-        crate::mac_input::frontmost_pid().map(|pid| ForegroundWindow { pid })
+        crate::mac_input::frontmost_pid().map(|pid| ForegroundWindow {
+            pid,
+            window: crate::mac_input::front_window(pid),
+        })
     }
     #[cfg(not(any(windows, target_os = "macos")))]
     {
@@ -234,9 +241,11 @@ impl ForegroundWindow {
         {
             self.hwnd == other.hwnd
         }
+        // The same application is not enough: another of its windows (a
+        // chat beside the login form) must not get the password.
         #[cfg(target_os = "macos")]
         {
-            self.pid == other.pid
+            self.pid == other.pid && self.window == other.window
         }
         #[cfg(not(any(windows, target_os = "macos")))]
         {

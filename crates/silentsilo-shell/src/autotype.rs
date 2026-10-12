@@ -119,6 +119,8 @@ pub enum TypeError {
     NoAccess,
     /// macOS: another program has secure keyboard entry on.
     SecureInput,
+    /// The window typed into stopped being the one in front.
+    FocusLost,
     NotSupported,
 }
 
@@ -154,20 +156,44 @@ pub fn open_access_settings() {
     }
 }
 
-/// Types `steps` into whatever window is in front, after the shortcut's own
-/// keys are released. The caller checks first that the window in front is
-/// the one meant.
-pub fn type_steps(steps: &[Step]) -> Result<(), TypeError> {
+/// Types `steps` into `target`, after the shortcut's own keys are released.
+/// The window is checked again before every key: one that loses the front
+/// half way stops the typing there, rather than send the rest of a password
+/// to whatever came up. On a Mac the events go to the target's process as
+/// well, not to whichever has the focus.
+pub fn type_into(
+    target: &crate::ForegroundWindow,
+    process_id: u32,
+    steps: &[Step],
+) -> Result<(), TypeError> {
     #[cfg(windows)]
     {
+        use ::windows::Win32::UI::Input::KeyboardAndMouse::{VK_RETURN, VK_TAB};
         wait_for_modifiers_up()?;
+        let in_front = || {
+            if target.is_in_front(process_id) {
+                Ok(())
+            } else {
+                Err(TypeError::FocusLost)
+            }
+        };
         for step in steps {
-            let inputs = match step {
-                Step::Text(text) => unicode_inputs(text),
-                Step::Tab => key_inputs(::windows::Win32::UI::Input::KeyboardAndMouse::VK_TAB),
-                Step::Enter => key_inputs(::windows::Win32::UI::Input::KeyboardAndMouse::VK_RETURN),
-            };
-            send(&inputs)?;
+            match step {
+                Step::Text(text) => {
+                    for unit in text.encode_utf16() {
+                        in_front()?;
+                        send(&unicode_inputs(unit))?;
+                    }
+                }
+                Step::Tab => {
+                    in_front()?;
+                    send(&key_inputs(VK_TAB))?;
+                }
+                Step::Enter => {
+                    in_front()?;
+                    send(&key_inputs(VK_RETURN))?;
+                }
+            }
             // A field that moves focus on Tab needs a moment before the next
             // characters, or they land in the field being left.
             std::thread::sleep(std::time::Duration::from_millis(60));
@@ -194,11 +220,36 @@ pub fn type_steps(steps: &[Step]) -> Result<(), TypeError> {
         if !released {
             return Err(TypeError::KeysHeld);
         }
+        let pid = process_id as i32;
+        let in_front = || {
+            if target.is_in_front(process_id) {
+                Ok(())
+            } else {
+                Err(TypeError::FocusLost)
+            }
+        };
         for step in steps {
             let sent = match step {
-                Step::Text(text) => mac::post_text(text),
-                Step::Tab => mac::post_tab(),
-                Step::Enter => mac::post_return(),
+                Step::Text(text) => {
+                    let mut units = [0u16; 2];
+                    let mut sent = true;
+                    for c in text.chars() {
+                        in_front()?;
+                        if !mac::post_char(pid, c.encode_utf16(&mut units)) {
+                            sent = false;
+                            break;
+                        }
+                    }
+                    sent
+                }
+                Step::Tab => {
+                    in_front()?;
+                    mac::post_tab(pid)
+                }
+                Step::Enter => {
+                    in_front()?;
+                    mac::post_return(pid)
+                }
             };
             if !sent {
                 return Err(TypeError::Refused);
@@ -209,7 +260,7 @@ pub fn type_steps(steps: &[Step]) -> Result<(), TypeError> {
     }
     #[cfg(not(any(windows, target_os = "macos")))]
     {
-        let _ = steps;
+        let _ = (target, process_id, steps);
         Err(TypeError::NotSupported)
     }
 }
@@ -233,8 +284,9 @@ fn wait_for_modifiers_up() -> Result<(), TypeError> {
     Err(TypeError::KeysHeld)
 }
 
+/// One UTF-16 unit, pressed and released.
 #[cfg(windows)]
-fn unicode_inputs(text: &str) -> Vec<::windows::Win32::UI::Input::KeyboardAndMouse::INPUT> {
+fn unicode_inputs(unit: u16) -> Vec<::windows::Win32::UI::Input::KeyboardAndMouse::INPUT> {
     use ::windows::Win32::UI::Input::KeyboardAndMouse::{
         INPUT, INPUT_0, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_KEYUP,
         KEYEVENTF_UNICODE, VIRTUAL_KEY,
@@ -256,9 +308,7 @@ fn unicode_inputs(text: &str) -> Vec<::windows::Win32::UI::Input::KeyboardAndMou
             },
         },
     };
-    text.encode_utf16()
-        .flat_map(|unit| [event(unit, false), event(unit, true)])
-        .collect()
+    vec![event(unit, false), event(unit, true)]
 }
 
 #[cfg(windows)]
@@ -304,8 +354,8 @@ mod tests {
 
     #[test]
     fn text_goes_as_characters_down_and_up() {
-        let inputs = unicode_inputs("aé😀");
-        // "😀" is two UTF-16 units, each pressed and released.
+        // "😀" is two UTF-16 units, each pressed and released on its own.
+        let inputs: Vec<_> = "aé😀".encode_utf16().flat_map(unicode_inputs).collect();
         assert_eq!(inputs.len(), 2 * 4);
     }
 

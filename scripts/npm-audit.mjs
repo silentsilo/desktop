@@ -22,8 +22,24 @@ try {
   report = e.stdout;
 }
 
+// An audit that did not run is a failure, never a clean result: npm answers
+// a registry it cannot reach with exit code 1 and an error object instead of
+// a report, which read as "nothing found".
+let parsed;
+try {
+  parsed = JSON.parse(report ?? "");
+} catch {
+  console.error("npm audit gave no report it could read");
+  process.exit(1);
+}
+if (parsed.error || typeof parsed.vulnerabilities !== "object" || !parsed.metadata) {
+  const why = parsed.error?.summary || parsed.error?.code || parsed.message || "no report";
+  console.error(`npm audit did not run: ${why}`);
+  process.exit(1);
+}
+
 const advisories = new Map();
-for (const vuln of Object.values(JSON.parse(report).vulnerabilities ?? {})) {
+for (const vuln of Object.values(parsed.vulnerabilities)) {
   for (const via of vuln.via) {
     if (typeof via !== "object") continue;
     const id = via.url?.split("/").pop() ?? String(via.source);

@@ -48,6 +48,10 @@ const SECURE_INPUT: &str = coded!(
     "err.autotype_secure_input",
     "Another program has secure keyboard entry on, and macOS lets nothing else type while it does. Turn it off there (in Terminal: Terminal > Secure Keyboard Entry) and try again."
 );
+const FOCUS_LOST: &str = coded!(
+    "err.autotype_focus_lost",
+    "The window being typed into was no longer in front, so typing stopped."
+);
 const NOT_A_LOGIN: &str = coded!(
     "err.autotype_not_a_login",
     "That entry has no password to type."
@@ -236,15 +240,33 @@ pub fn autotype_cancel(app: AppHandle, request_id: String) {
 }
 
 /// The person chose `entry` and pressed Type: the key check, the activity
-/// log, focus back to the target, and only then the typing.
+/// log, focus back to the target, and only then the typing. The login is
+/// named in the prompt and the log as the silo has it, never as the window
+/// says.
 #[tauri::command]
 pub async fn autotype_confirm(
     app: AppHandle,
     request_id: String,
     entry_id: String,
-    label: String,
 ) -> Result<(), String> {
     let entry = Uuid::parse_str(&entry_id).map_err(|e| e.to_string())?;
+    let silo = crate::state::focused_id(&app.state::<AppState>())?;
+    let label = {
+        let handle = app.clone();
+        crate::commands::fido::run_blocking(move || {
+            let state = handle.state::<AppState>();
+            let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
+            let session = sessions
+                .get(&silo)
+                .ok_or_else(|| silentsilo_core::CoreError::VaultLocked.to_string())?;
+            Ok(crate::browser::logins::read(session)?
+                .iter()
+                .find(|login| login.id == entry)
+                .map(|login| login.label.clone()))
+        })
+        .await?
+        .ok_or_else(|| NOT_A_LOGIN.to_string())?
+    };
     let program = {
         let state = app.state::<AutoType>();
         let mut slot = lock(&state.pending);
@@ -281,7 +303,11 @@ pub async fn autotype_confirm(
             .ok_or_else(|| GONE.to_string())?
     };
 
-    let silo = crate::state::focused_id(&app.state::<AppState>())?;
+    // The silo on screen when Type was pressed, still.
+    if crate::state::focused_id(&app.state::<AppState>()).ok() != Some(silo) {
+        pending.front.settle(&app, false);
+        return Err(GONE.into());
+    }
     // In the log before the secret is read, as every secret that leaves the
     // silo is: an organisation's silo that cannot record it locks instead.
     crate::audit::record_off_thread(
@@ -326,15 +352,18 @@ pub async fn autotype_confirm(
         if enter {
             steps.push(Step::Enter);
         }
-        silentsilo_shell::autotype::type_steps(&steps).map_err(|e| {
-            match e {
-                silentsilo_shell::autotype::TypeError::KeysHeld => KEYS_HELD,
-                silentsilo_shell::autotype::TypeError::NoAccess => NO_ACCESS,
-                silentsilo_shell::autotype::TypeError::SecureInput => SECURE_INPUT,
-                _ => REFUSED,
-            }
-            .to_string()
-        })
+        silentsilo_shell::autotype::type_into(&pending.target, pending.process_id, &steps).map_err(
+            |e| {
+                match e {
+                    silentsilo_shell::autotype::TypeError::KeysHeld => KEYS_HELD,
+                    silentsilo_shell::autotype::TypeError::NoAccess => NO_ACCESS,
+                    silentsilo_shell::autotype::TypeError::SecureInput => SECURE_INPUT,
+                    silentsilo_shell::autotype::TypeError::FocusLost => FOCUS_LOST,
+                    _ => REFUSED,
+                }
+                .to_string()
+            },
+        )
     })
     .await
 }

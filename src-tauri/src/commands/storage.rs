@@ -95,14 +95,27 @@ pub fn s3_get_config(app: AppHandle) -> Result<Option<StoreConfigView>, String> 
 
 /// Verifies the details actually work before storing them, so a typo can't
 /// leave backup permanently but silently broken.
+///
+/// Only while unlocked. Pointing the silo at a new place asks for a key
+/// first, as adding a copy does; new details for the same place do not.
 #[tauri::command]
 pub async fn s3_save_config(
     app: AppHandle,
     config: StoreConfigInput,
 ) -> Result<StoreConfigView, String> {
-    let silo = crate::state::active_silo(&app)?;
+    let silo = crate::state::unlocked_silo(&app)?;
     let described = describe(config, crate::state::silo_store_config(&app))?;
     let config = described.config.clone();
+    let same_place = silentsilo_vault::load_targets(silo.id)
+        .first()
+        .is_some_and(|first| first.config.target_id() == config.target_id());
+    if !same_place {
+        crate::commands::vault::confirm_lasting_change(
+            &app,
+            crate::commands::vault::Presence::AddCopy,
+        )
+        .await?;
+    }
     // The test write first: it makes a folder typed for a new copy (an
     // iCloud Drive silo folder), which reads as unreachable until then. It
     // leaves nothing behind, so another silo's place loses nothing to it.
@@ -364,6 +377,9 @@ fn backup_targets_list_impl(app: &AppHandle) -> Result<Vec<BackupTargetView>, St
 /// Checked before it is saved, like the first one: a target that cannot be
 /// written to is not a copy, and finding that out on the next sync pass means
 /// believing you have two for however long that takes.
+///
+/// Only while unlocked, and with a key first: a copy is every record of the
+/// silo sent somewhere new, for as long as it stays on the list.
 #[tauri::command]
 pub async fn backup_target_add(
     app: AppHandle,
@@ -371,11 +387,13 @@ pub async fn backup_target_add(
     label: String,
     archive: bool,
 ) -> Result<(), String> {
+    let silo = crate::state::unlocked_silo(&app)?;
+    crate::commands::vault::confirm_lasting_change(&app, crate::commands::vault::Presence::AddCopy)
+        .await?;
     let described = describe(config, None)?;
     let config = described.config.clone();
     described.store.check().await.map_err(|e| e.to_string())?;
 
-    let silo = crate::state::active_silo(&app)?;
     refuse_foreign_vault(&app, &silo, &*described.store).await?;
     let mut targets = silentsilo_vault::load_targets(silo.id);
     // The same place twice is not a second copy, however it was typed.

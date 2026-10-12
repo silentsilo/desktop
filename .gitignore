@@ -5,6 +5,21 @@ dist-release
 .env*
 
 # Local tooling state, never part of the source tree
+.claude/
+.vscode/
+.idea/
+*.log
+.DS_Store
+Thumbs.db
+
+# Key material and certificates: signing keys, keystores, exported
+# certificates. None belongs in a public repository.
+*.key
+*.pem
+*.pfx
+*.p12
+*.keystore
+*.jks
 
 # Local [patch] pointing Cargo at a core checkout on this machine. It rewrites
 # Cargo.lock, so it must never be committed and never be present for a release

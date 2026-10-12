@@ -422,6 +422,10 @@ export type PasswordEntry = {
   fields?: CustomField[];
   /** Earlier versions, newest first (`lib/entryHistory.ts`). */
   history?: HistoryVersion[];
+  /** Set by the backend, never stored: a protected entry read without its
+   * secrets, until a key touch lets it through (`fido_reverify`). Saving
+   * one whole is refused, since it would store the blanks. */
+  withheld?: true;
 };
 
 export type CustomField = { name: string; value: string; hidden: boolean };
