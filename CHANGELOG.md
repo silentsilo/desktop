@@ -7,6 +7,28 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+### Security
+
+- Built on core v1.10.0-beta.9, which checks what storage could forge: key
+  envelopes, object names, file contents against their records, rotations
+  and the activity log. A file whose content is not the one its record
+  names is refused when opened, saved out or checked.
+- A key taken in from another device counts only once this computer has
+  unlocked with it; the last key cannot be removed in favour of one that
+  has not. A removed Touch ID key leaves the keychain only when no other
+  silo here uses it.
+- The device secret is deleted once the first key is enrolled. No core
+  dumps of the process.
+- Without a keyring (Linux), storage passwords are written to a private
+  file only after a switch under Settings, General, says so.
+- A key change storage cannot prove is reported as such, and gaps in
+  another device's history are reported after a sync. Two edits of one
+  entry made at the same moment both stay, the second in its history.
+- Updates are accepted only when their signature names the version offered.
+  Every release file is signed for the updater on the release machine; the
+  macOS app is built and signed on the Mac (`scripts/build-release-mac.sh`).
+  No signing key is on GitHub.
+
 ### Added
 
 - Auto-type on Windows, for programs outside the browser: turned on under

@@ -4,7 +4,7 @@ vi.mock("@tauri-apps/plugin-updater", () => ({ check: vi.fn() }));
 vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
-import { fromOurReleases } from "./updater";
+import { fromOurReleases, signedForVersion } from "./updater";
 
 const AT = "https://github.com/silentsilo/desktop/releases/download/";
 
@@ -41,5 +41,39 @@ describe("an update is offered only from SilentSilo's releases", () => {
       },
     };
     expect(fromOurReleases("1.5.0", raw)).toBe(false);
+  });
+});
+
+describe("signedForVersion", () => {
+  const sig = (comment: string) =>
+    btoa(
+      "untrusted comment: signature from rsign secret key\nRUSxx\n" +
+        `trusted comment: ${comment}\nZZZZ\n`,
+    );
+  const answer = (comment: string) => ({
+    version: "1.5.1",
+    platforms: { "windows-x86_64": { signature: sig(comment), url: "x" } },
+  });
+
+  it("takes a signature that names the version offered", () => {
+    expect(
+      signedForVersion("1.5.1", answer("version:1.5.1\tfile:SilentSilo_1.5.1_x64-setup.exe")),
+    ).toBe(true);
+  });
+
+  it("refuses one made for another version", () => {
+    expect(
+      signedForVersion("1.5.1", answer("version:1.4.0\tfile:SilentSilo_1.4.0_x64-setup.exe")),
+    ).toBe(false);
+  });
+
+  it("refuses one that names no version, as the old signer wrote", () => {
+    expect(
+      signedForVersion("1.5.1", answer("timestamp:1\tfile:SilentSilo_1.5.1_x64-setup.exe")),
+    ).toBe(false);
+  });
+
+  it("refuses an answer with no signature at all", () => {
+    expect(signedForVersion("1.5.1", { version: "1.5.1", platforms: {} })).toBe(false);
   });
 });

@@ -1,0 +1,16 @@
+[package]
+name = "silentsilo-release-signer"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+publish = false
+description = "Signs release files with the updater key, one password for all of them"
+
+# Its own workspace, built on the release machine before anything of the
+# app's is, so no dependency of the app can stand in for it.
+[workspace]
+
+[dependencies]
+minisign = "0.7"
+rpassword = "7"
+base64 = "0.22"

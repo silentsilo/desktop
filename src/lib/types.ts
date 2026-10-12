@@ -435,7 +435,12 @@ export type CustomField = { name: string; value: string; hidden: boolean };
  * was filed or what was attached to it: attachments are counted only from
  * the entry itself, so a blob referenced from history alone would be swept.
  */
-export type HistoryVersion = Partial<Omit<PasswordEntry, "history">> & { saved_at: number };
+export type HistoryVersion = Partial<Omit<PasswordEntry, "history">> & {
+  saved_at: number;
+  /** Saved on another device at the same moment as the version after it,
+   * and kept here by core rather than lost. */
+  conflict?: boolean;
+};
 
 export type NavMode = "push" | "replace" | "index";
 

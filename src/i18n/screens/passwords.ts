@@ -1933,6 +1933,17 @@ export const passwords = {
     "pt-BR": "Próxima alteração: {changes}",
     pl: "Następna zmiana: {changes}",
   },
+  "pw.history_conflict": {
+    note: "On an earlier version's row: this version was saved on another device at the same moment as the one that is shown now, and was kept here so it is not lost.",
+    en: "Saved at the same time on another device",
+    ro: "Salvată în același timp pe alt dispozitiv",
+    de: "Zur gleichen Zeit auf einem anderen Gerät gespeichert",
+    fr: "Enregistrée au même moment sur un autre appareil",
+    es: "Guardada al mismo tiempo en otro dispositivo",
+    it: "Salvata nello stesso momento su un altro dispositivo",
+    "pt-BR": "Salva ao mesmo tempo em outro dispositivo",
+    pl: "Zapisana w tym samym czasie na innym urządzeniu",
+  },
   "pw.history_no_change": {
     note: "On an earlier version's row when the next version changed nothing that is shown.",
     en: "No change",

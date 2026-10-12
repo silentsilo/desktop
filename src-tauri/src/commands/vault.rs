@@ -832,6 +832,8 @@ pub async fn vault_unlock(
         // behind; this is the first moment it is safe to clear it.
         wipe_open_scratch(&session.paths.root);
 
+        // It opened the silo here, so it is one of this machine's keys now.
+        let _ = silentsilo_vault::confirm_key(&root, &hex::encode(&unlock.credential_id));
         crate::state::open_focused_session(&app, session)?;
         let label = keys
             .find_by_credential_id(&unlock.credential_id)
@@ -1759,7 +1761,7 @@ pub async fn vault_export_file(
     // The row and its wrapped key under one short lock, before the network
     // and before the decrypt: neither of those may hold the sessions mutex,
     // or every small command in the app queues behind a large file.
-    let (blob_id, name, size, wrapped_key) = {
+    let (blob_id, name, size, wrapped_key, recorded_hash) = {
         let state = app.state::<AppState>();
         let session_guard = state.focused_session()?;
         let session = session_guard
@@ -1773,6 +1775,7 @@ pub async fn vault_export_file(
             file.name,
             file.size_bytes.max(0) as u64,
             wrapped,
+            file.content_hash.unwrap_or_default(),
         )
     };
     // On the same card as opening a file, Cancel included.
@@ -1797,7 +1800,8 @@ pub async fn vault_export_file(
         )?;
         let key = unwrap_export_key(&wrapped_key, &snapshot.kek)?;
         let blob_path = silentsilo_vault::VaultPaths::new(snapshot.root.clone()).blob_path(blob_id);
-        decrypt_blob(&blob_path, &dest, &key, blob_id).map_err(|e| e.to_string())?;
+        silentsilo_crypto::decrypt_file(&blob_path, &dest, &key, blob_id, &recorded_hash)
+            .map_err(|e| e.to_string())?;
         let _ = touch_blob_access(&snapshot.root, blob_id);
         Ok(())
     })
@@ -1970,6 +1974,7 @@ pub async fn vault_export_folder(
                     dest,
                     blob_id,
                     wrapped_key,
+                    recorded_hash,
                     ..
                 } => {
                     if is_cancelled(&app, folder_id) {
@@ -1984,8 +1989,14 @@ pub async fn vault_export_folder(
                         return Err(CoreError::VaultLocked.to_string());
                     }
                     let key = unwrap_export_key(wrapped_key, &snapshot.kek)?;
-                    decrypt_blob(&paths.blob_path(*blob_id), dest, &key, *blob_id)
-                        .map_err(|e| e.to_string())?;
+                    silentsilo_crypto::decrypt_file(
+                        &paths.blob_path(*blob_id),
+                        dest,
+                        &key,
+                        *blob_id,
+                        recorded_hash,
+                    )
+                    .map_err(|e| e.to_string())?;
                     let _ = touch_blob_access(&snapshot.root, *blob_id);
                     exported += 1;
                     open_progress(&app, folder_id, "decrypting", exported.into(), file_count);
@@ -2005,6 +2016,8 @@ enum ExportItem {
         blob_id: Uuid,
         size: u64,
         wrapped_key: String,
+        /// The content hash the file's record holds.
+        recorded_hash: String,
     },
 }
 
@@ -2030,6 +2043,7 @@ fn plan_export(
                     blob_id: file.blob_id,
                     size: file.size_bytes.max(0) as u64,
                     wrapped_key: vfs.blob_key(file.id).map_err(|e| e.to_string())?,
+                    recorded_hash: file.content_hash.clone().unwrap_or_default(),
                 });
             }
         }
@@ -2117,7 +2131,7 @@ pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), Stri
         crate::state::lock_recovering(&app.state::<AppState>().open_cancelled).contains(&file_id)
     };
 
-    let (blob_id, name, size, wrapped_key) = {
+    let (blob_id, name, size, wrapped_key, recorded_hash) = {
         let session_guard = state.focused_session()?;
         let session = session_guard
             .as_ref()
@@ -2132,6 +2146,7 @@ pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), Stri
             file.name,
             file.size_bytes.max(0) as u64,
             wrapped,
+            file.content_hash.unwrap_or_default(),
         )
     };
     let root = vault_dir(&app)?;
@@ -2187,7 +2202,8 @@ pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), Stri
             )?;
             let blob_path =
                 silentsilo_vault::VaultPaths::new(snapshot.root.clone()).blob_path(blob_id);
-            decrypt_blob(&blob_path, &target, &key, blob_id).map_err(|e| e.to_string())?;
+            silentsilo_crypto::decrypt_file(&blob_path, &target, &key, blob_id, &recorded_hash)
+                .map_err(|e| e.to_string())?;
             crate::state::discard_if_locked(&app2.state::<AppState>(), snapshot.id, &target)?;
             // Whoever can write to the silo chose these bytes: Windows warns
             // before running them, as it does for a download.
@@ -3829,6 +3845,7 @@ mod unlock_rule_tests {
             wrapped_dek: wrapped.into(),
             platform: false,
             revoked: false,
+            unconfirmed: false,
         }
     }
 

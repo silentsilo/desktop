@@ -1,7 +1,14 @@
 # Builds and signs, on this machine, the release artifacts CI cannot: the
-# installer, its updater signature, latest.json and the Windows extractor.
-# The Authenticode certificate sits on a hardware token no runner reaches,
-# which is the whole reason they are built here.
+# installer and the Windows extractor, the updater signature of every file
+# on the release, and latest.json. The Authenticode certificate sits on a
+# hardware token no runner reaches, and the updater key is on no server at
+# all, which is the whole reason they are made here.
+#
+# Before running it: the release workflow has attached the Linux app, the
+# Linux and macOS extractors and the SBOM to the draft, and
+# scripts/build-release-mac.sh has attached the signed macOS app from the
+# Mac. This script checks the provenance of the CI files, then signs them
+# all for the updater.
 #
 # The Linux and macOS extractors are built by this repository's release
 # workflow, from a clean clone of the core tag this build pins, and attached
@@ -21,10 +28,12 @@
 # published the installer, and minisign, which is what the updater checks
 # before installing anything. They are unrelated and both are required.
 #
-# Authenticode needs the hardware token plugged in and unlocked. The updater
-# key needs a password, asked for once after every build has finished; it
-# never reaches a file or the shell history, and sits in the environment only
-# while the two signer commands run.
+# Authenticode needs the hardware token, asked for only after everything is
+# compiled: dependency code runs while compiling, and a token that is not
+# plugged in signs nothing for it. The updater key's password is asked for
+# once, at the end, by tools\release-signer, which is built from its own
+# lockfile before anything of the app's and checked by hash before it runs:
+# `tauri signer` runs out of node_modules, which any npm package can rewrite.
 #
 # Everything lands in dist-release\, ready to upload to the GitHub release.
 
@@ -126,6 +135,14 @@ if ((git tag --points-at HEAD) -notcontains $tag) {
     throw "HEAD is not tagged $tag. Tag first (see TUTORIAL-RELEASE.md), then build."
 }
 
+# The updater signer, built before npm or cargo touch the app, from its own
+# lockfile, and hashed now so the copy that gets the password is this one.
+Write-Host "`n== Updater signer ==" -ForegroundColor Cyan
+cargo build --release --locked --manifest-path tools\release-signer\Cargo.toml
+if (-not $?) { throw "building the updater signer failed" }
+$signer = Join-Path $repoRoot "tools\release-signer\target\release\silentsilo-release-signer.exe"
+$signerHash = (Get-FileHash $signer -Algorithm SHA256).Hash
+
 try {
     # One release per run. Leftovers from an earlier tag would ride along in
     # the `gh release upload dist-release\*` step at the end and attach an
@@ -214,23 +231,10 @@ try {
         $tauriConfigs += @("--config", "src-tauri/tauri.browser-host.json")
     }
 
-    npx --no-install tauri build @tauriConfigs
+    # Compiled first, with no token in the machine: every build script runs
+    # here. Bundled, and so signed, only once the token is asked for below.
+    npx --no-install tauri build --no-bundle @tauriConfigs
     if (-not $?) { throw "tauri build failed" }
-
-    # The workspace root is the repository root, so cargo writes to .\target,
-    # not to src-tauri\target. Getting this wrong looks like a failed build
-    # when the build actually succeeded.
-    $nsisDir = "target\release\bundle\nsis"
-    # Matched on the version, not on "most recent": installers from earlier
-    # tags stay in this directory, and shipping one of those under this tag's
-    # release notes is the kind of mistake nobody catches until an update
-    # misbehaves.
-    $setup = Get-ChildItem $nsisDir -Filter "*_${version}_*-setup.exe" |
-        Select-Object -First 1
-    if (-not $setup) { throw "no installer for $version in $nsisDir" }
-    # Copied, then signed where it ships. A .sig left in the bundle folder by
-    # an earlier build is never picked up.
-    Copy-Item $setup.FullName (Join-Path $out $setup.Name) -Force
 
     # The extractor lives in silentsilo/core now, so it is built from a clean
     # clone of the tag this app is pinned to, at the exact commit Cargo.lock
@@ -275,39 +279,84 @@ try {
         Pop-Location
     }
 
+    # Everything is compiled. Only now the token: it signs the app as Tauri
+    # bundles it, the browser host beside it, the installer and the
+    # extractor, and nothing that ran a build script.
+    Write-Host "`n== Authenticode ==" -ForegroundColor Cyan
+    Read-Host "Plug in the signing token and press Enter" | Out-Null
+    npx --no-install tauri bundle @tauriConfigs
+    if (-not $?) { throw "tauri bundle failed" }
+
+    # The workspace root is the repository root, so cargo writes to .\target,
+    # not to src-tauri\target. Getting this wrong looks like a failed build
+    # when the build actually succeeded.
+    $nsisDir = "target\release\bundle\nsis"
+    # Matched on the version, not on "most recent": installers from earlier
+    # tags stay in this directory, and shipping one of those under this tag's
+    # release notes is the kind of mistake nobody catches until an update
+    # misbehaves.
+    $setup = Get-ChildItem $nsisDir -Filter "*_${version}_*-setup.exe" |
+        Select-Object -First 1
+    if (-not $setup) { throw "no installer for $version in $nsisDir" }
+    # Copied, then signed where it ships. A .sig left in the bundle folder by
+    # an earlier build is never picked up.
+    Copy-Item $setup.FullName (Join-Path $out $setup.Name) -Force
+
     # Tauri bundles the app, not this, so its Authenticode signature is applied
     # by hand. Here rather than next to the minisign signing below, because
     # that one covers the bytes as they ship and Authenticode changes them.
     & "$PSScriptRoot\sign-windows.ps1" -Path (Join-Path $out "silentsilo-extract-windows-x86_64.exe")
     if (-not $?) { throw "signing the windows extractor failed" }
 
-    # The updater signature, on the installer and on the extractor: the
-    # extractor is the tool someone reaches for when they no longer trust
-    # anything else, so it gets the same one. Verify with minisign against the
-    # public key in tauri.conf.json.
-    #
-    # Asked only now, after every build: the password lives in the
-    # environment for these two commands and nothing else.
-    Write-Host "`n== Updater signatures ==" -ForegroundColor Cyan
-    Remove-Item Env:\TAURI_SIGNING_PRIVATE_KEY -ErrorAction SilentlyContinue
-    $secure = Read-Host "Updater signing key password" -AsSecureString
-    $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
-    try {
-        $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD =
-            [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+    Write-Host "`nThe token can come out now." -ForegroundColor Gray
+
+    # What the release workflow and the Mac attached to the draft, in a
+    # folder of its own: only their signatures go up from here.
+    Write-Host "`n== From the draft ==" -ForegroundColor Cyan
+    $draft = Join-Path ([System.IO.Path]::GetTempPath()) "silentsilo-draft-$tag"
+    if (Test-Path $draft) { Remove-Item $draft -Recurse -Force }
+    New-Item -ItemType Directory -Path $draft | Out-Null
+    $assets = (gh release view $tag --repo $slug --json assets | ConvertFrom-Json).assets.name |
+        Where-Object { $_ -notlike "*.sig" -and $_ -ne "latest.json" -and $_ -ne $setup.Name -and
+            $_ -ne "silentsilo-extract-windows-x86_64.exe" }
+    foreach ($asset in $assets) {
+        gh release download $tag --repo $slug --pattern $asset --dir $draft --clobber
+        if (-not $?) { throw "downloading $asset from the draft failed" }
     }
-    finally {
-        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
-    }
-    try {
-        foreach ($name in @($setup.Name, "silentsilo-extract-windows-x86_64.exe")) {
-            npx --no-install tauri signer sign --private-key-path $keyFile (Join-Path $out $name)
-            if (-not $?) { throw "the updater signature for $name failed" }
-            if (-not (Test-Path (Join-Path $out "$name.sig"))) { throw "$name.sig was not written" }
+
+    # A file the release workflow built carries a provenance statement for
+    # this tag and this workflow. Anything else on the draft from CI is
+    # refused: it is exactly what someone with write access to the
+    # repository, and no key, could put there. The macOS app comes from the
+    # Mac and has none; Gatekeeper checks its Developer ID signature.
+    $identity = "https://github.com/$slug/.github/workflows/release.yml@refs/tags/$tag"
+    foreach ($file in Get-ChildItem $draft -File) {
+        if ($file.Name -like "*.dmg" -or $file.Name -like "*.app.tar.gz") {
+            Write-Host ("  {0,-46} from the Mac" -f $file.Name)
+            continue
         }
+        gh attestation verify $file.FullName --repo $slug --cert-identity $identity | Out-Null
+        if (-not $?) { throw "$($file.Name) has no provenance from this tag's release workflow" }
+        Write-Host ("  {0,-46} built by the release workflow" -f $file.Name)
     }
-    finally {
-        Remove-Item Env:\TAURI_SIGNING_PRIVATE_KEY_PASSWORD -ErrorAction SilentlyContinue
+
+    # The updater signature on every file: what the updater installs, and
+    # the extractors and the rest, so "is this what the project published"
+    # can be answered without trusting GitHub. One password for all of them.
+    Write-Host "`n== Updater signatures ==" -ForegroundColor Cyan
+    if ((Get-FileHash $signer -Algorithm SHA256).Hash -ne $signerHash) {
+        throw "the updater signer changed on disk since it was built"
+    }
+    $toSign = @((Join-Path $out $setup.Name), (Join-Path $out "silentsilo-extract-windows-x86_64.exe")) +
+        @(Get-ChildItem $draft -File | ForEach-Object FullName)
+    & $signer --key $keyFile --version $version @toSign
+    if ($LASTEXITCODE -ne 0) { throw "the updater signatures failed" }
+    foreach ($file in Get-ChildItem $draft -File -Filter *.sig) {
+        Copy-Item $file.FullName (Join-Path $out $file.Name) -Force
+    }
+    foreach ($path in $toSign) {
+        $sig = Join-Path $out ("{0}.sig" -f (Split-Path $path -Leaf))
+        if (-not (Test-Path $sig)) { throw "$sig was not written" }
     }
 
     # latest.json is what the updater actually reads. tauri-action writes it

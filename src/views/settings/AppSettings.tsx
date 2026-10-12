@@ -23,6 +23,7 @@ import { HISTORY_POLICIES, type HistoryPolicy } from "../../lib/entryHistory";
 import { SshAgentSettings } from "./SshAgentSettings";
 import { AutoTypeSettings } from "./AutoTypeSettings";
 import { ScreenCaptureSettings } from "./ScreenCaptureSettings";
+import { UnprotectedSecretsSettings } from "./UnprotectedSecretsSettings";
 import { loadHistoryPolicy, saveHistoryPolicy } from "../../lib/historySetting";
 import { useLasting } from "../../lib/lasting";
 import { setLockNotice, useLockNotice } from "../../lib/lockNotice";
@@ -314,6 +315,7 @@ export function AppSettingsSection({
           </SettingRow>
 
           <ScreenCaptureSettings />
+          <UnprotectedSecretsSettings />
 
           <SettingRow
             label={t("set.gen_history")}

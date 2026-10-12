@@ -837,7 +837,7 @@ pub async fn vault_verify(app: AppHandle, deep: bool) -> Result<Vec<VerifyTarget
     // Read once, up front: the connection cannot be held across the network
     // work below, and asking again per target would let the answer change
     // half way through a report.
-    let (dek, kek, expected, keys) = {
+    let (dek, kek, expected, keys, hashes) = {
         let state = app.state::<AppState>();
         let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
         let session = sessions.get(&silo.id).ok_or_else(|| {
@@ -861,6 +861,7 @@ pub async fn vault_verify(app: AppHandle, deep: bool) -> Result<Vec<VerifyTarget
             vfs.referenced_blobs_with_attachments()
                 .map_err(|e| e.to_string())?,
             keys,
+            vfs.blob_hashes().map_err(|e| e.to_string())?,
         )
     };
 
@@ -914,9 +915,12 @@ pub async fn vault_verify(app: AppHandle, deep: bool) -> Result<Vec<VerifyTarget
             configured.label.clone()
         };
         let id = store.describe();
+        // With the hash the file's record holds, so a blob is checked
+        // against its record and not only against its own header.
         let mut open = |blob_id: uuid::Uuid| {
             keys.get(&blob_id)
                 .and_then(|wrapped| silentsilo_crypto::unwrap_content_key(wrapped, &kek).ok())
+                .map(|key| (key, hashes.get(&blob_id).cloned().unwrap_or_default()))
         };
         let handle = app.clone();
         let label = target_label.clone();
@@ -976,6 +980,7 @@ pub async fn vault_verify(app: AppHandle, deep: bool) -> Result<Vec<VerifyTarget
             let mut open = |blob_id: uuid::Uuid| {
                 keys.get(&blob_id)
                     .and_then(|wrapped| silentsilo_crypto::unwrap_content_key(wrapped, &kek).ok())
+                    .map(|key| (key, hashes.get(&blob_id).cloned().unwrap_or_default()))
             };
             let state = app.state::<AppState>();
             match sync::repair_from(&*store, report, &sources, &dek, &mut open, &|| {

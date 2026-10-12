@@ -217,6 +217,7 @@ mod tests {
             wrapped_dek: "the-wrapped-dek".into(),
             platform,
             revoked,
+            unconfirmed: false,
         }
     }
 

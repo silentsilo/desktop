@@ -54,13 +54,60 @@ export function fromOurReleases(version: string, raw: Record<string, unknown>): 
   );
 }
 
+/** Every signature an update answer carries, in its platform map or on its
+ * own. */
+function updateSignatures(raw: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  if (typeof raw.signature === "string") out.push(raw.signature);
+  const platforms = raw.platforms;
+  if (platforms && typeof platforms === "object") {
+    for (const entry of Object.values(platforms as Record<string, unknown>)) {
+      const signature = (entry as { signature?: unknown } | null)?.signature;
+      if (typeof signature === "string") out.push(signature);
+    }
+  }
+  return out;
+}
+
+/**
+ * Whether every signature names the version offered in its trusted comment
+ * (`version:<x.y.z>`), which the release machine writes and the signature
+ * covers: the updater checks the comment with the file. Without it a signed
+ * older installer could be served under a newer version's name.
+ */
+export function signedForVersion(version: string, raw: Record<string, unknown>): boolean {
+  const signatures = updateSignatures(raw);
+  return (
+    signatures.length > 0 &&
+    signatures.every((signature) => {
+      let text: string;
+      try {
+        text = atob(signature.trim());
+      } catch {
+        return false;
+      }
+      const comment = text
+        .split("\n")
+        .find((line) => line.startsWith("trusted comment: "))
+        ?.slice("trusted comment: ".length);
+      return (
+        comment !== undefined &&
+        comment.split("\t").some((field) => field.trim() === `version:${version}`)
+      );
+    })
+  );
+}
+
 export async function checkForUpdate(): Promise<UpdateCheckResult> {
   // Never back to an older version, whatever the server says.
   const update = await check({ allowDowngrades: false });
   if (!update?.available) {
     return { available: false };
   }
-  if (!fromOurReleases(update.version, update.rawJson)) {
+  if (
+    !fromOurReleases(update.version, update.rawJson) ||
+    !signedForVersion(update.version, update.rawJson)
+  ) {
     throw new Error(NOT_OURS);
   }
   return { available: true, version: update.version, body: update.body ?? null, update };

@@ -15,10 +15,10 @@ Authenticode signature changes the installer, so the updater signature has to
 be taken after it. That is the reason the installer and latest.json come from
 the same place.
 
-Every other platform is built and signed by CI and is already attached to the
-draft, so its entry is read from there rather than rebuilt. That does not bend
-the rule: nothing re-signs those bytes afterwards, so the signature on the
-draft covers exactly what ships.
+Every other platform is built by CI or on the Mac and is already attached to
+the draft. Its updater signature is made on this machine, over the bytes
+downloaded from the draft, and goes up beside it, so it covers exactly what
+ships.
 
 Keys carry the installer, because the updater asks for
 `{os}-{arch}-{installer}` before `{os}-{arch}`. A .deb client and an AppImage
@@ -71,14 +71,13 @@ function New-ManifestPlatforms {
             Write-Host ("  {0,-40} no asset matching {1}, skipped" -f ($entry.Keys -join ", "), $entry.Pattern) -ForegroundColor Yellow
             continue
         }
-        if (-not ($assets | Where-Object { $_ -eq "$asset.sig" })) {
-            throw "$asset is on the draft but $asset.sig is not. An entry without its signature is an update the app refuses."
+        # Made on this machine for the file on the draft, and uploaded with
+        # the rest of OutDir.
+        $sigPath = Join-Path $OutDir "$asset.sig"
+        if (-not (Test-Path $sigPath)) {
+            throw "$asset is on the draft but was not signed here. An entry without its signature is an update the app refuses."
         }
-        # Downloaded rather than assumed: the signature has to be the one
-        # sitting next to the file people will actually download.
-        gh release download $Tag --pattern "$asset.sig" --dir $OutDir --clobber
-        if (-not $?) { throw "downloading $asset.sig from the draft failed" }
-        $signature = (Get-Content (Join-Path $OutDir "$asset.sig") -Raw).Trim()
+        $signature = (Get-Content $sigPath -Raw).Trim()
         if (-not $signature) { throw "$asset.sig is empty" }
 
         foreach ($key in $entry.Keys) {

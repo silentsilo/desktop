@@ -530,6 +530,7 @@ pub async fn fido_enroll_primary(
                 wrapped_dek: hex::encode(&envelope_bytes),
                 platform: authenticator == Authenticator::ThisDevice,
                 revoked: false,
+                unconfirmed: false,
             }],
         },
         // The silo is being created, so there is nothing to take away.
@@ -539,6 +540,13 @@ pub async fn fido_enroll_primary(
     // From here the vault is key-only: the device secret alone no longer
     // decrypts it. Replaced whole or not at all.
     silentsilo_vault::save_wrapped_dek_bytes(&root, &envelope_bytes).map_err(|e| e.to_string())?;
+    // The device secret opened the silo until now and opens nothing from
+    // here, so it goes. Best effort: unlock retires it too.
+    if let Ok(id) = uuid::Uuid::parse_str(&vault_id)
+        && let Err(e) = silentsilo_vault::retire_device_secret(id)
+    {
+        crate::diagnostics::warn("enrol", format_args!("device secret kept for now: {e}"));
+    }
 
     // An organisation's silo keeps its activity log from the start, read
     // with this key. A failure is said and left to Settings, Activity, where
@@ -728,6 +736,7 @@ pub async fn fido_add_key(
         wrapped_dek: hex::encode(&envelope_bytes),
         platform: authenticator == Authenticator::ThisDevice,
         revoked: false,
+        unconfirmed: false,
     };
 
     crate::audit::record_off_thread(
@@ -859,8 +868,11 @@ pub async fn fido_remove_key(
     // leave the silo with one key": revoking a lost laptop's Touch ID key
     // must stay possible from here. The count is of *usable* keys, or an
     // unusable one would stand in for the key this machine needs.
-    let removing_usable = keys.usable().any(|k| k.credential_id == credential_id);
-    if removing_usable && keys.usable().count() <= 1 {
+    // Only keys this machine has enrolled or unlocked with count: one taken
+    // in from storage could have been planted there.
+    let confirmed = || keys.usable().filter(|k| !k.unconfirmed);
+    let removing_usable = confirmed().any(|k| k.credential_id == credential_id);
+    if removing_usable && confirmed().count() <= 1 {
         return Err(
             crate::err::coded!("err.keep_one_key", "Keep at least one key enrolled.").into(),
         );
@@ -911,12 +923,24 @@ pub async fn fido_remove_key(
     // retried by every later sync pass instead of being forgotten. The key
     // stops opening this silo on this machine either way: `active()` is what
     // unlock consults.
+    let was_confirmed = !key.unconfirmed;
     key.revoked = true;
     save_fido_keys(&root, &keys, authority(proof.as_ref())).map_err(|e| e.to_string())?;
 
     // A Touch ID key is this Mac's own: once it opens nothing, it goes from
-    // the keychain too. Any other key is left to whoever holds it.
-    if let Ok(raw) = hex::decode(&credential_id)
+    // the keychain too. Any other key is left to whoever holds it. Only one
+    // this silo enrolled or unlocked with here, and only when no other silo
+    // on this Mac still uses it: an id taken in from storage could name
+    // another silo's key.
+    let elsewhere = silentsilo_vault::load_registry(&crate::state::app_data_dir(&app)?)
+        .silos
+        .iter()
+        .filter(|other| other.id != silo.id)
+        .filter_map(|other| load_fido_keys(&other.path).ok())
+        .any(|other| other.active().any(|k| k.credential_id == credential_id));
+    if was_confirmed
+        && !elsewhere
+        && let Ok(raw) = hex::decode(&credential_id)
         && let Err(e) = silentsilo_fido::forget_platform_key(&raw)
     {
         crate::diagnostics::warn(
@@ -1688,6 +1712,7 @@ mod authenticator_choice_tests {
             wrapped_dek: "ff".into(),
             platform,
             revoked: false,
+            unconfirmed: false,
         }
     }
 

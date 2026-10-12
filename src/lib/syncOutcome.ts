@@ -47,6 +47,12 @@ export type SyncReport = {
   /// replaced or put back. Rejoining reads the same object, so this must
   /// never be reported as a rejoin.
   key_material_replaced?: boolean;
+  /// With `needs_rejoin`: nothing in storage proves a rotation did it. An
+  /// older release rotates without that proof, and so does garbage written
+  /// over the content key, so the screen names both.
+  rotation_unproven?: boolean;
+  /// Records missing from the middle of a device's history after the pass.
+  chain_holes?: string[];
   compacted: number;
   targets: TargetStatus[];
   /// Another pass was already running and this one stood down.
@@ -101,7 +107,7 @@ export type Status =
 /// One line summarising what a pass actually did, rather than a bare "done".
 export function describeSync(r: SyncReport): string {
   if (r.needs_rejoin) {
-    return t("app.sync_needs_rejoin");
+    return t(r.rotation_unproven ? "app.sync_rejoin_unproven" : "app.sync_needs_rejoin");
   }
   // Never the rejoin wording: rejoining reads the same content key, so it
   // would fail on the same object and leave the user going round a loop.
@@ -118,6 +124,8 @@ export function describeSync(r: SyncReport): string {
   if (r.blobs_failed > 0) parts.push(t("app.sync_failed_retry", { count: r.blobs_failed }));
   const restored = r.blobs_restored ?? 0;
   if (restored > 0) parts.push(t("app.sync_restored", { count: restored }));
+  const holes = r.chain_holes?.length ?? 0;
+  if (holes > 0) parts.push(t("app.sync_records_missing", { count: holes }));
   const unreadable = r.unreadable?.length ?? 0;
   if (unreadable > 0) parts.push(t("app.sync_unreadable", { count: unreadable }));
   // Housekeeping, mentioned rather than announced: the user did not ask for

@@ -90,3 +90,33 @@ mod tests {
         assert!(s.allow);
     }
 }
+
+/// Where storage passwords can be kept on this computer.
+#[derive(serde::Serialize)]
+pub struct SecretsStatus {
+    /// A keyring or the system's own protection is there.
+    protected: bool,
+    /// Without one, writing them to a file only this account reads is allowed.
+    allowed: bool,
+}
+
+fn secrets_status() -> SecretsStatus {
+    SecretsStatus {
+        protected: silentsilo_vault::local_secrets_protected(),
+        allowed: silentsilo_vault::unprotected_secrets_allowed(),
+    }
+}
+
+/// For Settings, General: shown only where there is no keyring.
+#[tauri::command(async)]
+pub fn secrets_storage_status() -> SecretsStatus {
+    secrets_status()
+}
+
+/// The person's answer to keeping storage passwords in a file only their
+/// account can read, on a computer with no keyring.
+#[tauri::command(async)]
+pub fn secrets_allow_unprotected(allow: bool) -> Result<SecretsStatus, String> {
+    silentsilo_vault::allow_unprotected_secrets(allow).map_err(|e| e.to_string())?;
+    Ok(secrets_status())
+}

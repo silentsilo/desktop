@@ -569,6 +569,9 @@ export function EntryDetail({
                               ? t("pw.history_next_change", { changes: changed.join(", ") })
                               : t("pw.history_no_change")}
                           </span>
+                          {version.conflict && (
+                            <span className="pw-history-what">{t("pw.history_conflict")}</span>
+                          )}
                           {version.password && (
                             <>
                               <span className="pw-field-value pw-mask">

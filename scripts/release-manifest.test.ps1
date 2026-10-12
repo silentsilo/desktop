@@ -19,7 +19,12 @@ function Reset-Fixture {
     if (Test-Path $out) { Remove-Item $out -Recurse -Force }
     New-Item -ItemType Directory -Path $out | Out-Null
     Set-Content (Join-Path $out "$setupName.sig") "windows-signature" -NoNewline
-    $script:fakeAssets = $Assets
+    # The signatures this machine made for the draft's files, beside the
+    # Windows one; a name in the list ending in .sig stands for one made.
+    foreach ($name in $Assets | Where-Object { $_ -like "*.sig" -and $_ -ne "$setupName.sig" }) {
+        Set-Content (Join-Path $out $name) "signature-for-$name" -NoNewline
+    }
+    $script:fakeAssets = @($Assets | Where-Object { $_ -notlike "*.sig" })
 }
 
 # Stands in for the CLI. `release view` answers with the fixture's asset list,

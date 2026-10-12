@@ -13,11 +13,9 @@ name: Release everything that is not Windows
 # bytes. Publishing that manifest offers an update the app then refuses to
 # install, and nothing announces the mistake until someone tries to update.
 #
-# The macOS app has no such constraint: Developer ID signing takes a
-# certificate in a secret, and notarisation is a network call. Until those
-# secrets exist the job still runs, so the build itself is exercised, but
-# its unsigned output is kept as a workflow artifact and never attached to
-# the release. See the job for the rule.
+# The macOS app is built here unsigned, as a check that it builds, and kept
+# as a workflow artifact only. The release is built, signed and notarised on
+# the Mac by scripts/build-release-mac.sh.
 #
 # The extractor's source lives in silentsilo/core. It is built here from a
 # clean clone of the core tag this app pins, checked against the commit the
@@ -25,12 +23,13 @@ name: Release everything that is not Windows
 # revision the installer was compiled against. Same logic as the local script
 # uses for the Windows one.
 #
-# The build jobs never see the updater key or a token that can write. They run
-# vite, every npm install script, every cargo build script and the bundler,
-# and any of those can plant something for a later step of the same job (a
-# changed node_modules, a line in $GITHUB_ENV). So they only build and upload
-# workflow artifacts. The `publish` job signs and attaches, from a fresh
-# checkout, with `npm ci --ignore-scripts` and no build cache.
+# No signing key is on GitHub. The build jobs never see a token that can
+# write: they run vite, every npm install script, every cargo build script
+# and the bundler, and any of those can plant something for a later step of
+# the same job (a changed node_modules, a line in $GITHUB_ENV). So they only
+# build and upload workflow artifacts, and `publish` attaches them unsigned,
+# with provenance, building nothing. The release machine checks that
+# provenance and signs every file for the updater.
 on:
   push:
     tags:
@@ -235,33 +234,17 @@ jobs:
           retention-days: 7
 
   # The macOS application: a universal binary (Apple silicon and Intel) in a
-  # .app inside a .dmg, plus the .app.tar.gz the updater downloads, signed
-  # by `publish`. Built against the core commit the lockfile pins, like
-  # everything else, through `--locked`.
+  # .app inside a .dmg, plus the .app.tar.gz the updater downloads. Built
+  # against the core commit the lockfile pins, like everything else, through
+  # `--locked`.
   #
-  # Signing and notarisation happen inside `tauri build` when the APPLE_*
-  # variables are set, and are skipped when they are not. The rule that
-  # decides whether the output reaches the release is Gatekeeper: an app
-  # that is not both signed and notarised is refused on every Mac that did
-  # not build it, and an updater manifest pointing at one would offer an
-  # update nobody can install. So a build without a Developer ID is kept as
-  # a workflow artifact, for looking at, and only a build this job has
-  # verified as signed and notarised is attached to the draft by `publish`.
-  #
-  # The macOS entries of latest.json are not written yet. When they are, the
-  # trap to know: the updater asks for `darwin-aarch64` and `darwin-x86_64`
-  # and never for `darwin-universal`, so a universal build needs both keys
-  # pointing at the same archive.
+  # Built here unsigned and never shipped from here: the answer to "does it
+  # build". The release is built, signed and notarised on the Mac
+  # (scripts/build-release-mac.sh), where the Developer ID certificate lives;
+  # no Apple secret is on GitHub.
   build-macos-app:
-    # Manual runs reach here too, so that "does it build" can be answered
-    # without a tag. The Apple secrets live in the `release` environment,
-    # which only tags may use: a manual run builds unsigned.
-    environment: ${{ startsWith(github.ref, 'refs/tags/') && 'release' || '' }}
     runs-on: macos-latest
-    outputs:
-      signed: ${{ steps.apple.outputs.signed }}
-    # Two cold cargo release builds, one per architecture, plus notarisation,
-    # which is a queue on Apple's side and not a local step.
+    # Two cold cargo release builds, one per architecture.
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -278,49 +261,11 @@ jobs:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
       - run: npm ci
 
-      # Secrets are not readable in `if:`, so the decision is made once here
-      # and read as a step output below. All six or none: a half-configured
-      # set is the dangerous case, because the bundler signs with what it has
-      # and then skips notarisation with a warning rather than an error,
-      # which yields an app Gatekeeper refuses under a name that says it was
-      # signed.
-      - name: Which Apple secrets are configured
-        id: apple
-        shell: bash
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          names="APPLE_SIGNING_IDENTITY APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID"
-          have=0
-          missing=""
-          for name in $names; do
-            if [ -n "${!name}" ]; then
-              have=$((have + 1))
-            else
-              missing="$missing $name"
-            fi
-          done
-          if [ "$have" -eq 0 ]; then
-            echo "signed=false" >> "$GITHUB_OUTPUT"
-            echo "No Apple secrets: the build will be unsigned and kept as an artifact only"
-          elif [ -z "$missing" ]; then
-            echo "signed=true" >> "$GITHUB_OUTPUT"
-            echo "Developer ID present: the build will be signed and notarised"
-          else
-            echo "::error::Apple secrets are half configured. Missing:$missing. Set all six or none."
-            exit 1
-          fi
-
       # The browser extension's host, as on Windows and Linux: shipped once a
       # store lists the extension, checked with `--check-release`, built for
       # both architectures and joined into one binary for the universal app.
-      # The bundler puts it in Contents/MacOS beside the app and signs it with
-      # the app; the app copies it out at runtime (browser_pipe.rs says why).
+      # The bundler puts it in Contents/MacOS beside the app; the app copies
+      # it out at runtime (browser_pipe.rs says why).
       - name: The browser host, when a store lists the extension
         id: host
         shell: bash
@@ -348,95 +293,34 @@ jobs:
           src-tauri/binaries/silentsilo-browser-host-universal-apple-darwin --check-release
           echo "config=--config src-tauri/tauri.browser-host.json" >> "$GITHUB_OUTPUT"
 
-      # Two build steps rather than one with empty variables: the bundler
-      # treats a set-but-empty APPLE_CERTIFICATE as a certificate to import,
-      # and fails on it.
-      #
-      # Neither carries the updater key. `tauri build` runs vite, every npm
-      # plugin, every cargo build script and the bundler, and the key was in
-      # the environment of all of them: one compromised dependency anywhere
-      # in that tree could read the key that signs updates for every install.
-      # `createUpdaterArtifacts: false` is what lets it out, since the
-      # bundler refuses to make an updater artifact it cannot sign, so the
-      # .app.tar.gz is made below and signed by `publish`. The
-      # Apple secrets stay here: codesigning and notarisation happen inside
-      # `tauri build` and there is no separate step to move them to.
+      # The .app only: the .dmg is made after signing, around the signed app,
+      # and the updater archive after notarisation.
       - name: Build, unsigned
-        if: steps.apple.outputs.signed == 'false'
         env:
           SILENTSILO_GOOGLE_CLIENT_SECRET: ${{ secrets.SILENTSILO_GOOGLE_CLIENT_SECRET }}
-        run: npx tauri build --ci --target universal-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":false}}' ${{ steps.host.outputs.config }} -- --locked
+        run: npx tauri build --ci --target universal-apple-darwin --bundles app --config '{"bundle":{"createUpdaterArtifacts":false}}' ${{ steps.host.outputs.config }} -- --locked
 
-      - name: Build, sign and notarise
-        if: steps.apple.outputs.signed == 'true'
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          SILENTSILO_GOOGLE_CLIENT_SECRET: ${{ secrets.SILENTSILO_GOOGLE_CLIENT_SECRET }}
-        run: npx tauri build --ci --target universal-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":false}}' ${{ steps.host.outputs.config }} -- --locked
-
-      # The archive the macOS updater downloads, which the bundler would
-      # otherwise have made: a gzipped tar of the .app, taken from the
-      # directory holding it so the .app is at the root of the archive.
-      #
-      # After notarisation, never before: the ticket is stapled into the
-      # .app, and an archive made first would carry an app Gatekeeper asks
-      # Apple about. `COPYFILE_DISABLE` because bsdtar otherwise writes an
-      # AppleDouble `._` file beside every entry, which unpacks into the
-      # installed app as litter nobody put there.
-      - name: Archive the app for the updater
+      # A tar, because an artifact is a zip and a zip loses the symlinks and
+      # the permissions an .app depends on.
+      - name: Pack the app
         shell: bash
         env:
           COPYFILE_DISABLE: 1
         run: |
           out=target/universal-apple-darwin/release/bundle/macos
           app=$(cd "$out" && ls -d *.app)
-          tar -C "$out" -czf "$out/$app.tar.gz" "$app"
-          ls -l "$out"
-
-      # The workspace root is the repository root, so cargo and the bundler
-      # write to target\, not to src-tauri\target\. The staging directory is
-      # not `dist`: that is the frontend's build output, which `tauri build`
-      # has just refilled through beforeBuildCommand, and mixing the two
-      # would put index.html on the release page.
-      - name: Collect the bundle
-        shell: bash
-        run: |
-          out=target/universal-apple-darwin/release/bundle
           mkdir -p dist-macos
-          cp "$out"/dmg/*.dmg dist-macos/
-          cp "$out"/macos/*.app.tar.gz dist-macos/
+          tar -C "$out" -cf dist-macos/unsigned-app.tar "$app"
           ls -l dist-macos
 
-      # What the gate above promised, checked against the artifact rather
-      # than against the presence of a secret. `spctl` answers the question
-      # a user's Mac will ask, and `stapler` proves the notarisation ticket
-      # travels with the app instead of needing Apple to be reachable.
-      - name: Prove it is signed and notarised
-        if: steps.apple.outputs.signed == 'true'
-        shell: bash
-        run: |
-          app=$(ls -d target/universal-apple-darwin/release/bundle/macos/*.app)
-          echo "== $app"
-          codesign --verify --strict --verbose=2 "$app"
-          spctl --assess --type exec --verbose=4 "$app"
-          xcrun stapler validate "$app"
-
-      # Signed or not, it goes to `publish` as an artifact; only a build the
-      # step above proved signed and notarised is attached there.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: macos-app
-          path: dist-macos/
+          name: macos-app-unsigned
+          path: dist-macos/unsigned-app.tar
           retention-days: 7
 
   # The Linux application: a .deb for the Debian and Ubuntu family, and an
-  # AppImage for everything else. No certificate and no secrets beyond the
-  # updater key, so unlike macOS there is nothing to gate on.
+  # AppImage for everything else. No certificate and no signing secret.
   #
   # Built inside an Ubuntu 22.04 container rather than on the runner image.
   # The distribution you compile on fixes the minimum glibc, and 22.04 means
@@ -586,19 +470,41 @@ jobs:
           path: dist-linux/
           retention-days: 7
 
-  # The one job that sees the updater key and a token that can write. It
-  # builds nothing: a fresh checkout for the lockfile and the pin, the signer
-  # from `npm ci --ignore-scripts`, and the artifacts the jobs above left.
+  # What the release is made of: every crate in Cargo.lock and every package
+  # in package-lock.json, as CycloneDX. Its own job, with no secret and no
+  # write token: the action downloads its scanner when it runs.
+  sbom:
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: silentsilo-desktop-${{ github.ref_name }}.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sbom
+          path: silentsilo-desktop-${{ github.ref_name }}.cdx.json
+          retention-days: 7
+
+  # Attaches what the jobs above built to the draft. No updater key here or
+  # anywhere on GitHub: every updater signature is made on the release
+  # machine (scripts\build-release-local.ps1), after it has checked these
+  # files' provenance. So a tag pushed by someone who should not have, or a
+  # dependency of this workflow, can at most attach unsigned files to a
+  # draft, which no installed app accepts as an update.
   #
   # `!cancelled()` because one platform failing must not withhold what did
-  # build: the release is a draft either way. Tags only: the updater key signs
-  # what Windows installs as an update, so it never signs a branch. A manual
-  # run keeps the unsigned builds as artifacts of the jobs above.
-  #
-  # The `release` environment holds the key and admits only `v*` tags, so a
-  # workflow pushed to some branch cannot read it either.
+  # build: the release is a draft either way. Tags only.
   publish:
-    needs: [build-extract, build-extract-linux, build-macos-app, build-linux-app]
+    needs: [build-extract, build-extract-linux, build-linux-app, sbom]
     if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/') }}
     environment: release
     runs-on: ubuntu-latest
@@ -606,7 +512,8 @@ jobs:
     permissions:
       contents: write
       # Build provenance: a signed statement, in GitHub's attestation store,
-      # that these files came out of this workflow run.
+      # that these files came out of this workflow run. The release machine
+      # checks it before it signs anything.
       id-token: write
       attestations: write
     steps:
@@ -630,71 +537,73 @@ jobs:
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
           echo "core $tag at $commit"
 
-      # The signer as the lockfile pins it, and nothing run while installing.
-      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
-        with:
-          node-version: "22"
-      - run: npm ci --ignore-scripts
-
+      # Each by its name: a job of this workflow can upload an artifact of
+      # any name, and a pattern would take in whatever turned up.
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          path: artifacts
+          name: silentsilo-extract-macos-aarch64
+          path: artifacts/extract-macos
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: silentsilo-extract-linux-x86_64
+          path: artifacts/extract-linux
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: vars.SHIP_LINUX == 'true'
+        with:
+          name: linux-app
+          path: artifacts/linux-app
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: sbom
+          path: artifacts/sbom
 
-      # What goes on the draft, and nothing else. Extractors always; macOS
-      # only when its job proved the build signed and notarised; Linux only
-      # while the repository variable SHIP_LINUX is "true" (from 1.4.0).
+      # What goes on the draft, and nothing else: each file named, and
+      # anything unexpected beside them stops the job.
       - name: Choose what ships
         shell: bash
         env:
-          MAC_SIGNED: ${{ needs.build-macos-app.outputs.signed }}
           SHIP_LINUX: ${{ vars.SHIP_LINUX }}
+          TAG: ${{ github.ref_name }}
         run: |
+          set -euo pipefail
           mkdir -p ship
-          for f in artifacts/silentsilo-extract-*/silentsilo-extract-*; do
-            if [ -f "$f" ]; then cp "$f" ship/; fi
-          done
-          if [ "$MAC_SIGNED" = "true" ]; then
-            cp artifacts/macos-app/*.dmg artifacts/macos-app/*.app.tar.gz ship/
-          fi
+          expect() {
+            local dir=$1 pattern=$2
+            local found
+            found=$(find "$dir" -maxdepth 1 -type f -name "$pattern")
+            if [ "$(printf '%s\n' "$found" | grep -c .)" -ne 1 ]; then
+              echo "::error::expected exactly one $pattern in $dir"
+              exit 1
+            fi
+            cp "$found" ship/
+          }
+          only() {
+            local dir=$1 count=$2
+            local have
+            have=$(find "$dir" -type f | wc -l)
+            if [ "$have" -ne "$count" ]; then
+              echo "::error::$dir holds $have files, $count expected:"
+              find "$dir" -type f
+              exit 1
+            fi
+          }
+          only artifacts/extract-macos 1
+          expect artifacts/extract-macos silentsilo-extract-macos-aarch64
+          only artifacts/extract-linux 1
+          expect artifacts/extract-linux silentsilo-extract-linux-x86_64
+          only artifacts/sbom 1
+          expect artifacts/sbom "silentsilo-desktop-$TAG.cdx.json"
           if [ "$SHIP_LINUX" = "true" ]; then
-            cp artifacts/linux-app/*.deb artifacts/linux-app/*.AppImage ship/
+            only artifacts/linux-app 2
+            expect artifacts/linux-app "*_amd64.deb"
+            expect artifacts/linux-app "*_amd64.AppImage"
           fi
           ls -l ship
 
-      # What the release is made of: every crate in Cargo.lock and every
-      # package in package-lock.json, as CycloneDX, beside the files. Made
-      # before Sign, so it carries a minisign signature like the rest.
-      - name: Software bill of materials
-        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
-        with:
-          path: .
-          format: cyclonedx-json
-          output-file: ship/silentsilo-desktop-${{ github.ref_name }}.cdx.json
-          upload-artifact: false
-          upload-release-assets: false
-
-      # Everything the updater might download gets a signature, and the
-      # extractors too: "is this the binary the project published" has to be
-      # answerable without trusting GitHub. Verify with minisign against the
-      # public key in tauri.conf.json, also SIGNING-PUBKEY.txt in core. The
-      # .dmg is installed by hand and is not signed here.
-      - name: Sign
-        shell: bash
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          for file in ship/*; do
-            case "$file" in *.dmg|*.sig) continue ;; esac
-            npx --no-install tauri signer sign "$file"
-            [ -f "$file.sig" ] || { echo "::error::no signature for $file"; exit 1; }
-          done
-          ls -l ship
-
-      # Provenance for what this run built: the extractors, the macOS and
-      # Linux apps and the SBOM. The Windows installer and extractor are built
-      # and signed on the release machine and have none; `gh attestation
-      # verify <file> --repo silentsilo/desktop` checks the others.
+      # Provenance for what this run built: the extractors, the Linux app and
+      # the SBOM. The release machine verifies it with
+      # `gh attestation verify --cert-identity` before signing these for the
+      # updater; anyone can check it the same way.
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:

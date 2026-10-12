@@ -173,6 +173,8 @@ pub fn run() {
     // undone, so applying them first is the whole point: a DLL that gets in
     // ahead of this call has already won.
     silentsilo_shell::harden_process();
+    // No core dumps of a process that holds unlocked keys.
+    silentsilo_vault::harden_process();
     // WebKitGTK's DMA-BUF renderer paints a white window on some GPU stacks
     // (Fedora 44 in a VM). A value the user set wins.
     #[cfg(target_os = "linux")]
@@ -334,6 +336,8 @@ pub fn run() {
             autotype::autotype_cancel,
             autotype::autotype_confirm,
             screen_capture::screen_capture_status,
+            screen_capture::secrets_storage_status,
+            screen_capture::secrets_allow_unprotected,
             screen_capture::screen_capture_set,
             commands::vault::app_set_lock_notice,
             commands::silo::silo_blur,
