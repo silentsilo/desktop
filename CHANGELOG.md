@@ -7,9 +7,11 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+## [1.5.0] - macOS, eight languages and iCloud Drive
+
 ### Security
 
-- Built on core v1.10.0-beta.9, which checks what storage could forge: key
+- Built on core v1.10.0, which checks what storage could forge: key
   envelopes, object names, file contents against their records, rotations
   and the activity log. A file whose content is not the one its record
   names is refused when opened, saved out or checked.

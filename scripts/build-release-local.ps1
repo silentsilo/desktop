@@ -138,7 +138,7 @@ if (git status --porcelain) {
     throw "Working tree is not clean. Commit or stash, then build."
 }
 if ((git tag --points-at HEAD) -notcontains $tag) {
-    throw "HEAD is not tagged $tag. Tag first (see TUTORIAL-RELEASE.md), then build."
+    throw "HEAD is not tagged $tag. Build from the tagged commit (git switch --detach $tag), or tag this one first."
 }
 
 # No signing key belongs on GitHub: anyone who can push a tag and a changed

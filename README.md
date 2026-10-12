@@ -1,9 +1,10 @@
 # SilentSilo
 
 End-to-end encrypted vault for files and passwords, unlocked by a FIDO2
-security key or Windows Hello, with a written-down recovery code as the
-fallback. For Windows 10 and 11, and for Linux as a .deb or an AppImage
-(security keys only: Linux has no built-in key the app uses). AGPL-3.0.
+security key, Windows Hello or Touch ID, with a written-down recovery code as
+the fallback. For Windows 10 and 11, macOS 13 or later (one app for Apple
+silicon and Intel), and Linux as a .deb or an AppImage (security keys only:
+Linux has no built-in key the app uses). AGPL-3.0.
 
 Everything runs locally: no SilentSilo account, no SilentSilo server. Backup
 is optional, to storage you choose: your OneDrive, Dropbox or Google Drive,
@@ -239,6 +240,29 @@ leaves in your home, to remove by hand if you want it gone:
   or KWallet, through the Secret Service), under names ending in
   `.com.silentsilo.desktop`. As on Windows, remove them after the silo
   folders, not before.
+
+### On macOS
+
+Quit SilentSilo and move it from Applications to the Trash. That does not
+touch your silo folders or your backup storage. What the app leaves in your
+home, to remove by hand if you want it gone:
+
+- `~/Library/Application Support/com.silentsilo.desktop`, the list of silos
+  (names and folder paths)
+- `~/Library/Application Support/SilentSilo`, the app's settings and its
+  copy of the browser host, and `~/.cache/silentsilo`, the encrypted working
+  copies
+- `~/Library/Caches/com.silentsilo.desktop` and
+  `~/Library/WebKit/com.silentsilo.desktop`, the window's caches
+- `~/Library/LaunchAgents/com.silentsilo.desktop.plist`, if it starts at
+  login
+- the browser extension's manifests, `com.silentsilo.desktop.json` under
+  each browser's `NativeMessagingHosts` in `~/Library/Application Support`.
+  Turning the extension off in Settings before deleting the app removes
+  them.
+- the device secret, storage credentials and Touch ID keys in your login
+  keychain, under names ending in `.com.silentsilo.desktop`. As on Windows,
+  remove them after the silo folders, not before.
 
 ## Dev
 
