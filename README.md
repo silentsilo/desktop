@@ -31,13 +31,13 @@ nothing held back.
 
 ## What it looks like
 
-| Unlocking, with a security key | The files in a silo |
+| Unlocking, with Windows Hello | The files in a silo |
 |---|---|
-| ![The unlock screen, waiting for a security key to be touched](docs/screenshots/unlock.png) | ![The file explorer in grid view](docs/screenshots/files.png) |
+| ![The unlock screen, asking for Windows Hello](docs/screenshots/unlock.webp) | ![The files in a silo, a PDF selected with its details and the copies that hold it](docs/screenshots/files.webp) |
 
-| Credentials | Backup, to storage you chose |
+| Passwords | Backup, to storage you chose |
 |---|---|
-| ![The credentials view with a login selected](docs/screenshots/credentials.png) | ![The backup settings, connected to a folder](docs/screenshots/backup.png) |
+| ![The passwords, with a bank login open](docs/screenshots/credentials.webp) | ![The backup page, with the silo's copies](docs/screenshots/backup.webp) |
 
 ## Stack
 
