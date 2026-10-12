@@ -103,9 +103,11 @@ pub async fn s3_save_config(
     let silo = crate::state::active_silo(&app)?;
     let described = describe(config, crate::state::silo_store_config(&app))?;
     let config = described.config.clone();
-    // Another silo's place is refused before the test write lands in it.
-    refuse_foreign_vault(&app, &silo, &*described.store).await?;
+    // The test write first: it makes a folder typed for a new copy (an
+    // iCloud Drive silo folder), which reads as unreachable until then. It
+    // leaves nothing behind, so another silo's place loses nothing to it.
     described.store.check().await.map_err(|e| e.to_string())?;
+    refuse_foreign_vault(&app, &silo, &*described.store).await?;
     // Replaces the first target and leaves any others alone. This screen
     // edits one connection, and a silo may now have more than one: saving
     // through the list is what stops the two views of the same thing
@@ -163,9 +165,9 @@ pub async fn s3_test_config(app: AppHandle, config: StoreConfigInput) -> Result<
     }
     let store = describe(config, crate::state::silo_store_config(&app))?.store;
     // The same gate saving applies, so "Test connection" cannot pass a place
-    // that saving is about to refuse; asked before the test write.
-    refuse_foreign_vault(&app, &silo, &*store).await?;
-    store.check().await.map_err(|e| e.to_string())
+    // that saving is about to refuse; after the test write, as there.
+    store.check().await.map_err(|e| e.to_string())?;
+    refuse_foreign_vault(&app, &silo, &*store).await
 }
 
 /// Forgets the connection details. What is already in storage is left alone
