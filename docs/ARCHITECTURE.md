@@ -822,8 +822,9 @@ first session is in `planuri/lansare-1.5.md`):
   of the channel. An app can be dragged elsewhere, or run from a temporary
   read-only copy of itself (App Translocation) when opened where it was
   downloaded; a manifest naming the bundle would then name a path that is
-  gone. The release job builds the host for both architectures, joins them
-  with `lipo` and runs `--check-release`; the bundler signs it with the app.
+  gone. The release build (`scripts/build-release-mac.sh`, on the Mac)
+  builds the host for both architectures, joins them with `lipo` and runs
+  `--check-release`; it is signed with the app and refused if missing.
   The app checks a client by its path (`proc_pidpath`) against that copy, so
   the check is as strong as the user's own folder, as with the AppImage. The
   code signature is not read yet.

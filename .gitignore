@@ -2,6 +2,7 @@ node_modules
 dist
 target
 dist-release
+dist-release-mac
 .env*
 
 # Local tooling state, never part of the source tree

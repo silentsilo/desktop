@@ -77,6 +77,12 @@ $cargoVersion = ([regex]'(?m)^version\s*=\s*"([^"]+)"').Match(
 if ($cargoVersion -ne $version) {
     throw "Version mismatch: package.json says $version, Cargo.toml says $cargoVersion"
 }
+# The workspace's own version, which silentsilo-shell and the browser host
+# take theirs from.
+$workspaceVersion = ([regex]'(?m)^version\s*=\s*"([^"]+)"').Match((Get-Content Cargo.toml -Raw)).Groups[1].Value
+if ($workspaceVersion -ne $version) {
+    throw "Version mismatch: package.json says $version, the workspace Cargo.toml says $workspaceVersion"
+}
 
 # A `[patch]` pointing Cargo at a local core checkout rewrites Cargo.lock and
 # builds the app against whatever sits in a sibling directory rather than
@@ -451,7 +457,7 @@ try {
     # what it serves and refuse a version the updater would not offer.
     $live = $null
     try {
-        $live = (Invoke-RestMethod "https://releases.silentsilo.com/windows/x86_64/0.0.0" -TimeoutSec 10).version
+        $live = (Invoke-RestMethod "https://releases.silentsilo.com/windows/x86_64/0.0.0-probe" -TimeoutSec 10).version
     } catch {}
     if ($live) {
         if (-not (Test-VersionAbove -Version $version -Than $live)) {

@@ -46,8 +46,10 @@ echo "Building SilentSilo $version for macOS"
 # binary reports another.
 conf=$(node -p 'require("./src-tauri/tauri.conf.json").version')
 cargo_version=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)
+workspace_version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 [ "$conf" = "$version" ] || { echo "tauri.conf.json says $conf, package.json $version"; exit 1; }
-[ "$cargo_version" = "$version" ] || { echo "Cargo.toml says $cargo_version, package.json $version"; exit 1; }
+[ "$cargo_version" = "$version" ] || { echo "src-tauri/Cargo.toml says $cargo_version, package.json $version"; exit 1; }
+[ "$workspace_version" = "$version" ] || { echo "Cargo.toml (workspace) says $workspace_version, package.json $version"; exit 1; }
 
 # Built from the tag, against the core the lockfile pins, or not at all.
 [ ! -e .cargo/config.toml ] || { echo ".cargo/config.toml patches core to a local checkout. Remove it and run cargo check first."; exit 1; }
@@ -60,6 +62,10 @@ node scripts/check-lockfile.mjs
 # each of its environments, before anything is built or signed.
 command -v gh > /dev/null || { echo "gh is needed (brew install gh, then gh auth login)."; exit 1; }
 gh auth status > /dev/null 2>&1 || { echo "gh is not signed in (gh auth login)."; exit 1; }
+# The release workflow opens the draft this uploads to; a published release
+# is never written to, since attaching would put it back in draft.
+draft=$(gh release view "$tag" --repo silentsilo/desktop --json isDraft -q .isDraft 2>/dev/null || echo absent)
+[ "$draft" = "true" ] || { echo "No draft release $tag (it is $draft). Push the tag and wait for the release workflow first."; exit 1; }
 repo=silentsilo/desktop
 pattern='^(TAURI_SIGNING_|APPLE_)|SIGN|CERTIFICATE|PRIVATE_KEY|KEYSTORE|(^|_)P12($|_)'
 found=$(gh secret list --repo "$repo" --json name --jq '.[].name' | grep -E "$pattern" | sed 's/$/ (repository)/' || true)
@@ -97,10 +103,42 @@ mkdir -p "$OUT"
 echo "== Build"
 npm ci
 rustup target add aarch64-apple-darwin x86_64-apple-darwin > /dev/null
+
+# The browser extension's host, shipped once a store lists the extension:
+# built for both architectures, joined into one binary for the universal
+# app, and checked with --check-release. The bundler puts it in
+# Contents/MacOS beside the app, and it is signed below with the rest.
+# (The odd expansion below is for the bash 3.2 macOS ships, where an empty
+# array under `set -u` is an error.)
+host_config=()
+listed=$(node -p 'const o=require("./crates/silentsilo-browser-host/allowed-origins.json"); ["chrome_web_store","edge_add_ons","firefox_add_ons"].reduce((n,k)=>n+(o[k]||[]).length,0)')
+if [ "$listed" -gt 0 ]; then
+  echo "== Browser host"
+  for arch in aarch64-apple-darwin x86_64-apple-darwin; do
+    cargo build -p silentsilo-browser-host --release --locked --target "$arch"
+  done
+  mkdir -p src-tauri/binaries
+  # A universal build compiles each architecture on its own first, and each
+  # looks for its own copy.
+  for arch in aarch64-apple-darwin x86_64-apple-darwin; do
+    cp "target/$arch/release/silentsilo-browser-host" "src-tauri/binaries/silentsilo-browser-host-$arch"
+  done
+  lipo -create -output src-tauri/binaries/silentsilo-browser-host-universal-apple-darwin \
+    target/aarch64-apple-darwin/release/silentsilo-browser-host \
+    target/x86_64-apple-darwin/release/silentsilo-browser-host
+  src-tauri/binaries/silentsilo-browser-host-universal-apple-darwin --check-release
+  host_config=(--config src-tauri/tauri.browser-host.json)
+else
+  echo "No store lists the extension: this release ships without the browser host."
+fi
+
 # The .app only, unsigned: signing comes after, with the options below,
 # and the .dmg is made around the signed and notarised app.
 npx tauri build --target universal-apple-darwin --bundles app \
-  --config '{"bundle":{"createUpdaterArtifacts":false}}' -- --locked
+  --config '{"bundle":{"createUpdaterArtifacts":false}}' ${host_config[@]+"${host_config[@]}"} -- --locked
+if [ "$listed" -gt 0 ] && [ ! -x "target/universal-apple-darwin/release/bundle/macos/SilentSilo.app/Contents/MacOS/silentsilo-browser-host" ]; then
+  echo "The browser host is not inside the app."; exit 1
+fi
 
 bundle=target/universal-apple-darwin/release/bundle/macos
 app=$(cd "$bundle" && ls -d *.app)
@@ -155,10 +193,11 @@ xcrun stapler validate "$dmg"
 rm -rf "$work"
 
 ls -l "$OUT"
+
+echo "== Upload to the draft"
+gh release upload "$tag" "$OUT"/* --repo silentsilo/desktop --clobber
 cat <<EOF
 
-Ready. Attach these to the draft, then sign them for the updater on the
-release machine with scripts\\build-release-local.ps1:
-
-  gh release upload $tag $OUT/* --repo silentsilo/desktop
+Uploaded to the draft $tag. Next, on the release machine:
+scripts\\build-release-local.ps1 signs them for the updater with the rest.
 EOF
