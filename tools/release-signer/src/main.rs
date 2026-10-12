@@ -6,7 +6,14 @@
 //! before the app is, and the release script checks its hash before it runs,
 //! so the password only ever reaches code that did not come with the app.
 //!
-//!     silentsilo-release-signer --key <tauri key file> --version <x.y.z> <file>...
+//!     silentsilo-release-signer --key <tauri key file> --pubkey <tauri pubkey>
+//!         --version <x.y.z> <file>...
+//!     silentsilo-release-signer --key <tauri key file> --check
+//!
+//! `--pubkey` is the `pubkey` of tauri.conf.json: a key that is not that
+//! one signs nothing, since the app would refuse every file it signed.
+//! `--check` only reads the key file, without the password, so a release
+//! can find a missing or damaged key before it builds anything.
 //!
 //! For each file it writes `<file>.sig`: the minisign signature, base64 as
 //! the updater expects it. The trusted comment names the version and the
@@ -28,16 +35,27 @@ fn main() {
 fn run() -> Result<(), String> {
     let mut key = None;
     let mut version = None;
+    let mut pubkey = None;
+    let mut check = false;
     let mut files: Vec<PathBuf> = Vec::new();
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--key" => key = args.next().map(PathBuf::from),
             "--version" => version = args.next(),
+            "--pubkey" => pubkey = args.next(),
+            "--check" => check = true,
             _ => files.push(PathBuf::from(arg)),
         }
     }
     let key = key.ok_or("--key is missing")?;
+    let wrapped = std::fs::read_to_string(&key).map_err(|e| format!("{}: {e}", key.display()))?;
+    if check {
+        read_key_box(&wrapped)?;
+        println!("{} reads as an updater key", key.display());
+        return Ok(());
+    }
+    let expected = expected_public_key(&pubkey.ok_or("--pubkey is missing")?)?;
     let version = version.ok_or("--version is missing")?;
     if files.is_empty() {
         return Err("no files to sign".into());
@@ -49,10 +67,14 @@ fn run() -> Result<(), String> {
         return Err(format!("{version} is not a version"));
     }
 
-    let wrapped = std::fs::read_to_string(&key).map_err(|e| format!("{}: {e}", key.display()))?;
     let password = rpassword::prompt_password("Updater signing key password: ")
         .map_err(|e| format!("reading the password: {e}"))?;
     let (secret, public) = load_key(&wrapped, password)?;
+    if public.to_base64() != expected.to_base64() {
+        return Err(
+            "this key is not the one whose public key the app carries; nothing was signed".into(),
+        );
+    }
 
     for file in &files {
         sign_one(file, &version, &secret, &public)?;
@@ -62,15 +84,44 @@ fn run() -> Result<(), String> {
 }
 
 /// The Tauri key file is the minisign secret key, base64 again.
-fn load_key(
-    wrapped: &str,
-    password: String,
-) -> Result<(minisign::SecretKey, minisign::PublicKey), String> {
+fn read_key_box(wrapped: &str) -> Result<minisign::SecretKeyBox, String> {
     let text = STANDARD
         .decode(wrapped.trim())
         .map_err(|e| format!("the key file is not base64: {e}"))?;
     let text = String::from_utf8(text).map_err(|_| "the key file is not text")?;
-    let key_box = minisign::SecretKeyBox::from_string(&text).map_err(|e| e.to_string())?;
+    // Checked by shape: the minisign crate parses a key only when it opens
+    // it, and anything at all reads as one before that.
+    let mut lines = text.lines();
+    let comment = lines.next().unwrap_or_default();
+    let body = lines.next().map(|l| STANDARD.decode(l.trim()));
+    if !comment.starts_with("untrusted comment:")
+        || !matches!(body, Some(Ok(bytes)) if bytes.len() == SECRET_KEY_BYTES)
+    {
+        return Err("not an updater key".into());
+    }
+    minisign::SecretKeyBox::from_string(&text).map_err(|e| format!("not an updater key: {e}"))
+}
+
+/// A minisign secret key as stored: algorithms, KDF parameters, key id and
+/// the encrypted key pair.
+const SECRET_KEY_BYTES: usize = 158;
+
+/// The `pubkey` of tauri.conf.json: the minisign public key, base64 again.
+fn expected_public_key(wrapped: &str) -> Result<minisign::PublicKey, String> {
+    let text = STANDARD
+        .decode(wrapped.trim())
+        .map_err(|e| format!("the public key is not base64: {e}"))?;
+    let text = String::from_utf8(text).map_err(|_| "the public key is not text")?;
+    minisign::PublicKeyBox::from_string(&text)
+        .and_then(|b| b.into_public_key())
+        .map_err(|e| format!("not a minisign public key: {e}"))
+}
+
+fn load_key(
+    wrapped: &str,
+    password: String,
+) -> Result<(minisign::SecretKey, minisign::PublicKey), String> {
+    let key_box = read_key_box(wrapped)?;
     // No password is how `tauri signer generate` writes a key without one.
     let password = (!password.is_empty()).then_some(password);
     let secret = key_box
@@ -127,8 +178,18 @@ mod tests {
     fn a_tauri_style_key_signs_what_the_updater_accepts() {
         let pair = minisign::KeyPair::generate_encrypted_keypair(Some("pw".into())).unwrap();
         let wrapped = STANDARD.encode(pair.sk.to_box(None).unwrap().to_string());
+        assert!(
+            read_key_box(&wrapped).is_ok(),
+            "readable without the password"
+        );
+        assert!(read_key_box("bm90IGEga2V5").is_err());
         assert!(load_key(&wrapped, "wrong".into()).is_err());
         let (secret, public) = load_key(&wrapped, "pw".into()).unwrap();
+        let carried = STANDARD.encode(pair.pk.to_box().unwrap().to_string());
+        assert_eq!(
+            expected_public_key(&carried).unwrap().to_base64(),
+            public.to_base64()
+        );
 
         let dir = std::env::temp_dir().join(format!("signer-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -138,7 +199,9 @@ mod tests {
 
         let sig = std::fs::read_to_string(dir.join("SilentSilo_1.5.0_x64-setup.exe.sig")).unwrap();
         let text = String::from_utf8(STANDARD.decode(sig).unwrap()).unwrap();
-        assert!(text.contains("trusted comment: version:1.5.0	file:SilentSilo_1.5.0_x64-setup.exe"));
+        assert!(
+            text.contains("trusted comment: version:1.5.0	file:SilentSilo_1.5.0_x64-setup.exe")
+        );
         let _ = std::fs::remove_dir_all(dir);
     }
 

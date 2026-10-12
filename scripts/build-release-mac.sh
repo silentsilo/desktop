@@ -59,6 +59,7 @@ node scripts/check-lockfile.mjs
 # workflow can read a secret there. Checked by name, on the repository and
 # each of its environments, before anything is built or signed.
 command -v gh > /dev/null || { echo "gh is needed (brew install gh, then gh auth login)."; exit 1; }
+gh auth status > /dev/null 2>&1 || { echo "gh is not signed in (gh auth login)."; exit 1; }
 repo=silentsilo/desktop
 pattern='^(TAURI_SIGNING_|APPLE_)|SIGN|CERTIFICATE|PRIVATE_KEY|KEYSTORE|(^|_)P12($|_)'
 found=$(gh secret list --repo "$repo" --json name --jq '.[].name' | grep -E "$pattern" | sed 's/$/ (repository)/' || true)

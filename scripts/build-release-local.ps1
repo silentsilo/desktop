@@ -166,6 +166,20 @@ if (-not $?) { throw "building the updater signer failed" }
 $signer = Join-Path $repoRoot "tools\release-signer\target\release\silentsilo-release-signer.exe"
 $signerHash = (Get-FileHash $signer -Algorithm SHA256).Hash
 
+# Everything signing needs, found now rather than an hour in: the updater
+# key readable, the Authenticode certificate known to this machine (the
+# token itself is asked for later), and gh signed in for the draft.
+& $signer --key $keyFile --check
+if ($LASTEXITCODE -ne 0) { throw "the updater key at $keyFile cannot be read" }
+$pubkey = (Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json).plugins.updater.pubkey
+if (-not $pubkey) { throw "tauri.conf.json carries no updater public key" }
+$thumbprint = if ($env:SILENTSILO_SIGN_THUMBPRINT) { $env:SILENTSILO_SIGN_THUMBPRINT } else { "5DF397C236D87DA3DB0137E9CBFDF29319241E4A" }
+if (-not (Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Thumbprint -eq $thumbprint })) {
+    throw "The Authenticode certificate $thumbprint is not known to this machine. Plug the token in once with proCertum CardManager closed so Windows registers it."
+}
+gh auth status 2>&1 | Out-Null
+if (-not $?) { throw "gh is not signed in (gh auth login)" }
+
 try {
     # One release per run. Leftovers from an earlier tag would ride along in
     # the `gh release upload dist-release\*` step at the end and attach an
@@ -372,7 +386,7 @@ try {
     }
     $toSign = @((Join-Path $out $setup.Name), (Join-Path $out "silentsilo-extract-windows-x86_64.exe")) +
         @(Get-ChildItem $draft -File | ForEach-Object FullName)
-    & $signer --key $keyFile --version $version @toSign
+    & $signer --key $keyFile --pubkey $pubkey --version $version @toSign
     if ($LASTEXITCODE -ne 0) { throw "the updater signatures failed" }
     foreach ($file in Get-ChildItem $draft -File -Filter *.sig) {
         Copy-Item $file.FullName (Join-Path $out $file.Name) -Force
