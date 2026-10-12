@@ -37,6 +37,18 @@ silo from opening needs a major version rather than a note.
   (and Enter, if you want) once you confirm with Windows Hello or your
   security key. A window that runs as administrator is refused, since
   Windows would drop the input.
+- Auto-type on macOS too, with Control-Option-A, confirmed with Touch ID or
+  a security key. It needs the Accessibility permission, which Settings
+  asks for and links to.
+- iCloud Drive as backup storage, on macOS and Windows. The form says
+  whether SilentSilo's folder is on this computer and how to get it there,
+  and lists the silos it holds when setting one up from it. Linux does not
+  offer it.
+- Passwords: act on several entries at once. A tick box on every row,
+  Ctrl or Shift click as in Files, Select all for what the list shows, and
+  a bar to move them to a category, star or unstar them, delete them, or
+  export only those to KeePass or CSV. A paperclip marks entries with
+  attachments.
 - The last minute before a silo locks itself is counted down in the window,
   and announced by a system notification when the window is hidden or
   behind others (a switch under General). A check of the copies, a seed or a
