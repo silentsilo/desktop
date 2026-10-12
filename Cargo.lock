@@ -5767,7 +5767,7 @@ dependencies = [
 
 [[package]]
 name = "silentsilo"
-version = "1.4.0"
+version = "1.5.0-rc.1"
 dependencies = [
  "async-trait",
  "blake3",
@@ -5849,7 +5849,7 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-browser-host"
-version = "1.4.0"
+version = "1.5.0-rc.1"
 dependencies = [
  "libc",
  "serde_json",
@@ -5957,7 +5957,7 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-shell"
-version = "1.4.0"
+version = "1.5.0-rc.1"
 dependencies = [
  "block2",
  "core-foundation 0.10.1",

@@ -8,10 +8,10 @@ Each is listed with its version and its licence, and the full text of every
 licence follows, once per distinct text. Where a component ships its own
 copyright or NOTICE file, that file is what is reproduced here.
 
-Generated from the resolved dependency graph on 2026-10-07, for x86_64-pc-windows-msvc, x86_64-unknown-linux-gnu, aarch64-apple-darwin, x86_64-apple-darwin.
+Generated from the resolved dependency graph on 2026-10-12, for x86_64-pc-windows-msvc, x86_64-unknown-linux-gnu, aarch64-apple-darwin, x86_64-apple-darwin.
 Regenerate with: npm run notices
 
-Components: 673
+Components: 679
 
 ==============================================================================
 COMPONENTS
@@ -95,7 +95,7 @@ alloc-no-stdlib 2.0.4 (crate)
 alloc-stdlib 0.2.4 (crate)
   licence: BSD-3-Clause
   source:  https://github.com/dropbox/rust-alloc-no-stdlib
-  text:    declares BSD-3-Clause and ships no file; the standard text is at [347]
+  text:    declares BSD-3-Clause and ships no file; the standard text is at [351]
 
 allocator-api2 0.2.21 (crate)
   licence: MIT OR Apache-2.0
@@ -325,7 +325,7 @@ base64 0.21.7 (crate)
 base64-simd 0.8.0 (crate)
   licence: MIT
   source:  https://github.com/Nugine/simd
-  text:    declares MIT and ships no file; the standard text is at [348]
+  text:    declares MIT and ships no file; the standard text is at [352]
 
 base64ct 1.8.3 (crate)
   licence: Apache-2.0 OR MIT
@@ -370,7 +370,7 @@ blake2 0.11.0-rc.6 (crate)
 blake2b_simd 1.0.5 (crate)
   licence: MIT
   source:  https://github.com/oconnor663/blake2_simd
-  text:    declares MIT and ships no file; the standard text is at [348]
+  text:    declares MIT and ships no file; the standard text is at [352]
 
 blake3 1.8.5 (crate)
   licence: CC0-1.0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception
@@ -404,7 +404,7 @@ block-padding 0.4.2 (crate)
 block2 0.6.2 (crate)
   licence: MIT
   source:  https://github.com/madsmtm/objc2
-  text:    declares MIT and ships no file; the standard text is at [348]
+  text:    declares MIT and ships no file; the standard text is at [352]
 
 blocking 1.6.2 (crate)
   licence: Apache-2.0 OR MIT
@@ -794,12 +794,12 @@ displaydoc 0.2.6 (crate)
 dlopen2 0.8.2 (crate)
   licence: MIT
   source:  https://github.com/OpenByteDev/dlopen2
-  text:    declares MIT and ships no file; the standard text is at [348]
+  text:    declares MIT and ships no file; the standard text is at [352]
 
 dlopen2_derive 0.4.3 (crate)
   licence: MIT
   source:  https://github.com/OpenByteDev/dlopen2
-  text:    declares MIT and ships no file; the standard text is at [348]
+  text:    declares MIT and ships no file; the standard text is at [352]
 
 dom_query 0.27.0 (crate)
   licence: MIT
@@ -1539,6 +1539,11 @@ lucide-react 1.26.0 (npm package)
   source:  https://github.com/lucide-icons/lucide.git
   text:    see [189]
 
+mac-notification-sys 0.6.15 (crate)
+  licence: MIT/Apache-2.0
+  source:  https://github.com/h4llow3En/mac-notification-sys
+  text:    declares Apache-2.0 and ships no file; the standard text is at [4]
+
 markup5ever 0.38.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/servo/html5ever
@@ -1619,6 +1624,11 @@ nix 0.31.3 (crate)
   source:  https://github.com/nix-rust/nix
   text:    see [204]
 
+notify-rust 4.18.2 (crate)
+  licence: MIT OR Apache-2.0
+  source:  https://github.com/hoodie/notify-rust
+  text:    see [70] [205]
+
 num 0.4.3 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/rust-num/num
@@ -1642,7 +1652,7 @@ num-complex 0.4.6 (crate)
 num-conv 0.2.2 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/jhpratt/num-conv
-  text:    see [116] [205]
+  text:    see [116] [206]
 
 num-integer 0.1.46 (crate)
   licence: MIT OR Apache-2.0
@@ -1667,7 +1677,7 @@ num-traits 0.2.19 (crate)
 objc2 0.6.4 (crate)
   licence: MIT
   source:  https://github.com/madsmtm/objc2
-  text:    declares MIT and ships no file; the standard text is at [348]
+  text:    declares MIT and ships no file; the standard text is at [352]
 
 objc2-app-kit 0.3.2 (crate)
   licence: Zlib OR Apache-2.0 OR MIT
@@ -1687,7 +1697,7 @@ objc2-core-graphics 0.3.2 (crate)
 objc2-encode 4.1.0 (crate)
   licence: MIT
   source:  https://github.com/madsmtm/objc2
-  text:    declares MIT and ships no file; the standard text is at [348]
+  text:    declares MIT and ships no file; the standard text is at [352]
 
 objc2-exception-helper 0.1.1 (crate)
   licence: Zlib OR Apache-2.0 OR MIT
@@ -1697,7 +1707,7 @@ objc2-exception-helper 0.1.1 (crate)
 objc2-foundation 0.3.2 (crate)
   licence: MIT
   source:  https://github.com/madsmtm/objc2
-  text:    declares MIT and ships no file; the standard text is at [348]
+  text:    declares MIT and ships no file; the standard text is at [352]
 
 objc2-io-surface 0.3.2 (crate)
   licence: Zlib OR Apache-2.0 OR MIT
@@ -1732,12 +1742,12 @@ once_cell 1.21.4 (crate)
 opaque-debug 0.3.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/RustCrypto/utils
-  text:    see [6] [206]
+  text:    see [6] [207]
 
 open 5.4.0 (crate)
   licence: MIT
   source:  https://github.com/Byron/open-rs
-  text:    see [207]
+  text:    see [208]
 
 openssl-probe 0.2.1 (crate)
   licence: MIT OR Apache-2.0
@@ -1747,7 +1757,7 @@ openssl-probe 0.2.1 (crate)
 openssl-src 300.6.1+3.6.3 (crate)
   licence: MIT/Apache-2.0
   source:  https://github.com/alexcrichton/openssl-src-rs
-  text:    see [20] [52] [208]
+  text:    see [20] [52] [209]
 
 openssl-sys 0.9.117 (crate)
   licence: MIT
@@ -1757,7 +1767,7 @@ openssl-sys 0.9.117 (crate)
 option-ext 0.2.0 (crate)
   licence: MPL-2.0
   source:  https://github.com/soc/option-ext.git
-  text:    see [209]
+  text:    see [210]
 
 ordered-stream 0.2.0 (crate)
   licence: MIT OR Apache-2.0
@@ -1767,12 +1777,12 @@ ordered-stream 0.2.0 (crate)
 osakit 0.3.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/mdevils/rust-osakit
-  text:    see [19] [210]
+  text:    see [19] [211]
 
 outref 0.5.2 (crate)
   licence: MIT
   source:  https://github.com/Nugine/outref
-  text:    see [211]
+  text:    see [212]
 
 p256 0.14.0 (crate)
   licence: Apache-2.0 OR MIT
@@ -1782,7 +1792,7 @@ p256 0.14.0 (crate)
 p384 0.14.0 (crate)
   licence: Apache-2.0 OR MIT
   source:  https://github.com/RustCrypto/elliptic-curves
-  text:    see [6] [212]
+  text:    see [6] [213]
 
 p521 0.14.0 (crate)
   licence: Apache-2.0 OR MIT
@@ -1807,7 +1817,7 @@ pango-sys 0.18.0 (crate)
 parking 2.2.1 (crate)
   licence: Apache-2.0 OR MIT
   source:  https://github.com/smol-rs/parking
-  text:    see [20] [5] [213]
+  text:    see [20] [5] [214]
 
 parking_lot 0.12.5 (crate)
   licence: MIT OR Apache-2.0
@@ -1822,7 +1832,7 @@ parking_lot_core 0.9.12 (crate)
 password-hash 0.5.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/RustCrypto/traits/tree/master/password-hash
-  text:    see [6] [214]
+  text:    see [6] [215]
 
 password-hash 0.6.1 (crate)
   licence: MIT OR Apache-2.0
@@ -1832,12 +1842,12 @@ password-hash 0.6.1 (crate)
 pbkdf2 0.13.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/RustCrypto/password-hashes
-  text:    see [6] [215]
+  text:    see [6] [216]
 
 pem-rfc7468 1.0.0 (crate)
   licence: Apache-2.0 OR MIT
   source:  https://github.com/RustCrypto/formats
-  text:    see [6] [216]
+  text:    see [6] [217]
 
 percent-encoding 2.3.2 (crate)
   licence: MIT OR Apache-2.0
@@ -1852,27 +1862,27 @@ phc 0.6.1 (crate)
 phf 0.13.1 (crate)
   licence: MIT
   source:  https://github.com/rust-phf/rust-phf
-  text:    see [217]
+  text:    see [218]
 
 phf_codegen 0.13.1 (crate)
   licence: MIT
   source:  https://github.com/rust-phf/rust-phf
-  text:    see [217]
+  text:    see [218]
 
 phf_generator 0.13.1 (crate)
   licence: MIT
   source:  https://github.com/rust-phf/rust-phf
-  text:    see [217]
+  text:    see [218]
 
 phf_macros 0.13.1 (crate)
   licence: MIT
   source:  https://github.com/rust-phf/rust-phf
-  text:    see [217]
+  text:    see [218]
 
 phf_shared 0.13.1 (crate)
   licence: MIT
   source:  https://github.com/rust-phf/rust-phf
-  text:    see [217]
+  text:    see [218]
 
 pin-project-lite 0.2.17 (crate)
   licence: Apache-2.0 OR MIT
@@ -1882,7 +1892,7 @@ pin-project-lite 0.2.17 (crate)
 pin-utils 0.1.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/rust-lang-nursery/pin-utils
-  text:    see [218] [219]
+  text:    see [219] [220]
 
 piper 0.2.5 (crate)
   licence: MIT OR Apache-2.0
@@ -1892,7 +1902,7 @@ piper 0.2.5 (crate)
 pkcs1 0.8.0-rc.4 (crate)
   licence: Apache-2.0 OR MIT
   source:  https://github.com/RustCrypto/formats
-  text:    see [6] [216]
+  text:    see [6] [217]
 
 pkcs5 0.8.1 (crate)
   licence: Apache-2.0 OR MIT
@@ -1912,17 +1922,17 @@ pkg-config 0.3.33 (crate)
 plist 1.10.0 (crate)
   licence: MIT
   source:  https://github.com/ebarnard/rust-plist/
-  text:    see [220]
+  text:    see [221]
 
 png 0.17.16 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/image-rs/image-png
-  text:    see [20] [221]
+  text:    see [20] [222]
 
 png 0.18.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/image-rs/image-png
-  text:    see [20] [221]
+  text:    see [20] [222]
 
 polling 3.11.0 (crate)
   licence: Apache-2.0 OR MIT
@@ -1932,12 +1942,12 @@ polling 3.11.0 (crate)
 poly1305 0.9.1 (crate)
   licence: Apache-2.0 OR MIT
   source:  https://github.com/RustCrypto/universal-hashes
-  text:    see [6] [222]
+  text:    see [6] [223]
 
 polyval 0.6.2 (crate)
   licence: Apache-2.0 OR MIT
   source:  https://github.com/RustCrypto/universal-hashes
-  text:    see [6] [223]
+  text:    see [6] [224]
 
 polyval 0.7.3 (crate)
   licence: Apache-2.0 OR MIT
@@ -1952,27 +1962,27 @@ potential_utf 0.1.5 (crate)
 powerfmt 0.2.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/jhpratt/powerfmt
-  text:    see [224] [225]
+  text:    see [225] [226]
 
 ppv-lite86 0.2.21 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/cryptocorrosion/cryptocorrosion
-  text:    see [226] [227]
+  text:    see [227] [228]
 
 precomputed-hash 0.1.1 (crate)
   licence: MIT
   source:  https://github.com/emilio/precomputed-hash
-  text:    see [228]
+  text:    see [229]
 
 primefield 0.14.0 (crate)
   licence: Apache-2.0 OR MIT
   source:  https://github.com/RustCrypto/elliptic-curves
-  text:    see [6] [229]
+  text:    see [6] [230]
 
 primeorder 0.14.0 (crate)
   licence: Apache-2.0 OR MIT
   source:  https://github.com/RustCrypto/elliptic-curves
-  text:    see [6] [214]
+  text:    see [6] [215]
 
 proc-macro-crate 1.3.1 (crate)
   licence: MIT OR Apache-2.0
@@ -1992,42 +2002,52 @@ proc-macro-crate 3.5.0 (crate)
 proc-macro-error 1.0.4 (crate)
   licence: MIT OR Apache-2.0
   source:  https://gitlab.com/CreepySkeleton/proc-macro-error
-  text:    see [230] [231]
+  text:    see [231] [232]
 
 proc-macro-error-attr 1.0.4 (crate)
   licence: MIT OR Apache-2.0
   source:  https://gitlab.com/CreepySkeleton/proc-macro-error
-  text:    see [232] [231]
+  text:    see [233] [232]
 
 proc-macro2 1.0.107 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/dtolnay/proc-macro2
   text:    see [19] [5]
 
+psl 2.1.241 (crate)
+  licence: MIT/Apache-2.0
+  source:  https://github.com/addr-rs/psl
+  text:    see [234]
+
+psl-types 2.0.11 (crate)
+  licence: MIT/Apache-2.0
+  source:  https://github.com/addr-rs/psl-types
+  text:    see [235] [20]
+
 quick-xml 0.41.0 (crate)
   licence: MIT
   source:  https://github.com/tafia/quick-xml
-  text:    see [233]
+  text:    see [236]
 
 quick-xml 0.42.0 (crate)
   licence: MIT
   source:  https://github.com/tafia/quick-xml
-  text:    see [234]
+  text:    see [237]
 
 quinn 0.11.11 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/quinn-rs/quinn
-  text:    see [57] [235]
+  text:    see [57] [238]
 
 quinn-proto 0.11.16 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/quinn-rs/quinn
-  text:    see [57] [235]
+  text:    see [57] [238]
 
 quinn-udp 0.5.15 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/quinn-rs/quinn
-  text:    see [57] [235]
+  text:    see [57] [238]
 
 quote 1.0.47 (crate)
   licence: MIT OR Apache-2.0
@@ -2037,62 +2057,62 @@ quote 1.0.47 (crate)
 rand 0.9.5 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/rust-random/rand
-  text:    see [236] [237]
+  text:    see [239] [240]
 
 rand 0.10.2 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/rust-random/rand
-  text:    see [236] [237]
+  text:    see [239] [240]
 
 rand 0.8.7 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/rust-random/rand
-  text:    see [236] [237]
+  text:    see [239] [240]
 
 rand_chacha 0.9.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/rust-random/rand
-  text:    see [236] [237]
+  text:    see [239] [240]
 
 rand_chacha 0.3.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/rust-random/rand
-  text:    see [129] [237]
+  text:    see [129] [240]
 
 rand_core 0.6.4 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/rust-random/rand
-  text:    see [238] [237]
+  text:    see [241] [240]
 
 rand_core 0.9.5 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/rust-random/rand
-  text:    see [238] [237]
+  text:    see [241] [240]
 
 rand_core 0.10.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/rust-random/rand_core
-  text:    see [238] [239]
+  text:    see [241] [242]
 
 rand_pcg 0.10.2 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/rust-random/rngs
-  text:    see [238] [240]
+  text:    see [241] [243]
 
 raw-window-handle 0.6.2 (crate)
   licence: MIT OR Apache-2.0 OR Zlib
   source:  https://github.com/rust-windowing/raw-window-handle
-  text:    see [116] [241] [242]
+  text:    see [116] [244] [245]
 
 react 19.2.7 (npm package)
   licence: MIT
   source:  https://github.com/facebook/react.git
-  text:    see [243]
+  text:    see [246]
 
 react-dom 19.2.7 (npm package)
   licence: MIT
   source:  https://github.com/facebook/react.git
-  text:    see [243]
+  text:    see [246]
 
 ref-cast 1.0.26 (crate)
   licence: MIT OR Apache-2.0
@@ -2127,12 +2147,12 @@ regex-syntax 0.8.11 (crate)
 reqwest 0.12.28 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/seanmonstar/reqwest
-  text:    see [244] [245]
+  text:    see [247] [248]
 
 reqwest 0.13.4 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/seanmonstar/reqwest
-  text:    see [244] [246]
+  text:    see [247] [249]
 
 rfc6979 0.6.0 (crate)
   licence: Apache-2.0 OR MIT
@@ -2142,12 +2162,12 @@ rfc6979 0.6.0 (crate)
 rfd 0.16.0 (crate)
   licence: MIT
   source:  https://github.com/PolyMeilex/rfd
-  text:    see [247]
+  text:    see [250]
 
 ring 0.17.14 (crate)
   licence: Apache-2.0 AND ISC
   source:  https://github.com/briansmith/ring
-  text:    see [248] [249] [250]
+  text:    see [251] [252] [253]
 
 rsa 0.10.0-rc.18 (crate)
   licence: MIT OR Apache-2.0
@@ -2172,7 +2192,7 @@ russh-cryptovec 0.62.0 (crate)
 russh-sftp 2.3.0 (crate)
   licence: Apache-2.0
   source:  https://github.com/AspectUnk/russh-sftp
-  text:    see [251]
+  text:    see [254]
 
 russh-util 0.52.0 (crate)
   licence: Apache-2.0
@@ -2182,7 +2202,7 @@ russh-util 0.52.0 (crate)
 rust-argon2 3.0.0 (crate)
   licence: MIT/Apache-2.0
   source:  https://github.com/sru-systems/rust-argon2
-  text:    see [20] [252]
+  text:    see [20] [255]
 
 rustc_version 0.4.1 (crate)
   licence: MIT OR Apache-2.0
@@ -2207,22 +2227,22 @@ rustls 0.23.45 (crate)
 rustls-native-certs 0.8.4 (crate)
   licence: Apache-2.0 OR ISC OR MIT
   source:  https://github.com/rustls/rustls-native-certs
-  text:    see [253] [20] [152] [153]
+  text:    see [256] [20] [152] [153]
 
 rustls-pki-types 1.15.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/rustls/pki-types
-  text:    see [254] [255]
+  text:    see [257] [258]
 
-rustls-platform-verifier 0.7.0 (crate)
+rustls-platform-verifier 0.7.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/rustls/rustls-platform-verifier
-  text:    see [57] [256]
+  text:    see [57] [259]
 
 rustls-webpki 0.103.15 (crate)
   licence: ISC
   source:  https://github.com/rustls/webpki
-  text:    see [257]
+  text:    see [260]
 
 rustversion 1.0.23 (crate)
   licence: MIT OR Apache-2.0
@@ -2232,52 +2252,52 @@ rustversion 1.0.23 (crate)
 ryu 1.0.23 (crate)
   licence: Apache-2.0 OR BSL-1.0
   source:  https://github.com/dtolnay/ryu
-  text:    see [19] [258]
+  text:    see [19] [261]
 
 salsa20 0.11.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/RustCrypto/stream-ciphers
-  text:    see [6] [259]
+  text:    see [6] [262]
 
 same-file 1.0.6 (crate)
   licence: Unlicense/MIT
   source:  https://github.com/BurntSushi/same-file
-  text:    see [13] [260] [15]
+  text:    see [13] [263] [15]
 
 schannel 0.1.29 (crate)
   licence: MIT
   source:  https://github.com/steffengy/schannel-rs
-  text:    see [261]
+  text:    see [264]
 
 scheduler 0.27.0 (npm package)
   licence: MIT
   source:  https://github.com/facebook/react.git
-  text:    see [243]
+  text:    see [246]
 
 schemars 0.8.22 (crate)
   licence: MIT
   source:  https://github.com/GREsau/schemars
-  text:    see [262]
+  text:    see [265]
 
 schemars 0.9.0 (crate)
   licence: MIT
   source:  https://github.com/GREsau/schemars
-  text:    see [262]
+  text:    see [265]
 
 schemars 1.2.1 (crate)
   licence: MIT
   source:  https://github.com/GREsau/schemars
-  text:    see [262]
+  text:    see [265]
 
 schemars_derive 0.8.22 (crate)
   licence: MIT
   source:  https://github.com/GREsau/schemars
-  text:    see [262]
+  text:    see [265]
 
 scopeguard 1.2.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/bluss/scopeguard
-  text:    see [20] [263]
+  text:    see [20] [266]
 
 scrypt 0.12.0 (crate)
   licence: MIT OR Apache-2.0
@@ -2292,7 +2312,7 @@ sec1 0.8.1 (crate)
 secrecy 0.10.3 (crate)
   licence: Apache-2.0 OR MIT
   source:  https://github.com/iqlusioninc/crates/tree/main/secrecy
-  text:    see [57] [264]
+  text:    see [57] [267]
 
 secret-service 4.0.0 (crate)
   licence: MIT OR Apache-2.0
@@ -2302,12 +2322,12 @@ secret-service 4.0.0 (crate)
 security-framework 3.7.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/kornelski/rust-security-framework
-  text:    see [20] [265]
+  text:    see [20] [268]
 
 security-framework-sys 2.17.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/kornelski/rust-security-framework
-  text:    see [20] [265]
+  text:    see [20] [268]
 
 selectors 0.36.1 (crate)
   licence: MPL-2.0
@@ -2357,17 +2377,17 @@ serde_repr 0.1.21 (crate)
 serde_spanned 1.1.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/toml-rs/toml
-  text:    see [70] [266]
+  text:    see [70] [269]
 
 serde_spanned 0.6.9 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/toml-rs/toml
-  text:    see [70] [266]
+  text:    see [70] [269]
 
 serde_urlencoded 0.7.1 (crate)
   licence: MIT/Apache-2.0
   source:  https://github.com/nox/serde_urlencoded
-  text:    see [19] [267]
+  text:    see [19] [270]
 
 serde_with 3.21.0 (crate)
   licence: MIT OR Apache-2.0
@@ -2387,17 +2407,17 @@ serde-untagged 0.1.9 (crate)
 serdect 0.4.3 (crate)
   licence: Apache-2.0 OR MIT
   source:  https://github.com/RustCrypto/formats
-  text:    see [57] [268]
+  text:    see [57] [271]
 
 serialize-to-javascript 0.1.2 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/chippers/serialize-to-javascript
-  text:    see [57] [269]
+  text:    see [57] [272]
 
 serialize-to-javascript-impl 0.1.2 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/chippers/serialize-to-javascript
-  text:    see [57] [269]
+  text:    see [57] [272]
 
 servo_arc 0.4.3 (crate)
   licence: MIT OR Apache-2.0
@@ -2412,17 +2432,17 @@ sha1 0.11.0 (crate)
 sha1 0.10.7 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/RustCrypto/hashes
-  text:    see [6] [270]
+  text:    see [6] [273]
 
 sha1_smol 1.0.1 (crate)
   licence: BSD-3-Clause
   source:  https://github.com/mitsuhiko/sha1-smol
-  text:    see [271]
+  text:    see [274]
 
 sha2 0.10.9 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/RustCrypto/hashes
-  text:    see [6] [270]
+  text:    see [6] [273]
 
 sha2 0.11.0 (crate)
   licence: MIT OR Apache-2.0
@@ -2432,22 +2452,22 @@ sha2 0.11.0 (crate)
 sha3 0.11.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/RustCrypto/hashes
-  text:    see [6] [272]
+  text:    see [6] [275]
 
 sha3 0.12.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/RustCrypto/hashes
-  text:    see [6] [272]
+  text:    see [6] [275]
 
 shlex 2.0.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/comex/rust-shlex
-  text:    see [273] [274]
+  text:    see [276] [277]
 
 signal-hook-registry 1.4.8 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/vorner/signal-hook
-  text:    see [20] [275]
+  text:    see [20] [278]
 
 signature 3.0.0 (crate)
   licence: Apache-2.0 OR MIT
@@ -2457,22 +2477,22 @@ signature 3.0.0 (crate)
 simd-adler32 0.3.10 (crate)
   licence: MIT
   source:  https://github.com/mcountryman/simd-adler32
-  text:    see [276]
+  text:    see [279]
 
 siphasher 1.0.3 (crate)
   licence: MIT/Apache-2.0
   source:  https://github.com/jedisct1/rust-siphash
-  text:    see [277]
+  text:    see [280]
 
 slab 0.4.12 (crate)
   licence: MIT
   source:  https://github.com/tokio-rs/slab
-  text:    see [278]
+  text:    see [281]
 
 smallvec 1.15.2 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/servo/rust-smallvec
-  text:    see [20] [279]
+  text:    see [20] [282]
 
 socket2 0.6.5 (crate)
   licence: MIT OR Apache-2.0
@@ -2482,7 +2502,7 @@ socket2 0.6.5 (crate)
 softbuffer 0.4.8 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/rust-windowing/softbuffer
-  text:    see [280] [281]
+  text:    see [283] [284]
 
 soup3 0.5.0 (crate)
   licence: MIT
@@ -2497,7 +2517,7 @@ soup3-sys 0.5.0 (crate)
 spin 0.10.1 (crate)
   licence: MIT
   source:  https://github.com/mvdnes/spin-rs.git
-  text:    see [282]
+  text:    see [285]
 
 spki 0.8.0 (crate)
   licence: Apache-2.0 OR MIT
@@ -2507,7 +2527,7 @@ spki 0.8.0 (crate)
 sponge-cursor 0.1.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/RustCrypto/utils
-  text:    see [6] [283]
+  text:    see [6] [286]
 
 ssh-cipher 0.3.0 (crate)
   licence: Apache-2.0 OR MIT
@@ -2527,12 +2547,12 @@ ssh-key 0.7.0-rc.11 (crate)
 stable_deref_trait 1.2.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/storyyeller/stable_deref_trait
-  text:    see [20] [284]
+  text:    see [20] [287]
 
 static_assertions 1.1.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/nvzqz/static-assertions-rs
-  text:    see [57] [285]
+  text:    see [57] [288]
 
 string_cache 0.9.0 (crate)
   licence: MIT OR Apache-2.0
@@ -2547,17 +2567,17 @@ string_cache_codegen 0.6.1 (crate)
 strsim 0.11.1 (crate)
   licence: MIT
   source:  https://github.com/rapidfuzz/strsim-rs
-  text:    see [286]
+  text:    see [289]
 
 subtle 2.6.1 (crate)
   licence: BSD-3-Clause
   source:  https://github.com/dalek-cryptography/subtle
-  text:    see [287]
+  text:    see [290]
 
 swift-rs 1.0.7 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/Brendonovich/swift-rs
-  text:    see [288] [289]
+  text:    see [291] [292]
 
 syn 2.0.119 (crate)
   licence: MIT OR Apache-2.0
@@ -2582,7 +2602,7 @@ sync_wrapper 1.0.2 (crate)
 synstructure 0.13.2 (crate)
   licence: MIT
   source:  https://github.com/mystor/synstructure
-  text:    see [290]
+  text:    see [293]
 
 system-deps 6.2.2 (crate)
   licence: MIT OR Apache-2.0
@@ -2592,12 +2612,12 @@ system-deps 6.2.2 (crate)
 tao 0.35.3 (crate)
   licence: Apache-2.0
   source:  https://github.com/tauri-apps/tao
-  text:    see [70] [291]
+  text:    see [70] [294]
 
 tar 0.4.46 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/composefs/tar-rs
-  text:    see [20] [292]
+  text:    see [20] [295]
 
 target-lexicon 0.12.16 (crate)
   licence: Apache-2.0 WITH LLVM-exception
@@ -2635,6 +2655,11 @@ tauri-plugin-dialog 2.7.2 (crate)
   text:    see [2]
 
 tauri-plugin-fs 2.5.1 (crate)
+  licence: Apache-2.0 OR MIT
+  source:  https://github.com/tauri-apps/plugins-workspace
+  text:    see [2]
+
+tauri-plugin-notification 2.4.0 (crate)
   licence: Apache-2.0 OR MIT
   source:  https://github.com/tauri-apps/plugins-workspace
   text:    see [2]
@@ -2682,17 +2707,22 @@ tauri-utils 2.9.3 (crate)
 tauri-winres 0.3.6 (crate)
   licence: MIT
   source:  https://github.com/tauri-apps/winres
-  text:    see [293]
+  text:    see [296]
+
+tauri-winrt-notification 0.8.1 (crate)
+  licence: MIT OR Apache-2.0
+  source:  https://github.com/tauri-apps/winrt-notification
+  text:    see [297]
 
 tempfile 3.27.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/Stebalien/tempfile
-  text:    see [20] [294]
+  text:    see [20] [298]
 
 tendril 0.5.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/servo/html5ever
-  text:    see [20] [295]
+  text:    see [20] [299]
 
 thiserror 1.0.69 (crate)
   licence: MIT OR Apache-2.0
@@ -2717,17 +2747,17 @@ thiserror-impl 2.0.19 (crate)
 time 0.3.53 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/time-rs/time
-  text:    see [116] [296]
+  text:    see [116] [300]
 
 time-core 0.1.9 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/time-rs/time
-  text:    see [116] [296]
+  text:    see [116] [300]
 
 time-macros 0.2.31 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/time-rs/time
-  text:    see [116] [296]
+  text:    see [116] [300]
 
 tinystr 0.8.3 (crate)
   licence: Unicode-3.0
@@ -2737,57 +2767,57 @@ tinystr 0.8.3 (crate)
 tinyvec 1.12.0 (crate)
   licence: Zlib OR Apache-2.0 OR MIT
   source:  https://github.com/Lokathor/tinyvec
-  text:    see [57] [79] [297]
+  text:    see [57] [79] [301]
 
 tinyvec_macros 0.1.1 (crate)
   licence: MIT OR Apache-2.0 OR Zlib
   source:  https://github.com/Soveu/tinyvec_macros
-  text:    see [298] [299] [300]
+  text:    see [302] [303] [304]
 
 tokio 1.53.0 (crate)
   licence: MIT
   source:  https://github.com/tokio-rs/tokio
-  text:    see [301]
+  text:    see [305]
 
 tokio-macros 2.7.1 (crate)
   licence: MIT
   source:  https://github.com/tokio-rs/tokio
-  text:    see [302]
+  text:    see [306]
 
 tokio-rustls 0.26.4 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/rustls/tokio-rustls
-  text:    see [303] [304]
+  text:    see [307] [308]
 
 tokio-util 0.7.18 (crate)
   licence: MIT
   source:  https://github.com/tokio-rs/tokio
-  text:    see [301]
+  text:    see [305]
 
 toml 0.9.12+spec-1.1.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/toml-rs/toml
-  text:    see [70] [266]
+  text:    see [70] [269]
 
 toml 1.1.3+spec-1.1.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/toml-rs/toml
-  text:    see [70] [266]
+  text:    see [70] [269]
 
 toml 0.8.2 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/toml-rs/toml
-  text:    see [70] [266]
+  text:    see [70] [269]
 
 toml_datetime 0.7.5+spec-1.1.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/toml-rs/toml
-  text:    see [70] [266]
+  text:    see [70] [269]
 
 toml_datetime 1.1.1+spec-1.1.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/toml-rs/toml
-  text:    see [70] [266]
+  text:    see [70] [269]
 
 toml_datetime 0.6.3 (crate)
   licence: MIT OR Apache-2.0
@@ -2797,77 +2827,77 @@ toml_datetime 0.6.3 (crate)
 toml_edit 0.19.15 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/toml-rs/toml
-  text:    see [70] [266]
+  text:    see [70] [269]
 
 toml_edit 0.20.2 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/toml-rs/toml
-  text:    see [70] [266]
+  text:    see [70] [269]
 
 toml_edit 0.25.13+spec-1.1.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/toml-rs/toml
-  text:    see [70] [266]
+  text:    see [70] [269]
 
 toml_parser 1.1.2+spec-1.1.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/toml-rs/toml
-  text:    see [70] [266]
+  text:    see [70] [269]
 
 toml_writer 1.1.2+spec-1.1.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/toml-rs/toml
-  text:    see [70] [266]
+  text:    see [70] [269]
 
 tower 0.5.3 (crate)
   licence: MIT
   source:  https://github.com/tower-rs/tower
-  text:    see [305]
+  text:    see [309]
 
 tower-http 0.6.11 (crate)
   licence: MIT
   source:  https://github.com/tower-rs/tower-http
-  text:    see [306]
+  text:    see [310]
 
 tower-layer 0.3.3 (crate)
   licence: MIT
   source:  https://github.com/tower-rs/tower
-  text:    see [305]
+  text:    see [309]
 
 tower-service 0.3.3 (crate)
   licence: MIT
   source:  https://github.com/tower-rs/tower
-  text:    see [305]
+  text:    see [309]
 
 tracing 0.1.44 (crate)
   licence: MIT
   source:  https://github.com/tokio-rs/tracing
-  text:    see [307]
+  text:    see [311]
 
 tracing-attributes 0.1.31 (crate)
   licence: MIT
   source:  https://github.com/tokio-rs/tracing
-  text:    see [307]
+  text:    see [311]
 
 tracing-core 0.1.36 (crate)
   licence: MIT
   source:  https://github.com/tokio-rs/tracing
-  text:    see [307]
+  text:    see [311]
 
 tray-icon 0.24.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/tauri-apps/tray-icon
-  text:    see [20] [201] [308]
+  text:    see [20] [201] [312]
 
 try-lock 0.2.5 (crate)
   licence: MIT
   source:  https://github.com/seanmonstar/try-lock
-  text:    see [309]
+  text:    see [313]
 
 twofish 0.8.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/RustCrypto/block-ciphers
-  text:    see [6] [310]
+  text:    see [6] [314]
 
 typeid 1.0.3 (crate)
   licence: MIT OR Apache-2.0
@@ -2877,7 +2907,7 @@ typeid 1.0.3 (crate)
 typenum 1.20.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/paholg/typenum
-  text:    see [311] [312] [313]
+  text:    see [315] [316] [317]
 
 unic-char-property 0.9.0 (crate)
   licence: MIT/Apache-2.0
@@ -2912,7 +2942,7 @@ unicase 2.9.0 (crate)
 unicode-ident 1.0.24 (crate)
   licence: (MIT OR Apache-2.0) AND Unicode-3.0
   source:  https://github.com/dtolnay/unicode-ident
-  text:    see [19] [5] [314]
+  text:    see [19] [5] [318]
 
 unicode-normalization 0.1.25 (crate)
   licence: MIT OR Apache-2.0
@@ -2927,22 +2957,22 @@ unicode-segmentation 1.13.3 (crate)
 universal-hash 0.5.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/RustCrypto/traits
-  text:    see [6] [315]
+  text:    see [6] [319]
 
 universal-hash 0.6.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/RustCrypto/traits
-  text:    see [6] [316]
+  text:    see [6] [320]
 
 untrusted 0.7.1 (crate)
   licence: ISC
   source:  https://github.com/briansmith/untrusted
-  text:    see [317]
+  text:    see [321]
 
 untrusted 0.9.0 (crate)
   licence: ISC
   source:  https://github.com/briansmith/untrusted
-  text:    see [317]
+  text:    see [321]
 
 url 2.5.8 (crate)
   licence: MIT OR Apache-2.0
@@ -2952,47 +2982,47 @@ url 2.5.8 (crate)
 urlpattern 0.3.0 (crate)
   licence: MIT
   source:  https://github.com/denoland/rust-urlpattern
-  text:    see [318]
+  text:    see [322]
 
 utf8_iter 1.0.4 (crate)
   licence: Apache-2.0 OR MIT
   source:  https://github.com/hsivonen/utf8_iter
-  text:    see [57] [319]
+  text:    see [57] [323]
 
 uuid 1.24.0 (crate)
   licence: Apache-2.0 OR MIT
   source:  https://github.com/uuid-rs/uuid
-  text:    see [20] [320]
+  text:    see [20] [324]
 
 vcpkg 0.2.15 (crate)
   licence: MIT/Apache-2.0
   source:  https://github.com/mcgoo/vcpkg-rs
-  text:    see [321] [322]
+  text:    see [325] [326]
 
 version_check 0.9.5 (crate)
   licence: MIT/Apache-2.0
   source:  https://github.com/SergioBenitez/version_check
-  text:    see [20] [323]
+  text:    see [20] [327]
 
 version-compare 0.2.1 (crate)
   licence: MIT
   source:  https://gitlab.com/timvisee/version-compare
-  text:    see [324]
+  text:    see [328]
 
 vsimd 0.8.0 (crate)
   licence: MIT
   source:  https://github.com/Nugine/simd
-  text:    declares MIT and ships no file; the standard text is at [348]
+  text:    declares MIT and ships no file; the standard text is at [352]
 
 vswhom 0.1.0 (crate)
   licence: MIT
   source:  https://github.com/nabijaczleweli/vswhom.rs
-  text:    see [325]
+  text:    see [329]
 
 vswhom-sys 0.1.3 (crate)
   licence: MIT
   source:  https://github.com/nabijaczleweli/vswhom-sys.rs
-  text:    see [325]
+  text:    see [329]
 
 walkdir 2.5.0 (crate)
   licence: Unlicense/MIT
@@ -3002,7 +3032,7 @@ walkdir 2.5.0 (crate)
 want 0.3.1 (crate)
   licence: MIT
   source:  https://github.com/seanmonstar/want
-  text:    see [326]
+  text:    see [330]
 
 web_atoms 0.2.5 (crate)
   licence: MIT OR Apache-2.0
@@ -3012,207 +3042,207 @@ web_atoms 0.2.5 (crate)
 webkit2gtk 2.0.2 (crate)
   licence: MIT
   source:  https://github.com/tauri-apps/webkit2gtk-rs
-  text:    see [327]
+  text:    see [331]
 
 webkit2gtk-sys 2.0.2 (crate)
   licence: MIT
   source:  https://github.com/tauri-apps/webkit2gtk-rs
-  text:    see [328]
+  text:    see [332]
 
 webpki-roots 1.0.9 (crate)
   licence: CDLA-Permissive-2.0
   source:  https://github.com/rustls/webpki-roots
-  text:    see [329]
+  text:    see [333]
 
 webview2-com 0.38.2 (crate)
   licence: MIT
   source:  https://github.com/wravery/webview2-rs
-  text:    declares MIT and ships no file; the standard text is at [348]
+  text:    declares MIT and ships no file; the standard text is at [352]
 
 webview2-com-macros 0.8.1 (crate)
   licence: MIT
   source:  https://github.com/wravery/webview2-rs
-  text:    declares MIT and ships no file; the standard text is at [348]
+  text:    declares MIT and ships no file; the standard text is at [352]
 
 webview2-com-sys 0.38.2 (crate)
   licence: MIT
   source:  https://github.com/wravery/webview2-rs
-  text:    declares MIT and ships no file; the standard text is at [348]
+  text:    declares MIT and ships no file; the standard text is at [352]
 
 winapi-util 0.1.11 (crate)
   licence: Unlicense OR MIT
   source:  https://github.com/BurntSushi/winapi-util
-  text:    see [13] [260] [15]
+  text:    see [13] [263] [15]
 
 window-vibrancy 0.6.0 (crate)
   licence: Apache-2.0 OR MIT
   source:  https://github.com/tauri-apps/tauri-plugin-vibrancy
-  text:    see [20] [330] [331]
+  text:    see [20] [334] [335]
 
 windows 0.61.3 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows 0.62.2 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows_x86_64_msvc 0.52.6 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows_x86_64_msvc 0.53.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-collections 0.2.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-collections 0.3.2 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-core 0.61.2 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-core 0.62.2 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-future 0.2.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-future 0.3.2 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-implement 0.60.2 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-interface 0.59.3 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-link 0.1.3 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-link 0.2.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-numerics 0.2.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-numerics 0.3.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-result 0.3.4 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-result 0.4.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-strings 0.4.2 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-strings 0.5.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-sys 0.59.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-sys 0.60.2 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-sys 0.61.2 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-targets 0.52.6 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-targets 0.53.5 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-threading 0.1.0 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-threading 0.2.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 windows-version 0.1.7 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/microsoft/windows-rs
-  text:    see [332] [333]
+  text:    see [336] [337]
 
 winnow 0.7.15 (crate)
   licence: MIT
   source:  https://github.com/winnow-rs/winnow
-  text:    see [334]
+  text:    see [338]
 
 winnow 1.0.4 (crate)
   licence: MIT
   source:  https://github.com/winnow-rs/winnow
-  text:    see [334]
+  text:    see [338]
 
 winnow 0.5.40 (crate)
   licence: MIT
   source:  https://github.com/winnow-rs/winnow
-  text:    see [334]
+  text:    see [338]
 
 winreg 0.55.0 (crate)
   licence: MIT
   source:  https://github.com/gentoo90/winreg-rs
-  text:    see [335]
+  text:    see [339]
 
 wnaf 0.14.1 (crate)
   licence: Apache-2.0 OR MIT
   source:  https://github.com/RustCrypto/elliptic-curves
-  text:    see [6] [336]
+  text:    see [6] [340]
 
 writeable 0.6.3 (crate)
   licence: Unicode-3.0
@@ -3222,7 +3252,7 @@ writeable 0.6.3 (crate)
 wry 0.55.1 (crate)
   licence: Apache-2.0 OR MIT
   source:  https://github.com/tauri-apps/wry
-  text:    see [20] [337] [338]
+  text:    see [20] [341] [342]
 
 x11 2.21.0 (crate)
   licence: MIT
@@ -3237,12 +3267,12 @@ x11-dl 2.21.0 (crate)
 x25519-dalek 3.0.0 (crate)
   licence: BSD-3-Clause
   source:  https://github.com/dalek-cryptography/curve25519-dalek/tree/main/x25519-dalek
-  text:    see [339]
+  text:    see [343]
 
 xattr 1.6.1 (crate)
   licence: MIT OR Apache-2.0
   source:  https://github.com/Stebalien/xattr
-  text:    see [20] [294]
+  text:    see [20] [298]
 
 xdg-home 1.3.0 (crate)
   licence: MIT
@@ -3252,7 +3282,7 @@ xdg-home 1.3.0 (crate)
 xmlparser 0.13.6 (crate)
   licence: MIT/Apache-2.0
   source:  https://github.com/RazrFalcon/xmlparser
-  text:    see [20] [340]
+  text:    see [20] [344]
 
 yoke 0.8.3 (crate)
   licence: Unicode-3.0
@@ -3267,22 +3297,22 @@ yoke-derive 0.8.2 (crate)
 zbus 4.4.0 (crate)
   licence: MIT
   source:  https://github.com/dbus2/zbus/
-  text:    see [341]
+  text:    see [345]
 
 zbus 5.18.0 (crate)
   licence: MIT
   source:  https://github.com/z-galaxy/zbus/
-  text:    see [341]
+  text:    see [345]
 
 zbus_macros 4.4.0 (crate)
   licence: MIT
   source:  https://github.com/dbus2/zbus/
-  text:    see [341]
+  text:    see [345]
 
 zbus_macros 5.18.0 (crate)
   licence: MIT
   source:  https://github.com/z-galaxy/zbus/
-  text:    see [341]
+  text:    see [345]
 
 zbus_names 3.0.0 (crate)
   licence: MIT
@@ -3292,17 +3322,17 @@ zbus_names 3.0.0 (crate)
 zbus_names 4.3.4 (crate)
   licence: MIT
   source:  https://github.com/z-galaxy/zbus/
-  text:    see [341]
+  text:    see [345]
 
 zerocopy 0.8.54 (crate)
   licence: BSD-2-Clause OR Apache-2.0 OR MIT
   source:  https://github.com/google/zerocopy
-  text:    see [342] [343] [344]
+  text:    see [346] [347] [348]
 
 zerocopy-derive 0.8.54 (crate)
   licence: BSD-2-Clause OR Apache-2.0 OR MIT
   source:  https://github.com/google/zerocopy
-  text:    see [342] [343] [344]
+  text:    see [346] [347] [348]
 
 zerofrom 0.1.8 (crate)
   licence: Unicode-3.0
@@ -3317,7 +3347,7 @@ zerofrom-derive 0.1.7 (crate)
 zeroize 1.9.0 (crate)
   licence: Apache-2.0 OR MIT
   source:  https://github.com/RustCrypto/utils
-  text:    see [57] [345]
+  text:    see [57] [349]
 
 zeroize_derive 1.5.0 (crate)
   licence: Apache-2.0 OR MIT
@@ -3342,7 +3372,7 @@ zerovec-derive 0.11.3 (crate)
 zip 4.6.1 (crate)
   licence: MIT
   source:  https://github.com/zip-rs/zip2.git
-  text:    see [346]
+  text:    see [350]
 
 zmij 1.0.23 (crate)
   licence: MIT
@@ -3352,22 +3382,22 @@ zmij 1.0.23 (crate)
 zvariant 4.2.0 (crate)
   licence: MIT
   source:  https://github.com/dbus2/zbus/
-  text:    see [341]
+  text:    see [345]
 
 zvariant 5.13.1 (crate)
   licence: MIT
   source:  https://github.com/z-galaxy/zbus/
-  text:    see [341]
+  text:    see [345]
 
 zvariant_derive 4.2.0 (crate)
   licence: MIT
   source:  https://github.com/dbus2/zbus/
-  text:    see [341]
+  text:    see [345]
 
 zvariant_derive 5.13.1 (crate)
   licence: MIT
   source:  https://github.com/z-galaxy/zbus/
-  text:    see [341]
+  text:    see [345]
 
 zvariant_utils 2.1.0 (crate)
   licence: MIT
@@ -15606,7 +15636,9 @@ THE SOFTWARE.
 
 [205] LICENSE-MIT
 ------------------------------------------------------------------------------
-Copyright (c) Jacob Pratt
+MIT License
+
+Copyright (c) 2017 Hendrik Sollich
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -15627,6 +15659,28 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 [206] LICENSE-MIT
+------------------------------------------------------------------------------
+Copyright (c) Jacob Pratt
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+[207] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2018-2024 The RustCrypto Project Developers
 
@@ -15654,7 +15708,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[207] LICENSE.md
+[208] LICENSE.md
 ------------------------------------------------------------------------------
 The MIT License (MIT)
 =====================
@@ -15682,7 +15736,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 
-[208] openssl/LICENSE.txt
+[209] openssl/LICENSE.txt
 ------------------------------------------------------------------------------
 Apache License
                            Version 2.0, January 2004
@@ -15861,7 +15915,7 @@ Apache License
 
    END OF TERMS AND CONDITIONS
 
-[209] LICENSE.txt
+[210] LICENSE.txt
 ------------------------------------------------------------------------------
 Mozilla Public License Version 2.0
 ==================================
@@ -16237,7 +16291,7 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
   This Source Code Form is "Incompatible With Secondary Licenses", as
   defined by the Mozilla Public License, v. 2.0.
 
-[210] LICENSE-MIT
+[211] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2024 Marat Dulin
 
@@ -16265,7 +16319,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[211] LICENSE
+[212] LICENSE
 ------------------------------------------------------------------------------
 MIT License
 
@@ -16289,7 +16343,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[212] LICENSE-MIT
+[213] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2020-2021 RustCrypto Developers
 
@@ -16317,7 +16371,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[213] LICENSE-THIRD-PARTY
+[214] LICENSE-THIRD-PARTY
 ------------------------------------------------------------------------------
 ===============================================================================
 
@@ -16329,7 +16383,7 @@ http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
 option. All files in the project carrying such notice may not be
 copied, modified, or distributed except according to those terms.
 
-[214] LICENSE-MIT
+[215] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2020-2023 RustCrypto Developers
 
@@ -16357,7 +16411,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[215] LICENSE-MIT
+[216] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2017 Artyom Pavlov
 Copyright (c) 2018-2023 The RustCrypto Project Developers
@@ -16386,7 +16440,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[216] LICENSE-MIT
+[217] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2021-2025 The RustCrypto Project Developers
 
@@ -16414,7 +16468,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[217] LICENSE
+[218] LICENSE
 ------------------------------------------------------------------------------
 The MIT License (MIT)
 
@@ -16437,7 +16491,7 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-[218] LICENSE-APACHE
+[219] LICENSE-APACHE
 ------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -16641,7 +16695,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-[219] LICENSE-MIT
+[220] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2018 The pin-utils authors
 
@@ -16669,7 +16723,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[220] LICENCE
+[221] LICENCE
 ------------------------------------------------------------------------------
 Copyright (c) 2015 Edward Barnard
 
@@ -16691,7 +16745,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[221] LICENSE-MIT
+[222] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2015 nwin
 
@@ -16719,7 +16773,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[222] LICENSE-MIT
+[223] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2015-2026 The RustCrypto Project Developers
 
@@ -16747,7 +16801,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[223] LICENSE-MIT
+[224] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2019-2023 RustCrypto Developers
 
@@ -16775,7 +16829,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[224] LICENSE-Apache
+[225] LICENSE-Apache
 ------------------------------------------------------------------------------
 Apache License
                            Version 2.0, January 2004
@@ -16979,7 +17033,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 
-[225] LICENSE-MIT
+[226] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2023 Jacob Pratt et al.
 
@@ -17001,7 +17055,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[226] LICENSE-APACHE
+[227] LICENSE-APACHE
 ------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -17205,7 +17259,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-[227] LICENSE-MIT
+[228] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2019 The CryptoCorrosion Contributors
 
@@ -17233,7 +17287,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[228] LICENSE
+[229] LICENSE
 ------------------------------------------------------------------------------
 MIT License
 
@@ -17257,7 +17311,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[229] LICENSE-MIT
+[230] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2024-2026 RustCrypto Developers
 
@@ -17285,7 +17339,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[230] LICENSE-APACHE
+[231] LICENSE-APACHE
 ------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -17489,7 +17543,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-[231] LICENSE-MIT
+[232] LICENSE-MIT
 ------------------------------------------------------------------------------
 MIT License
 
@@ -17513,7 +17567,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[232] LICENSE-APACHE
+[233] LICENSE-APACHE
 ------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -17717,7 +17771,55 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-[233] LICENSE-MIT.md
+[234] LICENSE
+------------------------------------------------------------------------------
+MIT License
+
+Copyright (c) 2016 Rushmore Mushambi
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+[235] LICENSE
+------------------------------------------------------------------------------
+MIT License
+
+Copyright (c) 2021 Rushmore Mushambi
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+[236] LICENSE-MIT.md
 ------------------------------------------------------------------------------
 The MIT License (MIT)
 
@@ -17743,7 +17845,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-[234] LICENSE-MIT.md
+[237] LICENSE-MIT.md
 ------------------------------------------------------------------------------
 The MIT License (MIT)
 
@@ -17769,7 +17871,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-[235] LICENSE-MIT
+[238] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2018 The quinn Developers
 
@@ -17779,7 +17881,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-[236] LICENSE-APACHE
+[239] LICENSE-APACHE
 ------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -17958,7 +18060,7 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 
 END OF TERMS AND CONDITIONS
 
-[237] LICENSE-MIT
+[240] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright 2018 Developers of the Rand project
 Copyright (c) 2014 The Rust Project Developers
@@ -17987,7 +18089,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[238] LICENSE-APACHE
+[241] LICENSE-APACHE
 ------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -18177,7 +18279,7 @@ APPENDIX: How to apply the Apache License to your work.
    same "printed page" as the copyright notice for easier
    identification within third-party archives.
 
-[239] LICENSE-MIT
+[242] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2018-2026 The Rand Project Developers
 
@@ -18205,7 +18307,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[240] LICENSE-MIT
+[243] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2014-2017 Melissa O'Neill and PCG Project contributors
 Copyright 2018 Developers of the Rand project
@@ -18234,7 +18336,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[241] LICENSE-MIT.md
+[244] LICENSE-MIT.md
 ------------------------------------------------------------------------------
 MIT License
 
@@ -18258,7 +18360,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[242] LICENSE-ZLIB.md
+[245] LICENSE-ZLIB.md
 ------------------------------------------------------------------------------
 Copyright (c) 2020 Osspial
 
@@ -18272,7 +18374,7 @@ Permission is granted to anyone to use this software for any purpose, including 
 
 3. This notice may not be removed or altered from any source distribution.
 
-[243] LICENSE
+[246] LICENSE
 ------------------------------------------------------------------------------
 MIT License
 
@@ -18296,7 +18398,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[244] LICENSE-APACHE
+[247] LICENSE-APACHE
 ------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -18500,7 +18602,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-[245] LICENSE-MIT
+[248] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2016-2025 Sean McArthur
 
@@ -18522,7 +18624,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-[246] LICENSE-MIT
+[249] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2016-2026 Sean McArthur
 
@@ -18544,7 +18646,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-[247] LICENSE
+[250] LICENSE
 ------------------------------------------------------------------------------
 MIT License
 
@@ -18568,7 +18670,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[248] LICENSE
+[251] LICENSE
 ------------------------------------------------------------------------------
 *ring* uses an "ISC" license, like BoringSSL used to use, for new code
 files. See LICENSE-other-bits for the text of that license.
@@ -18580,7 +18682,7 @@ license. In each case, the license info is at the top of the file.
 See src/polyfill/once_cell/LICENSE-APACHE and src/polyfill/once_cell/LICENSE-MIT
 for the license to code that was sourced from the once_cell project.
 
-[249] LICENSE-BoringSSL
+[252] LICENSE-BoringSSL
 ------------------------------------------------------------------------------
 Apache License
                            Version 2.0, January 2004
@@ -18854,7 +18956,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-[250] LICENSE-other-bits
+[253] LICENSE-other-bits
 ------------------------------------------------------------------------------
 Copyright 2015-2025 Brian Smith.
 
@@ -18870,7 +18972,7 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
 OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-[251] LICENSE
+[254] LICENSE
 ------------------------------------------------------------------------------
 Apache License
                            Version 2.0, January 2004
@@ -19074,7 +19176,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 
-[252] LICENSE-MIT
+[255] LICENSE-MIT
 ------------------------------------------------------------------------------
 The MIT license.
 
@@ -19099,7 +19201,7 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-[253] LICENSE
+[256] LICENSE
 ------------------------------------------------------------------------------
 Rustls is distributed under the following three licenses:
 
@@ -19111,7 +19213,7 @@ These are included as LICENSE-APACHE, LICENSE-MIT and LICENSE-ISC
 respectively.  You may use this software under the terms of any
 of these licenses, at your option.
 
-[254] LICENSE-APACHE
+[257] LICENSE-APACHE
 ------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -19315,7 +19417,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-[255] LICENSE-MIT
+[258] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2023 Dirkjan Ochtman <dirkjan@ochtman.nl>
 
@@ -19343,7 +19445,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[256] LICENSE-MIT
+[259] LICENSE-MIT
 ------------------------------------------------------------------------------
 MIT License
 
@@ -19367,7 +19469,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[257] LICENSE
+[260] LICENSE
 ------------------------------------------------------------------------------
 Except as otherwise noted, this project is licensed under the following
 (ISC-style) terms:
@@ -19389,7 +19491,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 The files under third-party/chromium are licensed as described in
 third-party/chromium/LICENSE.
 
-[258] LICENSE-BOOST
+[261] LICENSE-BOOST
 ------------------------------------------------------------------------------
 Boost Software License - Version 1.0 - August 17th, 2003
 
@@ -19415,7 +19517,7 @@ FOR ANY DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR OTHERWISE,
 ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[259] LICENSE-MIT
+[262] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2019-2026 The RustCrypto Project Developers
 Copyright (c) 2019 Eric McCorkle
@@ -19444,7 +19546,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[260] LICENSE-MIT
+[263] LICENSE-MIT
 ------------------------------------------------------------------------------
 The MIT License (MIT)
 
@@ -19468,7 +19570,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-[261] LICENSE.md
+[264] LICENSE.md
 ------------------------------------------------------------------------------
 Copyright (c) 2015 steffengy
 
@@ -19478,7 +19580,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-[262] LICENSE
+[265] LICENSE
 ------------------------------------------------------------------------------
 MIT License
 
@@ -19502,7 +19604,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[263] LICENSE-MIT
+[266] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2016-2019 Ulrik Sverdrup "bluss" and scopeguard developers
 
@@ -19530,7 +19632,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[264] LICENSE-MIT
+[267] LICENSE-MIT
 ------------------------------------------------------------------------------
 MIT License
 
@@ -19554,7 +19656,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[265] LICENSE-MIT
+[268] LICENSE-MIT
 ------------------------------------------------------------------------------
 The MIT License (MIT)
 
@@ -19577,7 +19679,7 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-[266] LICENSE-MIT
+[269] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) Individual contributors
 
@@ -19599,7 +19701,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[267] LICENSE-MIT
+[270] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2016 Anthony Ramine
 
@@ -19627,7 +19729,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[268] LICENSE-MIT
+[271] LICENSE-MIT
 ------------------------------------------------------------------------------
 MIT License
 
@@ -19651,7 +19753,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[269] LICENSE-MIT
+[272] LICENSE-MIT
 ------------------------------------------------------------------------------
 MIT License
 
@@ -19675,7 +19777,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[270] LICENSE-MIT
+[273] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2006-2009 Graydon Hoare
 Copyright (c) 2009-2013 Mozilla Foundation
@@ -19705,7 +19807,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[271] LICENSE
+[274] LICENSE
 ------------------------------------------------------------------------------
 BSD 3-Clause License
 
@@ -19768,7 +19870,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[272] LICENSE-MIT
+[275] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2020-2026 The RustCrypto Project Developers
 Copyright (c) 2016-2023 Artyom Pavlov, Marek Kotewicz
@@ -19800,7 +19902,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[273] LICENSE-APACHE
+[276] LICENSE-APACHE
 ------------------------------------------------------------------------------
 Copyright 2015 Nicholas Allegra (comex).
 
@@ -19816,7 +19918,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-[274] LICENSE-MIT
+[277] LICENSE-MIT
 ------------------------------------------------------------------------------
 The MIT License (MIT)
 
@@ -19840,7 +19942,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-[275] LICENSE-MIT
+[278] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2017 tokio-jsonrpc developers
 
@@ -19868,7 +19970,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[276] LICENSE.md
+[279] LICENSE.md
 ------------------------------------------------------------------------------
 MIT License
 
@@ -19892,7 +19994,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[277] COPYING
+[280] COPYING
 ------------------------------------------------------------------------------
 Copyright 2012-2016 The Rust Project Developers.
 Copyright 2016-2026 Frank Denis.
@@ -19902,7 +20004,7 @@ http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
 <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 option.
 
-[278] LICENSE
+[281] LICENSE
 ------------------------------------------------------------------------------
 Copyright (c) 2019 Carl Lerche
 
@@ -19930,7 +20032,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[279] LICENSE-MIT
+[282] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2018 The Servo Project Developers
 
@@ -19958,7 +20060,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[280] LICENSE-APACHE
+[283] LICENSE-APACHE
 ------------------------------------------------------------------------------
 Apache License
                            Version 2.0, January 2004
@@ -20162,7 +20264,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 
-[281] LICENSE-MIT
+[284] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright 2022 Kirill Chibisov
 
@@ -20184,7 +20286,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[282] LICENSE
+[285] LICENSE
 ------------------------------------------------------------------------------
 The MIT License (MIT)
 
@@ -20208,7 +20310,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[283] LICENSE-MIT
+[286] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2026 The RustCrypto Project Developers
 
@@ -20236,7 +20338,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[284] LICENSE-MIT
+[287] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2017 Robert Grosse
 
@@ -20264,7 +20366,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[285] LICENSE-MIT
+[288] LICENSE-MIT
 ------------------------------------------------------------------------------
 MIT License
 
@@ -20288,7 +20390,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[286] LICENSE
+[289] LICENSE
 ------------------------------------------------------------------------------
 The MIT License (MIT)
 
@@ -20314,7 +20416,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[287] LICENSE
+[290] LICENSE
 ------------------------------------------------------------------------------
 Copyright (c) 2016-2017 Isis Agora Lovecruft, Henry de Valence. All rights reserved.
 Copyright (c) 2016-2024 Isis Agora Lovecruft. All rights reserved.
@@ -20346,7 +20448,7 @@ LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-[288] LICENSE-APACHE
+[291] LICENSE-APACHE
 ------------------------------------------------------------------------------
 Apache License
                            Version 2.0, January 2004
@@ -20550,7 +20652,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 
-[289] LICENSE-MIT
+[292] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2023 The swift-rs Developers
 
@@ -20572,7 +20674,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[290] LICENSE
+[293] LICENSE
 ------------------------------------------------------------------------------
 Copyright 2016 Nika Layzell
 
@@ -20582,7 +20684,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-[291] LICENSE.spdx
+[294] LICENSE.spdx
 ------------------------------------------------------------------------------
 SPDXVersion: SPDX-2.1
 DataLicense: CC0-1.0
@@ -20603,7 +20705,7 @@ PackageDownloadLocation: git+https://github.com/tauri-apps/tao.git
 PackageDownloadLocation: git+ssh://github.com/tauri-apps/tao.git
 Creator: Person: Daniel Thompson-Yvetot
 
-[292] LICENSE-MIT
+[295] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) The tar-rs Project Contributors
 
@@ -20631,7 +20733,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[293] LICENSE
+[296] LICENSE
 ------------------------------------------------------------------------------
 The MIT License (MIT)
 
@@ -20662,7 +20764,29 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[294] LICENSE-MIT
+[297] LICENSE.spdx
+------------------------------------------------------------------------------
+SPDXVersion: SPDX-2.1
+DataLicense: CC0-1.0
+PackageName: winrt-notification
+DataFormat: SPDXRef-1
+PackageSupplier: Organization: The Tauri Programme in the Commons Conservancy
+PackageHomePage: https://tauri.app
+PackageLicenseDeclared: Apache-2.0
+PackageLicenseDeclared: MIT
+PackageCopyrightText: 2022-2022, The Tauri Programme in the Commons Conservancy
+PackageSummary: <text>An incomplete wrapper over the WinRT toast api.
+                </text>
+PackageComment: <text>The package includes the following libraries; see
+Relationship information.
+                </text>
+Created: 2019-05-20T09:00:00Z
+PackageDownloadLocation: git://github.com/tauri-apps/winrt-notification
+PackageDownloadLocation: git+https://github.com/tauri-apps/winrt-notification.git
+PackageDownloadLocation: git+ssh://github.com/tauri-apps/winrt-notification.git
+Creator: Person: Daniel Thompson-Yvetot
+
+[298] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2015 Steven Allen
 
@@ -20690,7 +20814,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[295] LICENSE-MIT
+[299] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2015 Keegan McAllister
 
@@ -20718,7 +20842,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[296] LICENSE-MIT
+[300] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) Jacob Pratt et al.
 
@@ -20740,7 +20864,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[297] LICENSE-ZLIB.md
+[301] LICENSE-ZLIB.md
 ------------------------------------------------------------------------------
 Copyright (c) 2019 Daniel "Lokathor" Gee.
 
@@ -20754,7 +20878,7 @@ Permission is granted to anyone to use this software for any purpose, including 
 
 3. This notice may not be removed or altered from any source distribution.
 
-[298] LICENSE-APACHE.md
+[302] LICENSE-APACHE.md
 ------------------------------------------------------------------------------
 Apache License
                            Version 2.0, January 2004
@@ -20958,7 +21082,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 
-[299] LICENSE-MIT.md
+[303] LICENSE-MIT.md
 ------------------------------------------------------------------------------
 MIT License
 
@@ -20982,7 +21106,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[300] LICENSE-ZLIB.md
+[304] LICENSE-ZLIB.md
 ------------------------------------------------------------------------------
 zlib License
 
@@ -21004,7 +21128,7 @@ freely, subject to the following restrictions:
    misrepresented as being the original software.
 3. This notice may not be removed or altered from any source distribution.
 
-[301] LICENSE
+[305] LICENSE
 ------------------------------------------------------------------------------
 MIT License
 
@@ -21028,7 +21152,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[302] LICENSE
+[306] LICENSE
 ------------------------------------------------------------------------------
 MIT License
 
@@ -21053,7 +21177,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[303] LICENSE-APACHE
+[307] LICENSE-APACHE
 ------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -21257,7 +21381,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-[304] LICENSE-MIT
+[308] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2017 quininer kel
 
@@ -21285,7 +21409,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[305] LICENSE
+[309] LICENSE
 ------------------------------------------------------------------------------
 Copyright (c) 2019 Tower Contributors
 
@@ -21313,7 +21437,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[306] LICENSE
+[310] LICENSE
 ------------------------------------------------------------------------------
 Copyright (c) 2019-2021 Tower Contributors
 
@@ -21341,7 +21465,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[307] LICENSE
+[311] LICENSE
 ------------------------------------------------------------------------------
 Copyright (c) 2019 Tokio Contributors
 
@@ -21369,7 +21493,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[308] LICENSE.spdx
+[312] LICENSE.spdx
 ------------------------------------------------------------------------------
 SPDXVersion: SPDX-2.1
 DataLicense: CC0-1.0
@@ -21391,7 +21515,7 @@ PackageDownloadLocation: git+https://github.com/tauri-apps/tray-icon.git
 PackageDownloadLocation: git+ssh://github.com/tauri-apps/tray-icon.git
 Creator: Person: Daniel Thompson-Yvetot
 
-[309] LICENSE
+[313] LICENSE
 ------------------------------------------------------------------------------
 Copyright (c) 2018-2023 Sean McArthur
 Copyright (c) 2016 Alex Crichton
@@ -21414,7 +21538,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-[310] LICENSE-MIT
+[314] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2017-2024 The RustCrypto Project Developers
 Copyright (c) 2017 Alexander Krotov
@@ -21443,11 +21567,11 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[311] LICENSE
+[315] LICENSE
 ------------------------------------------------------------------------------
 MIT OR Apache-2.0
 
-[312] LICENSE-APACHE
+[316] LICENSE-APACHE
 ------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -21651,7 +21775,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-[313] LICENSE-MIT
+[317] LICENSE-MIT
 ------------------------------------------------------------------------------
 The MIT License (MIT)
 
@@ -21675,7 +21799,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[314] LICENSE-UNICODE
+[318] LICENSE-UNICODE
 ------------------------------------------------------------------------------
 UNICODE LICENSE V3
 
@@ -21717,7 +21841,7 @@ not be used in advertising or otherwise to promote the sale, use or other
 dealings in these Data Files or Software without prior written
 authorization of the copyright holder.
 
-[315] LICENSE-MIT
+[319] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2019-2020 RustCrypto Developers
 
@@ -21745,7 +21869,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[316] LICENSE-MIT
+[320] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2019-2025 RustCrypto Developers
 
@@ -21773,7 +21897,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[317] LICENSE.txt
+[321] LICENSE.txt
 ------------------------------------------------------------------------------
 // Copyright 2015-2016 Brian Smith.
 //
@@ -21789,7 +21913,7 @@ DEALINGS IN THE SOFTWARE.
 // ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-[318] LICENSE
+[322] LICENSE
 ------------------------------------------------------------------------------
 MIT License
 
@@ -21813,7 +21937,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[319] LICENSE-MIT
+[323] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright Mozilla Foundation
 
@@ -21841,7 +21965,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[320] LICENSE-MIT
+[324] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2014 The Rust Project Developers
 Copyright (c) 2018 Ashley Mannix, Christopher Armstrong, Dylan DPC, Hunar Roop Kahlon
@@ -21870,7 +21994,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[321] LICENSE-APACHE
+[325] LICENSE-APACHE
 ------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -22074,7 +22198,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-[322] LICENSE-MIT
+[326] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2017 Jim McGrath
 
@@ -22102,7 +22226,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[323] LICENSE-MIT
+[327] LICENSE-MIT
 ------------------------------------------------------------------------------
 The MIT License (MIT)
 Copyright (c) 2017-2018 Sergio Benitez
@@ -22124,7 +22248,7 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-[324] LICENSE
+[328] LICENSE
 ------------------------------------------------------------------------------
 Copyright (c) 2017 Tim Visée
 
@@ -22146,7 +22270,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[325] LICENSE
+[329] LICENSE
 ------------------------------------------------------------------------------
 The MIT License (MIT)
 
@@ -22170,7 +22294,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[326] LICENSE
+[330] LICENSE
 ------------------------------------------------------------------------------
 Copyright (c) 2018-2019 Sean McArthur
 
@@ -22192,7 +22316,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-[327] LICENSE
+[331] LICENSE
 ------------------------------------------------------------------------------
 Copyright (c) 2016 Boucher, Antoni <bouanto@zoho.com>
 Copyright (c) 2017-2021, The Gtk-rs Project Developers.
@@ -22215,7 +22339,7 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-[328] LICENSE
+[332] LICENSE
 ------------------------------------------------------------------------------
 Copyright (c) 2016 Boucher, Antoni <bouanto@zoho.com>
 
@@ -22236,7 +22360,7 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-[329] LICENSE
+[333] LICENSE
 ------------------------------------------------------------------------------
 # Community Data License Agreement - Permissive - Version 2.0
 
@@ -22300,7 +22424,7 @@ agreement.
 of Data, including for example machine learning models and models'
 insights.
 
-[330] LICENSE-MIT
+[334] LICENSE-MIT
 ------------------------------------------------------------------------------
 MIT License
 
@@ -22324,7 +22448,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[331] LICENSE.spdx
+[335] LICENSE.spdx
 ------------------------------------------------------------------------------
 SPDXVersion: SPDX-2.1
 DataLicense: CC0-1.0
@@ -22346,7 +22470,7 @@ PackageDownloadLocation: git+https://github.com/tauri-apps/window-vibrancy.git
 PackageDownloadLocation: git+ssh://github.com/tauri-apps/window-vibrancy.git
 Creator: Person: Daniel Thompson-Yvetot
 
-[332] license-apache-2.0
+[336] license-apache-2.0
 ------------------------------------------------------------------------------
 Apache License
                            Version 2.0, January 2004
@@ -22550,7 +22674,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 
-[333] license-mit
+[337] license-mit
 ------------------------------------------------------------------------------
 MIT License
 
@@ -22574,7 +22698,7 @@ MIT License
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE
 
-[334] LICENSE-MIT
+[338] LICENSE-MIT
 ------------------------------------------------------------------------------
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -22595,7 +22719,7 @@ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-[335] LICENSE
+[339] LICENSE
 ------------------------------------------------------------------------------
 Copyright (c) 2015 Igor Shaula
 
@@ -22617,7 +22741,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-[336] LICENSE-MIT
+[340] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2026 RustCrypto Developers
 Copyright (c) 2018-2025 `group` crate developers
@@ -22646,7 +22770,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[337] LICENSE-MIT
+[341] LICENSE-MIT
 ------------------------------------------------------------------------------
 MIT License
 
@@ -22670,7 +22794,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[338] LICENSE.spdx
+[342] LICENSE.spdx
 ------------------------------------------------------------------------------
 SPDXVersion: SPDX-2.1
 DataLicense: CC0-1.0
@@ -22693,7 +22817,7 @@ PackageDownloadLocation: git+https://github.com/tauri-apps/wry.git
 PackageDownloadLocation: git+ssh://github.com/tauri-apps/wry.git
 Creator: Person: Daniel Thompson-Yvetot
 
-[339] LICENSE
+[343] LICENSE
 ------------------------------------------------------------------------------
 Copyright (c) 2017-2021 isis agora lovecruft. All rights reserved.
 Copyright (c) 2019-2021 DebugSteven. All rights reserved.
@@ -22725,7 +22849,7 @@ LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-[340] LICENSE-MIT
+[344] LICENSE-MIT
 ------------------------------------------------------------------------------
 The MIT License (MIT)
 
@@ -22749,7 +22873,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-[341] LICENSE
+[345] LICENSE
 ------------------------------------------------------------------------------
 Copyright (c) 2024 Zeeshan Ali Khan & zbus contributors
 
@@ -22777,7 +22901,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[342] LICENSE-APACHE
+[346] LICENSE-APACHE
 ------------------------------------------------------------------------------
 Apache License
                            Version 2.0, January 2004
@@ -22981,7 +23105,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 
-[343] LICENSE-BSD
+[347] LICENSE-BSD
 ------------------------------------------------------------------------------
 Copyright 2019 The Fuchsia Authors.
 
@@ -23008,7 +23132,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-[344] LICENSE-MIT
+[348] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright 2023 The Fuchsia Authors
 
@@ -23036,7 +23160,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[345] LICENSE-MIT
+[349] LICENSE-MIT
 ------------------------------------------------------------------------------
 Copyright (c) 2018-2026 The RustCrypto Project Developers
 
@@ -23064,7 +23188,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-[346] LICENSE
+[350] LICENSE
 ------------------------------------------------------------------------------
 The MIT License (MIT)
 
@@ -23091,7 +23215,7 @@ SOFTWARE.
 Some files in the "tests/data" subdirectory of this repository are under other
 licences; see files named LICENSE.*.txt for details.
 
-[347] BSD-3-Clause (standard text)
+[351] BSD-3-Clause (standard text)
 ------------------------------------------------------------------------------
 The 3-Clause BSD License
 
@@ -23120,7 +23244,7 @@ CONSEQUENTIAL DAMAGES HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
 IN CONTRACT, STRICT LIABILITY, OR TORT, ARISING IN ANY WAY OUT OF THE USE OF
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-[348] MIT (standard text)
+[352] MIT (standard text)
 ------------------------------------------------------------------------------
 The MIT License
 

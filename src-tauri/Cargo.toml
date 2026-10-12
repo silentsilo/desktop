@@ -1,6 +1,6 @@
 [package]
 name = "silentsilo"
-version = "1.4.0"
+version = "1.5.0-rc.1"
 description = "SilentSilo desktop client"
 authors = ["Software Hive S.R.L."]
 edition = "2024"
