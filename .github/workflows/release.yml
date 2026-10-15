@@ -1,8 +1,7 @@
 name: Release everything that is not Windows
 
-# Runs on version tags. Builds the extraction tool for the two platforms
-# that cannot be built on the release machine, and the macOS and Linux
-# applications. Everything Windows in a release (the installer, its updater
+# Runs on version tags. Builds the Linux extraction tool, which cannot be
+# built on the release machine, and the macOS and Linux applications. Everything Windows in a release (the installer, its updater
 # signature, latest.json and the Windows extractor) is built by
 # scripts\build-release-local.ps1 and uploaded by hand.
 #
@@ -17,11 +16,11 @@ name: Release everything that is not Windows
 # as a workflow artifact only. The release is built, signed and notarised on
 # the Mac by scripts/build-release-mac.sh.
 #
-# The extractor's source lives in silentsilo/core. It is built here from a
-# clean clone of the core tag this app pins, checked against the commit the
-# lockfile records, so the binary on the release page comes from exactly the
-# revision the installer was compiled against. Same logic as the local script
-# uses for the Windows one.
+# The extractor's source lives in silentsilo/core. The Linux one is built
+# here from a clean clone of the core tag this app pins, checked against the
+# commit the lockfile records, so the binary on the release page comes from
+# exactly the revision the installer was compiled against. Same logic as the
+# local script uses for the Windows one and the Mac script for the macOS one.
 #
 # No signing key is on GitHub. The build jobs never see a token that can
 # write: they run vite, every npm install script, every cargo build script
@@ -51,98 +50,11 @@ jobs:
   # it is least useful: someone recovering on Linux would have to install a
   # Windows application first. It is a plain binary with no interface and no
   # security key, so one source builds everywhere.
-  build-extract:
-    # A tag, never a manual run: the extractor answers a tag, and a manual run
-    # asks whether the app builds.
-    if: startsWith(github.ref, 'refs/tags/')
-    strategy:
-      # One platform failing must not withhold the binary that did build: the
-      # release is a draft either way, and a missing macOS binary is something
-      # to notice rather than a reason to have no Linux one.
-      fail-fast: false
-      # Linux is built apart, in `build-extract-linux`: the runner's own glibc
-      # is newer than the distributions people recover on.
-      matrix:
-        include:
-          - os: macos-latest
-            asset: silentsilo-extract-macos-aarch64
-            built: silentsilo-extract
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          persist-credentials: false
-      # The pin is the single source of truth for which core revision the app
-      # was compiled against. Read from the manifest and the lockfile rather
-      # than typed here, and the two must agree with each other and with what
-      # the clone below actually checks out.
-      - name: Which core revision this build is pinned to
-        id: pin
-        shell: bash
-        run: |
-          tag=$(grep -m1 -oE 'silentsilo-core = \{ git = "[^"]+", tag = "([^"]+)"' Cargo.toml \
-                | grep -oE 'tag = "[^"]+"' | cut -d'"' -f2)
-          commit=$(awk '/^name = "silentsilo-core"$/{f=1} f && /^source = /{print; exit}' Cargo.lock \
-                   | grep -oE '#[0-9a-f]{40}' | tr -d '#')
-          if [ -z "$tag" ] || [ -z "$commit" ]; then
-            echo "::error::Cargo.toml pins no core tag, or Cargo.lock records no commit for it"
-            exit 1
-          fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "commit=$commit" >> "$GITHUB_OUTPUT"
-          echo "core $tag at $commit"
-
-      # A tag can be moved after the fact; the lockfile's commit cannot. If
-      # the two disagree, the extractor about to be built is not the code the
-      # installer contains.
-      - name: Clone core at that tag and check the commit
-        shell: bash
-        run: |
-          git clone --quiet --branch "${{ steps.pin.outputs.tag }}" --depth 1 \
-            https://github.com/silentsilo/core core-src
-          got=$(git -C core-src rev-parse HEAD)
-          if [ "$got" != "${{ steps.pin.outputs.commit }}" ]; then
-            echo "::error::core ${{ steps.pin.outputs.tag }} is at $got, but Cargo.lock pins ${{ steps.pin.outputs.commit }}"
-            exit 1
-          fi
-
-      # No build cache in any release job: a cache is written by other runs,
-      # and what it restores ends up in a binary people download.
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
-        with:
-          toolchain: 1.97.1
-
-      # The keychain crate reaches for D-Bus on Linux, because the vault
-      # stores credentials in the OS keychain and the persistent Linux
-      # backend is secret-service. The extractor never calls that code, but
-      # it links the crate, so the build needs the headers.
-      #
-      # This is a workaround rather than the answer. A recovery binary that
-      # links libdbus needs libdbus present on the machine someone is
-      # recovering on, which is the one place to assume nothing. Making the
-      # keychain optional in silentsilo-vault is the real fix.
-      # `-p` and nothing else: this must not drag in the security key backend,
-      # which is the whole reason it builds on three platforms from one
-      # source. `--locked` against core's own lockfile: the extractor ships
-      # with the dependency versions core tested, not whatever resolves today.
-      - run: cargo test -p silentsilo-extract --release --locked
-        working-directory: core-src
-      - run: cargo build -p silentsilo-extract --release --locked
-        working-directory: core-src
-
-      - name: Name the binary for the platform it runs on
-        shell: bash
-        run: |
-          mkdir -p dist
-          cp "core-src/target/release/${{ matrix.built }}" "dist/${{ matrix.asset }}"
-
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: ${{ matrix.asset }}
-          path: dist/${{ matrix.asset }}
-          retention-days: 7
-
+  #
+  # The macOS extractor is built on the Mac by scripts/build-release-mac.sh,
+  # for both architectures in one binary, signed and notarised: unsigned, a
+  # browser download of it would not start without a Terminal workaround.
+  #
   # The Linux extractor, in Ubuntu 22.04 like the Linux app: a binary built on
   # the runner asked for glibc 2.38 and did not start on Ubuntu 22.04 or
   # Debian 12, which is where someone recovering a silo may well be.
@@ -504,7 +416,7 @@ jobs:
   # `!cancelled()` because one platform failing must not withhold what did
   # build: the release is a draft either way. Tags only.
   publish:
-    needs: [build-extract, build-extract-linux, build-linux-app, sbom]
+    needs: [build-extract-linux, build-linux-app, sbom]
     if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/') }}
     environment: release
     runs-on: ubuntu-latest
@@ -539,10 +451,6 @@ jobs:
 
       # Each by its name: a job of this workflow can upload an artifact of
       # any name, and a pattern would take in whatever turned up.
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: silentsilo-extract-macos-aarch64
-          path: artifacts/extract-macos
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: silentsilo-extract-linux-x86_64
@@ -587,8 +495,6 @@ jobs:
               exit 1
             fi
           }
-          only artifacts/extract-macos 1
-          expect artifacts/extract-macos silentsilo-extract-macos-aarch64
           only artifacts/extract-linux 1
           expect artifacts/extract-linux silentsilo-extract-linux-x86_64
           only artifacts/sbom 1

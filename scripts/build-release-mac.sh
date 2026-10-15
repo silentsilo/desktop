@@ -1,6 +1,7 @@
 #!/bin/bash
 # Builds, signs and notarises the macOS release on the Mac: the universal
-# .app inside a .dmg, and the .app.tar.gz the updater downloads. The
+# .app inside a .dmg, the .app.tar.gz the updater downloads, and the
+# universal extractor (silentsilo-extract-macos-universal). The
 # Developer ID certificate and the notarisation password stay in this Mac's
 # keychain; nothing of them is on GitHub.
 #
@@ -99,10 +100,52 @@ xcrun notarytool history --keychain-profile "$PROFILE" > /dev/null \
 
 rm -rf "$OUT"
 mkdir -p "$OUT"
+rustup target add aarch64-apple-darwin x86_64-apple-darwin > /dev/null
+
+echo "== Extractor"
+# From a clean clone of the core tag this app pins, at the commit the
+# lockfile records: a tag can move, the lockfile's commit cannot. Built
+# before the app, so a problem here shows up in minutes. Both architectures
+# in one binary, signed and notarised, so it starts on any Mac from a
+# browser download. A bare binary cannot be stapled; Gatekeeper finds the
+# ticket online.
+core_tag=$(grep -m1 -oE 'silentsilo-core = \{ git = "[^"]+", tag = "([^"]+)"' Cargo.toml \
+  | grep -oE 'tag = "[^"]+"' | cut -d'"' -f2)
+core_commit=$(awk '/^name = "silentsilo-core"$/{f=1} f && /^source = /{print; exit}' Cargo.lock \
+  | grep -oE '#[0-9a-f]{40}' | tr -d '#')
+[ -n "$core_tag" ] && [ -n "$core_commit" ] \
+  || { echo "Cargo.toml pins no core tag, or Cargo.lock records no commit for it."; exit 1; }
+extract_work=$(mktemp -d)
+core_src="$extract_work/core"
+git clone --quiet --branch "$core_tag" --depth 1 https://github.com/silentsilo/core "$core_src"
+got=$(git -C "$core_src" rev-parse HEAD)
+[ "$got" = "$core_commit" ] || { echo "core $core_tag is at $got, but Cargo.lock pins $core_commit."; exit 1; }
+extractor="$OUT/silentsilo-extract-macos-universal"
+(
+  cd "$core_src"
+  cargo test -p silentsilo-extract --release --locked
+  for arch in aarch64-apple-darwin x86_64-apple-darwin; do
+    cargo build -p silentsilo-extract --release --locked --target "$arch"
+  done
+)
+lipo -create -output "$extractor" \
+  "$core_src/target/aarch64-apple-darwin/release/silentsilo-extract" \
+  "$core_src/target/x86_64-apple-darwin/release/silentsilo-extract"
+lipo "$extractor" -verify_arch arm64 x86_64
+codesign --force --options runtime --timestamp --identifier com.silentsilo.extract \
+  --sign "$IDENTITY" "$extractor"
+codesign --verify --strict --verbose=2 "$extractor"
+ditto -c -k "$extractor" "$extract_work/extract.zip"
+# Read whole before matching: under pipefail, grep -q closing the pipe early
+# would fail the submit and read as a refusal.
+notarised=$(xcrun notarytool submit "$extract_work/extract.zip" --keychain-profile "$PROFILE" \
+  --wait --output-format json)
+echo "$notarised"
+echo "$notarised" | grep -Eq '"status" *: *"Accepted"' || { echo "The extractor was not notarised."; exit 1; }
+rm -rf "$extract_work"
 
 echo "== Build"
 npm ci
-rustup target add aarch64-apple-darwin x86_64-apple-darwin > /dev/null
 
 # The browser extension's host, shipped once a store lists the extension:
 # built for both architectures, joined into one binary for the universal

@@ -5,14 +5,14 @@
 # all, which is the whole reason they are made here.
 #
 # Before running it: the release workflow has attached the Linux app, the
-# Linux and macOS extractors and the SBOM to the draft, and
-# scripts/build-release-mac.sh has attached the signed macOS app from the
-# Mac. This script checks the provenance of the CI files, then signs them
-# all for the updater.
+# Linux extractor and the SBOM to the draft, and
+# scripts/build-release-mac.sh has attached the signed macOS app and the
+# macOS extractor from the Mac. This script checks the provenance of the CI
+# files, then signs them all for the updater.
 #
-# The Linux and macOS extractors are built by this repository's release
-# workflow, from a clean clone of the core tag this build pins, and attached
-# to the same draft. Core publishes tags and no releases, so there is nothing
+# The Linux extractor is built by this repository's release workflow, the
+# macOS one by the Mac script, each from a clean clone of the core tag this
+# build pins, and attached to the same draft. Core publishes tags and no releases, so there is nothing
 # to download from it. They are not built here on purpose: a binary out of
 # WSL links against this machine's glibc, and the extractor is the one tool
 # that has to start on a machine nothing is assumed about.
@@ -289,8 +289,8 @@ try {
     # may have uncommitted work, and this binary is the one somebody reaches
     # for when they have lost confidence in everything else.
     #
-    # The Linux and macOS extractors are built by the release workflow on
-    # GitHub, from this same core tag. A binary built out of WSL links
+    # The Linux extractor is built by the release workflow on GitHub and the
+    # macOS one on the Mac, from this same core tag. A binary built out of WSL links
     # against this machine's glibc, and the extractor is the one tool that
     # has to start on a machine nothing is assumed about.
     Write-Host "`n== CLI, Windows ==" -ForegroundColor Cyan
@@ -381,11 +381,13 @@ try {
     # A file the release workflow built carries a provenance statement for
     # this tag and this workflow. Anything else on the draft from CI is
     # refused: it is exactly what someone with write access to the
-    # repository, and no key, could put there. The macOS app comes from the
-    # Mac and has none; Gatekeeper checks its Developer ID signature.
+    # repository, and no key, could put there. The macOS app and extractor
+    # come from the Mac and have none; Gatekeeper checks their Developer ID
+    # signature.
     $identity = "https://github.com/$slug/.github/workflows/release.yml@refs/tags/$tag"
     foreach ($file in Get-ChildItem $draft -File) {
-        if ($file.Name -like "*.dmg" -or $file.Name -like "*.app.tar.gz") {
+        if ($file.Name -like "*.dmg" -or $file.Name -like "*.app.tar.gz" -or
+            $file.Name -eq "silentsilo-extract-macos-universal") {
             Write-Host ("  {0,-46} from the Mac" -f $file.Name)
             continue
         }
