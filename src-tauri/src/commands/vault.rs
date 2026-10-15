@@ -690,32 +690,43 @@ fn requeue_uploads(paths: &[String]) {
 /// key covers the silo whose envelopes were published by another device and
 /// carry ids this one has not seen; it fails a moment later with a clearer
 /// message than "no matching key" would give here.
-/// Which of the key's secrets opens its envelope, and whether it was the one
-/// it gave without its PIN.
-///
-/// A security key enrolled before it had a PIN holds the silo under its
-/// unverified secret. Over CTAP2 the ceremony asked for that one too, and it
-/// still opens the silo here; Windows verifies every ceremony on a key with a
-/// PIN and cannot ask, so there the person is told what happened instead of
-/// meeting a decryption error.
+/// The key's secret that opens `wrapped`, and whether it was the one the key
+/// gave without its PIN: a security key enrolled before it had a PIN holds
+/// the silo under that one, and a CTAP2 ceremony (Linux, macOS) brings it
+/// back beside the verified one. Every check that a key opens the silo goes
+/// through here, or a key that unlocks would fail the confirmation right
+/// after.
+pub(crate) fn secret_that_opens(
+    unlock: &silentsilo_fido::UnlockMaterial,
+    wrapped: &str,
+) -> Option<(zeroize::Zeroizing<[u8; 32]>, bool)> {
+    let opens = |key: &[u8; 32]| silentsilo_vault::unwrap_dek_hex(wrapped, key).is_ok();
+    if opens(&unlock.wrap_key) {
+        return Some((zeroize::Zeroizing::new(unlock.wrap_key), false));
+    }
+    unlock
+        .unverified_wrap_key
+        .as_ref()
+        .filter(|old| opens(old))
+        .map(|old| (zeroize::Zeroizing::new(*old), true))
+}
+
+/// [`secret_that_opens`] for the unlock. Windows verifies every ceremony on a
+/// key with a PIN and cannot ask for the other secret, so there a security
+/// key of this silo that answers with its PIN and opens nothing was added
+/// before it had one: said, rather than met with a decryption error.
 fn opening_wrap_key(
     unlock: &silentsilo_fido::UnlockMaterial,
     wrapped: &str,
-    platform_key: bool,
+    enrolled: Option<&silentsilo_vault::StoredFidoCredential>,
 ) -> Result<(zeroize::Zeroizing<[u8; 32]>, bool), String> {
-    let opens = |key: &[u8; 32]| silentsilo_vault::unwrap_dek_hex(wrapped, key).is_ok();
-    if opens(&unlock.wrap_key) {
-        return Ok((zeroize::Zeroizing::new(unlock.wrap_key), false));
+    if let Some(found) = secret_that_opens(unlock, wrapped) {
+        return Ok(found);
     }
-    if let Some(old) = unlock.unverified_wrap_key.as_ref()
-        && opens(old)
-    {
-        return Ok((zeroize::Zeroizing::new(*old), true));
-    }
-    if unlock.verified && !platform_key {
+    if cfg!(windows) && unlock.verified && enrolled.is_some_and(|k| !k.platform) {
         return Err(crate::err::coded!(
             "err.key_added_without_pin",
-            "This key was added to the silo before it had a PIN, and with a PIN it gives a different secret. Open the silo with another of its keys or your recovery code, then remove this key in Settings and add it again. On Linux or a Mac it still opens the silo."
+            "This key was added to the silo before it had a PIN, and with a PIN it gives a different secret. Open the silo with another of its keys or your recovery code, then add this key again under Settings, Unlocking and remove its old entry. On Linux or a Mac it still opens the silo."
         )
         .into());
     }
@@ -723,6 +734,8 @@ fn opening_wrap_key(
     Ok((zeroize::Zeroizing::new(unlock.wrap_key), false))
 }
 
+/// The DEK envelope to open the silo with, for the credential the ceremony
+/// answered with.
 fn wrapped_dek_for(
     keys: &silentsilo_vault::StoredFidoKeys,
     credential_id: &[u8],
@@ -851,10 +864,8 @@ pub async fn vault_unlock(
     .await?;
 
     let wrapped_dek = wrapped_dek_for(&keys, &unlock.credential_id)?;
-    let platform_key = keys
-        .find_by_credential_id(&unlock.credential_id)
-        .is_some_and(|k| k.platform);
-    let (wrap_key, added_without_pin) = opening_wrap_key(&unlock, &wrapped_dek, platform_key)?;
+    let enrolled = keys.find_by_credential_id(&unlock.credential_id);
+    let (wrap_key, added_without_pin) = opening_wrap_key(&unlock, &wrapped_dek, enrolled)?;
     // The touch is done. Opening can take a while (after an update the
     // tree is rebuilt from the history), and the touch line must not stay.
     emit_fido_progress(
@@ -2958,9 +2969,9 @@ pub(crate) async fn verify_presence(app: &AppHandle, purpose: Presence) -> Resul
             .to_string()
         })?;
 
-    silentsilo_vault::unwrap_dek_hex(&stored.wrapped_dek, &unlock.wrap_key)
+    secret_that_opens(&unlock, &stored.wrapped_dek)
         .map(|_| ())
-        .map_err(|_| {
+        .ok_or_else(|| {
             crate::err::coded!(
                 "err.key_cannot_verify",
                 "That key could not verify this silo."

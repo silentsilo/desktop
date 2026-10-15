@@ -325,8 +325,8 @@ mod linux {
     /// in `/tmp/.mount_…`, which is gone the moment the app quits; the
     /// AppImage itself is what `$APPIMAGE` names.
     fn launcher() -> std::io::Result<PathBuf> {
-        match std::env::var_os("APPIMAGE").filter(|p| !p.is_empty()) {
-            Some(image) => Ok(PathBuf::from(image)),
+        match crate::running_appimage() {
+            Some(image) => Ok(image),
             None => std::env::current_exe(),
         }
     }

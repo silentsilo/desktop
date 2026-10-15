@@ -1160,13 +1160,17 @@ fn opens_current_key(
     keys: &StoredFidoKeys,
     credential_id: &str,
     label: &str,
-    wrap_key: &[u8; 32],
+    wrap_keys: &[&[u8; 32]],
     current: &silentsilo_crypto::MasterDek,
 ) -> Result<(), String> {
     let opened = keys
         .active()
         .find(|k| k.credential_id == credential_id)
-        .and_then(|k| silentsilo_vault::unwrap_dek_hex(&k.wrapped_dek, wrap_key).ok());
+        .and_then(|k| {
+            wrap_keys
+                .iter()
+                .find_map(|key| silentsilo_vault::unwrap_dek_hex(&k.wrapped_dek, key).ok())
+        });
     match opened {
         Some(dek) if dek.as_bytes() == current.as_bytes() => Ok(()),
         _ => Err(format!(
@@ -1174,6 +1178,13 @@ fn opens_current_key(
              was changed. Try again with that key."
         )),
     }
+}
+
+/// The secrets a ceremony brought back, verified first.
+fn candidates(unlock: &silentsilo_fido::UnlockMaterial) -> Vec<&[u8; 32]> {
+    std::iter::once(&unlock.wrap_key)
+        .chain(unlock.unverified_wrap_key.as_ref())
+        .collect()
 }
 
 /// What to say when a rotation stops after storage has been touched.
@@ -1349,7 +1360,10 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
             silentsilo_fido::derive_unlock_material(std::slice::from_ref(&raw), &vault, wanted)
         })
         .await?;
-        opens_current_key(&keys, id, &label, &unlock.wrap_key, &old_dek)?;
+        // A key added before it had a PIN proves itself with the secret it
+        // gave then, and is re-sealed under the one it gives now: after the
+        // rotation it opens the silo on Windows too.
+        opens_current_key(&keys, id, &label, &candidates(&unlock), &old_dek)?;
         wrap_keys.push((id.clone(), unlock.wrap_key));
     }
 
@@ -1572,7 +1586,7 @@ pub async fn vault_rotate_resume(
     .await?;
     // Before storage is touched: a key that does not open the current one
     // would be the only key left after this, opening nothing.
-    opens_current_key(&keys, &credential, &label, &unlock.wrap_key, &old_dek)?;
+    opens_current_key(&keys, &credential, &label, &candidates(&unlock), &old_dek)?;
 
     // Idempotent, so whatever the interrupted pass managed is kept and only
     // the rest is done.
@@ -1816,12 +1830,16 @@ mod authenticator_choice_tests {
         held.wrapped_dek = hex::encode(silentsilo_vault::wrap_dek_bytes(&current, &wrap).unwrap());
         let keys = StoredFidoKeys { keys: vec![held] };
 
-        assert!(super::opens_current_key(&keys, "aa11", "Blue", &wrap, &current).is_ok());
-        let wrong = super::opens_current_key(&keys, "aa11", "Blue", &[8u8; 32], &current);
+        assert!(super::opens_current_key(&keys, "aa11", "Blue", &[&wrap], &current).is_ok());
+        let wrong = super::opens_current_key(&keys, "aa11", "Blue", &[&[8u8; 32]], &current);
         assert!(wrong.unwrap_err().contains("nothing was changed"));
         // Opens, but to a key the silo no longer uses.
         let older = silentsilo_crypto::generate_dek();
-        assert!(super::opens_current_key(&keys, "aa11", "Blue", &wrap, &older).is_err());
+        assert!(super::opens_current_key(&keys, "aa11", "Blue", &[&wrap], &older).is_err());
+        // A key added before its PIN: the second secret is the one that opens.
+        assert!(
+            super::opens_current_key(&keys, "aa11", "Blue", &[&[8u8; 32], &wrap], &current).is_ok()
+        );
     }
 
     #[test]

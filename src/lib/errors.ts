@@ -77,12 +77,9 @@ export function formatAppError(err: unknown): string {
     return t("app.err_disk_full");
   }
   // A file over what the drive's file system takes: FAT32's 4 GB, as on many
-  // USB sticks. "os error 223" on Windows, "os error 27" elsewhere.
-  if (
-    lower.includes("os error 223)") ||
-    lower.includes("os error 27)") ||
-    lower.includes("file too large")
-  ) {
+  // USB sticks. "os error 223" on Windows; elsewhere EFBIG, matched by its
+  // words, since 27 is another error on Windows.
+  if (lower.includes("os error 223)") || lower.includes("file too large")) {
     return t("app.err_file_too_large");
   }
   // "Unlock the silo first", "enrol a key before unlocking" and friends

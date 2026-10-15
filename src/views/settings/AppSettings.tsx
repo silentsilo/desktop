@@ -133,9 +133,9 @@ export function useUpdater(
   return { state, check, install };
 }
 
-/** An update that could not replace the installed app for want of rights. */
-const NO_PERMISSION =
-  /os error 13\)|os error 30\)|permission denied|read-only file system|pkexec|polkit|not authorized/i;
+/** An update that could not replace the installed app for want of rights.
+ * By the words, not the numbers: 13 and 30 are other errors on Windows. */
+const NO_PERMISSION = /permission denied|read-only file system|pkexec|polkit|not authorized/i;
 
 type Props = {
   section: AppSectionId;

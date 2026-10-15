@@ -12,9 +12,11 @@ silo from opening needs a major version rather than a note.
 - A security key without a PIN is no longer added. Once such a key gets a
   PIN, as Windows 11 asks at the first passkey on any site, it gives a
   different secret and stopped opening its silo. A key added that way
-  earlier still opens the silo on Linux and macOS, which then asks for it to
-  be added again; on Windows the unlock says what happened instead of
-  failing to decrypt.
+  earlier still opens the silo on Linux and macOS, confirms changes there
+  and sets up from backup storage, and the app asks for it to be added
+  again; replacing the encryption key also re-seals it under the secret it
+  gives now. On Windows the unlock says what happened instead of failing to
+  decrypt.
 - Windows: the browser extension's native host and the extractor no longer
   need the Visual C++ runtime. On a computer without it the browser could
   not start the host, and the extension said the app was not running. The

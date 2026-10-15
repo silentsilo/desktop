@@ -356,34 +356,39 @@ fn status_of(app: &AppHandle) -> ExtensionStatus {
     }
 }
 
-/// Chromium browsers installed as a snap or a flatpak, found by the data
-/// folder each keeps in the user's home. They do not start native hosts
-/// outside their sandbox. Firefox as a snap does, through the WebExtensions
-/// portal, so it is not on the list.
+/// Chromium browsers installed as a snap or a flatpak, found where each is
+/// installed (not by its data folder, which outlives an uninstall). They do
+/// not start native hosts outside their sandbox. Firefox as a snap does,
+/// through the WebExtensions portal, so it is not on the list.
 fn sandboxed_browsers() -> Vec<&'static str> {
     #[cfg(target_os = "linux")]
     {
-        let Some(home) = std::env::var_os("HOME").map(std::path::PathBuf::from) else {
-            return Vec::new();
+        use std::path::PathBuf;
+        let home = std::env::var_os("HOME").map(PathBuf::from);
+        let flatpak = |id: &str| {
+            let system = PathBuf::from("/var/lib/flatpak/app").join(id);
+            let user = home
+                .as_ref()
+                .map(|h| h.join(".local/share/flatpak/app").join(id));
+            system.is_dir() || user.is_some_and(|u| u.is_dir())
         };
-        let flatpak = home.join(".var").join("app");
-        [
-            ("Chromium", home.join("snap").join("chromium")),
-            ("Chrome", flatpak.join("com.google.Chrome")),
-            ("Chromium", flatpak.join("org.chromium.Chromium")),
-            ("Brave", flatpak.join("com.brave.Browser")),
-            ("Edge", flatpak.join("com.microsoft.Edge")),
-            ("Vivaldi", flatpak.join("com.vivaldi.Vivaldi")),
-        ]
-        .into_iter()
-        .filter(|(_, dir)| dir.is_dir())
-        .map(|(name, _)| name)
-        .fold(Vec::new(), |mut names, name| {
-            if !names.contains(&name) {
+        let snap = |name: &str| PathBuf::from("/snap").join(name).is_dir();
+        let found = [
+            ("Chromium", snap("chromium")),
+            ("Brave", snap("brave")),
+            ("Chrome", flatpak("com.google.Chrome")),
+            ("Chromium", flatpak("org.chromium.Chromium")),
+            ("Brave", flatpak("com.brave.Browser")),
+            ("Edge", flatpak("com.microsoft.Edge")),
+            ("Vivaldi", flatpak("com.vivaldi.Vivaldi")),
+        ];
+        let mut names: Vec<&'static str> = Vec::new();
+        for (name, here) in found {
+            if here && !names.contains(&name) {
                 names.push(name);
             }
-            names
-        })
+        }
+        names
     }
     #[cfg(not(target_os = "linux"))]
     {

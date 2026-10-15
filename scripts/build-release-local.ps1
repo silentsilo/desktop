@@ -340,8 +340,11 @@ try {
         Pop-Location
     }
 
-    $shipped = @("target\release\silentsilo.exe", (Join-Path $out "silentsilo-extract-windows-x86_64.exe"))
-    if ($shipHost) { $shipped += $sidecar }
+    # Absolute: .NET reads relative paths against the process's directory,
+    # which Set-Location does not move.
+    $shipped = @((Join-Path $repoRoot "target\release\silentsilo.exe"),
+        (Join-Path $out "silentsilo-extract-windows-x86_64.exe"))
+    if ($shipHost) { $shipped += (Join-Path $repoRoot $sidecar) }
     Assert-NoVcRuntime $shipped
 
     # Everything is compiled. Only now the token: it signs the app as Tauri

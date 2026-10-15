@@ -114,3 +114,15 @@ fn download_queue_file_path() -> std::path::PathBuf {
         .join("SilentSilo")
         .join(DOWNLOAD_QUEUE)
 }
+
+/// The AppImage this app runs from, when it runs from one. `$APPIMAGE` alone
+/// is not proof: a program started from a terminal inside another AppImage
+/// inherits it. The runtime sets `$APPDIR` to its mount, and this executable
+/// sits inside it only when it is the AppImage's own.
+pub fn running_appimage() -> Option<std::path::PathBuf> {
+    let image = std::env::var_os("APPIMAGE").filter(|p| !p.is_empty())?;
+    let mount = std::env::var_os("APPDIR").filter(|p| !p.is_empty())?;
+    let exe = std::env::current_exe().ok()?;
+    exe.starts_with(&mount)
+        .then(|| std::path::PathBuf::from(image))
+}

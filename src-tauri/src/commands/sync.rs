@@ -555,13 +555,17 @@ pub async fn vault_join_from_storage(
         vault_id,
         keys: keys.keys.clone(),
     };
-    let join = silentsilo_app::flows::key_join_open(
-        &**store,
-        &offer,
-        &hex::encode(&unlock.credential_id),
-        &unlock.wrap_key,
-    )
-    .await?;
+    // The secret that opens the touched key's envelope: a key added before it
+    // had a PIN still holds the silo under the one it gave then.
+    let touched = hex::encode(&unlock.credential_id);
+    let wrap_key = keys
+        .keys
+        .iter()
+        .find(|k| k.credential_id == touched)
+        .and_then(|k| crate::commands::vault::secret_that_opens(&unlock, &k.wrapped_dek))
+        .map(|(key, _)| key)
+        .unwrap_or_else(|| zeroize::Zeroizing::new(unlock.wrap_key));
+    let join = silentsilo_app::flows::key_join_open(&**store, &offer, &touched, &wrap_key).await?;
 
     // From here on local state is created. Everything above could fail
     // without leaving anything behind, and everything below is undone if it

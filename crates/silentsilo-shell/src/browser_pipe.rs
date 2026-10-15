@@ -437,7 +437,7 @@ mod unix {
     }
 
     fn host_copied() -> bool {
-        cfg!(target_os = "macos") || std::env::var_os("APPIMAGE").is_some()
+        cfg!(target_os = "macos") || crate::running_appimage().is_some()
     }
 
     fn host_copy() -> io::Result<PathBuf> {

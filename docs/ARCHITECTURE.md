@@ -315,8 +315,12 @@ ignored Health findings, offers made.
 On Linux the app locks every silo when the session locks or the machine is
 about to sleep, as on Windows and macOS: `silentsilo_shell::session_watch`
 listens to logind on the system bus (`PrepareForSleep`, the session's
-`Lock` signal and its `LockedHint` turning true). A system without logind
-has only the idle timer.
+`Lock` signal and its `LockedHint` turning true). The session is found by
+`XDG_SESSION_ID`, then by process, then (from 1.5.1) as the user's
+graphical session, logind's `Display`: an app started at sign-in by
+systemd's autostart generator or by GNOME Shell runs outside the session
+and found none. Failures are logged. A system without logind has only the
+idle timer.
 
 Key operations (enrol, add, remove, rotate, resume), the snapshot rebuild and
 a seed take the sync flag for as long as they run (`sync::hold_sync`), after
@@ -385,12 +389,14 @@ differently on two platforms would open neither's silo on the other.
 From 1.5.1 a key without a PIN is not enrolled: on Windows the second
 ceremony (`derive_enrolment_material`) refuses an unverified one, and over
 CTAP2 core refuses a key with no PIN set. A key enrolled earlier without one
-and given a PIN since still opens its silo on Linux and macOS:
-`opening_wrap_key` in `vault_unlock` tries the unverified secret the
-ceremony also brought back, and on success emits `key-added-without-pin`
-so the window asks for the key to be added again. On Windows there is no
-such secret to try, so the unlock says `err.key_added_without_pin` rather
-than a decryption error.
+and given a PIN since still works on Linux and macOS: every check that a
+key opens the silo (`vault_unlock`, `verify_presence`, the rotation checks,
+setting up from backup) goes through `secret_that_opens`, which tries the
+unverified secret the ceremony also brought back. The unlock then emits
+`key-added-without-pin`, so the window asks for the key to be added again,
+and a rotation re-seals such a key under its verified secret. On Windows
+there is no such secret to try, so the unlock says
+`err.key_added_without_pin` rather than a decryption error.
 
 ## Activity log
 
@@ -880,7 +886,11 @@ as if they did.
   checked online.
 - **Another user on the same machine** cannot open the pipe (the DACL), and
   cannot stand in for it without the host noticing (owner, server user and
-  server image). An administrator can do anything.
+  server image). One way round it is outside these checks: Firefox installed
+  in a folder another user can write, such as one at the root of a second
+  drive, where they can plant a library the browser loads. That Firefox is
+  then theirs, signature or not, and so is everything typed into it. An
+  administrator can do anything.
 
 ## Auto-type
 
