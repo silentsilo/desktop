@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { platformStrings, type Os } from "../lib/platformStrings";
+import { PhonePrep } from "./PhonePrep";
 import {
   AlertTriangle,
   Building2,
@@ -80,6 +81,10 @@ type Props = {
   onRenameDevice: (deviceId: string, label: string) => void;
   /** Whether this machine's built-in authenticator can be enrolled. */
   platformAvailable: boolean;
+  /** Whether a phone can be added as a key here (Windows 11 22H2 on). */
+  phoneAvailable: boolean;
+  /** What already opens the silo, so adding a phone says which answers first. */
+  enrolledKinds: "builtin" | "portable" | "both";
   silo: Silo;
   onRenameSilo: (name: string) => void;
   onForgetSilo: () => void;
@@ -160,6 +165,8 @@ export function SettingsPanel(props: Props) {
     devices,
     onRenameDevice,
     platformAvailable,
+    phoneAvailable,
+    enrolledKinds,
     silo,
     onRenameSilo,
     onForgetSilo,
@@ -190,6 +197,7 @@ export function SettingsPanel(props: Props) {
   /// is offered: on a personal silo the backend would refuse it anyway.
   const orgControlled = securityKeys.some((k) => k.policy === "org");
   const [addAsOrganisation, setAddAsOrganisation] = useState(false);
+  const [addingPhone, setAddingPhone] = useState(false);
   const [renamingKey, setRenamingKey] = useState<string | null>(null);
   const [keyLabelDraft, setKeyLabelDraft] = useState("");
 
@@ -386,9 +394,10 @@ export function SettingsPanel(props: Props) {
               {t("set.keys_title")}
             </h3>
             <p>
-              {platform.hasBuiltIn
+              {platformAvailable
                 ? t("set.keys_intro_builtin", { builtin: platform.builtIn })
                 : t("set.keys_intro")}
+              {phoneAvailable && ` ${t("set.keys_intro_phone")}`}
             </p>
             {securityKeys.length === 0 ? (
               <p className="hint empty-state-row">
@@ -502,9 +511,11 @@ export function SettingsPanel(props: Props) {
             <div className="key-add-panel">
               <p className="hint">{t("set.add_intro")}</p>
               <ol className="hint key-add-steps">
-                <li>{t("set.add_step_plug")}</li>
+                <li>
+                  {phoneAvailable ? t("set.add_step_plug_phone") : t("set.add_step_plug")}
+                </li>
                 <li>{t("set.add_step_label")}</li>
-                <li>{t("set.add_step_click", { os: platform.osName })}</li>
+                <li>{t("set.add_step_click")}</li>
               </ol>
               <p className="hint">{t("set.add_wait")}</p>
               {!hasPortableKey && !recovery.enabled && securityKeys.length > 0 && (
@@ -572,7 +583,29 @@ export function SettingsPanel(props: Props) {
                     {t("set.add_builtin", { builtin: platform.builtIn })}
                   </button>
                 )}
+                {phoneAvailable && !addAsOrganisation && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={busy}
+                    onClick={() => setAddingPhone(true)}
+                  >
+                    {t("set.add_phone")}
+                  </button>
+                )}
               </div>
+              {addingPhone && phoneAvailable && !addAsOrganisation && (
+                <PhonePrep
+                  busy={busy}
+                  adding={enrolledKinds}
+                  builtIn={platform.builtIn}
+                  onContinue={() => {
+                    setAddingPhone(false);
+                    onAddKey("phone", false);
+                  }}
+                  onBack={() => setAddingPhone(false)}
+                />
+              )}
             </div>
           </div>
           <div className="panel-section">

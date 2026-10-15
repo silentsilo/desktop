@@ -2,6 +2,7 @@
 
 mod autostart;
 pub mod autotype;
+pub mod bluetooth;
 pub mod browser_pipe;
 mod cli;
 mod clipboard;

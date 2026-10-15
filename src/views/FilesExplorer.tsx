@@ -20,6 +20,7 @@ import { MoveToDialog } from "./MoveToDialog";
 import { canMoveTo, type MoveDestination } from "../lib/moves";
 import { useModal } from "../hooks/useModal";
 import { t, useLocale } from "../i18n";
+import { onMac } from "../lib/os";
 import {
   IconBack,
   IconFile,
@@ -948,8 +949,8 @@ export function FilesExplorer(props: Props) {
           <button
             type="button"
             className="explorer-icon-btn"
-            data-tooltip={t("files.back")}
-            aria-label={t("files.back")}
+            data-tooltip={t(onMac() ? "files.back_mac" : "files.back")}
+            aria-label={t(onMac() ? "files.back_mac" : "files.back")}
             disabled={navigating || !canGoBack}
             onClick={onBack}
           >
@@ -958,8 +959,8 @@ export function FilesExplorer(props: Props) {
           <button
             type="button"
             className="explorer-icon-btn"
-            data-tooltip={t("files.forward")}
-            aria-label={t("files.forward")}
+            data-tooltip={t(onMac() ? "files.forward_mac" : "files.forward")}
+            aria-label={t(onMac() ? "files.forward_mac" : "files.forward")}
             disabled={navigating || !canGoForward}
             onClick={onForward}
           >
@@ -968,8 +969,8 @@ export function FilesExplorer(props: Props) {
           <button
             type="button"
             className="explorer-icon-btn"
-            data-tooltip={t("files.up")}
-            aria-label={t("files.up")}
+            data-tooltip={t(onMac() ? "files.up_mac" : "files.up")}
+            aria-label={t(onMac() ? "files.up_mac" : "files.up")}
             disabled={navigating || !canGoUp}
             onClick={onUp}
           >

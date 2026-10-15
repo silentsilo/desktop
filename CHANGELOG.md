@@ -7,7 +7,30 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+### Added
+
+- Your phone as the key, on Windows 11: a third choice when setting up a
+  silo, and "Add a phone" in Settings. Windows shows a QR code; an iPhone
+  on iOS 18 or later, or an Android phone with Google Password Manager,
+  scans it and opens the silo from then on. The app checks this
+  computer's Bluetooth first and says if it is off or missing. No key to
+  buy.
+- "Setup not working?" on the setup screen opens a GitHub issue filled in
+  with what this computer offers. Nothing is sent unless you submit it.
+
+### Changed
+
+- The setup screen lists the ways in as rows of the same shape.
+
 ### Fixed
+
+- Every text in the app was checked against what the code does. Among
+  the fixes: a Mac and Linux no longer read about Windows prompts, the
+  TPM or Explorer; Windows Hello is named only where it works; a phone
+  is named wherever it can confirm; a quick backup check no longer says
+  files could not be repaired, since only reading every file back
+  repairs; the breach check counts only the passwords it got an answer
+  for; "seen 1 times" and other singular forms read right.
 
 - A security key without a PIN is no longer added. Once such a key gets a
   PIN, as Windows 11 asks at the first passkey on any site, it gives a

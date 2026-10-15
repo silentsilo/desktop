@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { keysUnavailable, osOf, platformStrings } from "../lib/platformStrings";
+import { keysUnavailable, osOf, ownPromptHint, platformStrings } from "../lib/platformStrings";
 import { ArrowLeft, HardDrive, KeyRound, LifeBuoy } from "lucide-react";
 import type { Bootstrap } from "../lib/types";
 import { AuthShell } from "../layout/AuthShell";
@@ -95,13 +95,20 @@ export function UnlockView({
   // they do not have.
   const helloOnly = bootstrap.platform_enrolled && !bootstrap.portable_enrolled;
   const both = bootstrap.platform_enrolled && bootstrap.portable_enrolled;
+  // Where a phone can be used, any removable key may be one: a phone is
+  // stored as a security key.
+  const phone = bootstrap.phone_available === true;
   const subtitle = helloOnly
     ? t("unlock.subtitle_builtin", { builtin: platform.builtIn })
     : both
-      ? t("unlock.subtitle_both", { builtin: platform.builtIn })
-      : t("unlock.subtitle_key");
+      ? phone
+        ? t("unlock.subtitle_both_phone", { builtin: platform.builtIn })
+        : t("unlock.subtitle_both", { builtin: platform.builtIn })
+      : phone
+        ? t("unlock.subtitle_key_or_phone")
+        : t("unlock.subtitle_key");
   // Only that the prompt is available: no key has been looked at yet.
-  const readyHint = t("unlock.os_prompt", { os: platform.osName });
+  const readyHint = ownPromptHint(platform);
 
   return (
     <AuthShell subtitle={subtitle}>

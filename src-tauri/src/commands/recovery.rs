@@ -51,7 +51,7 @@ pub(crate) fn without_a_way_back(root: &std::path::Path) -> bool {
 
 const CODE_REQUIRED: &str = crate::err::coded!(
     "err.recovery_needed_platform_only",
-    "Every key on this silo is tied to one computer, so the recovery code is the only way back if that computer is lost. Add a portable security key before turning the code off."
+    "Every key on this silo is tied to one computer, so the recovery code is the only way back if that computer is lost. Add a key that is not tied to one computer, such as a security key, before turning the code off."
 );
 
 fn client_for(app: &AppHandle) -> Option<Box<dyn ObjectStore>> {

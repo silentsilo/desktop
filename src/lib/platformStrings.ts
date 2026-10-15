@@ -151,20 +151,30 @@ export function osOf(bootstrap: Pick<Bootstrap, "os"> | null | undefined): Os {
 
 /** What to do about the built-in authenticator, by the reason the backend
  * gave. A backend that gives none gets the platform's general hint. */
-export function builtInHint(platform: PlatformStrings, status: PlatformStatus | undefined): string {
+export function builtInHint(
+  platform: PlatformStrings,
+  status: PlatformStatus | undefined,
+  phone = false,
+): string {
   switch (status) {
+    // "A security key is the only way in" is not true where a phone works.
     case "no_tpm":
-      return t("app.platform_hint_no_tpm");
+      return phone ? t("app.platform_hint_no_tpm_phone") : t("app.platform_hint_no_tpm");
     case "update_windows":
-      return t("app.platform_hint_update_windows");
+      return phone
+        ? t("app.platform_hint_update_windows_phone")
+        : t("app.platform_hint_update_windows");
     case "unavailable":
       return t("app.platform_hint_touchid_unavailable");
     case "absent":
-      return platform.os === "macos"
-        ? t("app.platform_hint_no_touchid")
+      if (platform.os === "macos") return t("app.platform_hint_no_touchid");
+      return phone && platform.os === "windows"
+        ? t("app.platform_setup_hint_windows_phone")
         : platform.builtInSetupHint;
     default:
-      return platform.builtInSetupHint;
+      return phone && platform.os === "windows"
+        ? t("app.platform_setup_hint_windows_phone")
+        : platform.builtInSetupHint;
   }
 }
 
@@ -180,9 +190,22 @@ export function keysUnavailable(
   return platform.fidoUnavailable;
 }
 
-/** "Windows Hello or your security key", or on Linux "your security key". */
-export function builtInOrKey(platform: PlatformStrings): string {
-  return platform.hasBuiltIn
-    ? t("app.platform_builtin_or_key", { builtIn: platform.builtIn })
-    : t("app.platform_your_key");
+/** What answers a confirmation: any key on the silo, whichever kinds it
+ * has (a security key, a phone, Windows Hello or Touch ID). */
+export function builtInOrKey(_platform: PlatformStrings): string {
+  return t("app.platform_any_key");
+}
+
+/** What happens once the key is asked for. Windows shows a dialog of its
+ * own; on a Mac and on Linux the app talks to a security key itself and
+ * asks for its PIN in its own window. */
+export function ownPromptHint(platform: PlatformStrings): string {
+  switch (platform.os) {
+    case "macos":
+      return t("app.own_prompt_macos");
+    case "linux":
+      return t("app.own_prompt_linux");
+    default:
+      return t("unlock.os_prompt", { os: platform.osName });
+  }
 }

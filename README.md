@@ -1,8 +1,8 @@
 # SilentSilo
 
 End-to-end encrypted vault for files and passwords, unlocked by a FIDO2
-security key, Windows Hello or Touch ID, with a written-down recovery code as
-the fallback. For Windows 10 (version 1903 or later) and 11, macOS 13 or
+security key, Windows Hello, Touch ID or a phone over the QR code (Windows 11),
+with a written-down recovery code as the fallback. For Windows 10 (version 1903 or later) and 11, macOS 13 or
 later (one app for Apple silicon and Intel), and Linux as a .deb or an
 AppImage on glibc 2.35 or later, such as Ubuntu 22.04 and Debian 12 (security
 keys only: Linux has no built-in key the app uses). AGPL-3.0.
@@ -125,12 +125,13 @@ window with Ctrl+Alt+A, also confirmed in the app.
 
 ## Unlocking
 
-Three ways in, all of which end up handing the vault the same encryption key:
+Four ways in, all of which end up handing the vault the same encryption key:
 
 | Method | Strength | Survives the machine |
 |--------|----------|----------------------|
 | FIDO2 security key | `hmac-secret` on the key | Yes, carry it with you |
-| Windows Hello | same, held in the TPM | No, sealed to that PC |
+| Windows Hello / Touch ID | same, held in the TPM or Secure Enclave | No, sealed to that computer |
+| Phone over the QR code (Windows 11) | `hmac-secret` from the phone's passkey | Yes, it syncs with the phone's account |
 | Recovery code | 160 generated bits | Yes, it's on paper |
 
 There is deliberately **no passphrase option**. The vault is only as strong as
@@ -270,6 +271,14 @@ home, to remove by hand if you want it gone:
 ```bash
 npm install
 npm run tauri:dev
+```
+
+On Windows, turn on long paths for git first. Core's test fixtures name
+Touch ID keys by their full id, and cargo's checkout of core passes the
+260-character limit without it:
+
+```bash
+git config --global core.longpaths true
 ```
 
 ### Working on core at the same time

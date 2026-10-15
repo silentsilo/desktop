@@ -5,6 +5,7 @@ import {
   builtInOrKey,
   keysUnavailable,
   osOf,
+  ownPromptHint,
   platformStrings,
 } from "./platformStrings";
 
@@ -59,9 +60,22 @@ describe("platformStrings", () => {
 
   it("offers no built-in key on Linux, which has none the app uses", () => {
     expect(platformStrings("linux").hasBuiltIn).toBe(false);
-    expect(builtInOrKey(platformStrings("linux"))).toBe("your security key");
-    expect(builtInOrKey(platformStrings("windows"))).toBe("Windows Hello or your security key");
     expect(platformStrings("macos").hasBuiltIn).toBe(true);
+  });
+
+  it("names any of the silo's keys for a confirmation, whatever kinds it has", () => {
+    // Hello is not on every Windows silo, and a phone answers too.
+    for (const os of ["windows", "macos", "linux"] as const) {
+      expect(builtInOrKey(platformStrings(os))).toBe("one of this silo's keys");
+    }
+  });
+
+  it("says who asks for the key on each system", () => {
+    expect(ownPromptHint(platformStrings("windows"))).toBe("Windows will show its own prompt.");
+    // No system dialog for a security key off Windows: the app asks for the PIN.
+    expect(ownPromptHint(platformStrings("linux"))).toContain("SilentSilo asks for the key's PIN");
+    expect(ownPromptHint(platformStrings("macos"))).toContain("Touch ID asks in a macOS prompt");
+    expect(ownPromptHint(platformStrings("linux"))).not.toContain("Linux");
   });
 
   it("says what to do about the built-in key by the reason the backend gave", () => {
@@ -88,6 +102,19 @@ describe("platformStrings", () => {
     for (const os of ["windows", "macos"] as const) {
       const s = platformStrings(os);
       expect(keysUnavailable(s, { fido_key_present: true })).toBe(s.fidoUnavailable);
+    }
+  });
+});
+
+describe("builtInHint where a phone works", () => {
+  const win = platformStrings("windows");
+
+  it("does not call a security key the only way in", () => {
+    for (const status of ["no_tpm", "update_windows", "not_set_up", "absent"] as const) {
+      expect(builtInHint(win, status, false)).toContain("the only way in");
+      const withPhone = builtInHint(win, status, true);
+      expect(withPhone).not.toContain("only way in");
+      expect(withPhone).toContain("phone");
     }
   });
 });

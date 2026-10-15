@@ -8,15 +8,22 @@ const KEYS: Record<string, Key> = {
   enrol_key: "app.fido_enrol_key",
   enrol_built_in_again: "app.fido_enrol_built_in_again",
   enrol_key_again: "app.fido_enrol_key_again",
+  enrol_phone: "app.fido_enrol_phone",
+  enrol_phone_again: "app.fido_enrol_phone_again",
+  enrol_phone_new: "app.fido_enrol_phone_new",
+  enrol_phone_new_again: "app.fido_enrol_phone_new_again",
   keep_key: "app.fido_keep_key",
   finish_with_key: "app.fido_finish_with_key",
   rotating: "app.fido_rotating",
   opening: "app.fido_opening",
   rotating_count: "app.fido_rotating_count",
   touch_enrolled: "app.fido_touch_enrolled",
+  touch_enrolled_or_phone: "app.fido_touch_enrolled_or_phone",
   unlock_built_in: "app.fido_unlock_built_in",
   unlock_key: "app.fido_unlock_key",
+  unlock_key_or_phone: "app.fido_unlock_key_or_phone",
   unlock_any: "app.fido_unlock_any",
+  unlock_any_or_phone: "app.fido_unlock_any_or_phone",
   verify_built_in_show_entry: "app.fido_verify_built_in_show_entry",
   verify_key_show_entry: "app.fido_verify_key_show_entry",
   verify_built_in_export: "app.fido_verify_built_in_export",
@@ -56,5 +63,16 @@ export function describeFidoPrompt(prompt: FidoPrompt | string, builtIn: string)
   const { code, params, text } = prompt;
   const name = code.startsWith("verify_") ? `${code}_${params.purpose}` : code;
   const key = KEYS[name];
-  return key ? t(key, { ...params, builtIn }) : text;
+  const said = key ? t(key, { ...params, builtIn }) : text;
+  // Adding a phone: this QR code is for a phone already on the silo (or
+  // its security key), and the new phone gets the next one.
+  if (params.adding_phone === "key") return t("app.fido_verify_add_phone_key");
+  if (params.adding_phone === "any") return t("app.fido_verify_add_phone_any", { builtIn });
+  if (params.adding_phone === "builtin") return `${said} ${t("app.fido_add_phone_next")}`;
+  // Where a phone can be the key, any other presence check may be answered
+  // by one, and only by the phone already on the silo.
+  if (code === "verify_key" && params.phone === "1") {
+    return `${said} ${t("app.fido_verify_phone")}`;
+  }
+  return said;
 }

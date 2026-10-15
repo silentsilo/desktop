@@ -30,6 +30,9 @@ pub struct AppBootstrap {
     /// Why it cannot, when it cannot, so the screen says what to do: set up
     /// Hello, no TPM, update Windows, Touch ID locked or absent.
     platform_status: silentsilo_fido::PlatformStatus,
+    /// Whether a phone can be the key here: Windows 11 22H2 and later,
+    /// where Windows shows the QR code and reaches the phone itself.
+    phone_available: bool,
     /// Whether any enrolled key is a removable one. The unlock screen words
     /// its instruction around what is actually enrolled: telling a Windows
     /// Hello household to insert a key sends them looking for hardware they
@@ -126,6 +129,7 @@ fn app_bootstrap_impl(app: &AppHandle) -> Result<AppBootstrap, String> {
             && silo.as_ref().is_some_and(|s| has_backup_key(&s.path)),
         platform_authenticator: platform_status == silentsilo_fido::PlatformStatus::Ready,
         platform_status,
+        phone_available: silentsilo_fido::phone_available(),
         portable_enrolled,
         platform_enrolled,
         silo: silo.as_ref().map(crate::commands::silo::SiloView::from),
@@ -787,9 +791,24 @@ fn unlock_prompt(wanted: Option<silentsilo_fido::Authenticator>) -> Prompt {
             "unlock_built_in",
             format!("Confirm with {built_in} to unlock the silo."),
         ),
-        Some(silentsilo_fido::Authenticator::SecurityKey) => {
-            Prompt::new("unlock_key", "Touch your security key to unlock the silo.")
-        }
+        // A phone is stored as a security key, so where one can be used the
+        // prompt names both.
+        Some(
+            silentsilo_fido::Authenticator::SecurityKey | silentsilo_fido::Authenticator::Phone,
+        ) if silentsilo_fido::phone_available() => Prompt::new(
+            "unlock_key_or_phone",
+            "Touch your security key, or confirm on your phone, to unlock the silo.",
+        ),
+        Some(
+            silentsilo_fido::Authenticator::SecurityKey | silentsilo_fido::Authenticator::Phone,
+        ) => Prompt::new("unlock_key", "Touch your security key to unlock the silo."),
+        // Hello and removable keys; where a phone can be one of those, say so.
+        None if silentsilo_fido::phone_available() => Prompt::new(
+            "unlock_any_or_phone",
+            format!(
+                "Touch an enrolled security key, or confirm on your phone or with {built_in}, to unlock."
+            ),
+        ),
         None => Prompt::new(
             "unlock_any",
             format!("Touch an enrolled security key, or confirm with {built_in}, to unlock."),
@@ -804,24 +823,38 @@ pub(crate) enum Presence {
     ExportLogins,
     RecoveryCode,
     RecoveryOff,
-    AddKey,
+    /// `phone`: what is being added is a phone, so the window says which
+    /// phone answers which QR code.
+    AddKey {
+        phone: bool,
+    },
     RemoveKey,
     AddCopy,
-    FillLogin { label: String, site: String },
+    FillLogin {
+        label: String,
+        site: String,
+    },
     FillAny,
-    SshSign { key: String },
-    AutoType { label: String, program: String },
+    SshSign {
+        key: String,
+    },
+    AutoType {
+        label: String,
+        program: String,
+    },
 }
 
 impl Presence {
-    fn prompt(&self, built_in: bool) -> Prompt {
+    /// `built_in`: only the built-in authenticator is on the silo. `mixed`:
+    /// it and removable keys both are, so Windows offers the whole menu.
+    fn prompt(&self, built_in: bool, mixed: bool) -> Prompt {
         let (code, purpose) = match self {
             Presence::ShowEntry => ("show_entry", "show this entry".to_string()),
             Presence::ChangeEntries => ("change", "change protected entries".to_string()),
             Presence::ExportLogins => ("export", "export your logins".to_string()),
             Presence::RecoveryCode => ("recovery_new", "create a new recovery code".to_string()),
             Presence::RecoveryOff => ("recovery_off", "turn off the recovery code".to_string()),
-            Presence::AddKey => ("key_add", "add a key to this silo".to_string()),
+            Presence::AddKey { .. } => ("key_add", "add a key to this silo".to_string()),
             Presence::RemoveKey => ("key_remove", "remove a key from this silo".to_string()),
             Presence::AddCopy => ("copy_add", "add a backup copy".to_string()),
             Presence::FillLogin { label, site } => {
@@ -849,6 +882,32 @@ impl Presence {
             )
         };
         let prompt = prompt.with("purpose", code);
+        // A phone is stored as a security key. Where one can be used, the
+        // window adds which phone: the one already on the silo, never a
+        // new one, which has no passkey to offer yet.
+        let prompt = if !built_in && silentsilo_fido::phone_available() {
+            prompt.with("phone", "1")
+        } else {
+            prompt
+        };
+        // Adding a phone: a key the silo already has answers first, then the
+        // new phone. With a phone already on the silo that first answer is a
+        // QR code too, which is the one people get wrong, so the window is
+        // told what the silo holds: Hello, removable keys (a security key or
+        // a phone, which look the same here), or both.
+        let prompt = match self {
+            Presence::AddKey { phone: true } => prompt.with(
+                "adding_phone",
+                if built_in {
+                    "builtin"
+                } else if mixed {
+                    "any"
+                } else {
+                    "key"
+                },
+            ),
+            _ => prompt,
+        };
         match self {
             Presence::FillLogin { label, site } => prompt.with("label", label).with("site", site),
             Presence::SshSign { key } => prompt.with("key", key),
@@ -2996,10 +3055,10 @@ pub(crate) async fn verify_presence(app: &AppHandle, purpose: Presence) -> Resul
     let wanted = crate::commands::fido::preferred_authenticator(&keys);
     emit_fido_progress(
         app,
-        purpose.prompt(matches!(
-            wanted,
-            Some(silentsilo_fido::Authenticator::ThisDevice)
-        )),
+        purpose.prompt(
+            matches!(wanted, Some(silentsilo_fido::Authenticator::ThisDevice)),
+            wanted.is_none(),
+        ),
     );
     let check = envelope_check(&keys.keys);
     let unlock = run_fido(app, move || {
@@ -3025,7 +3084,7 @@ pub(crate) async fn verify_presence(app: &AppHandle, purpose: Presence) -> Resul
     opening_wrap_key(&unlock, &stored.wrapped_dek, Some(stored))?;
     Err(crate::err::coded!(
         "err.key_cannot_verify",
-        "That key could not verify this silo."
+        "That key answered, but what it gave back does not open this silo. Use another of its keys."
     )
     .to_string())
 }

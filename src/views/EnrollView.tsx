@@ -1,14 +1,19 @@
 import { useState } from "react";
-import { builtInHint, keysUnavailable, osOf, platformStrings } from "../lib/platformStrings";
+import { builtInHint, keysUnavailable, osOf, ownPromptHint, platformStrings } from "../lib/platformStrings";
 import {
   AlertTriangle,
   ArrowLeft,
   Building2,
   Check,
+  ChevronRight,
   Fingerprint,
   KeyRound,
   Minus,
+  Smartphone,
 } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { PhonePrep } from "./PhonePrep";
+import { setupReportUrl } from "../lib/setupReport";
 import type { Authenticator, Bootstrap } from "../lib/types";
 import { AuthShell } from "../layout/AuthShell";
 import { t, tx, useLocale } from "../i18n";
@@ -39,6 +44,10 @@ export function EnrollView({
   /// up as: added later to a silo somebody is already using, the same feature
   /// would be a way to take their vault away from them.
   const [organisation, setOrganisation] = useState(false);
+  /// The phone's explanation and Bluetooth check, shown in place of the
+  /// choice until the person goes on to Windows' QR code or back.
+  const [phoneStep, setPhoneStep] = useState(false);
+  const phone = bootstrap.phone_available === true;
 
   return (
     <AuthShell
@@ -51,63 +60,101 @@ export function EnrollView({
       <section className="card auth-card is-choice">
         <h2>{t("start.enroll_title")}</h2>
         <p className="hint">{t("start.enroll_lead")}</p>
-        {/* The choice itself, as two cards side by side: what each is good
-            for and what it costs, so the decision is made on the screen
-            rather than in the paragraph above it. */}
-        <div className="enroll-choices">
-          <button
-            type="button"
-            className="enroll-choice"
-            disabled={busy || !bootstrap.fido_available}
-            onClick={() => onEnroll("security-key", organisation)}
-          >
-            <span className="enroll-choice-icon" aria-hidden>
-              {busy ? <span className="spinner" /> : <KeyRound size={20} />}
-            </span>
-            <strong>{busy ? t("start.waiting") : t("start.enroll_use_key")}</strong>
-            <span className="enroll-choice-line is-plus">
-              <Check size={13} aria-hidden />
-              {t("start.enroll_key_plus")}
-            </span>
-            <span className="enroll-choice-line">
-              <Minus size={13} aria-hidden />
-              {t("start.enroll_key_minus")}
-            </span>
-          </button>
-          {/* Hidden rather than disabled once the organisation box is
-              ticked: Hello is sealed to this machine, and an organisation
-              key has to open the silo from anywhere. The backend refuses
-              the combination too. */}
-          {bootstrap.platform_authenticator && !organisation && (
+        {/* The choice itself, as cards side by side: what each is good for
+            and what it costs, so the decision is made on the screen rather
+            than in the paragraph above it. */}
+        {phoneStep ? (
+          <PhonePrep
+            busy={busy}
+            onContinue={() => onEnroll("phone", false)}
+            onBack={() => setPhoneStep(false)}
+          />
+        ) : (
+          <div className="enroll-choices">
             <button
               type="button"
               className="enroll-choice"
-              disabled={busy}
-              onClick={() => onEnroll("this-device", false)}
+              disabled={busy || !bootstrap.fido_available}
+              onClick={() => onEnroll("security-key", organisation)}
             >
               <span className="enroll-choice-icon" aria-hidden>
-                <Fingerprint size={20} />
+                {busy ? <span className="spinner" /> : <KeyRound size={20} />}
               </span>
-              <strong>{t("start.enroll_use_built_in", { builtIn: platform.builtIn })}</strong>
+              <strong>{busy ? t("start.waiting") : t("start.enroll_use_key")}</strong>
               <span className="enroll-choice-line is-plus">
                 <Check size={13} aria-hidden />
-                {t("start.enroll_builtin_plus")}
+                {t("start.enroll_key_plus")}
               </span>
               <span className="enroll-choice-line">
                 <Minus size={13} aria-hidden />
-                {t("start.enroll_builtin_minus")}
+                {t("start.enroll_key_minus")}
               </span>
+            <ChevronRight size={16} className="enroll-choice-go" aria-hidden />
+          </button>
+            {/* Hidden rather than disabled once the organisation box is
+                ticked: Hello is sealed to this machine, and an organisation
+                key has to open the silo from anywhere. The backend refuses
+                the combination too. */}
+            {bootstrap.platform_authenticator && !organisation && (
+              <button
+                type="button"
+                className="enroll-choice"
+                disabled={busy}
+                onClick={() => onEnroll("this-device", false)}
+              >
+                <span className="enroll-choice-icon" aria-hidden>
+                  <Fingerprint size={20} />
+                </span>
+                <strong>{t("start.enroll_use_built_in", { builtIn: platform.builtIn })}</strong>
+                <span className="enroll-choice-line is-plus">
+                  <Check size={13} aria-hidden />
+                  {t("start.enroll_builtin_plus")}
+                </span>
+                <span className="enroll-choice-line">
+                  <Minus size={13} aria-hidden />
+                  {t("start.enroll_builtin_minus")}
+                </span>
+              <ChevronRight size={16} className="enroll-choice-go" aria-hidden />
             </button>
-          )}
-        </div>
+            )}
+            {/* As much a way in as the other two, for anyone without a key to
+                buy or a Hello that can hold a silo. Hidden for an organisation
+                key: a phone's passkey lives in its owner's own account. */}
+            {phone && !organisation && (
+              <button
+                type="button"
+                className="enroll-choice"
+                disabled={busy}
+                onClick={() => setPhoneStep(true)}
+              >
+                <span className="enroll-choice-icon" aria-hidden>
+                  <Smartphone size={20} />
+                </span>
+                <strong>{t("start.enroll_use_phone")}</strong>
+                <span className="enroll-choice-line is-plus">
+                  <Check size={13} aria-hidden />
+                  {t("start.enroll_phone_plus")}
+                </span>
+                <span className="enroll-choice-line">
+                  <Minus size={13} aria-hidden />
+                  {t("start.enroll_phone_minus")}
+                </span>
+              <ChevronRight size={16} className="enroll-choice-go" aria-hidden />
+            </button>
+            )}
+          </div>
+        )}
         {bootstrap.fido_available ? (
           <>
-            <p className="hint">
-              {t("start.enroll_os_prompt", { os: platform.osName })}
-              {platform.offersPhone && ` ${t("start.enroll_phone")}`}
-            </p>
+            {/* Said in the phone step already, in its own words. */}
+            {!phoneStep && (
+              <p className="hint">
+                {ownPromptHint(platform)}
+                {platform.offersPhone && !phone && ` ${t("start.enroll_phone_needs_11")}`}
+              </p>
+            )}
             {!bootstrap.platform_authenticator && (
-              <p className="hint">{builtInHint(platform, bootstrap.platform_status)}</p>
+              <p className="hint">{builtInHint(platform, bootstrap.platform_status, phone)}</p>
             )}
           </>
         ) : (
@@ -133,22 +180,26 @@ export function EnrollView({
         {/* The one moment this can be chosen, so it is asked here rather than
             offered as a setting later. Unticked is the ordinary case and the
             default: almost every silo belongs to the person setting it up. */}
-        <label className="confirm-option org-option">
-          <input
-            type="checkbox"
-            checked={organisation}
-            disabled={busy}
-            onChange={(e) => setOrganisation(e.target.checked)}
-          />
-          <span>
-            <Building2 size={14} aria-hidden /> {t("start.enroll_org")}
-            {/* The details show once the box is ticked: almost every silo
-                is personal. */}
-            {organisation && (
-              <span className="hint">{t("start.enroll_org_detail")}</span>
-            )}
-          </span>
-        </label>
+        {/* Not while the phone step is open: a phone is never an
+            organisation's key, so the question does not apply there. */}
+        {!phoneStep && (
+          <label className="confirm-option org-option">
+            <input
+              type="checkbox"
+              checked={organisation}
+              disabled={busy}
+              onChange={(e) => setOrganisation(e.target.checked)}
+            />
+            <span>
+              <Building2 size={14} aria-hidden /> {t("start.enroll_org")}
+              {/* The details show once the box is ticked: almost every silo
+                  is personal. */}
+              {organisation && (
+                <span className="hint">{t("start.enroll_org_detail")}</span>
+              )}
+            </span>
+          </label>
+        )}
         <div className="auth-alternatives">
           <button type="button" className="btn-secondary" disabled={busy} onClick={onBack}>
             <ArrowLeft size={15} />
@@ -163,6 +214,21 @@ export function EnrollView({
               </button>
             ),
           })}
+        </p>
+        {/* Nothing is sent from here: the browser opens a report already
+            filled in with what this computer offers, and the person decides
+            whether to file it. Without telemetry, this is how a setup that
+            fails on hardware nobody here has gets heard about. */}
+        <p className="hint">
+          <button
+            type="button"
+            className="link"
+            disabled={busy}
+            onClick={() => void openUrl(setupReportUrl(bootstrap, __APP_VERSION__))}
+          >
+            {t("start.setup_report")}
+          </button>{" "}
+          {t("start.setup_report_hint")}
         </p>
       </section>
     </AuthShell>

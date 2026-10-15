@@ -86,6 +86,9 @@ export type Bootstrap = {
   platform_authenticator: boolean;
   /** Why it cannot, when it cannot. Absent from a backend before 1.5.1. */
   platform_status?: PlatformStatus;
+  /** Whether a phone can be the key here (Windows 11 22H2 and later).
+   * Absent from a backend before 1.5.1. */
+  phone_available?: boolean;
   /** Whether any enrolled key is a removable one. The unlock screen words
    * its instruction around what is actually enrolled. */
   portable_enrolled: boolean;
@@ -119,7 +122,10 @@ export type SecurityKeyInfo = {
   usable?: boolean;
 };
 
-export type Authenticator = "security-key" | "this-device";
+export type Authenticator = "security-key" | "this-device" | "phone";
+
+/** Whether the phone flow can find a phone over Bluetooth LE. */
+export type BluetoothState = "on" | "off" | "absent" | "unknown";
 
 /** Where a silo's backup lives. The shapes differ because the questions do. */
 export type StoreKind = "s3" | "folder" | "web-dav" | "sftp" | "icloud" | CloudKind;

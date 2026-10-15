@@ -37,7 +37,7 @@ export const settingsGeneral = {
   "settings.language_hint": {
     note: "Hint under the language picker.",
     en: "Languages marked beta have not been read by a native speaker yet. Recovery codes and keys work the same in every language.",
-    ro: "Limbile marcate beta n-au fost încă citite de un vorbitor nativ. Codurile de recuperare și cheile de securitate funcționează la fel în orice limbă.",
+    ro: "Limbile marcate beta n-au fost încă citite de un vorbitor nativ. Codurile de recuperare și cheile funcționează la fel în orice limbă.",
     de: "Als Beta markierte Sprachen hat noch niemand mit dieser Muttersprache gelesen. Wiederherstellungscodes und Sicherheitsschlüssel funktionieren in jeder Sprache gleich.",
     fr: "Les langues marquées bêta n’ont pas encore été relues par une personne dont c’est la langue maternelle. Les codes de récupération et les clés de sécurité fonctionnent de la même façon dans toutes les langues.",
     es: "Los idiomas marcados como beta aún no los ha revisado un hablante nativo. Los códigos de recuperación y las llaves de seguridad funcionan igual en todos los idiomas.",

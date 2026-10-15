@@ -304,7 +304,8 @@ try {
 
     $coreDir = Join-Path ([System.IO.Path]::GetTempPath()) "silentsilo-core-$coreTag"
     if (Test-Path $coreDir) { Remove-Item $coreDir -Recurse -Force }
-    git clone --quiet --branch $coreTag --depth 1 https://github.com/silentsilo/core $coreDir
+    # Long paths: core's fixtures name Touch ID keys by their full id.
+    git clone --quiet -c core.longpaths=true --branch $coreTag --depth 1 https://github.com/silentsilo/core $coreDir
     if (-not $?) { throw "cloning core $coreTag failed" }
 
     # A tag can be moved after the fact; the lockfile's commit cannot. If the

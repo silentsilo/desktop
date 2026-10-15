@@ -357,6 +357,7 @@ pub fn run() {
             commands::vault::vault_lock,
             commands::vault::vault_meta,
             commands::fido::fido_enroll_primary,
+            commands::fido::bluetooth_state,
             commands::fido::fido_add_key,
             commands::fido::fido_list_keys,
             commands::fido::fido_remove_key,

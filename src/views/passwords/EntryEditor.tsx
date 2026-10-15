@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactNode } from "react";
-import { platformStrings, type Os } from "../../lib/platformStrings";
+import type { Os } from "../../lib/platformStrings";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFileDialog } from "../../lib/dialog";
 import {
@@ -103,7 +103,7 @@ function Section({
  * with baroque password rules, and permanently spending five lines on them
  * made every edit look like work.
  */
-export function EntryEditor({ os, initial, creating, categories, now, onSave, onCancel }: Props) {
+export function EntryEditor({ initial, creating, categories, now, onSave, onCancel }: Props) {
   useLocale();
   const [draft, setDraft] = useState<PasswordEntry>({ ...initial });
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -712,11 +712,7 @@ export function EntryEditor({ os, initial, creating, categories, now, onSave, on
                 setDraft({ ...draft, require_reauth: e.target.checked || undefined })
               }
             />
-            <span>
-              {platformStrings(os).hasBuiltIn
-                ? t("pw.reauth_option_builtin", { builtIn: platformStrings(os).builtIn })
-                : t("pw.reauth_option")}
-            </span>
+            <span>{t("pw.reauth_option")}</span>
           </label>
         </div>
       </Section>

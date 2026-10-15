@@ -75,8 +75,15 @@ impl Prompt {
     }
 }
 
-fn step_one_message(authenticator: Authenticator) -> Prompt {
+/// `adding`: the silo already has keys, and one of them has just confirmed.
+fn step_one_message(authenticator: Authenticator, adding: bool) -> Prompt {
     match authenticator {
+        // The second QR code of an addition, after one for a phone already
+        // on the silo: said to be the new phone's, by name.
+        Authenticator::Phone if adding => Prompt::new(
+            "enrol_phone_new",
+            "Now the new phone: Windows shows a new QR code. Scan it with the new phone and confirm on it.",
+        ),
         // Linux never offers this authenticator, so BUILT_IN's generic name
         // does not reach this sentence.
         Authenticator::ThisDevice => Prompt::new(
@@ -86,12 +93,20 @@ fn step_one_message(authenticator: Authenticator) -> Prompt {
         Authenticator::SecurityKey => {
             Prompt::new("enrol_key", "Touch your security key to enrol it.")
         }
+        Authenticator::Phone => Prompt::new(
+            "enrol_phone",
+            "Scan the QR code with your phone's camera and confirm on the phone.",
+        ),
     }
 }
 
 /// Only emitted when the first ceremony did not produce the wrap key.
-fn step_two_message(authenticator: Authenticator) -> Prompt {
+fn step_two_message(authenticator: Authenticator, adding: bool) -> Prompt {
     match authenticator {
+        Authenticator::Phone if adding => Prompt::new(
+            "enrol_phone_new_again",
+            "Once more on the new phone, to secure the silo's encryption key.",
+        ),
         Authenticator::ThisDevice => Prompt::new(
             "enrol_built_in_again",
             "Confirm once more to secure the silo's encryption key.",
@@ -99,6 +114,10 @@ fn step_two_message(authenticator: Authenticator) -> Prompt {
         Authenticator::SecurityKey => Prompt::new(
             "enrol_key_again",
             "Touch the SAME key again to secure the silo's encryption key.",
+        ),
+        Authenticator::Phone => Prompt::new(
+            "enrol_phone_again",
+            "Confirm on the same phone once more to secure the silo's encryption key.",
         ),
     }
 }
@@ -458,7 +477,8 @@ fn default_key_label(authenticator: Authenticator, taken: &[String]) -> String {
         Authenticator::ThisDevice if cfg!(windows) => "Windows Hello".to_string(),
         Authenticator::ThisDevice if cfg!(target_os = "macos") => "Touch ID".to_string(),
         Authenticator::ThisDevice => "This computer".to_string(),
-        _ => "Security key".to_string(),
+        Authenticator::Phone => "Phone".to_string(),
+        Authenticator::SecurityKey => "Security key".to_string(),
     };
     if !taken.iter().any(|l| l == &base) {
         return base;
@@ -467,6 +487,13 @@ fn default_key_label(authenticator: Authenticator, taken: &[String]) -> String {
         .map(|n| format!("{base} {n}"))
         .find(|name| !taken.iter().any(|l| l == name))
         .unwrap_or(base)
+}
+
+/// Whether the phone flow can find a phone: asked before Windows shows the
+/// QR code, so a computer without Bluetooth, or with it off, hears why.
+#[tauri::command]
+pub async fn bluetooth_state() -> Result<silentsilo_shell::bluetooth::BluetoothState, String> {
+    run_blocking(|| Ok(silentsilo_shell::bluetooth::state())).await
 }
 
 /// Enrols the silo's first key.
@@ -495,6 +522,15 @@ pub async fn fido_enroll_primary(
                 "{BUILT_IN} works only on this computer, and an organisation key has to \
                      open the silo from anywhere. Use a removable security key."
             ));
+        }
+        // A phone's passkey syncs to its owner's own account, which is not
+        // the organisation's to hold.
+        if authenticator == Authenticator::Phone {
+            return Err(crate::err::coded!(
+                "err.org_key_not_phone",
+                "An organisation key has to be a security key the organisation holds. A phone's passkey belongs to its owner's account."
+            )
+            .into());
         }
         silentsilo_vault::POLICY_ORG.to_string()
     } else {
@@ -528,7 +564,7 @@ pub async fn fido_enroll_primary(
     let challenge = silentsilo_fido::begin_enrollment(&vault_id, 0, authenticator)
         .map_err(|e| e.to_string())?;
 
-    emit_fido_progress(&app, step_one_message(authenticator));
+    emit_fido_progress(&app, step_one_message(authenticator, false));
     let enrolled = run_fido(&app, move || {
         silentsilo_fido::complete_enrollment(&challenge)
     })
@@ -541,7 +577,7 @@ pub async fn fido_enroll_primary(
         // only be a second prompt and a race to lose.
         Some(unlock) => unlock,
         None => {
-            emit_fido_progress(&app, step_two_message(authenticator));
+            emit_fido_progress(&app, step_two_message(authenticator, false));
             settle_between_ceremonies().await;
             let vault_id2 = vault_id.clone();
             let cred_ids = vec![cred.credential_id.clone()];
@@ -691,6 +727,15 @@ pub async fn fido_add_key(
                      open the silo from anywhere. Use a removable security key."
             ));
         }
+        // A phone's passkey syncs to its owner's own account, which is not
+        // the organisation's to hold.
+        if authenticator == Authenticator::Phone {
+            return Err(crate::err::coded!(
+                "err.org_key_not_phone",
+                "An organisation key has to be a security key the organisation holds. A phone's passkey belongs to its owner's account."
+            )
+            .into());
+        }
         if !keys.is_org_controlled() {
             return Err(
                 "This silo was not set up as organisation-administered, so it cannot \
@@ -724,7 +769,9 @@ pub async fn fido_add_key(
     if org_reader.is_none()
         && crate::commands::vault::confirm_lasting_change(
             &app,
-            crate::commands::vault::Presence::AddKey,
+            crate::commands::vault::Presence::AddKey {
+                phone: authenticator == Authenticator::Phone,
+            },
         )
         .await?
     {
@@ -734,7 +781,7 @@ pub async fn fido_add_key(
     let challenge = silentsilo_fido::begin_enrollment(&vault_id, slot, authenticator)
         .map_err(|e| e.to_string())?;
 
-    emit_fido_progress(&app, step_one_message(authenticator));
+    emit_fido_progress(&app, step_one_message(authenticator, true));
     let enrolled = run_fido(&app, move || {
         silentsilo_fido::complete_enrollment(&challenge)
     })
@@ -759,7 +806,7 @@ pub async fn fido_add_key(
         // enrolment for why that is worth taking.
         Some(unlock) => unlock,
         None => {
-            emit_fido_progress(&app, step_two_message(authenticator));
+            emit_fido_progress(&app, step_two_message(authenticator, true));
             settle_between_ceremonies().await;
             let vault_id2 = vault_id.clone();
             let cred_ids = vec![cred.credential_id.clone()];
@@ -943,7 +990,7 @@ pub async fn fido_remove_key(
     ) {
         return Err(crate::err::coded!(
             "err.keep_portable_key",
-            "This silo has no recovery code, and this is its last key that is not tied to one computer. Make a new recovery code or add another security key before removing it."
+            "This silo has no recovery code, and this is its last key that is not tied to one computer. Make a new recovery code or add another key that is not tied to one computer before removing it."
         )
         .into());
     }

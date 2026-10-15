@@ -3579,21 +3579,22 @@ input[type="range"] {
   color: var(--text-secondary);
 }
 
-/* The first key, as two cards: what each is good for and what it costs. */
+/* The first key, as one row per way in: what each is good for and what it
+   costs, the same shape whether two are offered or three. */
 .enroll-choices {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .enroll-choice {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
-  gap: 6px;
-  min-height: 132px;
-  padding: 16px;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  column-gap: 14px;
+  row-gap: 3px;
+  align-items: center;
+  width: 100%;
+  padding: 14px 16px;
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   background: var(--surface-raised);
@@ -3602,6 +3603,23 @@ input[type="range"] {
   transition:
     background-color var(--dur-1) ease,
     border-color var(--dur-1) ease;
+}
+
+.enroll-choice > strong,
+.enroll-choice > .enroll-choice-line {
+  grid-column: 2;
+}
+
+.enroll-choice-go {
+  grid-column: 3;
+  grid-row: 1 / span 3;
+  color: var(--text-tertiary);
+  transition: transform var(--dur-1) ease, color var(--dur-1) ease;
+}
+
+.enroll-choice:hover:not(:disabled) .enroll-choice-go {
+  color: var(--accent-text);
+  transform: translateX(2px);
 }
 
 .enroll-choice:hover:not(:disabled) {
@@ -3614,12 +3632,14 @@ input[type="range"] {
 }
 
 .enroll-choice-icon {
+  grid-column: 1;
+  grid-row: 1 / span 3;
+  align-self: start;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 40px;
   height: 40px;
-  margin-bottom: 4px;
   border-radius: var(--r-md);
   background: var(--accent-soft);
   color: var(--accent-text);
@@ -3647,6 +3667,122 @@ input[type="range"] {
 
 .enroll-choice-line.is-plus > svg {
   color: var(--success-text);
+}
+
+/* Using a phone as the key: the steps, then what it takes, with this
+   computer's Bluetooth checked on the spot. */
+.phone-prep {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-raised);
+}
+
+.phone-prep-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.phone-prep-head h3 {
+  margin: 0;
+  font-size: var(--fs-14);
+  font-weight: 600;
+}
+
+.phone-prep-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: phone-step;
+}
+
+.phone-prep-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: var(--fs-13);
+  line-height: 1.5;
+  counter-increment: phone-step;
+}
+
+.phone-prep-steps li::before {
+  content: counter(phone-step);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+
+.phone-prep-needs {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+.phone-prep-needs li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  font-size: var(--fs-12);
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.phone-prep-needs li + li {
+  border-top: 1px solid var(--border);
+}
+
+.phone-prep-needs li > svg {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+.phone-prep-needs li > span:first-of-type {
+  flex: 1;
+}
+
+.phone-prep-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.phone-prep-needs li.is-good .phone-prep-status {
+  color: var(--success-text);
+}
+
+.phone-prep-needs li.is-bad .phone-prep-status {
+  color: var(--danger-text);
+}
+
+.phone-prep .actions {
+  margin-top: 2px;
 }
 
 /* The pre-unlock screens on a short window. The enrolment card in

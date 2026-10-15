@@ -534,12 +534,21 @@ pub async fn vault_join_from_storage(
     }
     let cred_ids = keys.credential_ids_bytes().map_err(|e| e.to_string())?;
 
+    // A phone added on another computer is stored as a security key and
+    // answers here too, where Windows can reach one.
     emit_fido_progress(
         &app,
-        crate::commands::fido::Prompt::new(
-            "touch_enrolled",
-            "Touch a security key already enrolled on this silo.",
-        ),
+        if silentsilo_fido::phone_available() {
+            crate::commands::fido::Prompt::new(
+                "touch_enrolled_or_phone",
+                "Use a key already on this silo: touch the security key, or scan the QR code with the phone added to it.",
+            )
+        } else {
+            crate::commands::fido::Prompt::new(
+                "touch_enrolled",
+                "Touch a security key already enrolled on this silo.",
+            )
+        },
     );
     let vault_id_str = vault_id.to_string();
     let check = crate::commands::vault::envelope_check(&keys.keys);

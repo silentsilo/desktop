@@ -246,7 +246,10 @@ export function AppSettingsSection({
           {t("settings.general")}
         </h3>
         <p className="lead">
-          {t("set.gen_tray", { tray: platform.trayArea, fileManager: platform.fileManager })}
+          {/* Linux has no right-click actions to keep reachable. */}
+          {platform.os === "linux"
+            ? t("set.gen_tray_linux", { tray: platform.trayArea })
+            : t("set.gen_tray", { tray: platform.trayArea, fileManager: platform.fileManager })}
         </p>
         <SettingList>
           <SettingGroupTitle>{t("set.group_startup")}</SettingGroupTitle>

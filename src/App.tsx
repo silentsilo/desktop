@@ -1464,7 +1464,9 @@ export default function App() {
       toasts.success(
         authenticator === "this-device"
           ? t("app.enrolled_builtin", { name: platform.builtIn })
-          : t("app.enrolled_key"),
+          : authenticator === "phone"
+            ? t("app.enrolled_phone")
+            : t("app.enrolled_key"),
       );
     } catch (e) {
       toasts.error(e);
@@ -3352,7 +3354,9 @@ export default function App() {
     setFidoProgress(
       authenticator === "this-device"
         ? t("app.key_add_progress_builtin", { os: platform.osName, name: platform.builtIn })
-        : t("app.key_add_progress_key", { os: platform.osName }),
+        : authenticator === "phone"
+          ? t("app.key_add_progress_phone", { os: platform.osName })
+          : t("app.key_add_progress_key", { os: platform.osName }),
     );
     begin("keys");
     try {
@@ -3370,7 +3374,9 @@ export default function App() {
       toasts.success(
         authenticator === "this-device"
           ? t("app.key_added_builtin", { name: platform.builtIn })
-          : t("app.key_added_key"),
+          : authenticator === "phone"
+            ? t("app.key_added_phone")
+            : t("app.key_added_key"),
       );
     } catch (e) {
       toasts.error(e);
@@ -4436,6 +4442,7 @@ export default function App() {
         {view === "passwords" && meta && (
           <PasswordsPanel
             os={osOf(bootstrap)}
+            fidoProgress={view === "passwords" ? fidoProgress : null}
             backedUp={sync.configured}
             archiveTargets={archiveTargets}
             entries={passwordEntries}
@@ -4590,6 +4597,14 @@ export default function App() {
               void addSecurityKey(authenticator, organisation)
             }
             platformAvailable={bootstrap.platform_authenticator}
+            phoneAvailable={bootstrap.phone_available === true}
+            enrolledKinds={
+              bootstrap.platform_enrolled && bootstrap.portable_enrolled
+                ? "both"
+                : bootstrap.platform_enrolled
+                  ? "builtin"
+                  : "portable"
+            }
             silo={bootstrap.silo}
             onRenameSilo={(name) => void renameSilo(name)}
             onForgetSilo={() => void forgetSilo()}

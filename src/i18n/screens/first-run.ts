@@ -193,7 +193,7 @@ export const firstRun = {
   "first.until_then": {
     note: "Hint under the buttons. 'Settings, Backup': the menu path.",
     en: "Until then, if this computer fails, the silo is lost with it. You can set it up any time under Settings, Backup.",
-    ro: "Până atunci, dacă acest calculator se strică, silozul se pierde odată cu el. Îl poți configura oricând din Setări, Backup.",
+    ro: "Până atunci, dacă acest calculator se strică, silozul se pierde odată cu el. Poți configura backupul oricând din Setări, Backup.",
     de: "Bis dahin geht das Silo verloren, wenn dieser Computer ausfällt. Du kannst es jederzeit unter Einstellungen, Sicherung einrichten.",
     fr: "D’ici là, si cet ordinateur tombe en panne, le silo est perdu avec lui. Vous pouvez le configurer à tout moment dans Paramètres, Sauvegarde.",
     es: "Hasta entonces, si este ordenador falla, el silo se pierde con él. Puedes configurarlo en cualquier momento en Ajustes, Copia de seguridad.",

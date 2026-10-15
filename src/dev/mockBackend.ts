@@ -333,6 +333,8 @@ const handlers: Record<string, Handler> = {
   },
   silo_default_location: (args) =>
     `C:\\Users\\alex\\Documents\\SilentSilo\\${String(args.name ?? "Silo")}`,
+  // `?btoff` and `?nobt` model a radio switched off and none at all.
+  bluetooth_state: () => (flag("nobt") ? "absent" : flag("btoff") ? "off" : "on"),
   app_bootstrap: () => {
     const which = scenario();
     // A silo created this session: open, keyless until enrolment finishes.
@@ -347,6 +349,7 @@ const handlers: Record<string, Handler> = {
         // Linux has none the app uses, as `ctap.rs` answers.
         platform_authenticator: platformStatus() === "ready",
         platform_status: platformStatus(),
+        phone_available: os() === "windows" && !flag("nophone"),
         portable_enrolled: !flag("helloonly"),
         platform_enrolled: flag("helloonly"),
         os: os(),
@@ -382,6 +385,8 @@ const handlers: Record<string, Handler> = {
       // Linux has none the app uses, as `ctap.rs` answers.
       platform_authenticator: platformStatus() === "ready",
       platform_status: platformStatus(),
+      // `?nophone` models Windows 10, where Windows offers no phone.
+      phone_available: os() === "windows" && !flag("nophone"),
       // `?helloonly` models a silo whose only way in is Windows Hello, which
       // is what changes the unlock screen's instruction: telling that user to
       // insert a key sends them looking for hardware they do not own.

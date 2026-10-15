@@ -17,6 +17,11 @@ tokio = { version = "1", features = ["io-util", "macros", "net", "rt", "sync", "
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
 windows = { version = "0.61", features = [
+    # Whether this computer can reach a phone over Bluetooth LE, asked
+    # before Windows shows the QR code for one.
+    "Devices_Bluetooth",
+    "Devices_Radios",
+    "Foundation",
     "Win32_Foundation",
     "Win32_Storage_FileSystem",
     "Win32_System_DataExchange",

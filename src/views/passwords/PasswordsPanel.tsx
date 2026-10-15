@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { platformStrings, type Os } from "../../lib/platformStrings";
+import type { Os } from "../../lib/platformStrings";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFileDialog, save as saveFileDialog } from "../../lib/dialog";
 import {
@@ -77,8 +77,9 @@ type Props = {
   entries: PasswordEntry[];
   /** The stored category list, or null when this silo never saved one. */
   storedCategories: PasswordCategory[] | null;
-  /** Names the built-in authenticator in the verify notice. */
   os: Os;
+  /** The key prompt the backend sent, worded for this silo's keys. */
+  fidoProgress?: string | null;
   busy: boolean;
   /** Whether this silo has backup storage, so texts about syncing and
    * storage apply at all. */
@@ -168,6 +169,7 @@ export function PasswordsPanel({
   entries,
   storedCategories,
   os,
+  fidoProgress = null,
   busy,
   backedUp,
   archiveTargets,
@@ -180,7 +182,6 @@ export function PasswordsPanel({
   onConfirmRun,
 }: Props) {
   useLocale();
-  const platform = platformStrings(os);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<CredentialType | null>(null);
@@ -1199,9 +1200,7 @@ export function PasswordsPanel({
       {verifying && (
         <div className="pw-transfer-notice" role="status">
           <span>
-            {platform.hasBuiltIn
-              ? t("pw.touch_key_or_builtin", { builtIn: platform.builtIn })
-              : t("pw.touch_key")}
+            {fidoProgress ?? t("pw.touch_key")}
           </span>
         </div>
       )}

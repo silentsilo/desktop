@@ -270,7 +270,7 @@ function BreachResults({ report }: { report: PwnedReport }) {
   if (report.exposures.length === 0) {
     return (
       <p className="hint">
-        {t("dlg.health_breach_none", { count: report.checked })}
+        {t("dlg.health_breach_none", { count: report.checked - report.unavailable })}
         {report.unavailable > 0 &&
           ` ${t("dlg.health_breach_partial", { count: report.unavailable })}`}
       </p>

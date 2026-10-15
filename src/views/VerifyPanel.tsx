@@ -86,6 +86,9 @@ export function VerifyPanel({ part, busy, siloId }: Props) {
   /// nothing failed, and saying so in red would claim otherwise.
   const [stopped, setStopped] = useLasting<boolean>("verify.stopped", false, never);
   const [running, setRunning] = useLasting<"quick" | "deep" | null>("verify.running", null, Boolean);
+  /// Which check produced the results: only reading every file back
+  /// repairs anything, so a quick check's broken copy says how to.
+  const [ranDepth, setRanDepth] = useLasting<"quick" | "deep" | null>("verify.depth", null, never);
   const [cancelling, setCancelling] = useLasting<boolean>("verify.cancelling", false, Boolean);
   const [progress, setProgress] = useLasting<[string, number, number] | null>(
     "verify.progress",
@@ -151,6 +154,7 @@ export function VerifyPanel({ part, busy, siloId }: Props) {
     setResults(null);
     setCancelling(false);
     setRunning(deep ? "deep" : "quick");
+    setRanDepth(deep ? "deep" : "quick");
     try {
       setResults(await invoke<Result[]>("vault_verify", { deep }));
       markDone(siloId, "verified");
@@ -324,7 +328,11 @@ export function VerifyPanel({ part, busy, siloId }: Props) {
                     <span className="hint">{t("backup.verify_never_delete")}</span>
                   )}
                   {state === "broken" && !r.never_delete && (
-                    <span className="hint">{t("backup.verify_unrepaired")}</span>
+                    <span className="hint">
+                      {ranDepth === "deep"
+                        ? t("backup.verify_unrepaired")
+                        : t("backup.verify_try_deep")}
+                    </span>
                   )}
                   {r.unreferenced > 0 && (
                     <span className="hint">
@@ -456,7 +464,13 @@ export function VerifyPanel({ part, busy, siloId }: Props) {
               {t("backup.restore_more_differences", { count: restore.differences.length - 8 })}
             </p>
           )}
-          <p className="hint">{t("backup.restore_usual_cause")}</p>
+          {/* Differences usually mean changes not synced yet. A file that
+              did not open is damage in storage, which a sync does not fix. */}
+          <p className="hint">
+            {restore.differences.length > 0
+              ? t("backup.restore_usual_cause")
+              : t("backup.restore_content_cause")}
+          </p>
         </>
       )}
     </div>

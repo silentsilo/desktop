@@ -136,7 +136,7 @@ export const sidebar = {
   "nav.switch_silo": {
     note: "Tooltip on the silo name at the top of the sidebar. A silo is the user's encrypted vault.",
     en: "{name}. Click to switch silo.",
-    ro: "{name}. Click pentru alt siloz.",
+    ro: "{name}. Clic pentru alt siloz.",
     de: "{name}. Klicken, um das Silo zu wechseln.",
     fr: "{name}. Cliquez pour changer de silo.",
     es: "{name}. Haz clic para cambiar de silo.",
@@ -279,7 +279,7 @@ export const sidebar = {
   "nav.task_breaches": {
     note: "Sidebar, under the storage figure: one piece of work going on in the background. Short, an ongoing action, no ending punctuation. Clicking it opens the page where it can be followed or stopped. Passwords being checked against lists of leaked passwords.",
     en: "Checking passwords for leaks",
-    ro: "Se verifică parolele scurse",
+    ro: "Se verifică dacă parolele au fost expuse",
     de: "Passwörter werden auf Datenlecks geprüft",
     fr: "Recherche de mots de passe divulgués",
     es: "Buscando contraseñas filtradas",
