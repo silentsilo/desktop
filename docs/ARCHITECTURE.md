@@ -1089,7 +1089,11 @@ version stored in clear is dropped.
 
 ## Updates
 
-The window asks the updater with `allowDowngrades: false`, and offers an
+The Windows installer refuses to go over a newer version
+(`bundle.windows.allowDowngrades: false`, from 1.5.1): a build older than
+the silo's data could misread what a newer one wrote, so going back means
+uninstalling first, which keeps the silos. The window asks the updater with
+`allowDowngrades: false`, and offers an
 update only when every file the answer names sits under
 `https://github.com/silentsilo/desktop/releases/download/v<version>/`, the
 version it claims (`fromOurReleases`, `err.update_not_ours`). The minisign

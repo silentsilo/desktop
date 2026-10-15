@@ -26,24 +26,69 @@ pub fn space_at(path: &Path) -> Option<DiskSpace> {
     platform::space_at(path)
 }
 
+/// The largest file FAT takes: 4 GiB less one byte.
+pub const FAT_FILE_LIMIT: u64 = 0xFFFF_FFFF;
+
+/// The largest file the volume holding `path` takes, when it has a limit
+/// that matters. Windows reports a write past FAT32's limit as a full disk,
+/// so the check comes before the write. Elsewhere the error says it itself
+/// (EFBIG), and `None` here.
+pub fn file_size_limit(path: &Path) -> Option<u64> {
+    platform::file_system_at(path).and_then(|name| limit_for(&name))
+}
+
+/// FAT, FAT16 and FAT32 by the name Windows gives; exFAT has no such limit.
+fn limit_for(file_system: &str) -> Option<u64> {
+    file_system
+        .to_ascii_uppercase()
+        .starts_with("FAT")
+        .then_some(FAT_FILE_LIMIT)
+}
+
 #[cfg(windows)]
 mod platform {
     use super::DiskSpace;
     use std::os::windows::ffi::OsStrExt;
     use std::path::Path;
-    use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+    use windows::Win32::Storage::FileSystem::{
+        GetDiskFreeSpaceExW, GetVolumeInformationW, GetVolumePathNameW,
+    };
     use windows::core::PCWSTR;
+
+    fn wide(path: &Path) -> Vec<u16> {
+        path.as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect()
+    }
+
+    /// The file system's name ("NTFS", "FAT32", "exFAT") of the volume
+    /// holding `path`, mount points included.
+    pub fn file_system_at(path: &Path) -> Option<String> {
+        let existing = wide(&existing_ancestor(path)?);
+        let mut root = [0u16; 261];
+        let mut name = [0u16; 261];
+        unsafe {
+            GetVolumePathNameW(PCWSTR(existing.as_ptr()), &mut root).ok()?;
+            GetVolumeInformationW(
+                PCWSTR(root.as_ptr()),
+                None,
+                None,
+                None,
+                None,
+                Some(&mut name),
+            )
+            .ok()?;
+        }
+        let len = name.iter().position(|&c| c == 0).unwrap_or(name.len());
+        Some(String::from_utf16_lossy(&name[..len]))
+    }
 
     pub fn space_at(path: &Path) -> Option<DiskSpace> {
         // A path that does not exist yet has no volume to ask about. Walking
         // up to the nearest parent that does is what makes this usable while
         // a silo is being created, before its folder is there.
-        let existing = existing_ancestor(path)?;
-        let wide: Vec<u16> = existing
-            .as_os_str()
-            .encode_wide()
-            .chain(std::iter::once(0))
-            .collect();
+        let wide = wide(&existing_ancestor(path)?);
 
         let mut available = 0u64;
         let mut total = 0u64;
@@ -81,6 +126,11 @@ mod platform {
     /// generic bound rather than a cast that is redundant on one of them.
     fn wide(n: impl Into<u64>) -> u64 {
         n.into()
+    }
+
+    /// Not asked: the write past the limit fails with EFBIG, which says so.
+    pub fn file_system_at(_path: &Path) -> Option<String> {
+        None
     }
 
     /// `statvfs` on the filesystem holding `path`. `f_bavail` is what an
@@ -193,6 +243,31 @@ mod tests {
             verdict(space(u64::MAX / 2), u64::MAX),
             SpaceVerdict::Insufficient
         );
+    }
+
+    #[test]
+    fn only_fat_volumes_limit_a_file() {
+        for fat in ["FAT", "FAT16", "FAT32", "fat32"] {
+            assert_eq!(limit_for(fat), Some(FAT_FILE_LIMIT), "{fat}");
+        }
+        for other in ["NTFS", "exFAT", "ReFS", "UDF", ""] {
+            assert_eq!(limit_for(other), None, "{other}");
+        }
+        assert_eq!(FAT_FILE_LIMIT, 4 * 1024 * 1024 * 1024 - 1);
+    }
+
+    #[test]
+    fn the_temporary_folder_takes_large_files() {
+        // CI and dev machines keep it on NTFS, APFS or ext4.
+        assert_eq!(file_size_limit(&std::env::temp_dir()), None);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_names_the_file_system_of_a_path_that_does_not_exist_yet() {
+        let path = std::env::temp_dir().join("not-there-yet").join("file.bin");
+        let name = platform::file_system_at(&path).expect("no file system name");
+        assert!(!name.is_empty());
     }
 
     #[test]

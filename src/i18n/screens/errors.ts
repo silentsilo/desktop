@@ -842,6 +842,17 @@ export const errors = {
     "pt-BR": "Esse arquivo é grande demais para ser uma exportação de senhas.",
     pl: "Ten plik jest za duży, by był eksportem haseł.",
   },
+  "err.file_too_large_for_drive": {
+    note: "Error from the app's backend when saving a file or folder out of the silo onto a drive whose file system limits a file to 4 GB (FAT32), checked before writing. FAT32, exFAT, NTFS and APFS are names, kept as is.",
+    en: "This file is too large for the drive it goes to. Drives formatted FAT32, as many USB sticks are, take files up to 4 GB; use one formatted exFAT, NTFS or APFS.",
+    ro: "Fișierul e prea mare pentru unitatea pe care merge. Unitățile formatate FAT32, cum sunt multe stick-uri USB, primesc fișiere de cel mult 4 GB; folosește una formatată exFAT, NTFS sau APFS.",
+    de: "Diese Datei ist zu groß für das Laufwerk, auf das sie soll. Laufwerke mit FAT32, wie viele USB-Sticks, nehmen Dateien bis 4 GB; verwende eines mit exFAT, NTFS oder APFS.",
+    fr: "Ce fichier est trop volumineux pour le lecteur de destination. Les lecteurs formatés en FAT32, comme beaucoup de clés USB, acceptent des fichiers de 4 Go au plus ; utilisez-en un formaté en exFAT, NTFS ou APFS.",
+    es: "Este archivo es demasiado grande para la unidad de destino. Las unidades con formato FAT32, como muchas memorias USB, admiten archivos de hasta 4 GB; usa una con formato exFAT, NTFS o APFS.",
+    it: "Questo file è troppo grande per l’unità di destinazione. Le unità formattate FAT32, come molte chiavette USB, accettano file fino a 4 GB; usane una formattata exFAT, NTFS o APFS.",
+    "pt-BR": "Este arquivo é grande demais para a unidade de destino. Unidades formatadas em FAT32, como muitos pendrives, aceitam arquivos de até 4 GB; use uma formatada em exFAT, NTFS ou APFS.",
+    pl: "Ten plik jest za duży dla docelowego dysku. Dyski sformatowane jako FAT32, jak wiele pendrive’ów, przyjmują pliki do 4 GB; użyj dysku sformatowanego jako exFAT, NTFS lub APFS.",
+  },
   "err.not_a_folder_here": {
     note: "Error message from the app's backend, shown in a toast or under a form. ",
     en: "That is not a folder on this computer.",

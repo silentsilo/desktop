@@ -23,6 +23,11 @@ silo from opening needs a major version rather than a note.
   release script now refuses any shipped program that needs it.
   The extractor in this release runs on any Windows 10 or 11 and reads
   silos made by every earlier version.
+- Windows: the installer refuses to install over a newer version. To go
+  back, uninstall first; silos stay where they are.
+- Saving a file or folder out of a silo onto a FAT32 drive (many USB
+  sticks) refuses a file over 4 GB before writing, instead of failing
+  after 4 GB with "disk full".
 - A silo that opens only with Windows Hello or Touch ID can no longer be
   left without a recovery code: turning the code off, or removing the last
   security key while there is no code, is refused. A silo already in that

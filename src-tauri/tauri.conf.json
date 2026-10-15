@@ -45,6 +45,7 @@
     "externalBin": [],
     "licenseFile": "LICENSE-INSTALLER.txt",
     "windows": {
+      "allowDowngrades": false,
       "nsis": {
         "installerHooks": "nsis-hooks.nsh"
       }

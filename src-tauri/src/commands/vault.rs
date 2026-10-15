@@ -1880,6 +1880,7 @@ pub async fn vault_export_file(
             file.content_hash.unwrap_or_default(),
         )
     };
+    fits_on_drive(&dest, size)?;
     // On the same card as opening a file, Cancel included.
     let sizes = std::collections::HashMap::from([(blob_id, size)]);
     let watched = Watched {
@@ -1910,6 +1911,20 @@ pub async fn vault_export_file(
     .await;
     watch.stop();
     written
+}
+
+/// Refuses before anything is downloaded or decrypted when the largest file
+/// cannot go on the drive under `dest`. Windows reports a write past FAT32's
+/// 4 GB as a full disk, after the 4 GB were written.
+fn fits_on_drive(dest: &std::path::Path, largest: u64) -> Result<(), String> {
+    match silentsilo_shell::disk_space::file_size_limit(dest) {
+        Some(limit) if largest > limit => Err(crate::err::coded!(
+            "err.file_too_large_for_drive",
+            "This file is too large for the drive it goes to. Drives formatted FAT32, as many USB sticks are, take files up to 4 GB; use one formatted exFAT, NTFS or APFS."
+        )
+        .into()),
+        _ => Ok(()),
+    }
 }
 
 /// The key a file's content is encrypted under, unwrapped for use.
@@ -2045,6 +2060,10 @@ pub async fn vault_export_folder(
             ExportItem::Dir(_) => None,
         })
         .collect();
+    fits_on_drive(
+        std::path::Path::new(&dest_dir),
+        sizes.values().copied().max().unwrap_or(0),
+    )?;
     let blob_ids: Vec<Uuid> = sizes.keys().copied().collect();
     let file_count = plan
         .iter()
@@ -3827,8 +3846,14 @@ pub fn set_full_copy(app: AppHandle, enabled: bool) -> Result<(), String> {
 
 #[cfg(test)]
 mod export_path_tests {
-    use super::{safe_join, unwrap_export_key};
+    use super::{fits_on_drive, safe_join, unwrap_export_key};
     use std::path::Path;
+
+    #[test]
+    fn a_drive_without_a_file_limit_takes_any_size() {
+        // The temporary folder sits on NTFS, APFS or ext4 wherever tests run.
+        assert!(fits_on_drive(&std::env::temp_dir(), u64::MAX).is_ok());
+    }
 
     /// Names come out of the vault index, which this guard treats as data
     /// rather than as something the app controls: a row written by another
