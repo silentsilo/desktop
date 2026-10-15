@@ -50,7 +50,17 @@
   ${EndIf}
 !macroend
 
+; The app imports webauthn.dll by name, which Windows has from 10 version
+; 1903 (build 18362). On 1809, LTSC 2019 or Server 2019 it would install and
+; then fail to start with a loader error before any window, so it says so
+; here instead.
 !macro NSIS_HOOK_PREINSTALL
+  ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion" "CurrentBuildNumber"
+  ${If} $0 != ""
+  ${AndIf} $0 < 18362
+    MessageBox MB_OK|MB_ICONSTOP "SilentSilo needs Windows 10 version 1903 or later, or Windows 11. This computer has Windows build $0." /SD IDOK
+    Abort
+  ${EndIf}
   nsExec::Exec '"$SYSDIR\taskkill.exe" /F /IM silentsilo-browser-host.exe'
   Pop $0
 !macroend

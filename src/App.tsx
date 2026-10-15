@@ -633,6 +633,16 @@ export default function App() {
     [toasts],
   );
 
+  // Opened with the secret a security key gave before it had a PIN, which
+  // Windows can no longer reach: worth fixing while the key is at hand.
+  useEventSubscription(
+    () =>
+      listen("key-added-without-pin", () => {
+        toasts.errorText(t("app.key_added_without_pin"));
+      }),
+    [toasts],
+  );
+
   // Suppress the native WebView right-click menu everywhere by default —
   // only the file explorer wires up a real context menu (folder/file
   // actions); other screens have no use for a right-click menu at all.

@@ -236,7 +236,7 @@ pub use imp::{clear_if_still, set_secret};
 
 #[cfg(target_os = "macos")]
 mod mac {
-    use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
+    use objc2_app_kit::{NSPasteboard, NSPasteboardContentsOptions, NSPasteboardTypeString};
     use objc2_foundation::NSString;
 
     /// The type clipboard managers agree to skip. Documented at
@@ -249,7 +249,9 @@ mod mac {
     /// clipboard manager does not keep it.
     pub fn set_secret(text: &str) -> Result<(), String> {
         let pasteboard = NSPasteboard::generalPasteboard();
-        pasteboard.clearContents();
+        // This Mac only. Universal Clipboard would hand the secret to the
+        // user's iPhone and other Macs, where the clear below never reaches.
+        pasteboard.prepareForNewContentsWithOptions(NSPasteboardContentsOptions::CurrentHostOnly);
         // SAFETY: a static AppKit exports for the life of the process.
         let string_type = unsafe { NSPasteboardTypeString };
         if !pasteboard.setString_forType(&NSString::from_str(text), string_type) {

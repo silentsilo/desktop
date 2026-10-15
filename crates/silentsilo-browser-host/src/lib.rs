@@ -322,14 +322,25 @@ pub fn user_manifest_places(home: &Path) -> Vec<(&'static str, PathBuf)> {
 /// `Firefox` are what say it is installed.
 pub fn macos_manifest_places(home: &Path) -> Vec<(&'static str, PathBuf)> {
     let support = home.join("Library").join("Application Support");
+    // Every Chromium browser that installs from the Chrome Web Store reads
+    // its own folder, the channels and Arc and Vivaldi included.
+    let google = support.join("Google");
+    let brave = support.join("BraveSoftware");
     let chromium = [
-        ("chrome", support.join("Google").join("Chrome")),
+        ("chrome", google.join("Chrome")),
+        ("chrome", google.join("Chrome Beta")),
+        ("chrome", google.join("Chrome Dev")),
+        ("chrome", google.join("Chrome Canary")),
         ("chrome", support.join("Chromium")),
         ("edge", support.join("Microsoft Edge")),
-        (
-            "chrome",
-            support.join("BraveSoftware").join("Brave-Browser"),
-        ),
+        ("edge", support.join("Microsoft Edge Beta")),
+        ("edge", support.join("Microsoft Edge Dev")),
+        ("edge", support.join("Microsoft Edge Canary")),
+        ("chrome", brave.join("Brave-Browser")),
+        ("chrome", brave.join("Brave-Browser-Beta")),
+        ("chrome", brave.join("Brave-Browser-Nightly")),
+        ("chrome", support.join("Vivaldi")),
+        ("chrome", support.join("Arc").join("User Data")),
     ];
     let mut places: Vec<(&'static str, PathBuf)> = chromium
         .into_iter()
@@ -348,11 +359,19 @@ pub fn macos_manifest_places(home: &Path) -> Vec<(&'static str, PathBuf)> {
 /// [`user_manifest_places`] on Linux.
 pub fn linux_manifest_places(home: &Path) -> Vec<(&'static str, PathBuf)> {
     let config = home.join(".config");
+    let brave = config.join("BraveSoftware");
     let chromium = [
         ("chrome", config.join("google-chrome")),
+        ("chrome", config.join("google-chrome-beta")),
+        ("chrome", config.join("google-chrome-unstable")),
         ("chrome", config.join("chromium")),
         ("edge", config.join("microsoft-edge")),
-        ("chrome", config.join("BraveSoftware").join("Brave-Browser")),
+        ("edge", config.join("microsoft-edge-beta")),
+        ("edge", config.join("microsoft-edge-dev")),
+        ("chrome", brave.join("Brave-Browser")),
+        ("chrome", brave.join("Brave-Browser-Beta")),
+        ("chrome", brave.join("Brave-Browser-Nightly")),
+        ("chrome", config.join("vivaldi")),
     ];
     let mut places: Vec<(&'static str, PathBuf)> = chromium
         .into_iter()
@@ -376,6 +395,11 @@ pub fn linux_manifest_places(home: &Path) -> Vec<(&'static str, PathBuf)> {
     }
     if xdg.is_dir() {
         places.push(("firefox", xdg.join("native-messaging-hosts")));
+    }
+    // LibreWolf keeps its own folder rather than Firefox's.
+    let librewolf = home.join(".librewolf");
+    if librewolf.is_dir() {
+        places.push(("firefox", librewolf.join("native-messaging-hosts")));
     }
     places
 }
@@ -418,14 +442,16 @@ const FIREFOX_DIRS: [&str; 3] = [
 /// `<root>\BraveSoftware\Brave-Browser\Application\brave.exe` (or its
 /// `-Beta`, `-Dev`, `-Nightly` channel), and
 /// `<root>\Mozilla Firefox\firefox.exe` (or Firefox Developer Edition or
-/// Firefox Nightly).
+/// Firefox Nightly), and Firefox from the Microsoft Store
+/// ([`firefox_from_the_store`]).
 pub fn browser_at(image: &Path, roots: &[PathBuf]) -> Option<Browser> {
     let name = |p: &Path| p.file_name().map(|n| n.to_string_lossy().to_lowercase());
     let file = name(image)?;
     if file == "firefox.exe" {
         let install = image.parent()?;
         let known = FIREFOX_DIRS.contains(&name(install)?.as_str());
-        return (known && under_one_of(install.parent()?, roots)).then_some(Browser::Firefox);
+        let installed = known && under_one_of(install.parent()?, roots);
+        return (installed || firefox_from_the_store(image, roots)).then_some(Browser::Firefox);
     }
     let application = image.parent()?;
     let channel = application.parent()?;
@@ -459,6 +485,33 @@ pub fn browser_at(image: &Path, roots: &[PathBuf]) -> Option<Browser> {
     };
     let known_channel = channels.contains(&name(channel)?.as_str());
     (name(vendor)?.as_str() == vendor_name && known_channel).then_some(browser)
+}
+
+/// Firefox as the Microsoft Store installs it:
+/// `<root>\WindowsApps\Mozilla.Firefox_<version>_<arch>__n80bbvh6b1yt2\VFS\ProgramFiles\Firefox Package Root\firefox.exe`.
+/// `WindowsApps` is writable only by the Store, and the suffix is Mozilla's
+/// publisher id, so the folder says whose package it is; the signature is
+/// checked as for any other install.
+fn firefox_from_the_store(image: &Path, roots: &[PathBuf]) -> bool {
+    let name = |p: &Path| p.file_name().map(|n| n.to_string_lossy().to_lowercase());
+    let steps = || -> Option<bool> {
+        let package_root = image.parent()?;
+        let program_files = package_root.parent()?;
+        let vfs = program_files.parent()?;
+        let package = vfs.parent()?;
+        let windows_apps = package.parent()?;
+        let package_name = name(package)?;
+        Some(
+            name(package_root)? == "firefox package root"
+                && name(program_files)? == "programfiles"
+                && name(vfs)? == "vfs"
+                && package_name.starts_with("mozilla.firefox_")
+                && package_name.ends_with("__n80bbvh6b1yt2")
+                && name(windows_apps)? == "windowsapps"
+                && under_one_of(windows_apps.parent()?, roots),
+        )
+    };
+    steps().unwrap_or(false)
 }
 
 /// `cmd.exe` in a system directory: Chromium browsers start a native host
@@ -504,16 +557,37 @@ pub fn error_answer(id: &str, code: &str, message: &str) -> Vec<u8> {
         .into_bytes()
 }
 
-pub const NOT_RUNNING: &str = "SilentSilo is not running, or its browser extension setting is off.";
-pub const NOT_OURS: &str = "The channel to SilentSilo is held by another program. Nothing was sent to it. Restart SilentSilo.";
+/// Why the host answers on its own, with no app behind it: the code the
+/// extension tells apart, and a message for its log.
+#[derive(Debug, Clone, Copy)]
+pub struct Alone {
+    pub code: &'static str,
+    pub message: &'static str,
+}
+
+pub const NOT_RUNNING: Alone = Alone {
+    code: "app-not-running",
+    message: "SilentSilo is not running, or its browser extension setting is off.",
+};
+pub const NOT_OURS: Alone = Alone {
+    code: "channel-not-app",
+    message: "The channel to SilentSilo is held by another program. Nothing was sent to it. Restart SilentSilo.",
+};
+/// Started by a program the host does not take for a browser it knows. It
+/// says so rather than exiting, so the extension can tell the person which
+/// browsers work instead of asking them to start an app that is running.
+pub const BROWSER_REFUSED: Alone = Alone {
+    code: "browser-not-supported",
+    message: "SilentSilo does not take requests from this browser. Nothing was sent to it.",
+};
 pub const TOO_LARGE: &str = "The request was too large.";
 pub const MALFORMED: &str = "SilentSilo could not read the request.";
 
-/// What the host answers a request when it has no app to relay to:
-/// `app-not-running`, with `message` saying why.
-pub fn not_running_answer(request: &[u8], message: &str) -> Vec<u8> {
+/// What the host answers a request when it has no app to relay to: `why`'s
+/// code and message.
+pub fn alone_answer(request: &[u8], why: Alone) -> Vec<u8> {
     match request_id(request) {
-        Some(id) => error_answer(&id, "app-not-running", message),
+        Some(id) => error_answer(&id, why.code, why.message),
         None => error_answer("", "bad-request", MALFORMED),
     }
 }
@@ -1026,6 +1100,10 @@ mod tests {
                 r"c:\program files\firefox nightly\FIREFOX.EXE",
                 Browser::Firefox,
             ),
+            (
+                r"C:\Program Files\WindowsApps\Mozilla.Firefox_144.0.0.0_x64__n80bbvh6b1yt2\VFS\ProgramFiles\Firefox Package Root\firefox.exe",
+                Browser::Firefox,
+            ),
         ] {
             assert_eq!(
                 browser_at(Path::new(path), &roots()),
@@ -1058,6 +1136,10 @@ mod tests {
             r"C:\Program Files\x\Mozilla Firefox\firefox.exe",
             r"C:\Program Files\Mozilla Firefox\chrome.exe",
             r"firefox.exe",
+            // Another publisher's package, or the Store's layout elsewhere.
+            r"C:\Program Files\WindowsApps\Evil.Firefox_1.0.0.0_x64__n80bbvh6b1yt2\VFS\ProgramFiles\Firefox Package Root\firefox.exe",
+            r"C:\Program Files\WindowsApps\Mozilla.Firefox_1.0.0.0_x64__abcdefghijklm\VFS\ProgramFiles\Firefox Package Root\firefox.exe",
+            r"C:\Users\a\Downloads\WindowsApps\Mozilla.Firefox_1.0.0.0_x64__n80bbvh6b1yt2\VFS\ProgramFiles\Firefox Package Root\firefox.exe",
         ] {
             assert_eq!(browser_at(Path::new(path), &roots()), None, "{path}");
         }
@@ -1141,19 +1223,19 @@ mod tests {
 
     #[test]
     fn with_no_app_each_request_gets_its_own_refusal() {
-        let answer = not_running_answer(br#"{"id":"7","type":"status"}"#, NOT_RUNNING);
+        let answer = alone_answer(br#"{"id":"7","type":"status"}"#, NOT_RUNNING);
         let v: serde_json::Value = serde_json::from_slice(&answer).unwrap();
         assert_eq!(v["id"], "7");
         assert_eq!(v["type"], "error");
         assert_eq!(v["code"], "app-not-running");
-        assert_eq!(v["message"], NOT_RUNNING);
+        assert_eq!(v["message"], NOT_RUNNING.message);
     }
 
     #[test]
     fn a_request_without_an_id_is_malformed() {
         for request in [&b"not json"[..], br#"{"type":"status"}"#, br#"{"id":7}"#] {
             let v: serde_json::Value =
-                serde_json::from_slice(&not_running_answer(request, NOT_RUNNING)).unwrap();
+                serde_json::from_slice(&alone_answer(request, NOT_RUNNING)).unwrap();
             assert_eq!(v["code"], "bad-request");
             assert_eq!(v["id"], "");
         }
@@ -1196,6 +1278,68 @@ mod tests {
                         .join("NativeMessagingHosts")
                 ),
                 ("firefox", s.join("Mozilla").join("NativeMessagingHosts")),
+            ]
+        );
+        let _ = std::fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn macos_finds_arc_vivaldi_and_the_channels() {
+        let support = "Library/Application Support";
+        let home = home_with(
+            "mac-more",
+            &[
+                &format!("{support}/Arc/User Data"),
+                &format!("{support}/Vivaldi"),
+                &format!("{support}/Google/Chrome Canary"),
+                &format!("{support}/Microsoft Edge Beta"),
+            ],
+        );
+        let s = home.join("Library").join("Application Support");
+        let places = macos_manifest_places(&home);
+        for (key, dir) in [
+            ("chrome", s.join("Arc").join("User Data")),
+            ("chrome", s.join("Vivaldi")),
+            ("chrome", s.join("Google").join("Chrome Canary")),
+            ("edge", s.join("Microsoft Edge Beta")),
+        ] {
+            assert!(
+                places.contains(&(key, dir.join("NativeMessagingHosts"))),
+                "{dir:?}"
+            );
+        }
+        assert_eq!(places.len(), 4);
+        let _ = std::fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn linux_finds_vivaldi_the_channels_and_librewolf() {
+        let home = home_with(
+            "linux-more",
+            &[
+                ".config/vivaldi",
+                ".config/google-chrome-beta",
+                ".librewolf",
+            ],
+        );
+        let config = home.join(".config");
+        assert_eq!(
+            linux_manifest_places(&home),
+            vec![
+                (
+                    "chrome",
+                    config
+                        .join("google-chrome-beta")
+                        .join("NativeMessagingHosts")
+                ),
+                (
+                    "chrome",
+                    config.join("vivaldi").join("NativeMessagingHosts")
+                ),
+                (
+                    "firefox",
+                    home.join(".librewolf").join("native-messaging-hosts")
+                ),
             ]
         );
         let _ = std::fs::remove_dir_all(home);

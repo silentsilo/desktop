@@ -2843,7 +2843,6 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tower-service",
- "webpki-roots",
 ]
 
 [[package]]
@@ -2864,9 +2863,11 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "socket2",
+ "system-configuration",
  "tokio",
  "tower-service",
  "tracing",
+ "windows-registry",
 ]
 
 [[package]]
@@ -3759,7 +3760,7 @@ version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "680998035259dcfcafe653688bf2aa6d3e2dc05e98be6ab46afb089dc84f1df8"
 dependencies = [
- "proc-macro-crate 3.5.0",
+ "proc-macro-crate 1.3.1",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -4861,46 +4862,6 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "reqwest"
-version = "0.12.28"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
-dependencies = [
- "base64 0.22.1",
- "bytes",
- "futures-channel",
- "futures-core",
- "futures-util",
- "http 1.4.2",
- "http-body 1.1.0",
- "http-body-util",
- "hyper",
- "hyper-rustls",
- "hyper-util",
- "js-sys",
- "log",
- "percent-encoding",
- "pin-project-lite",
- "quinn",
- "rustls",
- "rustls-pki-types",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "sync_wrapper",
- "tokio",
- "tokio-rustls",
- "tower",
- "tower-http",
- "tower-service",
- "url",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "webpki-roots",
-]
-
-[[package]]
-name = "reqwest"
 version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "219c5811de6525e5416c7d5d53bb656d3afdbc6c5af816e0802bcfa42dbdc1c3"
@@ -5188,9 +5149,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.45"
+version = "0.23.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
+checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "aws-lc-rs",
  "once_cell",
@@ -5584,18 +5545,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_urlencoded"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3491c14715ca2294c4d6a88f15e84739788c1d030eed8c110436aafdaa2f3fd"
-dependencies = [
- "form_urlencoded",
- "itoa",
- "ryu",
- "serde",
-]
-
-[[package]]
 name = "serde_with"
 version = "3.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5776,7 +5725,7 @@ dependencies = [
  "keepass",
  "rand 0.9.5",
  "raw-window-handle",
- "reqwest 0.12.28",
+ "reqwest",
  "rsa",
  "serde",
  "serde_json",
@@ -5813,8 +5762,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-app"
-version = "1.10.0"
-source = "git+https://github.com/silentsilo/core?tag=v1.10.0#b8b126aab9e5bf247a71967bd855cc8e27856824"
+version = "1.10.1-beta.1"
+source = "git+https://github.com/silentsilo/core?tag=v1.10.1-beta.1#e0d1e6f9d4f81b80cd56226c9d8215137ea3a903"
 dependencies = [
  "hex",
  "serde",
@@ -5832,8 +5781,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-audit"
-version = "1.10.0"
-source = "git+https://github.com/silentsilo/core?tag=v1.10.0#b8b126aab9e5bf247a71967bd855cc8e27856824"
+version = "1.10.1-beta.1"
+source = "git+https://github.com/silentsilo/core?tag=v1.10.1-beta.1#e0d1e6f9d4f81b80cd56226c9d8215137ea3a903"
 dependencies = [
  "blake3",
  "hex",
@@ -5860,14 +5809,14 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-cloud"
-version = "1.10.0"
-source = "git+https://github.com/silentsilo/core?tag=v1.10.0#b8b126aab9e5bf247a71967bd855cc8e27856824"
+version = "1.10.1-beta.1"
+source = "git+https://github.com/silentsilo/core?tag=v1.10.1-beta.1#e0d1e6f9d4f81b80cd56226c9d8215137ea3a903"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
  "percent-encoding",
  "rand 0.9.5",
- "reqwest 0.13.4",
+ "reqwest",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -5881,8 +5830,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-core"
-version = "1.10.0"
-source = "git+https://github.com/silentsilo/core?tag=v1.10.0#b8b126aab9e5bf247a71967bd855cc8e27856824"
+version = "1.10.1-beta.1"
+source = "git+https://github.com/silentsilo/core?tag=v1.10.1-beta.1#e0d1e6f9d4f81b80cd56226c9d8215137ea3a903"
 dependencies = [
  "serde",
  "thiserror 2.0.19",
@@ -5891,8 +5840,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-crypto"
-version = "1.10.0"
-source = "git+https://github.com/silentsilo/core?tag=v1.10.0#b8b126aab9e5bf247a71967bd855cc8e27856824"
+version = "1.10.1-beta.1"
+source = "git+https://github.com/silentsilo/core?tag=v1.10.1-beta.1#e0d1e6f9d4f81b80cd56226c9d8215137ea3a903"
 dependencies = [
  "aes-gcm 0.10.3",
  "blake3",
@@ -5909,8 +5858,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-fido"
-version = "1.10.0"
-source = "git+https://github.com/silentsilo/core?tag=v1.10.0#b8b126aab9e5bf247a71967bd855cc8e27856824"
+version = "1.10.1-beta.1"
+source = "git+https://github.com/silentsilo/core?tag=v1.10.1-beta.1#e0d1e6f9d4f81b80cd56226c9d8215137ea3a903"
 dependencies = [
  "aes 0.8.4",
  "base64 0.22.1",
@@ -5938,8 +5887,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-s3"
-version = "1.10.0"
-source = "git+https://github.com/silentsilo/core?tag=v1.10.0#b8b126aab9e5bf247a71967bd855cc8e27856824"
+version = "1.10.1-beta.1"
+source = "git+https://github.com/silentsilo/core?tag=v1.10.1-beta.1#e0d1e6f9d4f81b80cd56226c9d8215137ea3a903"
 dependencies = [
  "aws-credential-types",
  "aws-sdk-s3",
@@ -5976,14 +5925,14 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-store"
-version = "1.10.0"
-source = "git+https://github.com/silentsilo/core?tag=v1.10.0#b8b126aab9e5bf247a71967bd855cc8e27856824"
+version = "1.10.1-beta.1"
+source = "git+https://github.com/silentsilo/core?tag=v1.10.1-beta.1#e0d1e6f9d4f81b80cd56226c9d8215137ea3a903"
 dependencies = [
  "async-trait",
  "objc2-foundation",
  "percent-encoding",
  "quick-xml 0.41.0",
- "reqwest 0.13.4",
+ "reqwest",
  "russh",
  "russh-sftp",
  "serde",
@@ -5999,8 +5948,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-sync"
-version = "1.10.0"
-source = "git+https://github.com/silentsilo/core?tag=v1.10.0#b8b126aab9e5bf247a71967bd855cc8e27856824"
+version = "1.10.1-beta.1"
+source = "git+https://github.com/silentsilo/core?tag=v1.10.1-beta.1#e0d1e6f9d4f81b80cd56226c9d8215137ea3a903"
 dependencies = [
  "blake3",
  "hex",
@@ -6021,8 +5970,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-vault"
-version = "1.10.0"
-source = "git+https://github.com/silentsilo/core?tag=v1.10.0#b8b126aab9e5bf247a71967bd855cc8e27856824"
+version = "1.10.1-beta.1"
+source = "git+https://github.com/silentsilo/core?tag=v1.10.1-beta.1#e0d1e6f9d4f81b80cd56226c9d8215137ea3a903"
 dependencies = [
  "aes-gcm 0.10.3",
  "argon2 0.5.3",
@@ -6050,8 +5999,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-vfs"
-version = "1.10.0"
-source = "git+https://github.com/silentsilo/core?tag=v1.10.0#b8b126aab9e5bf247a71967bd855cc8e27856824"
+version = "1.10.1-beta.1"
+source = "git+https://github.com/silentsilo/core?tag=v1.10.1-beta.1#e0d1e6f9d4f81b80cd56226c9d8215137ea3a903"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -6370,6 +6319,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "system-configuration"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a13f3d0daba03132c0aa9767f98351b3488edc2c100cda2d2ec2b04f3d8d3c8b"
+dependencies = [
+ "bitflags 2.13.1",
+ "core-foundation 0.9.4",
+ "system-configuration-sys",
+]
+
+[[package]]
+name = "system-configuration-sys"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e1d1b10ced5ca923a1fcb8d03e96b8d3268065d724548c0211415ff6ac6bac4"
+dependencies = [
+ "core-foundation-sys",
+ "libc",
+]
+
+[[package]]
 name = "system-deps"
 version = "6.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6480,7 +6450,7 @@ dependencies = [
  "percent-encoding",
  "plist",
  "raw-window-handle",
- "reqwest 0.13.4",
+ "reqwest",
  "serde",
  "serde_json",
  "serde_repr",
@@ -6704,7 +6674,7 @@ dependencies = [
  "minisign-verify",
  "osakit",
  "percent-encoding",
- "reqwest 0.13.4",
+ "reqwest",
  "rustls",
  "semver",
  "serde",
@@ -7646,15 +7616,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "webpki-roots"
-version = "1.0.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dcd9d09a39985f5344844e66b0c530a33843579125f23e21e9f0f220850f22a"
-dependencies = [
- "rustls-pki-types",
-]
-
-[[package]]
 name = "webview2-com"
 version = "0.38.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7879,6 +7840,17 @@ checksum = "6e2e40844ac143cdb44aead537bbf727de9b044e107a0f1220392177d15b0f26"
 dependencies = [
  "windows-core 0.62.2",
  "windows-link 0.2.1",
+]
+
+[[package]]
+name = "windows-registry"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02752bf7fbdcce7f2a27a742f798510f3e5ad88dbe84871e5168e2120c3d5720"
+dependencies = [
+ "windows-link 0.2.1",
+ "windows-result 0.4.1",
+ "windows-strings 0.5.1",
 ]
 
 [[package]]

@@ -15,6 +15,16 @@ describe("formatAppError", () => {
     expect(formatAppError("failed (os error 280)")).not.toContain("disk is full");
   });
 
+  it("names FAT32 when a file is over what the drive takes", () => {
+    for (const raw of [
+      "The file size exceeds the limit allowed and cannot be saved. (os error 223)",
+      "File too large (os error 27)",
+    ]) {
+      expect(formatAppError(raw)).toContain("FAT32");
+    }
+    expect(formatAppError("failed (os error 2230)")).not.toContain("FAT32");
+  });
+
   it("recognizes an unconfigured bucket as a benign local-only notice", () => {
     const expected = "Not backed up. This silo is only on this computer.";
     expect(formatAppError("CloudNotConfigured")).toBe(expected);

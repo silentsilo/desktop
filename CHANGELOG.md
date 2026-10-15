@@ -9,9 +9,42 @@ silo from opening needs a major version rather than a note.
 
 ### Fixed
 
-- Windows: the browser extension's native host no longer needs the Visual
-  C++ runtime. On a computer without it the browser could not start the
-  host, and the extension said the app was not running.
+- A security key without a PIN is no longer added. Once such a key gets a
+  PIN, as Windows 11 asks at the first passkey on any site, it gives a
+  different secret and stopped opening its silo. A key added that way
+  earlier still opens the silo on Linux and macOS, which then asks for it to
+  be added again; on Windows the unlock says what happened instead of
+  failing to decrypt.
+- Windows: the browser extension's native host and the extractor no longer
+  need the Visual C++ runtime. On a computer without it the browser could
+  not start the host, and the extension said the app was not running. The
+  release script now refuses any shipped program that needs it.
+- Windows Hello is offered only where it can protect a silo (a TPM 2.0 and
+  a Windows with Hello's PRF secret), and the setup screen says which one is
+  missing. Touch ID says when it is locked, out of reach, has no
+  fingerprints, or has no sensor, and when its key stopped working after
+  fingerprints changed.
+- Windows: WebAuthn refusals say what happened (cancelled, no key for this
+  silo here, no device) and are not retried after a cancel. A Windows too
+  old to pass a key's secret says to update.
+- Linux: a key that is plugged in but not readable by this account says how
+  to fix it (the udev rule) instead of "not available". The keyring setting
+  shows only when the keyring refused a secret. Autostart from an AppImage
+  points at the AppImage. Without a tray, the window shows at sign-in. The
+  lock screen is found for an app started at sign-in. Settings names
+  browsers installed as a Snap or a Flatpak, which cannot reach the app.
+- macOS: copied passwords stay on this Mac (no Universal Clipboard). The
+  Finder Quick Action registers. The browser host copy is not quarantined.
+- Browser extension: Arc, Vivaldi and the beta channels of Chrome, Edge and
+  Brave on macOS and Linux, LibreWolf on Linux, and Firefox from the
+  Microsoft Store on Windows. A browser the host does not take is told so
+  (`browser-not-supported`), and a channel held by another program is
+  `channel-not-app`.
+- Cloud storage, WebDAV, update checks and the breach check follow the
+  system proxy, and the breach check trusts the system's certificates.
+- The installer refuses Windows 10 before version 1903, where the app could
+  not start. A file over 4 GB on a FAT32 drive, and an update that cannot
+  replace the app, are said in words.
 
 ## [1.5.0] - macOS, eight languages and iCloud Drive
 

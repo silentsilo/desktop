@@ -118,7 +118,13 @@ export function useUpdater(
       });
     } catch (e) {
       const failure = e instanceof UpdateInstallError ? e : null;
-      const message = formatAppError(failure ? failure.reason : e);
+      const reason = failure ? failure.reason : e;
+      // Raw words from the OS otherwise: an AppImage in a folder this user
+      // cannot write, a .deb update with no polkit agent to ask for the
+      // password, a read-only disk.
+      const message = NO_PERMISSION.test(String(reason))
+        ? t("app.update_no_permission")
+        : formatAppError(reason);
       setState({ phase: "error", message });
       if (failure?.silosLocked) onFailedAfterLock?.(message);
     }
@@ -126,6 +132,10 @@ export function useUpdater(
 
   return { state, check, install };
 }
+
+/** An update that could not replace the installed app for want of rights. */
+const NO_PERMISSION =
+  /os error 13\)|os error 30\)|permission denied|read-only file system|pkexec|polkit|not authorized/i;
 
 type Props = {
   section: AppSectionId;
@@ -380,6 +390,13 @@ export function AppSettingsSection({
                     )}
                     {browserExtension && !browserExtension.supported && (
                       <p className="hint">{t("set.not_available_yet")}</p>
+                    )}
+                    {(browserExtension?.sandboxed?.length ?? 0) > 0 && (
+                      <p className="hint">
+                        {t("set.br_sandboxed", {
+                          browsers: browserExtension?.sandboxed?.join(", ") ?? "",
+                        })}
+                      </p>
                     )}
                     {browserExtension?.enabled &&
                       !browserExtension.running &&

@@ -460,7 +460,24 @@ mod unix {
         let partial = dest.with_extension("partial");
         std::fs::copy(&source, &partial)?;
         std::fs::set_permissions(&partial, std::fs::Permissions::from_mode(0o755))?;
+        #[cfg(target_os = "macos")]
+        clear_quarantine(&partial);
         std::fs::rename(&partial, &dest)
+    }
+
+    /// The copy keeps the attributes of an app downloaded with a browser,
+    /// quarantine included, and a bare executable carries no stapled ticket:
+    /// Gatekeeper would then ask Apple's servers before the browser can start
+    /// it, and refuse it offline. It is the app's own signed host.
+    #[cfg(target_os = "macos")]
+    fn clear_quarantine(path: &Path) {
+        use std::os::unix::ffi::OsStrExt;
+        if let Ok(path) = std::ffi::CString::new(path.as_os_str().as_bytes()) {
+            // SAFETY: both strings are NUL-terminated and outlive the call.
+            unsafe {
+                libc::removexattr(path.as_ptr(), c"com.apple.quarantine".as_ptr(), 0);
+            }
+        }
     }
 
     /// The same file, by device and inode: a path can be a link to it.

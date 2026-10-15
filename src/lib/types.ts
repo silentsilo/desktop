@@ -63,6 +63,15 @@ export type Silo = {
 /** The operating system the backend runs on, as `std::env::consts::OS` names it. */
 export type Os = "windows" | "macos" | "linux";
 
+/** What the backend says of the built-in authenticator (`PlatformStatus`). */
+export type PlatformStatus =
+  | "ready"
+  | "absent"
+  | "not_set_up"
+  | "no_tpm"
+  | "update_windows"
+  | "unavailable";
+
 export type Bootstrap = {
   /** Which platform's words to use. Absent from a backend older than the
    * field, which can only be Windows. */
@@ -75,6 +84,8 @@ export type Bootstrap = {
   fido_backup_enrolled: boolean;
   /** Whether this machine's built-in authenticator can be enrolled. */
   platform_authenticator: boolean;
+  /** Why it cannot, when it cannot. Absent from a backend before 1.5.1. */
+  platform_status?: PlatformStatus;
   /** Whether any enrolled key is a removable one. The unlock screen words
    * its instruction around what is actually enrolled. */
   portable_enrolled: boolean;
@@ -584,4 +595,7 @@ export type BrowserExtensionStatus = {
   running: boolean;
   /** Fills that sent a password since the app started, newest first. */
   recent: { site: string; label: string; at: number }[];
+  /** Linux: browsers installed as a snap or a flatpak, which cannot reach
+   * the app. Absent from a backend before 1.5.1. */
+  sandboxed?: string[];
 };

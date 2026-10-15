@@ -47,11 +47,28 @@ fn main() -> ExitCode {
     #[cfg(all(windows, not(debug_assertions)))]
     if let Err(reason) = silentsilo_browser_host::started_by_browser(engine) {
         eprintln!("silentsilo-browser-host: refused: {reason}");
-        return ExitCode::from(3);
+        return refuse_browser();
     }
     #[cfg(not(all(windows, not(debug_assertions))))]
     let _ = engine;
     relay::run()
+}
+
+/// Answers every request with `browser-not-supported`, opening nothing:
+/// a browser the host does not know gets told so, never the app's pipe.
+#[cfg(all(windows, not(debug_assertions)))]
+fn refuse_browser() -> ExitCode {
+    let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    else {
+        return ExitCode::from(3);
+    };
+    runtime.block_on(frames::answer_alone(
+        silentsilo_browser_host::BROWSER_REFUSED,
+    ));
+    // The stdin reader sits in a blocking read the runtime would wait for.
+    std::process::exit(3)
 }
 
 fn write_manifests() -> ExitCode {
@@ -230,21 +247,21 @@ mod relay {
 /// Frames between the browser's stdio and the app, whatever carries them.
 #[cfg(any(windows, unix))]
 mod frames {
-    use silentsilo_browser_host::{MALFORMED, TOO_LARGE, error_answer, not_running_answer};
+    use silentsilo_browser_host::{Alone, MALFORMED, TOO_LARGE, alone_answer, error_answer};
     use silentsilo_shell::browser_pipe::{Frame, read_frame, write_frame};
     use tokio::io::{AsyncRead, AsyncWrite};
     use tokio::sync::mpsc;
     use zeroize::Zeroize;
 
-    /// No app to relay to: each request gets `app-not-running` with
-    /// `message`, until the browser closes stdin.
-    pub async fn answer_alone(message: &str) {
+    /// No app to relay to: each request gets `why`'s code and message,
+    /// until the browser closes stdin.
+    pub async fn answer_alone(why: Alone) {
         let mut stdin = tokio::io::stdin();
         let mut stdout = tokio::io::stdout();
         while let Ok(Some(frame)) = read_frame(&mut stdin).await {
             let answer = match frame {
                 Frame::Message(mut request) => {
-                    let answer = not_running_answer(&request, message);
+                    let answer = alone_answer(&request, why);
                     request.zeroize();
                     answer
                 }

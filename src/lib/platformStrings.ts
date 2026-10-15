@@ -1,5 +1,5 @@
 import { t } from "../i18n";
-import type { Bootstrap, Os } from "./types";
+import type { Bootstrap, Os, PlatformStatus } from "./types";
 
 export type { Os };
 
@@ -147,6 +147,37 @@ export function platformStrings(os: Os): PlatformStrings {
  */
 export function osOf(bootstrap: Pick<Bootstrap, "os"> | null | undefined): Os {
   return bootstrap?.os ?? "windows";
+}
+
+/** What to do about the built-in authenticator, by the reason the backend
+ * gave. A backend that gives none gets the platform's general hint. */
+export function builtInHint(platform: PlatformStrings, status: PlatformStatus | undefined): string {
+  switch (status) {
+    case "no_tpm":
+      return t("app.platform_hint_no_tpm");
+    case "update_windows":
+      return t("app.platform_hint_update_windows");
+    case "unavailable":
+      return t("app.platform_hint_touchid_unavailable");
+    case "absent":
+      return platform.os === "macos"
+        ? t("app.platform_hint_no_touchid")
+        : platform.builtInSetupHint;
+    default:
+      return platform.builtInSetupHint;
+  }
+}
+
+/** Why security keys cannot be used here. On Linux a key that is plugged in
+ * but not readable by this account is its own case, with its own fix. */
+export function keysUnavailable(
+  platform: PlatformStrings,
+  bootstrap: Pick<Bootstrap, "fido_key_present">,
+): string {
+  if (platform.os === "linux" && bootstrap.fido_key_present) {
+    return t("app.platform_fido_no_access_linux");
+  }
+  return platform.fidoUnavailable;
 }
 
 /** "Windows Hello or your security key", or on Linux "your security key". */

@@ -268,6 +268,12 @@ pub fn run() {
             }
             commands::fido::bind_fido_parent_hwnd(app.handle());
             handle_shell_action(app.handle(), startup_args);
+            // A start at sign-in waits in the tray. Without one (GNOME with
+            // no AppIndicator extension) it would be a process nobody can
+            // reach, so the window shows instead.
+            if !has_tray {
+                show_main_window(app.handle());
+            }
             commands::sync::spawn_auto_sync(app.handle().clone());
             commands::vault::spawn_idle_backstop(app.handle().clone());
             pin::install(app.handle().clone());

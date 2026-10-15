@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { osOf, platformStrings } from "../lib/platformStrings";
+import { builtInHint, keysUnavailable, osOf, platformStrings } from "../lib/platformStrings";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -107,11 +107,11 @@ export function EnrollView({
               {platform.offersPhone && ` ${t("start.enroll_phone")}`}
             </p>
             {!bootstrap.platform_authenticator && (
-              <p className="hint">{platform.builtInSetupHint}</p>
+              <p className="hint">{builtInHint(platform, bootstrap.platform_status)}</p>
             )}
           </>
         ) : (
-          <p className="error">{platform.fidoUnavailable}</p>
+          <p className="error">{keysUnavailable(platform, bootstrap)}</p>
         )}
         {fidoProgress && <p className="fido-live">{fidoProgress}</p>}
         {!bootstrap.fido_available && (

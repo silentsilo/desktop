@@ -1,4 +1,4 @@
-import type { Os } from "../lib/types";
+import type { Os, PlatformStatus } from "../lib/types";
 
 /**
  * A stand-in for the Rust side, so the pre-unlock screens can be opened in a
@@ -85,6 +85,15 @@ function flag(name: string): boolean {
 
 /// `?os=macos` renders every screen with the Mac's words, so the platform
 /// strings can be looked at, and walked by Playwright, without a Mac.
+/** `?platform=no_tpm` (any `PlatformStatus`) shows the enrolment hint for
+ * that reason; without it, the answer `?nohello` implies. */
+function platformStatus(): PlatformStatus {
+  const v = new URLSearchParams(location.search).get("platform");
+  if (v) return v as PlatformStatus;
+  if (os() === "linux") return "absent";
+  return flag("nohello") ? "not_set_up" : "ready";
+}
+
 function os(): Os {
   const v = new URLSearchParams(location.search).get("os");
   return v === "macos" || v === "linux" ? v : "windows";
@@ -336,7 +345,8 @@ const handlers: Record<string, Handler> = {
         fido_enrolled: enrolledAtRuntime,
         fido_backup_enrolled: false,
         // Linux has none the app uses, as `ctap.rs` answers.
-        platform_authenticator: !flag("nohello") && os() !== "linux",
+        platform_authenticator: platformStatus() === "ready",
+        platform_status: platformStatus(),
         portable_enrolled: !flag("helloonly"),
         platform_enrolled: flag("helloonly"),
         os: os(),
@@ -370,7 +380,8 @@ const handlers: Record<string, Handler> = {
       // false to. The enrolment screen drops a button in that case, and that
       // branch had no way of being looked at.
       // Linux has none the app uses, as `ctap.rs` answers.
-      platform_authenticator: !flag("nohello") && os() !== "linux",
+      platform_authenticator: platformStatus() === "ready",
+      platform_status: platformStatus(),
       // `?helloonly` models a silo whose only way in is Windows Hello, which
       // is what changes the unlock screen's instruction: telling that user to
       // insert a key sends them looking for hardware they do not own.

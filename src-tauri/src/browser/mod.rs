@@ -178,7 +178,8 @@ const RECENT_FILLS: usize = 20;
 
 #[derive(Serialize)]
 pub struct ExtensionStatus {
-    /// Windows only for now: the host and its registration are Windows's.
+    /// Whether this build carries the channel at all: Windows, Linux and
+    /// macOS do.
     supported: bool,
     /// Whether the host sits beside the app. A release built before the
     /// extension has a store id ships without it.
@@ -186,6 +187,10 @@ pub struct ExtensionStatus {
     enabled: bool,
     running: bool,
     recent: Vec<RecentFill>,
+    /// Browsers on this computer that run in a sandbox the host cannot be
+    /// started from (Linux: Chromium browsers as a snap or a flatpak), by
+    /// name, so Settings can say why they never connect.
+    sandboxed: Vec<&'static str>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -347,6 +352,42 @@ fn status_of(app: &AppHandle) -> ExtensionStatus {
         enabled: silentsilo_shell::browser_pipe::extension_enabled(),
         running: app.state::<BrowserBridge>().running(),
         recent: recent_while_open(app),
+        sandboxed: sandboxed_browsers(),
+    }
+}
+
+/// Chromium browsers installed as a snap or a flatpak, found by the data
+/// folder each keeps in the user's home. They do not start native hosts
+/// outside their sandbox. Firefox as a snap does, through the WebExtensions
+/// portal, so it is not on the list.
+fn sandboxed_browsers() -> Vec<&'static str> {
+    #[cfg(target_os = "linux")]
+    {
+        let Some(home) = std::env::var_os("HOME").map(std::path::PathBuf::from) else {
+            return Vec::new();
+        };
+        let flatpak = home.join(".var").join("app");
+        [
+            ("Chromium", home.join("snap").join("chromium")),
+            ("Chrome", flatpak.join("com.google.Chrome")),
+            ("Chromium", flatpak.join("org.chromium.Chromium")),
+            ("Brave", flatpak.join("com.brave.Browser")),
+            ("Edge", flatpak.join("com.microsoft.Edge")),
+            ("Vivaldi", flatpak.join("com.vivaldi.Vivaldi")),
+        ]
+        .into_iter()
+        .filter(|(_, dir)| dir.is_dir())
+        .map(|(name, _)| name)
+        .fold(Vec::new(), |mut names, name| {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+            names
+        })
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        Vec::new()
     }
 }
 

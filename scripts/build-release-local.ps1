@@ -141,6 +141,24 @@ if ((git tag --points-at HEAD) -notcontains $tag) {
     throw "HEAD is not tagged $tag. Build from the tagged commit (git switch --detach $tag), or tag this one first."
 }
 
+# Every exe this release ships must start on a clean Windows. The Visual C++
+# runtime is not part of Windows, and the browser host and the extractor
+# once needed it while the app, linked statically by tauri-build, did not:
+# fine on this machine, broken on one that never installed the
+# redistributable. Read from the import table's names, which sit in the
+# file as plain ASCII.
+function Assert-NoVcRuntime {
+    param([string[]]$Paths)
+    foreach ($path in $Paths) {
+        $text = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($path))
+        $found = [regex]::Matches($text, '(?i)\b(vcruntime|msvcp)\d+[a-z_0-9]*\.dll') |
+            ForEach-Object { $_.Value.ToLower() } | Sort-Object -Unique
+        if ($found) {
+            throw "$path needs $($found -join ', '), which a clean Windows does not have. Link the C runtime statically (see crates/silentsilo-browser-host/build.rs)."
+        }
+    }
+}
+
 # No signing key belongs on GitHub: anyone who can push a tag and a changed
 # workflow can read a secret there. Checked by name, on the repository and
 # each of its environments, before anything is built or signed.
@@ -321,6 +339,10 @@ try {
     finally {
         Pop-Location
     }
+
+    $shipped = @("target\release\silentsilo.exe", (Join-Path $out "silentsilo-extract-windows-x86_64.exe"))
+    if ($shipHost) { $shipped += $sidecar }
+    Assert-NoVcRuntime $shipped
 
     # Everything is compiled. Only now the token: it signs the app as Tauri
     # bundles it, the browser host beside it, the installer and the

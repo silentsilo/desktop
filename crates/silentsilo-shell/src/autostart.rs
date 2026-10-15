@@ -318,7 +318,17 @@ mod linux {
     }
 
     fn expected_entry() -> std::io::Result<String> {
-        Ok(entry_for(&std::env::current_exe()?))
+        Ok(entry_for(&launcher()?))
+    }
+
+    /// What starts the app. Inside an AppImage the running executable sits
+    /// in `/tmp/.mount_…`, which is gone the moment the app quits; the
+    /// AppImage itself is what `$APPIMAGE` names.
+    fn launcher() -> std::io::Result<PathBuf> {
+        match std::env::var_os("APPIMAGE").filter(|p| !p.is_empty()) {
+            Some(image) => Ok(PathBuf::from(image)),
+            None => std::env::current_exe(),
+        }
     }
 
     pub fn autostart_enabled() -> bool {

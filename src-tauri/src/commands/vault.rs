@@ -27,6 +27,9 @@ pub struct AppBootstrap {
     /// Whether this machine can enrol its built-in authenticator, so the UI
     /// only offers Windows Hello where it would actually work.
     platform_authenticator: bool,
+    /// Why it cannot, when it cannot, so the screen says what to do: set up
+    /// Hello, no TPM, update Windows, Touch ID locked or absent.
+    platform_status: silentsilo_fido::PlatformStatus,
     /// Whether any enrolled key is a removable one. The unlock screen words
     /// its instruction around what is actually enrolled: telling a Windows
     /// Hello household to insert a key sends them looking for hardware they
@@ -39,6 +42,19 @@ pub struct AppBootstrap {
     /// Which platform's words the window uses: "windows", "linux" or
     /// "macos". Without it the window took every build for Windows.
     os: &'static str,
+}
+
+/// Whether a built-in key of `kind` is the kind this computer's own
+/// authenticator makes: Windows Hello is a FIDO2 credential, Touch ID a
+/// Secure Enclave key, and Linux has none.
+fn built_in_here(kind: &str) -> bool {
+    if cfg!(windows) {
+        kind == silentsilo_vault::KIND_FIDO2
+    } else if cfg!(target_os = "macos") {
+        kind == silentsilo_vault::KIND_SECURE_ENCLAVE
+    } else {
+        false
+    }
 }
 
 /// The platform this build is for, in the window's terms.
@@ -82,16 +98,21 @@ fn app_bootstrap_impl(app: &AppHandle) -> Result<AppBootstrap, String> {
             let mut portable = false;
             let mut platform = false;
             for key in keys.usable() {
-                if key.platform {
-                    platform = true;
-                } else {
+                if !key.platform {
                     portable = true;
+                } else if built_in_here(&key.kind) {
+                    platform = true;
                 }
+                // Another kind of computer's built-in key (Windows Hello on
+                // a Mac or on Linux) is neither: telling this person to
+                // confirm with a built-in key sends them after one this
+                // computer does not have.
             }
             (portable, platform)
         })
         .unwrap_or((false, false));
     let fido = silentsilo_fido::status();
+    let platform_status = silentsilo_fido::platform_status();
     Ok(AppBootstrap {
         provisioned,
         locked,
@@ -100,7 +121,8 @@ fn app_bootstrap_impl(app: &AppHandle) -> Result<AppBootstrap, String> {
         fido_enrolled,
         fido_backup_enrolled: fido_enrolled
             && silo.as_ref().is_some_and(|s| has_backup_key(&s.path)),
-        platform_authenticator: silentsilo_fido::platform_authenticator_available(),
+        platform_authenticator: platform_status == silentsilo_fido::PlatformStatus::Ready,
+        platform_status,
         portable_enrolled,
         platform_enrolled,
         silo: silo.as_ref().map(crate::commands::silo::SiloView::from),
@@ -668,6 +690,39 @@ fn requeue_uploads(paths: &[String]) {
 /// key covers the silo whose envelopes were published by another device and
 /// carry ids this one has not seen; it fails a moment later with a clearer
 /// message than "no matching key" would give here.
+/// Which of the key's secrets opens its envelope, and whether it was the one
+/// it gave without its PIN.
+///
+/// A security key enrolled before it had a PIN holds the silo under its
+/// unverified secret. Over CTAP2 the ceremony asked for that one too, and it
+/// still opens the silo here; Windows verifies every ceremony on a key with a
+/// PIN and cannot ask, so there the person is told what happened instead of
+/// meeting a decryption error.
+fn opening_wrap_key(
+    unlock: &silentsilo_fido::UnlockMaterial,
+    wrapped: &str,
+    platform_key: bool,
+) -> Result<(zeroize::Zeroizing<[u8; 32]>, bool), String> {
+    let opens = |key: &[u8; 32]| silentsilo_vault::unwrap_dek_hex(wrapped, key).is_ok();
+    if opens(&unlock.wrap_key) {
+        return Ok((zeroize::Zeroizing::new(unlock.wrap_key), false));
+    }
+    if let Some(old) = unlock.unverified_wrap_key.as_ref()
+        && opens(old)
+    {
+        return Ok((zeroize::Zeroizing::new(*old), true));
+    }
+    if unlock.verified && !platform_key {
+        return Err(crate::err::coded!(
+            "err.key_added_without_pin",
+            "This key was added to the silo before it had a PIN, and with a PIN it gives a different secret. Open the silo with another of its keys or your recovery code, then remove this key in Settings and add it again. On Linux or a Mac it still opens the silo."
+        )
+        .into());
+    }
+    // Not this case: the open fails as it always did, and says why.
+    Ok((zeroize::Zeroizing::new(unlock.wrap_key), false))
+}
+
 fn wrapped_dek_for(
     keys: &silentsilo_vault::StoredFidoKeys,
     credential_id: &[u8],
@@ -796,6 +851,10 @@ pub async fn vault_unlock(
     .await?;
 
     let wrapped_dek = wrapped_dek_for(&keys, &unlock.credential_id)?;
+    let platform_key = keys
+        .find_by_credential_id(&unlock.credential_id)
+        .is_some_and(|k| k.platform);
+    let (wrap_key, added_without_pin) = opening_wrap_key(&unlock, &wrapped_dek, platform_key)?;
     // The touch is done. Opening can take a while (after an update the
     // tree is rebuilt from the history), and the touch line must not stay.
     emit_fido_progress(
@@ -812,9 +871,8 @@ pub async fn vault_unlock(
     run_blocking(move || {
         // Kept by the scratch sweep another silo's lock runs meanwhile.
         let _opening = crate::state::opening(&app, &root);
-        let session =
-            VaultSession::open_with_fido_wrapped(root.clone(), &unlock.wrap_key, &wrapped_dek)
-                .map_err(|e| e.to_string())?;
+        let session = VaultSession::open_with_fido_wrapped(root.clone(), &wrap_key, &wrapped_dek)
+            .map_err(|e| e.to_string())?;
 
         if session.vault_id != creds.vault_id {
             return Err(crate::err::coded!(
@@ -844,6 +902,10 @@ pub async fn vault_unlock(
             &app,
             crate::audit::event(crate::audit::codes::UNLOCKED).with("key", label),
         )?;
+        if added_without_pin {
+            use tauri::Emitter;
+            let _ = app.emit("key-added-without-pin", ());
+        }
         // Any shell-upload paths queued while locked are left in the queue for
         // the frontend to fetch (via shell_upload_queue_pending) and offer a
         // destination-folder picker, instead of silently landing in Inbox.

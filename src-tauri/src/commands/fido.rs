@@ -214,7 +214,7 @@ where
     };
 
     for delay in [800, 1800] {
-        if ended_by_user(&last) {
+        if ended_by_user(&last) || settled_answer(&last) {
             break;
         }
         sleep_ms(delay).await;
@@ -234,6 +234,14 @@ fn ended_by_user(error: &str) -> bool {
     ["cancel", "timeout", "timed out", "time out"]
         .iter()
         .any(|word| lower.contains(word))
+}
+
+/// Whether a ceremony failed for a reason a second try cannot change: the
+/// key has no PIN, or this Windows cannot take a key's secret at all.
+fn settled_answer(error: &str) -> bool {
+    ["err.key_needs_pin", "err.windows_update_for_keys"]
+        .iter()
+        .any(|code| error.contains(code))
 }
 
 /// The longest key name the app accepts, when adding a key or renaming one.
@@ -495,7 +503,7 @@ pub async fn fido_enroll_primary(
             let vault_id2 = vault_id.clone();
             let cred_ids = vec![cred.credential_id.clone()];
             run_fido_settling(&app, move || {
-                silentsilo_fido::derive_unlock_material(&cred_ids, &vault_id2, Some(authenticator))
+                silentsilo_fido::derive_enrolment_material(&cred_ids, &vault_id2, authenticator)
             })
             .await?
         }
@@ -710,7 +718,7 @@ pub async fn fido_add_key(
             let vault_id2 = vault_id.clone();
             let cred_ids = vec![cred.credential_id.clone()];
             run_fido_settling(&app, move || {
-                silentsilo_fido::derive_unlock_material(&cred_ids, &vault_id2, Some(authenticator))
+                silentsilo_fido::derive_enrolment_material(&cred_ids, &vault_id2, authenticator)
             })
             .await?
         }

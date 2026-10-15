@@ -5,7 +5,8 @@ const INTEGRATION_FLAG: &str = "shell-integration.json";
 /// Bump whenever the registered context-menu entries change shape, so an
 /// existing install re-registers from a clean slate instead of mixing old
 /// and new entries.
-const MENU_VERSION: u32 = 1;
+/// 2: the macOS workflow gained the `Info.plist` that registers it.
+const MENU_VERSION: u32 = 2;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct IntegrationState {

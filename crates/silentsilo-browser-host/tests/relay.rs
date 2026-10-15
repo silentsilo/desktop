@@ -106,7 +106,7 @@ fn without_the_app_it_answers_alone_and_with_it_it_relays() {
     let answer = receive(&mut child);
     assert_eq!(answer["id"], "1");
     assert_eq!(answer["code"], "app-not-running");
-    assert_eq!(answer["message"], NOT_RUNNING);
+    assert_eq!(answer["message"], NOT_RUNNING.message);
     send(
         &mut child,
         br#"{"id":"2","type":"logins","origin":"https://a.example"}"#,
@@ -159,8 +159,8 @@ fn without_the_app_it_answers_alone_and_with_it_it_relays() {
     send(&mut child, br#"{"id":"5","type":"status"}"#);
     let answer = receive(&mut child);
     assert_eq!(answer["id"], "5");
-    assert_eq!(answer["code"], "app-not-running");
-    assert_eq!(answer["message"], NOT_OURS);
+    assert_eq!(answer["code"], "channel-not-app");
+    assert_eq!(answer["message"], NOT_OURS.message);
     drop(child.stdin.take());
     assert!(child.wait().unwrap().success());
     assert_eq!(

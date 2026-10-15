@@ -194,6 +194,8 @@ mod imp {
     const MANAGER_PATH: &str = "/org/freedesktop/login1";
     const MANAGER: &str = "org.freedesktop.login1.Manager";
     const SESSION: &str = "org.freedesktop.login1.Session";
+    const USER: &str = "org.freedesktop.login1.User";
+    const USER_SELF: &str = "/org/freedesktop/login1/user/self";
 
     /// Three listeners, each on a thread of its own since each blocks for
     /// good: the machine about to sleep, this session asked to lock, and
@@ -204,14 +206,20 @@ mod imp {
         let handler: Handler = Arc::from(handler);
         let sleep = handler.clone();
         std::thread::spawn(move || {
-            let _ = on_sleep(&sleep);
+            if let Err(e) = on_sleep(&sleep) {
+                eprintln!("[session] not told of sleep: {e}");
+            }
         });
         let lock = handler.clone();
         std::thread::spawn(move || {
-            let _ = on_lock_request(&lock);
+            if let Err(e) = on_lock_request(&lock) {
+                eprintln!("[session] not told of a lock request: {e}");
+            }
         });
         std::thread::spawn(move || {
-            let _ = on_locked_hint(&handler);
+            if let Err(e) = on_locked_hint(&handler) {
+                eprintln!("[session] not told of the lock screen: {e}");
+            }
         });
     }
 
@@ -253,7 +261,10 @@ mod imp {
 
     /// This process's login session. Signals come from its real path, never
     /// from the `auto` alias, so it is asked for by id, or by process when
-    /// the environment does not name it.
+    /// the environment does not name it. An app started at sign-in by
+    /// systemd's autostart generator, or by GNOME Shell, runs in a scope of
+    /// the user's manager rather than in the session, and neither finds one:
+    /// then the user's graphical session, which logind names `Display`.
     fn session_path(connection: &Connection) -> zbus::Result<OwnedObjectPath> {
         let manager = Proxy::new(connection, LOGIN1, MANAGER_PATH, MANAGER)?;
         if let Ok(id) = std::env::var("XDG_SESSION_ID")
@@ -261,7 +272,17 @@ mod imp {
         {
             return Ok(path);
         }
-        manager.call("GetSessionByPID", &(std::process::id(),))
+        let by_process: zbus::Result<OwnedObjectPath> =
+            manager.call("GetSessionByPID", &(std::process::id(),));
+        if by_process.is_ok() {
+            return by_process;
+        }
+        let user = Proxy::new(connection, LOGIN1, USER_SELF, USER)?;
+        let (_, display): (String, OwnedObjectPath) = user.get_property("Display")?;
+        if display.as_str() == "/" {
+            return by_process;
+        }
+        Ok(display)
     }
 }
 

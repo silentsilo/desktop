@@ -382,6 +382,16 @@ included. A key with a PIN is always asked for it, as Windows asks in its
 own dialog: `hmac-secret` gives another secret without it, and a key asked
 differently on two platforms would open neither's silo on the other.
 
+From 1.5.1 a key without a PIN is not enrolled: on Windows the second
+ceremony (`derive_enrolment_material`) refuses an unverified one, and over
+CTAP2 core refuses a key with no PIN set. A key enrolled earlier without one
+and given a PIN since still opens its silo on Linux and macOS:
+`opening_wrap_key` in `vault_unlock` tries the unverified secret the
+ceremony also brought back, and on success emits `key-added-without-pin`
+so the window asks for the key to be added again. On Windows there is no
+such secret to try, so the unlock says `err.key_added_without_pin` rather
+than a decryption error.
+
 ## Activity log
 
 Core owns the format, the queue on this computer and its delivery (core's
@@ -584,10 +594,15 @@ flowchart LR
   directory between the two is stepped over. Firefox starts an `.exe` host
   directly from its main process (`NativeMessaging.sys.mjs` through
   `Subprocess`, which goes through `cmd.exe` only for `.bat` and `.cmd`), so
-  a Firefox behind `cmd.exe` fails. Firefox from the Microsoft Store (MSIX,
-  under `WindowsApps`) is not on the list. A parent whose id was reused
-  (started after the host) fails. Anything else exits with code 3, before
-  the pipe is opened.
+  a Firefox behind `cmd.exe` fails. Firefox from the Microsoft Store is let
+  in by its package folder,
+  `<Program Files>\WindowsApps\Mozilla.Firefox_<version>_<arch>__n80bbvh6b1yt2\VFS\ProgramFiles\Firefox Package Root\firefox.exe`
+  (only the Store writes there, and the suffix is Mozilla's publisher id),
+  with the same signature check. A parent whose id was reused (started
+  after the host) fails. Anything else gets `browser-not-supported` for
+  every request, without the pipe being opened, and the host exits with
+  code 3 when the browser closes the port. Until 1.5.1 it exited at once,
+  and the extension read that as the app not running.
 - **The host checks the pipe is the app's** before writing to it. The pipe's
   owner SID (`GetSecurityInfo`) and the server process's token user
   (`GetNamedPipeServerProcessId`) must be this user, and the server's image
@@ -789,16 +804,19 @@ pipe (`browser_pipe`, `#[cfg(unix)]`). What changes, and why it holds:
 - **The manifests** are written per user when the toggle goes on and
   removed when it goes off, by the host itself (`--install-manifests`,
   `--remove-manifests`), so the lists of ids stay compiled in one place,
-  for each browser whose configuration directory exists: `~/.config/google-chrome/NativeMessagingHosts`,
-  `~/.config/chromium/NativeMessagingHosts`,
-  `~/.config/microsoft-edge/NativeMessagingHosts`,
-  `~/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts` (all as
-  `com.silentsilo.desktop.json`, with `allowed_origins`) and
-  `~/.mozilla/native-messaging-hosts` (with `allowed_extensions`), for any
-  sign of Firefox: Firefox reads that place as a snap or a flatpak, through
-  the WebExtensions portal, and from 147 on even with its profiles in
-  `~/.config/mozilla` (reading the XDG place too is Mozilla bug 2005167),
-  where a copy goes as well. Nothing is written
+  for each browser whose configuration directory exists: `~/.config/google-chrome`
+  (and `-beta`, `-unstable`), `~/.config/chromium`, `~/.config/microsoft-edge`
+  (and `-beta`, `-dev`), `~/.config/BraveSoftware/Brave-Browser` (and
+  `-Beta`, `-Nightly`) and `~/.config/vivaldi`, each under
+  `NativeMessagingHosts` (as `com.silentsilo.desktop.json`, with
+  `allowed_origins`), and `~/.mozilla/native-messaging-hosts` (with
+  `allowed_extensions`), for any sign of Firefox: Firefox reads that place
+  as a snap, through the WebExtensions portal, and from 147 on even with
+  its profiles in `~/.config/mozilla` (reading the XDG place too is Mozilla
+  bug 2005167), where a copy goes as well. LibreWolf reads
+  `~/.librewolf/native-messaging-hosts`, which gets one when it exists. The
+  portal is a patch Ubuntu carries, so Firefox as a flatpak elsewhere
+  (Fedora, Silverblue) is not known to work. Nothing is written
   under `/etc`: the `.deb` and the AppImage behave the same, and turning the
   toggle off undoes everything it did. Chromium as a snap or a flatpak does
   not reach native hosts outside its sandbox and is not supported.
@@ -809,8 +827,8 @@ AppImage itself. That is the same user the next section already rules out.
 
 ### On macOS
 
-The Linux code, with three places that differ (not yet run on a Mac; the
-first session is in `planuri/lansare-1.5.md`):
+The Linux code, with three places that differ (run on a Mac since 1.5.0;
+the first session is in `planuri/lansare-1.5.md`):
 
 - **The socket** is `~/Library/Application Support/SilentSilo/browser.sock`
   (`unix_place::socket_dir`), the folder made `0700`. macOS has no runtime
@@ -829,9 +847,11 @@ first session is in `planuri/lansare-1.5.md`):
   the check is as strong as the user's own folder, as with the AppImage. The
   code signature is not read yet.
 - **The manifests** go under `~/Library/Application Support`:
-  `Google/Chrome`, `Chromium`, `Microsoft Edge` and
-  `BraveSoftware/Brave-Browser`, each in `NativeMessagingHosts`, for the ones
-  whose folder exists, and `Mozilla/NativeMessagingHosts` when `Firefox` or
+  `Google/Chrome` (and `Chrome Beta`, `Chrome Dev`, `Chrome Canary`),
+  `Chromium`, `Microsoft Edge` (and its `Beta`, `Dev`, `Canary`),
+  `BraveSoftware/Brave-Browser` (and `-Beta`, `-Nightly`), `Vivaldi` and
+  `Arc/User Data`, each in `NativeMessagingHosts`, for the ones whose
+  folder exists, and `Mozilla/NativeMessagingHosts` when `Firefox` or
   `Mozilla` is there (`macos_manifest_places`). Safari is not served: it
   needs a Safari Web Extension built inside the app.
 

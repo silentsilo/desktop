@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { osOf, platformStrings } from "../lib/platformStrings";
+import { keysUnavailable, osOf, platformStrings } from "../lib/platformStrings";
 import { ArrowLeft, HardDrive, KeyRound, LifeBuoy } from "lucide-react";
 import type { Bootstrap } from "../lib/types";
 import { AuthShell } from "../layout/AuthShell";
@@ -110,7 +110,7 @@ export function UnlockView({
         {bootstrap.fido_available ? (
           <p className="hint">{readyHint}</p>
         ) : (
-          <p className="error">{platform.fidoUnavailable}</p>
+          <p className="error">{keysUnavailable(platform, bootstrap)}</p>
         )}
         {fidoProgress && <p className="fido-live">{fidoProgress}</p>}
 

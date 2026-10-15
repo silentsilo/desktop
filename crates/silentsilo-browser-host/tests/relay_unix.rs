@@ -138,7 +138,7 @@ fn without_the_app_it_answers_alone() {
     let answer = receive(&mut child);
     assert_eq!(answer["id"], "1");
     assert_eq!(answer["code"], "app-not-running");
-    assert_eq!(answer["message"], NOT_RUNNING);
+    assert_eq!(answer["message"], NOT_RUNNING.message);
     drop(child.stdin.take());
     assert!(child.wait().unwrap().success());
 }
@@ -179,8 +179,8 @@ fn with_the_app_it_relays_and_a_shared_directory_is_refused() {
     let mut child = host(&runtime.0);
     send(&mut child, br#"{"id":"2","type":"status"}"#);
     let answer = receive(&mut child);
-    assert_eq!(answer["code"], "app-not-running");
-    assert_eq!(answer["message"], NOT_OURS);
+    assert_eq!(answer["code"], "channel-not-app");
+    assert_eq!(answer["message"], NOT_OURS.message);
     drop(child.stdin.take());
     assert!(child.wait().unwrap().success());
     stop.send(true).unwrap();

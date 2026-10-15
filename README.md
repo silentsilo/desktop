@@ -2,9 +2,10 @@
 
 End-to-end encrypted vault for files and passwords, unlocked by a FIDO2
 security key, Windows Hello or Touch ID, with a written-down recovery code as
-the fallback. For Windows 10 and 11, macOS 13 or later (one app for Apple
-silicon and Intel), and Linux as a .deb or an AppImage (security keys only:
-Linux has no built-in key the app uses). AGPL-3.0.
+the fallback. For Windows 10 (version 1903 or later) and 11, macOS 13 or
+later (one app for Apple silicon and Intel), and Linux as a .deb or an
+AppImage on glibc 2.35 or later, such as Ubuntu 22.04 and Debian 12 (security
+keys only: Linux has no built-in key the app uses). AGPL-3.0.
 
 Everything runs locally: no SilentSilo account, no SilentSilo server. Backup
 is optional, to storage you choose: your OneDrive, Dropbox or Google Drive,

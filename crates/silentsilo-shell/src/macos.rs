@@ -35,6 +35,11 @@ done
 
     let document = generate_document_wflow(&shell_script);
     std::fs::write(contents.join("document.wflow"), document)?;
+    // What registers the workflow as a service at all: without an
+    // `NSServices` entry `pbs` has nothing to list, and Finder shows no
+    // action. The same entry Automator writes for a Quick Action that takes
+    // files and folders in Finder.
+    std::fs::write(contents.join("Info.plist"), SERVICE_INFO_PLIST)?;
 
     // Refresh Services cache so Finder picks up the workflow.
     let _ = Command::new("/System/Library/CoreServices/pbs")
@@ -43,6 +48,29 @@ done
 
     Ok(())
 }
+
+const SERVICE_INFO_PLIST: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSServices</key>
+  <array>
+    <dict>
+      <key>NSBackgroundColorName</key><string>background</string>
+      <key>NSIconName</key><string>NSActionTemplate</string>
+      <key>NSMenuItem</key><dict>
+        <key>default</key><string>Add to SilentSilo</string>
+      </dict>
+      <key>NSMessage</key><string>runWorkflowAsService</string>
+      <key>NSRequiredContext</key><dict>
+        <key>NSApplicationIdentifier</key><string>com.apple.finder</string>
+      </dict>
+      <key>NSSendFileTypes</key><array><string>public.item</string></array>
+    </dict>
+  </array>
+</dict>
+</plist>
+"#;
 
 fn generate_document_wflow(shell_script: &str) -> String {
     let escaped = shell_script

@@ -100,10 +100,16 @@ pub struct SecretsStatus {
     allowed: bool,
 }
 
+/// "No keyring" only once the keyring has refused a secret in this run: on
+/// Linux and macOS there is no protector, and saying so to everyone pushed
+/// people with a working keyring towards a plain file. A switch already on
+/// stays visible, so it can be turned off.
 fn secrets_status() -> SecretsStatus {
+    let allowed = silentsilo_vault::unprotected_secrets_allowed();
+    let keyring_refused = silentsilo_vault::keyring_keeps_secrets() == Some(false);
     SecretsStatus {
-        protected: silentsilo_vault::local_secrets_protected(),
-        allowed: silentsilo_vault::unprotected_secrets_allowed(),
+        protected: !allowed && (silentsilo_vault::local_secrets_protected() || !keyring_refused),
+        allowed,
     }
 }
 
