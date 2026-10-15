@@ -637,6 +637,20 @@ export default function App() {
     [toasts],
   );
 
+  // Only keys tied to this computer and no recovery code: allowed by
+  // releases before 1.5.1, and one fingerprint change or TPM reset from
+  // losing the silo. Kept on screen until closed, once per run.
+  const warnedWayBack = useRef(false);
+  useEventSubscription(
+    () =>
+      listen("silo-without-way-back", () => {
+        if (warnedWayBack.current) return;
+        warnedWayBack.current = true;
+        toasts.push("error", t("app.silo_without_way_back"), 0);
+      }),
+    [toasts],
+  );
+
   // Opened with the secret a security key gave before it had a PIN, which
   // Windows can no longer reach: worth fixing while the key is at hand.
   useEventSubscription(

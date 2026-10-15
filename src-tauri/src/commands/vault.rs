@@ -942,6 +942,10 @@ pub async fn vault_unlock(
             use tauri::Emitter;
             let _ = app.emit("key-added-without-pin", ());
         }
+        if crate::commands::recovery::without_a_way_back(&root) {
+            use tauri::Emitter;
+            let _ = app.emit("silo-without-way-back", ());
+        }
         // Any shell-upload paths queued while locked are left in the queue for
         // the frontend to fetch (via shell_upload_queue_pending) and offer a
         // destination-folder picker, instead of silently landing in Inbox.

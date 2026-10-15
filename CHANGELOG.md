@@ -21,6 +21,13 @@ silo from opening needs a major version rather than a note.
   need the Visual C++ runtime. On a computer without it the browser could
   not start the host, and the extension said the app was not running. The
   release script now refuses any shipped program that needs it.
+  The extractor in this release runs on any Windows 10 or 11 and reads
+  silos made by every earlier version.
+- A silo that opens only with Windows Hello or Touch ID can no longer be
+  left without a recovery code: turning the code off, or removing the last
+  security key while there is no code, is refused. A silo already in that
+  state says so after unlock, once per run, since losing that computer or
+  its fingerprints would lose the silo.
 - Windows Hello is offered only where it can protect a silo (a TPM 2.0 and
   a Windows with Hello's PRF secret), and the setup screen says which one is
   missing. Touch ID says when it is locked, out of reach, has no

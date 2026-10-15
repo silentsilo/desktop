@@ -2905,4 +2905,15 @@ export const appMessages = {
     "pt-BR": "O SilentSilo não conseguiu instalar a atualização aqui: esta conta não pode substituir o app onde ele está instalado. Baixe a nova versão em silentsilo.com e instale.",
     pl: "SilentSilo nie mógł tu zainstalować aktualizacji: to konto nie może zastąpić aplikacji w miejscu, gdzie jest zainstalowana. Pobierz nową wersję z silentsilo.com i zainstaluj ją.",
   },
+  "app.silo_without_way_back": {
+    note: "Warning shown once after unlocking a silo whose only keys are tied to this computer (Windows Hello, Touch ID) and which has no recovery code. 'Settings, Recovery code' is the app's settings section (see the glossary). TPM is a technical name, kept as is.",
+    en: "Every key on this silo is tied to this computer, and it has no recovery code. If the computer, its TPM or its fingerprints change, the silo is lost. Make a recovery code under Settings, Recovery code, or add a security key.",
+    ro: "Toate cheile acestui siloz sunt legate de acest calculator și nu are cod de recuperare. Dacă se schimbă calculatorul, TPM-ul sau amprentele lui, silozul se pierde. Fă un cod de recuperare din Setări, Cod de recuperare, sau adaugă o cheie de securitate.",
+    de: "Alle Schlüssel dieses Silos sind an diesen Computer gebunden, und es hat keinen Wiederherstellungscode. Ändern sich der Computer, sein TPM oder seine Fingerabdrücke, ist das Silo verloren. Erstelle unter Einstellungen, Wiederherstellungscode einen Code oder füge einen Sicherheitsschlüssel hinzu.",
+    fr: "Toutes les clés de ce silo sont liées à cet ordinateur, et il n’a pas de code de récupération. Si l’ordinateur, son TPM ou ses empreintes changent, le silo est perdu. Créez un code de récupération dans Paramètres, Code de récupération, ou ajoutez une clé de sécurité.",
+    es: "Todas las llaves de este silo están ligadas a este ordenador y no tiene código de recuperación. Si cambian el ordenador, su TPM o sus huellas, el silo se pierde. Crea un código de recuperación en Ajustes, Código de recuperación, o añade una llave de seguridad.",
+    it: "Tutte le chiavi di questo silo sono legate a questo computer e non ha un codice di recupero. Se cambiano il computer, il suo TPM o le sue impronte, il silo è perso. Crea un codice di recupero in Impostazioni, Codice di recupero, o aggiungi una chiave di sicurezza.",
+    "pt-BR": "Todas as chaves deste silo estão presas a este computador e ele não tem código de recuperação. Se o computador, o TPM ou as digitais mudarem, o silo se perde. Crie um código de recuperação em Configurações, Código de recuperação, ou adicione uma chave de segurança.",
+    pl: "Wszystkie klucze tego silosu są związane z tym komputerem i nie ma on kodu odzyskiwania. Jeśli zmieni się komputer, jego TPM lub odciski palców, silos przepadnie. Utwórz kod odzyskiwania w Ustawieniach, Kod odzyskiwania, albo dodaj klucz bezpieczeństwa.",
+  },
 } satisfies Screen;

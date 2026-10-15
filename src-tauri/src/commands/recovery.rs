@@ -42,6 +42,13 @@ fn code_required(root: &std::path::Path) -> bool {
     !has_portable_key(load_fido_keys(root).ok().as_ref())
 }
 
+/// A silo already in the state the two guards now refuse: only keys tied to
+/// one computer, and no recovery code. Earlier releases allowed it, so the
+/// unlock says so, while the silo is open and something can still be done.
+pub(crate) fn without_a_way_back(root: &std::path::Path) -> bool {
+    code_required(root) && !silentsilo_vault::has_recovery_code(root)
+}
+
 const CODE_REQUIRED: &str = crate::err::coded!(
     "err.recovery_needed_platform_only",
     "Every key on this silo is tied to one computer, so the recovery code is the only way back if that computer is lost. Add a portable security key before turning the code off."
@@ -724,5 +731,25 @@ mod tests {
         assert!(!has_portable_key(None));
         let dir = tempfile::tempdir().unwrap();
         assert!(code_required(dir.path()));
+    }
+
+    #[test]
+    fn a_hello_only_silo_without_a_code_is_warned_about_until_it_has_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let hello = keys(vec![key("aa", true)]);
+        silentsilo_vault::save_fido_keys(root, &hello, silentsilo_vault::Authority::Machine)
+            .unwrap();
+        assert!(without_a_way_back(root));
+
+        let code = root.join("keys").join("recovery.json");
+        std::fs::write(&code, b"{}").unwrap();
+        assert!(!without_a_way_back(root));
+
+        std::fs::remove_file(&code).unwrap();
+        let mixed = keys(vec![key("aa", true), key("bb", false)]);
+        silentsilo_vault::save_fido_keys(root, &mixed, silentsilo_vault::Authority::Machine)
+            .unwrap();
+        assert!(!without_a_way_back(root));
     }
 }
