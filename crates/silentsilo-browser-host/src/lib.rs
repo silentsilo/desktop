@@ -427,31 +427,26 @@ fn under_one_of(dir: &Path, roots: &[PathBuf]) -> bool {
     roots.iter().any(|root| lower(root) == dir)
 }
 
-/// Where Firefox installs under a root: release and Beta share the first.
-const FIREFOX_DIRS: [&str; 3] = [
-    "mozilla firefox",
-    "firefox developer edition",
-    "firefox nightly",
-];
-
 /// The browser whose executable is at `image`, when it sits where that
 /// browser installs, with `<root>` one of `roots`:
 /// `<root>\Google\Chrome\Application\chrome.exe`,
 /// `<root>\Microsoft\Edge\Application\msedge.exe` (either with a Beta, Dev
 /// or Canary (SxS) channel),
 /// `<root>\BraveSoftware\Brave-Browser\Application\brave.exe` (or its
-/// `-Beta`, `-Dev`, `-Nightly` channel), and
-/// `<root>\Mozilla Firefox\firefox.exe` (or Firefox Developer Edition or
-/// Firefox Nightly), and Firefox from the Microsoft Store
-/// ([`firefox_from_the_store`]).
+/// `-Beta`, `-Dev`, `-Nightly` channel), and `firefox.exe` anywhere.
+///
+/// Firefox lets the person choose its folder and drive, and comes through
+/// Scoop, as a portable copy and from the Microsoft Store, so its place says
+/// nothing. The Mozilla signature `started_by_browser` checks is what makes
+/// it Firefox: Tor Browser, LibreWolf and Waterfox are signed by others. A
+/// program that copies a signed Firefox somewhere runs as this user, which
+/// these checks leave out of scope (ARCHITECTURE, "What these checks do not
+/// stop").
 pub fn browser_at(image: &Path, roots: &[PathBuf]) -> Option<Browser> {
     let name = |p: &Path| p.file_name().map(|n| n.to_string_lossy().to_lowercase());
     let file = name(image)?;
     if file == "firefox.exe" {
-        let install = image.parent()?;
-        let known = FIREFOX_DIRS.contains(&name(install)?.as_str());
-        let installed = known && under_one_of(install.parent()?, roots);
-        return (installed || firefox_from_the_store(image, roots)).then_some(Browser::Firefox);
+        return Some(Browser::Firefox);
     }
     let application = image.parent()?;
     let channel = application.parent()?;
@@ -485,33 +480,6 @@ pub fn browser_at(image: &Path, roots: &[PathBuf]) -> Option<Browser> {
     };
     let known_channel = channels.contains(&name(channel)?.as_str());
     (name(vendor)?.as_str() == vendor_name && known_channel).then_some(browser)
-}
-
-/// Firefox as the Microsoft Store installs it:
-/// `<root>\WindowsApps\Mozilla.Firefox_<version>_<arch>__n80bbvh6b1yt2\VFS\ProgramFiles\Firefox Package Root\firefox.exe`.
-/// `WindowsApps` is writable only by the Store, and the suffix is Mozilla's
-/// publisher id, so the folder says whose package it is; the signature is
-/// checked as for any other install.
-fn firefox_from_the_store(image: &Path, roots: &[PathBuf]) -> bool {
-    let name = |p: &Path| p.file_name().map(|n| n.to_string_lossy().to_lowercase());
-    let steps = || -> Option<bool> {
-        let package_root = image.parent()?;
-        let program_files = package_root.parent()?;
-        let vfs = program_files.parent()?;
-        let package = vfs.parent()?;
-        let windows_apps = package.parent()?;
-        let package_name = name(package)?;
-        Some(
-            name(package_root)? == "firefox package root"
-                && name(program_files)? == "programfiles"
-                && name(vfs)? == "vfs"
-                && package_name.starts_with("mozilla.firefox_")
-                && package_name.ends_with("__n80bbvh6b1yt2")
-                && name(windows_apps)? == "windowsapps"
-                && under_one_of(windows_apps.parent()?, roots),
-        )
-    };
-    steps().unwrap_or(false)
 }
 
 /// `cmd.exe` in a system directory: Chromium browsers start a native host
@@ -1104,6 +1072,16 @@ mod tests {
                 r"C:\Program Files\WindowsApps\Mozilla.Firefox_144.0.0.0_x64__n80bbvh6b1yt2\VFS\ProgramFiles\Firefox Package Root\firefox.exe",
                 Browser::Firefox,
             ),
+            // Wherever it was put: the signature decides.
+            (r"D:\Apps\Firefox\firefox.exe", Browser::Firefox),
+            (
+                r"C:\Users\a\scoop\apps\firefox\current\firefox.exe",
+                Browser::Firefox,
+            ),
+            (
+                r"C:\Program Files\Tor Browser\firefox.exe",
+                Browser::Firefox,
+            ),
         ] {
             assert_eq!(
                 browser_at(Path::new(path), &roots()),
@@ -1129,17 +1107,7 @@ mod tests {
             r"C:\Program Files\BraveSoftware\Brave-Browser\brave.exe",
             r"C:\Program Files\Google\Chrome\Application\brave.exe",
             r"C:\Program Files\BraveSoftware\Brave-Browser\Application\chrome.exe",
-            r"C:\Program Files\Mozilla Firefox\Application\firefox.exe",
-            r"C:\Program Files\Mozilla\Firefox\firefox.exe",
-            r"C:\Program Files\Tor Browser\firefox.exe",
-            r"C:\Users\a\Downloads\Mozilla Firefox\firefox.exe",
-            r"C:\Program Files\x\Mozilla Firefox\firefox.exe",
             r"C:\Program Files\Mozilla Firefox\chrome.exe",
-            r"firefox.exe",
-            // Another publisher's package, or the Store's layout elsewhere.
-            r"C:\Program Files\WindowsApps\Evil.Firefox_1.0.0.0_x64__n80bbvh6b1yt2\VFS\ProgramFiles\Firefox Package Root\firefox.exe",
-            r"C:\Program Files\WindowsApps\Mozilla.Firefox_1.0.0.0_x64__abcdefghijklm\VFS\ProgramFiles\Firefox Package Root\firefox.exe",
-            r"C:\Users\a\Downloads\WindowsApps\Mozilla.Firefox_1.0.0.0_x64__n80bbvh6b1yt2\VFS\ProgramFiles\Firefox Package Root\firefox.exe",
         ] {
             assert_eq!(browser_at(Path::new(path), &roots()), None, "{path}");
         }

@@ -580,25 +580,24 @@ flowchart LR
   click on a store link turns it on, since getting the extension says the
   person wants it to reach the app.
 - **The host checks who started it** (release builds only; tests start it
-  from cargo). Its parent must be one of these, under `<Program Files,
-  Program Files (x86) or %LOCALAPPDATA%>`, running as this user, with a
-  valid Authenticode signature from the publisher named:
+  from cargo). Its parent must be one of these, running as this user, with
+  a valid Authenticode signature from the publisher named: under
+  `<Program Files, Program Files (x86) or %LOCALAPPDATA%>`,
   `Google\Chrome*\Application\chrome.exe` (Google LLC),
-  `Microsoft\Edge*\Application\msedge.exe` (Microsoft Corporation),
+  `Microsoft\Edge*\Application\msedge.exe` (Microsoft Corporation) or
   `BraveSoftware\Brave-Browser[-Beta|-Dev|-Nightly]\Application\brave.exe`
-  (Brave Software, Inc.), or `<Mozilla Firefox | Firefox Developer Edition |
-  Firefox Nightly>\firefox.exe` (Mozilla Corporation). The browser must
+  (Brave Software, Inc.); or `firefox.exe` anywhere (Mozilla Corporation).
+  Firefox lets the person choose its folder and drive, and comes through
+  Scoop, as a portable copy and from the Microsoft Store (from 1.5.1); its
+  place says nothing, so the signature is what makes it Firefox, and Tor
+  Browser, LibreWolf or Waterfox, signed by others, are refused. The browser must
   match the argument form: a Chromium origin from Chrome, Edge or Brave, a
   Firefox id from Firefox. Chromium browsers start a host through
   `cmd.exe` unless a policy says otherwise, so a `cmd.exe` in a system
   directory between the two is stepped over. Firefox starts an `.exe` host
   directly from its main process (`NativeMessaging.sys.mjs` through
   `Subprocess`, which goes through `cmd.exe` only for `.bat` and `.cmd`), so
-  a Firefox behind `cmd.exe` fails. Firefox from the Microsoft Store is let
-  in by its package folder,
-  `<Program Files>\WindowsApps\Mozilla.Firefox_<version>_<arch>__n80bbvh6b1yt2\VFS\ProgramFiles\Firefox Package Root\firefox.exe`
-  (only the Store writes there, and the suffix is Mozilla's publisher id),
-  with the same signature check. A parent whose id was reused (started
+  a Firefox behind `cmd.exe` fails. A parent whose id was reused (started
   after the host) fails. Anything else gets `browser-not-supported` for
   every request, without the pipe being opened, and the host exits with
   code 3 when the browser closes the port. Until 1.5.1 it exited at once,

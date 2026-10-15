@@ -36,8 +36,9 @@ silo from opening needs a major version rather than a note.
 - macOS: copied passwords stay on this Mac (no Universal Clipboard). The
   Finder Quick Action registers. The browser host copy is not quarantined.
 - Browser extension: Arc, Vivaldi and the beta channels of Chrome, Edge and
-  Brave on macOS and Linux, LibreWolf on Linux, and Firefox from the
-  Microsoft Store on Windows. A browser the host does not take is told so
+  Brave on macOS and Linux, LibreWolf on Linux, and on Windows Firefox
+  from any folder (a custom install, Scoop, the Microsoft Store), let in by
+  its Mozilla signature. A browser the host does not take is told so
   (`browser-not-supported`), and a channel held by another program is
   `channel-not-app`.
 - Cloud storage, WebDAV, update checks and the breach check follow the
