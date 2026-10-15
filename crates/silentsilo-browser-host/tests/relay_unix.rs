@@ -1,7 +1,9 @@
 //! The host as a browser runs it on Linux: a child process with the
 //! extension's origin as its argument, frames on stdin and stdout, and the
-//! app's socket in the runtime directory it is given.
-#![cfg(unix)]
+//! app's socket in the runtime directory it is given. Linux only: macOS
+//! keeps the socket and the manifests under `~/Library`, which these paths
+//! do not model.
+#![cfg(target_os = "linux")]
 
 use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
