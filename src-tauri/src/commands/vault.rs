@@ -693,6 +693,27 @@ fn requeue_uploads(paths: &[String]) {
 /// key covers the silo whose envelopes were published by another device and
 /// carry ids this one has not seen; it fails a moment later with a clearer
 /// message than "no matching key" would give here.
+/// What a ceremony is given to tell whether a secret opens the envelope of
+/// the credential it came from. Only when the verified secret opens nothing
+/// does a CTAP2 ceremony ask the key for the one it gives without its PIN
+/// (`derive_unlock_material_opening`), so an ordinary unlock is one
+/// assertion. Owns copies of the envelopes: the ceremony runs on a thread of
+/// its own.
+pub(crate) fn envelope_check(
+    keys: &[silentsilo_vault::StoredFidoCredential],
+) -> impl Fn(&[u8], &[u8; 32]) -> bool + Send + Sync + Clone + 'static {
+    let envelopes: Vec<(String, String)> = keys
+        .iter()
+        .map(|k| (k.credential_id.clone(), k.wrapped_dek.clone()))
+        .collect();
+    move |credential_id, secret| {
+        let id = hex::encode(credential_id);
+        envelopes.iter().any(|(known, wrapped)| {
+            *known == id && silentsilo_vault::unwrap_dek_hex(wrapped, secret).is_ok()
+        })
+    }
+}
+
 /// The key's secret that opens `wrapped`, and whether it was the one the key
 /// gave without its PIN: a security key enrolled before it had a PIN holds
 /// the silo under that one, and a CTAP2 ceremony (Linux, macOS) brings it
@@ -718,7 +739,7 @@ pub(crate) fn secret_that_opens(
 /// key with a PIN and cannot ask for the other secret, so there a security
 /// key of this silo that answers with its PIN and opens nothing was added
 /// before it had one: said, rather than met with a decryption error.
-fn opening_wrap_key(
+pub(crate) fn opening_wrap_key(
     unlock: &silentsilo_fido::UnlockMaterial,
     wrapped: &str,
     enrolled: Option<&silentsilo_vault::StoredFidoCredential>,
@@ -861,8 +882,9 @@ pub async fn vault_unlock(
     // with Hello rather than through the whole passkey menu.
     let wanted = crate::commands::fido::preferred_authenticator(&keys);
     emit_fido_progress(&app, unlock_prompt(wanted));
+    let check = envelope_check(&keys.keys);
     let unlock = run_fido(&app, move || {
-        silentsilo_fido::derive_unlock_material(&cred_ids, &vault_id, wanted)
+        silentsilo_fido::derive_unlock_material_opening(&cred_ids, &vault_id, wanted, Some(&check))
     })
     .await?;
 
@@ -2956,8 +2978,9 @@ pub(crate) async fn verify_presence(app: &AppHandle, purpose: Presence) -> Resul
             Some(silentsilo_fido::Authenticator::ThisDevice)
         )),
     );
+    let check = envelope_check(&keys.keys);
     let unlock = run_fido(app, move || {
-        silentsilo_fido::derive_unlock_material(&cred_ids, &vault_id, wanted)
+        silentsilo_fido::derive_unlock_material_opening(&cred_ids, &vault_id, wanted, Some(&check))
     })
     .await?;
 
@@ -2972,15 +2995,16 @@ pub(crate) async fn verify_presence(app: &AppHandle, purpose: Presence) -> Resul
             .to_string()
         })?;
 
-    secret_that_opens(&unlock, &stored.wrapped_dek)
-        .map(|_| ())
-        .ok_or_else(|| {
-            crate::err::coded!(
-                "err.key_cannot_verify",
-                "That key could not verify this silo."
-            )
-            .to_string()
-        })
+    if secret_that_opens(&unlock, &stored.wrapped_dek).is_some() {
+        return Ok(());
+    }
+    // A key added before its PIN, on Windows: said, as at unlock.
+    opening_wrap_key(&unlock, &stored.wrapped_dek, Some(stored))?;
+    Err(crate::err::coded!(
+        "err.key_cannot_verify",
+        "That key could not verify this silo."
+    )
+    .to_string())
 }
 
 #[derive(serde::Serialize)]
@@ -3984,7 +4008,9 @@ mod unlock_rule_tests {
 
 #[cfg(test)]
 mod key_secret_tests {
-    use super::{built_in_here, enrolled_kinds, opening_wrap_key, secret_that_opens};
+    use super::{
+        built_in_here, enrolled_kinds, envelope_check, opening_wrap_key, secret_that_opens,
+    };
     use silentsilo_fido::UnlockMaterial;
     use silentsilo_vault::{StoredFidoCredential, StoredFidoKeys};
 
@@ -4006,6 +4032,17 @@ mod key_secret_tests {
     fn sealed_under(secret: &[u8; 32]) -> String {
         let dek = silentsilo_crypto::generate_dek();
         hex::encode(silentsilo_vault::wrap_dek_bytes(&dek, secret).unwrap())
+    }
+
+    #[test]
+    fn the_ceremony_is_told_which_secret_opens_which_envelope() {
+        let mut held = key(false);
+        held.wrapped_dek = sealed_under(&UNVERIFIED);
+        let check = envelope_check(&[held]);
+        // The envelope of this credential, under this secret: nothing else.
+        assert!(check(&[0xaa, 0x11], &UNVERIFIED));
+        assert!(!check(&[0xaa, 0x11], &VERIFIED));
+        assert!(!check(&[0xbb, 0x22], &UNVERIFIED));
     }
 
     fn key(platform: bool) -> StoredFidoCredential {

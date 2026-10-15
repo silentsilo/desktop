@@ -542,8 +542,14 @@ pub async fn vault_join_from_storage(
         ),
     );
     let vault_id_str = vault_id.to_string();
+    let check = crate::commands::vault::envelope_check(&keys.keys);
     let unlock = run_fido(&app, move || {
-        silentsilo_fido::derive_unlock_material(&cred_ids, &vault_id_str, None)
+        silentsilo_fido::derive_unlock_material_opening(
+            &cred_ids,
+            &vault_id_str,
+            None,
+            Some(&check),
+        )
     })
     .await?;
 
@@ -557,14 +563,15 @@ pub async fn vault_join_from_storage(
     };
     // The secret that opens the touched key's envelope: a key added before it
     // had a PIN still holds the silo under the one it gave then.
+    // On Windows, one added before its PIN is said, as at unlock.
     let touched = hex::encode(&unlock.credential_id);
-    let wrap_key = keys
-        .keys
-        .iter()
-        .find(|k| k.credential_id == touched)
-        .and_then(|k| crate::commands::vault::secret_that_opens(&unlock, &k.wrapped_dek))
-        .map(|(key, _)| key)
-        .unwrap_or_else(|| zeroize::Zeroizing::new(unlock.wrap_key));
+    let stored = keys.keys.iter().find(|k| k.credential_id == touched);
+    let wrap_key = match stored {
+        Some(stored) => {
+            crate::commands::vault::opening_wrap_key(&unlock, &stored.wrapped_dek, Some(stored))?.0
+        }
+        None => zeroize::Zeroizing::new(unlock.wrap_key),
+    };
     let join = silentsilo_app::flows::key_join_open(&**store, &offer, &touched, &wrap_key).await?;
 
     // From here on local state is created. Everything above could fail

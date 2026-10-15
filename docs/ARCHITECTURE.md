@@ -391,8 +391,11 @@ ceremony (`derive_enrolment_material`) refuses an unverified one, and over
 CTAP2 core refuses a key with no PIN set. A key enrolled earlier without one
 and given a PIN since still works on Linux and macOS: every check that a
 key opens the silo (`vault_unlock`, `verify_presence`, the rotation checks,
-setting up from backup) goes through `secret_that_opens`, which tries the
-unverified secret the ceremony also brought back. The unlock then emits
+setting up from backup, an organisation key's touch) goes through
+`secret_that_opens`, which tries the unverified secret too. The ceremony
+brings that one back only when the verified one opens nothing: it is given
+`envelope_check`, a copy of the envelopes, so an ordinary unlock stays one
+assertion. The unlock then emits
 `key-added-without-pin`, so the window asks for the key to be added again,
 and a rotation re-seals such a key under its verified secret. On Windows
 there is no such secret to try, so the unlock says

@@ -91,13 +91,23 @@ describe("an install that failed for want of rights", () => {
     }
   });
 
-  it("and not by the numbers, which mean other things on Windows", () => {
+  it("and not by the numbers on Windows, where they mean other things", () => {
     for (const reason of [
       "The data is invalid. (os error 13)",
       "failed (os error 30)",
       "The update could not be verified.",
     ]) {
-      expect(lacksPermission(reason), reason).toBe(false);
+      expect(lacksPermission(reason, true), reason).toBe(false);
     }
+  });
+
+  it("but by the numbers elsewhere, where the words come in the system's language", () => {
+    for (const reason of [
+      "Keine Berechtigung (os error 13)",
+      "Système de fichiers en lecture seule (os error 30)",
+    ]) {
+      expect(lacksPermission(reason, false), reason).toBe(true);
+    }
+    expect(lacksPermission("The update could not be verified.", false)).toBe(false);
   });
 });

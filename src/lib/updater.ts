@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { onWindows } from "./os";
 
 export type UpdateCheckResult =
   | { available: false }
@@ -131,9 +132,13 @@ const NO_PERMISSION = /permission denied|read-only file system|pkexec|polkit|not
 /** Whether an install failed for want of rights: an AppImage in a folder
  * this user cannot write, a .deb update with no polkit agent, a read-only
  * disk. */
-export function lacksPermission(reason: unknown): boolean {
-  return NO_PERMISSION.test(String(reason));
+export function lacksPermission(reason: unknown, windows = onWindows()): boolean {
+  const text = String(reason);
+  // The words are the system's language; the numbers are not, but mean
+  // something else on Windows (13 is invalid data, 30 a read fault).
+  return NO_PERMISSION.test(text) || (!windows && /\(os error (13|30)\)/.test(text));
 }
+
 
 /**
  * Downloads, locks every open silo, installs, then relaunches into the new

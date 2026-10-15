@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { hasKey } from "../i18n";
@@ -23,12 +23,21 @@ describe("formatAppError", () => {
       expect(formatAppError(raw)).toContain("FAT32");
     }
     expect(formatAppError("failed (os error 2230)")).not.toContain("FAT32");
+    // EFBIG in the system's language, off Windows.
+    expect(formatAppError("Datei zu groß (os error 27)")).toContain("FAT32");
     // 27 is EFBIG only off Windows; there it is a sector not found.
-    for (const raw of [
-      "The drive cannot find the sector requested. (os error 27)",
-      "failed (os error 27)",
-    ]) {
-      expect(formatAppError(raw)).not.toContain("FAT32");
+    const agent = vi
+      .spyOn(navigator, "userAgent", "get")
+      .mockReturnValue("Mozilla/5.0 (Windows NT 10.0)");
+    try {
+      for (const raw of [
+        "The drive cannot find the sector requested. (os error 27)",
+        "failed (os error 27)",
+      ]) {
+        expect(formatAppError(raw)).not.toContain("FAT32");
+      }
+    } finally {
+      agent.mockRestore();
     }
   });
 
@@ -101,7 +110,7 @@ describe("formatAppError", () => {
 
   it("strips common Rust/Tauri error-wrapper prefixes for an unrecognized message", () => {
     expect(formatAppError("Error: something odd happened")).toBe("something odd happened");
-    expect(formatAppError('invoke(vault_unlock): disk is full')).toBe("disk is full");
+    expect(formatAppError("invoke(vault_unlock): disk is full")).toBe("disk is full");
   });
 
   it("falls back to a generic message for empty/unknown input", () => {
@@ -176,9 +185,9 @@ describe("coded backend errors", () => {
   });
 
   it("lose their keys inside a list the backend built", () => {
-    expect(plainError(`a.txt: Not a file.${SEP}err.not_a_file; b: x${SEP}err.y${SEP}{"p":"1"}`)).toBe(
-      "a.txt: Not a file.; b: x",
-    );
+    expect(
+      plainError(`a.txt: Not a file.${SEP}err.not_a_file; b: x${SEP}err.y${SEP}{"p":"1"}`),
+    ).toBe("a.txt: Not a file.; b: x");
   });
 
   it("have a text for every key the backend sends", () => {

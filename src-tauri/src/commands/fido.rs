@@ -239,9 +239,16 @@ fn ended_by_user(error: &str) -> bool {
 /// Whether a ceremony failed for a reason a second try cannot change: the
 /// key has no PIN, or this Windows cannot take a key's secret at all.
 fn settled_answer(error: &str) -> bool {
-    ["err.key_needs_pin", "err.windows_update_for_keys"]
-        .iter()
-        .any(|code| error.contains(code))
+    [
+        "err.key_needs_pin",
+        "err.windows_update_for_keys",
+        "err.pin_blocked",
+        "err.key_unsupported",
+        "err.key_not_of_silo",
+        "err.key_not_of_silo_here",
+    ]
+    .iter()
+    .any(|code| error.contains(code))
 }
 
 /// The longest key name the app accepts, when adding a key or renaming one.
@@ -322,30 +329,43 @@ pub(crate) async fn touch_organisation_key(
     let vault_id = crate::state::silo_credentials(app)?.vault_id.to_string();
 
     emit_fido_progress(app, prompt);
+    let check = crate::commands::vault::envelope_check(&keys.keys);
     let unlock = run_fido(app, move || {
-        silentsilo_fido::derive_unlock_material(&cred_ids, &vault_id, None)
+        silentsilo_fido::derive_unlock_material_opening(&cred_ids, &vault_id, None, Some(&check))
     })
     .await?;
+
+    // The secret that opens the key's envelope: an organisation key added
+    // before it had a PIN still holds the silo, and the log's key, under the
+    // one it gave then.
+    let secret = keys
+        .find_by_credential_id(&unlock.credential_id)
+        .and_then(|k| crate::commands::vault::secret_that_opens(&unlock, &k.wrapped_dek))
+        .map(|(key, _)| key)
+        .unwrap_or_else(|| zeroize::Zeroizing::new(unlock.wrap_key));
 
     // Both halves of the question, membership and material, are asked by the
     // proof's own constructor, so this and the write path cannot drift apart
     // about what counts as proof.
-    let proof = silentsilo_vault::OrgProof::verify(keys, &unlock.credential_id, &unlock.wrap_key)
-        .map_err(|_| {
-        crate::err::coded!(
-            "err.not_org_key",
-            "That is not one of this silo's organisation keys."
-        )
-        .to_string()
-    })?;
-    Ok((proof, org_touch(&unlock)))
+    let proof =
+        silentsilo_vault::OrgProof::verify(keys, &unlock.credential_id, &secret).map_err(|_| {
+            crate::err::coded!(
+                "err.not_org_key",
+                "That is not one of this silo's organisation keys."
+            )
+            .to_string()
+        })?;
+    Ok((proof, org_touch(&unlock.credential_id, secret)))
 }
 
 /// What the log needs of a key's touch.
-fn org_touch(unlock: &silentsilo_fido::UnlockMaterial) -> silentsilo_app::audit_admin::OrgKeyTouch {
+fn org_touch(
+    credential_id: &[u8],
+    secret: zeroize::Zeroizing<[u8; 32]>,
+) -> silentsilo_app::audit_admin::OrgKeyTouch {
     silentsilo_app::audit_admin::OrgKeyTouch {
-        credential_id: hex_encode(&unlock.credential_id),
-        wrap_key: zeroize::Zeroizing::new(unlock.wrap_key),
+        credential_id: hex_encode(credential_id),
+        wrap_key: secret,
     }
 }
 
@@ -560,7 +580,10 @@ pub async fn fido_enroll_primary(
     // with this key. A failure is said and left to Settings, Activity, where
     // the organisation can start it: the silo itself is enrolled.
     if organisation.unwrap_or(false) {
-        let touch = org_touch(&unlock);
+        let touch = org_touch(
+            &unlock.credential_id,
+            zeroize::Zeroizing::new(unlock.wrap_key),
+        );
         let started = crate::state::focused_id(&state)
             .and_then(|id| state.start_org_audit_log(id, &touch, Some(DEFAULT_ORG_RETENTION_DAYS)));
         if let Err(e) = started {
@@ -764,7 +787,10 @@ pub async fn fido_add_key(
     // A new organisation key reads the organisation's log too. A silo whose
     // log was never started starts it now, with both keys.
     if let Some(by) = org_reader {
-        let new = org_touch(&unlock);
+        let new = org_touch(
+            &unlock.credential_id,
+            zeroize::Zeroizing::new(unlock.wrap_key),
+        );
         let state = app.state::<AppState>();
         let added = match state.add_org_audit_reader(silo_id, &by, &new) {
             Err(_) if !state.audit_is_mandatory(silo_id) => state
@@ -1356,8 +1382,14 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
         let raw = hex::decode(id).map_err(|_| "That key id is not readable.".to_string())?;
         let vault = vault_id.clone();
         let wanted = authenticator_of(&keys, id);
+        let check = crate::commands::vault::envelope_check(&keys.keys);
         let unlock = run_fido_settling(&app, move || {
-            silentsilo_fido::derive_unlock_material(std::slice::from_ref(&raw), &vault, wanted)
+            silentsilo_fido::derive_unlock_material_opening(
+                std::slice::from_ref(&raw),
+                &vault,
+                wanted,
+                Some(&check),
+            )
         })
         .await?;
         // A key added before it had a PIN proves itself with the secret it
@@ -1580,8 +1612,14 @@ pub async fn vault_rotate_resume(
     );
     let raw = hex::decode(&credential).map_err(|_| "That key id is not readable.".to_string())?;
     let wanted = authenticator_of(&keys, &credential);
+    let check = crate::commands::vault::envelope_check(&keys.keys);
     let unlock = run_fido(&app, move || {
-        silentsilo_fido::derive_unlock_material(std::slice::from_ref(&raw), &vault_id, wanted)
+        silentsilo_fido::derive_unlock_material_opening(
+            std::slice::from_ref(&raw),
+            &vault_id,
+            wanted,
+            Some(&check),
+        )
     })
     .await?;
     // Before storage is touched: a key that does not open the current one

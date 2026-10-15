@@ -299,6 +299,8 @@ mod linux {
             .replace('"', "\\\"")
             .replace('$', "\\$")
             .replace('`', "\\`")
+            // A field code otherwise: `%` stands for arguments in Exec.
+            .replace('%', "%%")
     }
 
     /// `X-GNOME-Autostart-enabled` is what GNOME's own toggle writes, so an
@@ -387,6 +389,8 @@ mod linux {
                 "{entry}"
             );
             assert!(entry.starts_with("[Desktop Entry]\n"));
+            let percent = entry_for(Path::new("/home/ana/100% Apps/SilentSilo.AppImage"));
+            assert!(percent.contains("/home/ana/100%% Apps/"), "{percent}");
             assert!(entry.contains("X-GNOME-Autostart-enabled=true\n"));
         }
     }
