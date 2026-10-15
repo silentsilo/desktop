@@ -364,6 +364,11 @@ must open this silo's DEK.
   opened (an unlock or a join with it): that is the way back in when the
   keys are lost. An organisation's key, where the silo needs one, is the
   check.
+- **The recovery code stays** while no key outlives this computer.
+  `recovery_disable` refuses (`err.recovery_needed_platform_only`) unless a
+  usable, confirmed portable key is enrolled: Windows Hello and Touch ID go
+  with the machine or its TPM. `recovery_status` reports it as `required`,
+  and Settings explains it instead of offering the button.
 - **Exports** ask every time. The window asks before the file is chosen
   (`fido_reverify` with `export`), which stands for `EXPORT_FOR` (5
   minutes) and is used up by the write (`take_export_confirmation`); a write
@@ -1093,6 +1098,12 @@ repository names its version and only its owners can put files under it.
 The scheduled check asks at most once a day: an update an earlier run found
 is shown again from what that check left (`pendingToShow`), and Install
 asks for it then.
+
+The updater's identity is pinned by `src/lib/updaterIdentity.test.ts`: the
+minisign public key, the endpoint, the release prefix, the bundle
+identifier (it names the data folder and the keyring service) and the
+product name. Changing any of them strands every installed copy, so that
+test changes only with a transition plan.
 
 ## Looks wrong, is deliberate
 

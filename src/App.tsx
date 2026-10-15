@@ -402,7 +402,11 @@ export default function App() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [securityKeys, setSecurityKeys] = useState<SecurityKeyInfo[]>([]);
-  const [recovery, setRecovery] = useState<RecoveryStatus>({ enabled: false, created_at: null });
+  const [recovery, setRecovery] = useState<RecoveryStatus>({
+    enabled: false,
+    created_at: null,
+    required: false,
+  });
   // Held in memory only, and only until the user says they've written it
   // down: nothing anywhere else can produce it again.
   const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
@@ -947,7 +951,7 @@ export default function App() {
     // Secrets and one-time reveals first: these must never appear next to
     // another silo's name.
     setRecoveryCode(null);
-    setRecovery({ enabled: false, created_at: null });
+    setRecovery({ enabled: false, created_at: null, required: false });
     setKeyAddSuccess(null);
 
     // The credential store, which is read per silo.
@@ -3141,7 +3145,7 @@ export default function App() {
     try {
       setRecovery(await invoke<RecoveryStatus>("recovery_status"));
     } catch {
-      setRecovery({ enabled: false, created_at: null });
+      setRecovery({ enabled: false, created_at: null, required: false });
     }
   }, []);
 

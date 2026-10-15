@@ -123,6 +123,17 @@ export const recovery = {
     "pt-BR": "O código que você anotou deixa de funcionar, e só suas chaves abrem este silo.",
     pl: "Zapisany kod przestanie działać i tylko Twoje klucze otworzą ten silos.",
   },
+  "recovery.off_needed": {
+    note: "Shown instead of that text, with the button disabled, when every key is built into one computer (Windows Hello, Touch ID). 'Portable security key' is a removable one (YubiKey).",
+    en: "Every key on this silo is tied to one computer. Until you add a portable security key, the recovery code is the only way back if that computer is lost, so it cannot be turned off.",
+    ro: "Toate cheile acestui siloz sunt legate de un singur calculator. Până adaugi o cheie de securitate portabilă, codul de recuperare este singura cale de acces dacă pierzi acel calculator, așa că nu poate fi dezactivat.",
+    de: "Jeder Schlüssel dieses Silos ist an einen einzigen Computer gebunden. Solange du keinen tragbaren Sicherheitsschlüssel hinzufügst, ist der Wiederherstellungscode der einzige Weg zurück, wenn dieser Computer verloren geht. Deshalb lässt er sich nicht deaktivieren.",
+    fr: "Toutes les clés de ce silo sont liées à un seul ordinateur. Tant que vous n’ajoutez pas de clé de sécurité portable, le code de récupération est le seul moyen d’y revenir si vous perdez cet ordinateur : il ne peut donc pas être désactivé.",
+    es: "Todas las llaves de este silo están ligadas a un solo ordenador. Hasta que añadas una llave de seguridad portátil, el código de recuperación es la única forma de volver a entrar si pierdes ese ordenador, así que no se puede desactivar.",
+    it: "Tutte le chiavi di questo silo sono legate a un solo computer. Finché non aggiungi una chiave di sicurezza portatile, il codice di recupero è l’unico modo per rientrare se perdi quel computer, quindi non si può disattivare.",
+    "pt-BR": "Todas as chaves deste silo estão presas a um único computador. Até você adicionar uma chave de segurança portátil, o código de recuperação é a única forma de voltar se perder esse computador, então ele não pode ser desativado.",
+    pl: "Wszystkie klucze tego silosu są przypisane do jednego komputera. Dopóki nie dodasz przenośnego klucza bezpieczeństwa, kod odzyskiwania to jedyna droga powrotu, jeśli stracisz ten komputer, więc nie można go wyłączyć.",
+  },
   "recovery.copied": {
     note: "Message after the code is copied. The clipboard clears itself after a while.",
     en: "Copied to the clipboard. Write it down as well.",

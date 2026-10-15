@@ -77,6 +77,52 @@ jobs:
       # High and critical npm advisories, with reasoned ignores in the script.
       - run: node scripts/npm-audit.mjs
 
+  # The format fixtures of the exact core commit Cargo.lock pins, so moving
+  # the pin is also the moment every older silo is shown to still open. Core
+  # runs them on its own pushes; this ties them to what this app builds.
+  core-fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      # The commit after `#` on silentsilo-core's own `source` line, never
+      # another package's. Empty for a patched lockfile, which fails here.
+      - name: Core commit pinned in Cargo.lock
+        id: pin
+        run: |
+          commit=$(awk '/^\[\[package\]\]$/ { f = 0 } /^name = "silentsilo-core"$/ { f = 1 } f && /^source = / { print; exit }' Cargo.lock \
+            | sed -nE 's|^source = "git\+https://github\.com/silentsilo/core(\.git)?[?#][^#]*#([0-9a-f]{40})"$|\2|p')
+          if [ -z "$commit" ]; then
+            echo "::error::Cargo.lock records no silentsilo/core commit for silentsilo-core"
+            exit 1
+          fi
+          echo "core $commit"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: silentsilo/core
+          ref: ${{ steps.pin.outputs.commit }}
+          path: core
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: core-fixtures
+          workspaces: core
+      # What core's own Linux job installs before the same test.
+      - name: System libraries core links against
+        run: |
+          for attempt in 1 2 3; do
+            sudo timeout 180 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update && break
+            echo "apt-get update stalled or failed (attempt $attempt)"
+            sleep 5
+          done
+          sudo apt-get install -y libdbus-1-dev libudev-dev pkg-config
+      - run: cargo test --locked -p silentsilo-fixture
+        working-directory: core
+
   # Known advisories against what the lockfile actually pins. Warnings for
   # unsound and yanked crates only print. Ignores sit in .cargo/audit.toml,
   # each with its reason. Pinned so a new cargo-audit release cannot turn the

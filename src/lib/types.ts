@@ -262,6 +262,8 @@ export type SyncProgress = {
 export type RecoveryStatus = {
   enabled: boolean;
   created_at: number | null;
+  /** Every key is tied to one computer, so the code may not be turned off. */
+  required: boolean;
 };
 
 export type FileEntry = {

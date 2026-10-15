@@ -726,12 +726,13 @@ export function SettingsPanel(props: Props) {
                   <LifeBuoy size={16} />
                   {t("recovery.off_title")}
                 </h3>
-                <p>{t("recovery.off_body")}</p>
+                {/* The backend refuses it too; this says why before anyone tries. */}
+                <p>{t(recovery.required ? "recovery.off_needed" : "recovery.off_body")}</p>
                 <div className="actions">
                   <button
                     type="button"
                     className="btn-danger"
-                    disabled={busy}
+                    disabled={busy || recovery.required}
                     onClick={onDisableRecovery}
                   >
                     {t("recovery.off_title")}

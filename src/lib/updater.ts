@@ -8,7 +8,7 @@ export type UpdateCheckResult =
   | { available: true; version: string; body: string | null; update: Update };
 
 /** Where SilentSilo's releases are published, one folder per tag. */
-const RELEASES = "https://github.com/silentsilo/desktop/releases/download/";
+export const RELEASES = "https://github.com/silentsilo/desktop/releases/download/";
 
 /** Said when an answer points anywhere else. */
 const NOT_OURS =

@@ -358,6 +358,29 @@ pub(crate) async fn touch_organisation_key(
     Ok((proof, org_touch(&unlock.credential_id, secret)))
 }
 
+/// Whether removing `credential_id` would leave a silo with no recovery code
+/// and only keys tied to one computer (Windows Hello, Touch ID): lose that
+/// computer, or its TPM or Secure Enclave key, and nothing opens the silo.
+/// Keys taken in from storage and never used here do not count, as for the
+/// last-key rule: one could have been planted in the bucket.
+fn leaves_no_way_back(
+    keys: &silentsilo_vault::StoredFidoKeys,
+    credential_id: &str,
+    has_code: bool,
+) -> bool {
+    let portable = |k: &&silentsilo_vault::StoredFidoCredential| !k.platform && !k.unconfirmed;
+    let removing_portable = keys
+        .usable()
+        .filter(portable)
+        .any(|k| k.credential_id == credential_id);
+    let others = keys
+        .usable()
+        .filter(portable)
+        .filter(|k| k.credential_id != credential_id)
+        .count();
+    !has_code && removing_portable && others == 0
+}
+
 /// What the log needs of a key's touch.
 fn org_touch(
     credential_id: &[u8],
@@ -910,6 +933,19 @@ pub async fn fido_remove_key(
         return Err(
             crate::err::coded!("err.keep_one_key", "Keep at least one key enrolled.").into(),
         );
+    }
+    // The other door to what turning the code off refuses: with no recovery
+    // code, the last key that is not tied to one computer stays.
+    if leaves_no_way_back(
+        &keys,
+        &credential_id,
+        silentsilo_vault::has_recovery_code(&root),
+    ) {
+        return Err(crate::err::coded!(
+            "err.keep_portable_key",
+            "This silo has no recovery code, and this is its last key that is not tied to one computer. Make a new recovery code or add another security key before removing it."
+        )
+        .into());
     }
 
     // An organisation's key is the company's way back into a silo it
@@ -1752,7 +1788,7 @@ mod authenticator_choice_tests {
         );
     }
 
-    use super::preferred_authenticator;
+    use super::{leaves_no_way_back, preferred_authenticator};
     use silentsilo_fido::Authenticator;
     use silentsilo_vault::{StoredFidoCredential, StoredFidoKeys};
 
@@ -1774,6 +1810,36 @@ mod authenticator_choice_tests {
             revoked: false,
             unconfirmed: false,
         }
+    }
+
+    #[test]
+    fn without_a_code_the_last_portable_key_stays() {
+        let mut portable = key(false);
+        portable.credential_id = "bb22".into();
+        let mut hello = key(true);
+        hello.credential_id = "cc33".into();
+        let keys = StoredFidoKeys {
+            keys: vec![portable.clone(), hello.clone()],
+        };
+        assert!(leaves_no_way_back(&keys, "bb22", false));
+        // A code is a way back; so is another portable key.
+        assert!(!leaves_no_way_back(&keys, "bb22", true));
+        let mut second = portable.clone();
+        second.credential_id = "dd44".into();
+        let with_two = StoredFidoKeys {
+            keys: vec![portable.clone(), second, hello.clone()],
+        };
+        assert!(!leaves_no_way_back(&with_two, "bb22", false));
+        // Removing a platform key is never this case.
+        assert!(!leaves_no_way_back(&keys, "cc33", false));
+        // A portable key taken in from storage and never used here is no way back.
+        let mut planted = portable.clone();
+        planted.credential_id = "ee55".into();
+        planted.unconfirmed = true;
+        let with_planted = StoredFidoKeys {
+            keys: vec![portable, planted, hello],
+        };
+        assert!(leaves_no_way_back(&with_planted, "bb22", false));
     }
 
     #[test]

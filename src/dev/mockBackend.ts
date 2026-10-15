@@ -510,8 +510,8 @@ const handlers: Record<string, Handler> = {
   // a real first run.
   recovery_status: () =>
     flag("norecovery")
-      ? { enabled: false, created_at: null }
-      : { enabled: true, created_at: 1_769_000_000 },
+      ? { enabled: false, created_at: null, required: false }
+      : { enabled: true, created_at: 1_769_000_000, required: flag("helloonly") },
   // A different code every call, like the real command, which mints one and
   // overwrites the stored envelope. The old fixed string made a double call
   // look identical to a single one on screen, which is precisely the bug this

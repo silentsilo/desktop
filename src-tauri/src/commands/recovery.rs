@@ -8,8 +8,9 @@
 use silentsilo_store::ObjectStore;
 use silentsilo_sync as sync;
 use silentsilo_vault::{
-    VaultSession, clear_recovery_envelope, create_recovery_envelope, has_recovery_code,
-    load_recovery_envelope, save_recovery_envelope, unwrap_with_code,
+    StoredFidoKeys, VaultSession, clear_recovery_envelope, create_recovery_envelope,
+    has_recovery_code, load_fido_keys, load_recovery_envelope, save_recovery_envelope,
+    unwrap_with_code,
 };
 use silentsilo_vfs::Vfs;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -21,7 +22,30 @@ pub struct RecoveryStatus {
     pub enabled: bool,
     /// Unix seconds, so the UI can say how old the written-down code is.
     pub created_at: Option<i64>,
+    /// The code may not be turned off: no key would be left that outlives
+    /// this computer. False when there is no code.
+    pub required: bool,
 }
+
+/// Whether the silo still has a way in that outlives one computer once the
+/// code is gone: a removable key this build can unlock with. Windows Hello
+/// and Touch ID go with the machine. A key taken in from storage and never
+/// used here does not count either, since a bucket writer could have
+/// planted it.
+fn has_portable_key(keys: Option<&StoredFidoKeys>) -> bool {
+    keys.is_some_and(|keys| keys.usable().any(|k| !k.platform && !k.unconfirmed))
+}
+
+/// [`has_portable_key`] for the silo at `root`. Keys that will not load
+/// count as none: refusing is recoverable, a silo with no way in is not.
+fn code_required(root: &std::path::Path) -> bool {
+    !has_portable_key(load_fido_keys(root).ok().as_ref())
+}
+
+const CODE_REQUIRED: &str = crate::err::coded!(
+    "err.recovery_needed_platform_only",
+    "Every key on this silo is tied to one computer, so the recovery code is the only way back if that computer is lost. Add a portable security key before turning the code off."
+);
 
 fn client_for(app: &AppHandle) -> Option<Box<dyn ObjectStore>> {
     crate::state::silo_store(app)
@@ -77,6 +101,7 @@ pub fn recovery_status(app: AppHandle) -> Result<RecoveryStatus, String> {
     Ok(RecoveryStatus {
         enabled: true,
         created_at,
+        required: code_required(&root),
     })
 }
 
@@ -193,6 +218,11 @@ pub async fn recovery_disable(app: AppHandle) -> Result<Vec<String>, String> {
     // Pinned: storage is reached below, and the local envelope cleared after
     // it has to be this silo's, not whichever is focused by then.
     let (silo, kek) = crate::state::unlocked_silo_with_kek(&app)?;
+    // Enforced here, not only in the UI: without a portable key the code is
+    // all that survives losing this computer or its TPM or Secure Enclave.
+    if code_required(&silo.path) {
+        return Err(CODE_REQUIRED.into());
+    }
     // Same reasoning as regenerating: turning recovery off entirely is the
     // blunter version of the same lockout.
     confirm_code_change(&app, crate::commands::vault::Presence::RecoveryOff).await?;
@@ -620,4 +650,79 @@ pub async fn vault_join_with_recovery(
         Ok(meta)
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use silentsilo_vault::StoredFidoCredential;
+
+    fn key(id: &str, platform: bool) -> StoredFidoCredential {
+        StoredFidoCredential {
+            kind: silentsilo_vault::KIND_FIDO2.into(),
+            derivation: silentsilo_vault::DERIVATION_HMAC_V1.into(),
+            policy: String::new(),
+            credential_id: id.into(),
+            public_key: "3059".into(),
+            key_slot: 0,
+            rp_id: "silentsilo.com".into(),
+            label: String::new(),
+            wrapped_dek: "00".into(),
+            platform,
+            revoked: false,
+            unconfirmed: false,
+        }
+    }
+
+    fn keys(keys: Vec<StoredFidoCredential>) -> StoredFidoKeys {
+        StoredFidoKeys { keys }
+    }
+
+    #[test]
+    fn a_silo_opened_only_by_windows_hello_keeps_its_code() {
+        let hello = keys(vec![key("aa", true), key("bb", true)]);
+        assert!(!has_portable_key(Some(&hello)));
+    }
+
+    #[test]
+    fn a_portable_key_lets_the_code_go() {
+        let mixed = keys(vec![key("aa", true), key("bb", false)]);
+        assert!(has_portable_key(Some(&mixed)));
+        assert!(has_portable_key(Some(&keys(vec![key("cc", false)]))));
+    }
+
+    #[test]
+    fn a_retired_portable_key_does_not_count() {
+        let mut stick = key("bb", false);
+        stick.revoked = true;
+        assert!(!has_portable_key(Some(&keys(vec![key("aa", true), stick]))));
+    }
+
+    #[test]
+    fn a_portable_key_taken_in_from_storage_and_never_used_does_not_count() {
+        let mut planted = key("bb", false);
+        planted.unconfirmed = true;
+        assert!(!has_portable_key(Some(&keys(vec![
+            key("aa", true),
+            planted
+        ]))));
+    }
+
+    #[test]
+    fn a_portable_key_this_build_cannot_unlock_with_does_not_count() {
+        // A kind no build knows: not usable here, whatever it claims.
+        let mut unknown = key("bb", false);
+        unknown.kind = "some-future-kind".into();
+        assert!(!has_portable_key(Some(&keys(vec![
+            key("aa", true),
+            unknown
+        ]))));
+    }
+
+    #[test]
+    fn keys_that_will_not_load_keep_the_code() {
+        assert!(!has_portable_key(None));
+        let dir = tempfile::tempdir().unwrap();
+        assert!(code_required(dir.path()));
+    }
 }
