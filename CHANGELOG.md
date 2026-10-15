@@ -23,6 +23,9 @@ silo from opening needs a major version rather than a note.
   release script now refuses any shipped program that needs it.
   The extractor in this release runs on any Windows 10 or 11 and reads
   silos made by every earlier version.
+- macOS: the extractor is one binary for Apple silicon and Intel, signed
+  and notarised, so a browser download starts without a Terminal
+  workaround. Its file name is now `silentsilo-extract-macos-universal`.
 - Windows: the installer refuses to install over a newer version. To go
   back, uninstall first; silos stay where they are.
 - Saving a file or folder out of a silo onto a FAT32 drive (many USB
