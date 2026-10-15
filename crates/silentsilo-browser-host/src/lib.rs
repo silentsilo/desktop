@@ -1200,6 +1200,22 @@ mod tests {
     }
 
     #[test]
+    fn each_reason_to_answer_alone_has_the_code_the_extension_tells_apart() {
+        for (why, code) in [
+            (NOT_RUNNING, "app-not-running"),
+            (NOT_OURS, "channel-not-app"),
+            (BROWSER_REFUSED, "browser-not-supported"),
+        ] {
+            let answer = alone_answer(br#"{"id":"9","type":"status"}"#, why);
+            let v: serde_json::Value = serde_json::from_slice(&answer).unwrap();
+            assert_eq!(v["id"], "9");
+            assert_eq!(v["type"], "error");
+            assert_eq!(v["code"], code);
+            assert_eq!(v["message"], why.message);
+        }
+    }
+
+    #[test]
     fn a_request_without_an_id_is_malformed() {
         for request in [&b"not json"[..], br#"{"type":"status"}"#, br#"{"id":7}"#] {
             let v: serde_json::Value =

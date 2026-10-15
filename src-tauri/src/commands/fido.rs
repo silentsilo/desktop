@@ -1823,6 +1823,43 @@ mod authenticator_choice_tests {
     }
 
     #[test]
+    fn a_failure_a_second_try_cannot_change_is_not_retried() {
+        for settled in [
+            "This key has no PIN.\u{1f}err.key_needs_pin",
+            "Update Windows to use security keys.\u{1f}err.windows_update_for_keys",
+        ] {
+            assert!(super::settled_answer(settled), "{settled}");
+            assert!(!super::ended_by_user(settled), "{settled}");
+        }
+        // An ordinary failure is tried again.
+        for transient in [
+            "unlock failed: InvalidStateError",
+            "enrollment failed: the device is busy",
+        ] {
+            assert!(!super::settled_answer(transient), "{transient}");
+            assert!(!super::ended_by_user(transient), "{transient}");
+        }
+    }
+
+    #[test]
+    fn the_verified_secret_is_tried_before_the_one_given_without_a_pin() {
+        let unlock = silentsilo_fido::UnlockMaterial {
+            wrap_key: [1; 32],
+            credential_id: vec![0xaa, 0x11],
+            verified: true,
+            unverified_wrap_key: Some([2; 32]),
+        };
+        assert_eq!(super::candidates(&unlock), vec![&[1u8; 32], &[2u8; 32]]);
+        let windows = silentsilo_fido::UnlockMaterial {
+            wrap_key: [1; 32],
+            credential_id: vec![0xaa, 0x11],
+            verified: true,
+            unverified_wrap_key: None,
+        };
+        assert_eq!(super::candidates(&windows), vec![&[1u8; 32]]);
+    }
+
+    #[test]
     fn a_key_change_needs_a_key_that_opens_the_current_key() {
         let current = silentsilo_crypto::generate_dek();
         let wrap = [7u8; 32];

@@ -43,6 +43,8 @@ if (-not $RustOnly) {
         powershell -NoProfile -ExecutionPolicy Bypass -File scripts\release-manifest.test.ps1
         if ($LASTEXITCODE -ne 0) { return }
         powershell -NoProfile -ExecutionPolicy Bypass -File scripts\browser-host-release.test.ps1
+        if ($LASTEXITCODE -ne 0) { return }
+        powershell -NoProfile -ExecutionPolicy Bypass -File scripts\vc-runtime.test.ps1
     }
 }
 

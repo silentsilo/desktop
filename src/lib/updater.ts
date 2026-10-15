@@ -124,6 +124,17 @@ export class UpdateInstallError extends Error {
   }
 }
 
+/** An update that could not replace the installed app for want of rights.
+ * By the words, not the numbers: 13 and 30 are other errors on Windows. */
+const NO_PERMISSION = /permission denied|read-only file system|pkexec|polkit|not authorized/i;
+
+/** Whether an install failed for want of rights: an AppImage in a folder
+ * this user cannot write, a .deb update with no polkit agent, a read-only
+ * disk. */
+export function lacksPermission(reason: unknown): boolean {
+  return NO_PERMISSION.test(String(reason));
+}
+
 /**
  * Downloads, locks every open silo, installs, then relaunches into the new
  * version. On Windows the installer ends this process outright, with no exit

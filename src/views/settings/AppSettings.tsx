@@ -11,6 +11,7 @@ import { Segmented } from "../../components/Segmented";
 import {
   checkForUpdate,
   installUpdateAndRelaunch,
+  lacksPermission,
   UpdateInstallError,
 } from "../../lib/updater";
 import { readAutostart, writeAutostart, type AutostartStatus } from "../../lib/autostart";
@@ -122,7 +123,7 @@ export function useUpdater(
       // Raw words from the OS otherwise: an AppImage in a folder this user
       // cannot write, a .deb update with no polkit agent to ask for the
       // password, a read-only disk.
-      const message = NO_PERMISSION.test(String(reason))
+      const message = lacksPermission(reason)
         ? t("app.update_no_permission")
         : formatAppError(reason);
       setState({ phase: "error", message });
@@ -132,10 +133,6 @@ export function useUpdater(
 
   return { state, check, install };
 }
-
-/** An update that could not replace the installed app for want of rights.
- * By the words, not the numbers: 13 and 30 are other errors on Windows. */
-const NO_PERMISSION = /permission denied|read-only file system|pkexec|polkit|not authorized/i;
 
 type Props = {
   section: AppSectionId;

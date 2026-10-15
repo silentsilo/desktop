@@ -23,6 +23,13 @@ describe("formatAppError", () => {
       expect(formatAppError(raw)).toContain("FAT32");
     }
     expect(formatAppError("failed (os error 2230)")).not.toContain("FAT32");
+    // 27 is EFBIG only off Windows; there it is a sector not found.
+    for (const raw of [
+      "The drive cannot find the sector requested. (os error 27)",
+      "failed (os error 27)",
+    ]) {
+      expect(formatAppError(raw)).not.toContain("FAT32");
+    }
   });
 
   it("recognizes an unconfigured bucket as a benign local-only notice", () => {

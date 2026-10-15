@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { builtInOrKey, osOf, platformStrings } from "./platformStrings";
+import { t } from "../i18n";
+import {
+  builtInHint,
+  builtInOrKey,
+  keysUnavailable,
+  osOf,
+  platformStrings,
+} from "./platformStrings";
 
 describe("platformStrings", () => {
   it("names the Windows pieces exactly as the screens always did", () => {
@@ -55,5 +62,32 @@ describe("platformStrings", () => {
     expect(builtInOrKey(platformStrings("linux"))).toBe("your security key");
     expect(builtInOrKey(platformStrings("windows"))).toBe("Windows Hello or your security key");
     expect(platformStrings("macos").hasBuiltIn).toBe(true);
+  });
+
+  it("says what to do about the built-in key by the reason the backend gave", () => {
+    const win = platformStrings("windows");
+    const mac = platformStrings("macos");
+    expect(builtInHint(win, "no_tpm")).toBe(t("app.platform_hint_no_tpm"));
+    expect(builtInHint(win, "update_windows")).toBe(t("app.platform_hint_update_windows"));
+    expect(builtInHint(mac, "unavailable")).toBe(t("app.platform_hint_touchid_unavailable"));
+    expect(builtInHint(mac, "absent")).toBe(t("app.platform_hint_no_touchid"));
+    // Absent elsewhere, set up later, or a backend that gives no reason.
+    expect(builtInHint(win, "absent")).toBe(win.builtInSetupHint);
+    expect(builtInHint(win, "not_set_up")).toBe(win.builtInSetupHint);
+    expect(builtInHint(mac, "not_set_up")).toBe(mac.builtInSetupHint);
+    expect(builtInHint(win, undefined)).toBe(win.builtInSetupHint);
+    expect(builtInHint(mac, undefined)).toBe(mac.builtInSetupHint);
+  });
+
+  it("tells a Linux key that is plugged in but unreadable apart from no key", () => {
+    const linux = platformStrings("linux");
+    expect(keysUnavailable(linux, { fido_key_present: true })).toBe(
+      t("app.platform_fido_no_access_linux"),
+    );
+    expect(keysUnavailable(linux, { fido_key_present: false })).toBe(linux.fidoUnavailable);
+    for (const os of ["windows", "macos"] as const) {
+      const s = platformStrings(os);
+      expect(keysUnavailable(s, { fido_key_present: true })).toBe(s.fidoUnavailable);
+    }
   });
 });

@@ -89,6 +89,30 @@ mod tests {
         let s: Settings = serde_json::from_str(r#"{"allow":true}"#).unwrap();
         assert!(s.allow);
     }
+
+    #[test]
+    fn no_keyring_is_said_only_once_the_keyring_refused() {
+        // (allowed, protector, keyring refused) -> protected
+        for (allowed, protector, refused, protected) in [
+            // A working or untried keyring is not reported missing.
+            (false, false, false, true),
+            (false, false, true, false),
+            (false, true, false, true),
+            // DPAPI, or a protector, seals the file whatever the keyring did.
+            (false, true, true, true),
+            // A switch already on stays visible, so it can be turned off.
+            (true, false, false, false),
+            (true, false, true, false),
+            (true, true, false, false),
+            (true, true, true, false),
+        ] {
+            assert_eq!(
+                shown_protected(allowed, protector, refused),
+                protected,
+                "allowed {allowed}, protector {protector}, refused {refused}"
+            );
+        }
+    }
 }
 
 /// Where storage passwords can be kept on this computer.
@@ -108,9 +132,18 @@ fn secrets_status() -> SecretsStatus {
     let allowed = silentsilo_vault::unprotected_secrets_allowed();
     let keyring_refused = silentsilo_vault::keyring_keeps_secrets() == Some(false);
     SecretsStatus {
-        protected: !allowed && (silentsilo_vault::local_secrets_protected() || !keyring_refused),
+        protected: shown_protected(
+            allowed,
+            silentsilo_vault::local_secrets_protected(),
+            keyring_refused,
+        ),
         allowed,
     }
+}
+
+/// [`secrets_status`]'s rule, apart from what it reads.
+fn shown_protected(allowed: bool, protector: bool, keyring_refused: bool) -> bool {
+    !allowed && (protector || !keyring_refused)
 }
 
 /// For Settings, General: shown only where there is no keyring.

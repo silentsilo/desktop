@@ -120,9 +120,77 @@ fn download_queue_file_path() -> std::path::PathBuf {
 /// inherits it. The runtime sets `$APPDIR` to its mount, and this executable
 /// sits inside it only when it is the AppImage's own.
 pub fn running_appimage() -> Option<std::path::PathBuf> {
-    let image = std::env::var_os("APPIMAGE").filter(|p| !p.is_empty())?;
-    let mount = std::env::var_os("APPDIR").filter(|p| !p.is_empty())?;
     let exe = std::env::current_exe().ok()?;
-    exe.starts_with(&mount)
+    appimage_of(
+        std::env::var_os("APPIMAGE").as_deref(),
+        std::env::var_os("APPDIR").as_deref(),
+        &exe,
+    )
+}
+
+/// [`running_appimage`] with `$APPIMAGE`, `$APPDIR` and the executable
+/// passed in.
+fn appimage_of(
+    appimage: Option<&std::ffi::OsStr>,
+    appdir: Option<&std::ffi::OsStr>,
+    exe: &std::path::Path,
+) -> Option<std::path::PathBuf> {
+    let image = appimage.filter(|p| !p.is_empty())?;
+    let mount = appdir.filter(|p| !p.is_empty())?;
+    exe.starts_with(mount)
         .then(|| std::path::PathBuf::from(image))
+}
+
+#[cfg(test)]
+mod appimage_tests {
+    use super::appimage_of;
+    use std::ffi::OsStr;
+    use std::path::{Path, PathBuf};
+
+    const IMAGE: &str = "/home/ana/Apps/SilentSilo.AppImage";
+    const MOUNT: &str = "/tmp/.mount_SilentAb12";
+
+    #[test]
+    fn inside_its_own_mount_it_is_the_appimage() {
+        let exe = Path::new(MOUNT).join("usr/bin/silentsilo");
+        assert_eq!(
+            appimage_of(Some(OsStr::new(IMAGE)), Some(OsStr::new(MOUNT)), &exe),
+            Some(PathBuf::from(IMAGE))
+        );
+    }
+
+    #[test]
+    fn appimage_inherited_from_another_appimage_is_not_ours() {
+        // Started from a terminal inside another AppImage: both variables
+        // are that one's, and this executable sits elsewhere.
+        for exe in [
+            "/usr/bin/silentsilo",
+            "/tmp/.mount_SilentAb123/usr/bin/silentsilo",
+        ] {
+            assert_eq!(
+                appimage_of(
+                    Some(OsStr::new("/opt/Other.AppImage")),
+                    Some(OsStr::new(MOUNT)),
+                    Path::new(exe)
+                ),
+                None,
+                "{exe}"
+            );
+        }
+    }
+
+    #[test]
+    fn missing_or_empty_variables_mean_no_appimage() {
+        let exe = Path::new(MOUNT).join("usr/bin/silentsilo");
+        let (image, mount, empty) = (OsStr::new(IMAGE), OsStr::new(MOUNT), OsStr::new(""));
+        for (appimage, appdir) in [
+            (None, Some(mount)),
+            (Some(image), None),
+            (Some(empty), Some(mount)),
+            (Some(image), Some(empty)),
+            (None, None),
+        ] {
+            assert_eq!(appimage_of(appimage, appdir, &exe), None);
+        }
+    }
 }

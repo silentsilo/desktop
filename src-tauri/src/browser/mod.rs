@@ -363,37 +363,40 @@ fn status_of(app: &AppHandle) -> ExtensionStatus {
 fn sandboxed_browsers() -> Vec<&'static str> {
     #[cfg(target_os = "linux")]
     {
-        use std::path::PathBuf;
+        use std::path::{Path, PathBuf};
         let home = std::env::var_os("HOME").map(PathBuf::from);
-        let flatpak = |id: &str| {
-            let system = PathBuf::from("/var/lib/flatpak/app").join(id);
-            let user = home
-                .as_ref()
-                .map(|h| h.join(".local/share/flatpak/app").join(id));
-            system.is_dir() || user.is_some_and(|u| u.is_dir())
-        };
-        let snap = |name: &str| PathBuf::from("/snap").join(name).is_dir();
-        let found = [
-            ("Chromium", snap("chromium")),
-            ("Brave", snap("brave")),
-            ("Chrome", flatpak("com.google.Chrome")),
-            ("Chromium", flatpak("org.chromium.Chromium")),
-            ("Brave", flatpak("com.brave.Browser")),
-            ("Edge", flatpak("com.microsoft.Edge")),
-            ("Vivaldi", flatpak("com.vivaldi.Vivaldi")),
-        ];
-        let mut names: Vec<&'static str> = Vec::new();
-        for (name, here) in found {
-            if here && !names.contains(&name) {
-                names.push(name);
-            }
-        }
-        names
+        let mut flatpak = vec![PathBuf::from("/var/lib/flatpak/app")];
+        flatpak.extend(home.map(|h| h.join(".local/share/flatpak/app")));
+        sandboxed_under(Path::new("/snap"), &flatpak)
     }
     #[cfg(not(target_os = "linux"))]
     {
         Vec::new()
     }
+}
+
+/// [`sandboxed_browsers`] with the snap root and the flatpak app roots
+/// (system, then the user's) passed in. Each name once.
+#[cfg(any(target_os = "linux", test))]
+fn sandboxed_under(snap: &std::path::Path, flatpak: &[std::path::PathBuf]) -> Vec<&'static str> {
+    let in_flatpak = |id: &str| flatpak.iter().any(|root| root.join(id).is_dir());
+    let in_snap = |name: &str| snap.join(name).is_dir();
+    let found = [
+        ("Chromium", in_snap("chromium")),
+        ("Brave", in_snap("brave")),
+        ("Chrome", in_flatpak("com.google.Chrome")),
+        ("Chromium", in_flatpak("org.chromium.Chromium")),
+        ("Brave", in_flatpak("com.brave.Browser")),
+        ("Edge", in_flatpak("com.microsoft.Edge")),
+        ("Vivaldi", in_flatpak("com.vivaldi.Vivaldi")),
+    ];
+    let mut names: Vec<&'static str> = Vec::new();
+    for (name, here) in found {
+        if here && !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    names
 }
 
 /// The fills of silos open now. Those of a silo that has locked since are
@@ -1125,5 +1128,62 @@ async fn wait_for<T>(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod sandbox_tests {
+    use super::sandboxed_under;
+
+    #[test]
+    fn sandboxed_browsers_are_found_where_they_are_installed() {
+        let dir = tempfile::tempdir().unwrap();
+        let snap = dir.path().join("snap");
+        let system = dir.path().join("var/lib/flatpak/app");
+        let user = dir.path().join("home/.local/share/flatpak/app");
+        let roots = [system.clone(), user.clone()];
+        assert!(
+            sandboxed_under(&snap, &roots).is_empty(),
+            "nothing installed"
+        );
+
+        std::fs::create_dir_all(snap.join("chromium")).unwrap();
+        std::fs::create_dir_all(system.join("com.brave.Browser")).unwrap();
+        std::fs::create_dir_all(user.join("com.vivaldi.Vivaldi")).unwrap();
+        assert_eq!(
+            sandboxed_under(&snap, &roots),
+            vec!["Chromium", "Brave", "Vivaldi"]
+        );
+    }
+
+    #[test]
+    fn data_left_behind_by_an_uninstalled_flatpak_is_not_a_browser() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        // ~/.var/app outlives `flatpak uninstall`; only the app roots count.
+        std::fs::create_dir_all(home.join(".var/app/com.google.Chrome")).unwrap();
+        std::fs::create_dir_all(home.join(".var/app/com.microsoft.Edge")).unwrap();
+        let roots = [
+            dir.path().join("var/lib/flatpak/app"),
+            home.join(".local/share/flatpak/app"),
+        ];
+        assert!(sandboxed_under(&dir.path().join("snap"), &roots).is_empty());
+    }
+
+    #[test]
+    fn a_browser_installed_both_ways_is_named_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let snap = dir.path().join("snap");
+        let system = dir.path().join("flatpak/app");
+        let user = dir.path().join("user/flatpak/app");
+        std::fs::create_dir_all(snap.join("chromium")).unwrap();
+        std::fs::create_dir_all(snap.join("brave")).unwrap();
+        std::fs::create_dir_all(system.join("org.chromium.Chromium")).unwrap();
+        std::fs::create_dir_all(user.join("org.chromium.Chromium")).unwrap();
+        std::fs::create_dir_all(user.join("com.brave.Browser")).unwrap();
+        assert_eq!(
+            sandboxed_under(&snap, &[system, user]),
+            vec!["Chromium", "Brave"]
+        );
     }
 }

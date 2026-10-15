@@ -41,6 +41,15 @@ describe("translations", () => {
     });
   }
 
+  it("every text is in every language", () => {
+    const missing = Object.entries(TRANSLATIONS).flatMap(([lang, table]) =>
+      Object.keys(en)
+        .filter((key) => !(key in table))
+        .map((key) => `${lang}: ${key}`),
+    );
+    expect(missing).toEqual([]);
+  });
+
   it("every language the picker lists has a table, English aside", () => {
     for (const l of LOCALES) {
       if (l.id !== "en") expect(TRANSLATIONS).toHaveProperty(l.id);

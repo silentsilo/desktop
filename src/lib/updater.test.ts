@@ -4,7 +4,7 @@ vi.mock("@tauri-apps/plugin-updater", () => ({ check: vi.fn() }));
 vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
-import { fromOurReleases, signedForVersion } from "./updater";
+import { fromOurReleases, lacksPermission, signedForVersion } from "./updater";
 
 const AT = "https://github.com/silentsilo/desktop/releases/download/";
 
@@ -75,5 +75,29 @@ describe("signedForVersion", () => {
 
   it("refuses an answer with no signature at all", () => {
     expect(signedForVersion("1.5.1", { version: "1.5.1", platforms: {} })).toBe(false);
+  });
+});
+
+describe("an install that failed for want of rights", () => {
+  it("is told apart by the words the OS and polkit use", () => {
+    for (const reason of [
+      "Permission denied (os error 13)",
+      "Read-only file system (os error 30)",
+      "pkexec: Error executing command as another user: Not authorized",
+      "polkit agent not found",
+      new Error("failed to replace the AppImage: Permission denied (os error 13)"),
+    ]) {
+      expect(lacksPermission(reason), String(reason)).toBe(true);
+    }
+  });
+
+  it("and not by the numbers, which mean other things on Windows", () => {
+    for (const reason of [
+      "The data is invalid. (os error 13)",
+      "failed (os error 30)",
+      "The update could not be verified.",
+    ]) {
+      expect(lacksPermission(reason), reason).toBe(false);
+    }
   });
 });

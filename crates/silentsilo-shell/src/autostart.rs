@@ -373,6 +373,23 @@ mod linux {
         }
         Ok(())
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::entry_for;
+        use std::path::Path;
+
+        #[test]
+        fn the_entry_starts_the_launcher_it_is_given_quoted_and_escaped() {
+            let entry = entry_for(Path::new("/home/ana/My Apps/Silent$Silo.AppImage"));
+            assert!(
+                entry.contains("Exec=\"/home/ana/My Apps/Silent\\$Silo.AppImage\" --autostart\n"),
+                "{entry}"
+            );
+            assert!(entry.starts_with("[Desktop Entry]\n"));
+            assert!(entry.contains("X-GNOME-Autostart-enabled=true\n"));
+        }
+    }
 }
 
 #[cfg(target_os = "linux")]

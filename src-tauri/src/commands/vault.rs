@@ -57,6 +57,24 @@ fn built_in_here(kind: &str) -> bool {
     }
 }
 
+/// Whether the silo holds a usable removable key, and a usable built-in key
+/// of this computer's own kind.
+fn enrolled_kinds(keys: &silentsilo_vault::StoredFidoKeys) -> (bool, bool) {
+    let mut portable = false;
+    let mut platform = false;
+    for key in keys.usable() {
+        if !key.platform {
+            portable = true;
+        } else if built_in_here(&key.kind) {
+            platform = true;
+        }
+        // Another kind of computer's built-in key (Windows Hello on a Mac or
+        // on Linux) is neither: telling this person to confirm with a
+        // built-in key sends them after one this computer does not have.
+    }
+    (portable, platform)
+}
+
 /// The platform this build is for, in the window's terms.
 fn os_name() -> &'static str {
     if cfg!(target_os = "macos") {
@@ -94,22 +112,7 @@ fn app_bootstrap_impl(app: &AppHandle) -> Result<AppBootstrap, String> {
     let (portable_enrolled, platform_enrolled) = silo
         .as_ref()
         .and_then(|s| silentsilo_vault::load_fido_keys(&s.path).ok())
-        .map(|keys| {
-            let mut portable = false;
-            let mut platform = false;
-            for key in keys.usable() {
-                if !key.platform {
-                    portable = true;
-                } else if built_in_here(&key.kind) {
-                    platform = true;
-                }
-                // Another kind of computer's built-in key (Windows Hello on
-                // a Mac or on Linux) is neither: telling this person to
-                // confirm with a built-in key sends them after one this
-                // computer does not have.
-            }
-            (portable, platform)
-        })
+        .map(|keys| enrolled_kinds(&keys))
         .unwrap_or((false, false));
     let fido = silentsilo_fido::status();
     let platform_status = silentsilo_fido::platform_status();
@@ -3975,6 +3978,151 @@ mod unlock_rule_tests {
             wrapped_dek_for(&keys, &hex::decode("aa11").unwrap()).unwrap(),
             "envelope-b",
             "a retired key must not be what unlocks the silo"
+        );
+    }
+}
+
+#[cfg(test)]
+mod key_secret_tests {
+    use super::{built_in_here, enrolled_kinds, opening_wrap_key, secret_that_opens};
+    use silentsilo_fido::UnlockMaterial;
+    use silentsilo_vault::{StoredFidoCredential, StoredFidoKeys};
+
+    const VERIFIED: [u8; 32] = [1; 32];
+    const UNVERIFIED: [u8; 32] = [2; 32];
+
+    /// What a ceremony brings back: the verified secret, and on Linux and
+    /// macOS the one the key gives without its PIN.
+    fn touch(verified: bool, unverified: Option<[u8; 32]>) -> UnlockMaterial {
+        UnlockMaterial {
+            wrap_key: VERIFIED,
+            credential_id: vec![0xaa, 0x11],
+            verified,
+            unverified_wrap_key: unverified,
+        }
+    }
+
+    /// A silo key sealed under `secret`, as fido-keys.json holds it.
+    fn sealed_under(secret: &[u8; 32]) -> String {
+        let dek = silentsilo_crypto::generate_dek();
+        hex::encode(silentsilo_vault::wrap_dek_bytes(&dek, secret).unwrap())
+    }
+
+    fn key(platform: bool) -> StoredFidoCredential {
+        StoredFidoCredential {
+            kind: silentsilo_vault::KIND_FIDO2.into(),
+            derivation: silentsilo_vault::DERIVATION_HMAC_V1.into(),
+            policy: String::new(),
+            credential_id: "aa11".into(),
+            public_key: "3059".into(),
+            key_slot: 0,
+            rp_id: "silentsilo.com".into(),
+            label: "a key".into(),
+            wrapped_dek: String::new(),
+            platform,
+            revoked: false,
+            unconfirmed: false,
+        }
+    }
+
+    #[test]
+    fn the_verified_secret_opens_first() {
+        let wrapped = sealed_under(&VERIFIED);
+        let (key, old) = secret_that_opens(&touch(true, Some(UNVERIFIED)), &wrapped).unwrap();
+        assert_eq!(*key, VERIFIED);
+        assert!(!old);
+    }
+
+    #[test]
+    fn a_key_added_before_its_pin_opens_with_the_secret_it_gave_then() {
+        let wrapped = sealed_under(&UNVERIFIED);
+        let (key, old) = secret_that_opens(&touch(true, Some(UNVERIFIED)), &wrapped).unwrap();
+        assert_eq!(*key, UNVERIFIED);
+        assert!(old, "the unlock warns that the key needs adding again");
+    }
+
+    #[test]
+    fn a_secret_that_opens_nothing_is_not_offered() {
+        let wrapped = sealed_under(&[3; 32]);
+        assert!(secret_that_opens(&touch(true, Some(UNVERIFIED)), &wrapped).is_none());
+        // Windows brings back no second secret.
+        let old = sealed_under(&UNVERIFIED);
+        assert!(secret_that_opens(&touch(true, None), &old).is_none());
+    }
+
+    #[test]
+    fn the_unlock_takes_the_secret_that_opens() {
+        let wrapped = sealed_under(&UNVERIFIED);
+        let stick = key(false);
+        let (key, old) =
+            opening_wrap_key(&touch(true, Some(UNVERIFIED)), &wrapped, Some(&stick)).unwrap();
+        assert_eq!(*key, UNVERIFIED);
+        assert!(old);
+    }
+
+    #[test]
+    fn on_windows_a_security_key_with_a_pin_that_opens_nothing_is_said_to_need_adding_again() {
+        // Sealed under the secret the key gave before its PIN, which Windows
+        // cannot ask for.
+        let wrapped = sealed_under(&UNVERIFIED);
+        let stick = key(false);
+        let result = opening_wrap_key(&touch(true, None), &wrapped, Some(&stick));
+        if cfg!(windows) {
+            assert!(result.err().unwrap().contains("err.key_added_without_pin"));
+        } else {
+            let (key, old) = result.unwrap();
+            assert_eq!(*key, VERIFIED, "the open fails as it always did");
+            assert!(!old);
+        }
+    }
+
+    #[test]
+    fn only_a_verified_security_key_of_this_silo_gets_that_message() {
+        let wrapped = sealed_under(&UNVERIFIED);
+        let hello = key(true);
+        let stick = key(false);
+        for (unlock, enrolled) in [
+            (touch(true, None), Some(&hello)),
+            (touch(true, None), None),
+            (touch(false, None), Some(&stick)),
+        ] {
+            let (key, old) = opening_wrap_key(&unlock, &wrapped, enrolled).unwrap();
+            assert_eq!(*key, VERIFIED);
+            assert!(!old);
+        }
+    }
+
+    #[test]
+    fn a_built_in_key_is_this_computers_only_in_its_own_kind() {
+        assert_eq!(built_in_here(silentsilo_vault::KIND_FIDO2), cfg!(windows));
+        assert_eq!(
+            built_in_here(silentsilo_vault::KIND_SECURE_ENCLAVE),
+            cfg!(target_os = "macos")
+        );
+        assert!(!built_in_here(silentsilo_vault::KIND_ANDROID_KEYSTORE));
+    }
+
+    #[test]
+    fn windows_hello_counts_as_a_built_in_key_on_windows_only() {
+        let hello = StoredFidoKeys {
+            keys: vec![key(true)],
+        };
+        // On a Mac or on Linux it is neither: no built-in prompt, and no
+        // "insert your key" either.
+        assert_eq!(enrolled_kinds(&hello), (false, cfg!(windows)));
+        let stick = StoredFidoKeys {
+            keys: vec![key(false)],
+        };
+        assert_eq!(enrolled_kinds(&stick), (true, false));
+        let mut retired = key(false);
+        retired.revoked = true;
+        let both = StoredFidoKeys {
+            keys: vec![retired, key(true)],
+        };
+        assert_eq!(
+            enrolled_kinds(&both),
+            (false, cfg!(windows)),
+            "a revoked key counts for nothing"
         );
     }
 }
