@@ -7,6 +7,12 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+### Fixed
+
+- Windows: the browser extension's native host no longer needs the Visual
+  C++ runtime. On a computer without it the browser could not start the
+  host, and the extension said the app was not running.
+
 ## [1.5.0] - macOS, eight languages and iCloud Drive
 
 ### Security
