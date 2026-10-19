@@ -7,4 +7,13 @@ ignore = [
     # the common cases, never touch this code. Re-check whenever russh or
     # rsa moves.
     "RUSTSEC-2023-0071",
+    # zip 4.6.1: SUID bits, symlinks out of the target and permissions through
+    # symlinks, all in `extract()` (RUSTSEC-2026-0367, -0368, -0369). Fixed in
+    # zip 9, but tauri-plugin-updater still needs 4.x. The Bitwarden import
+    # reads entries and never extracts; the updater extracts only on Windows,
+    # only a zip whose signature our key made, and ours ship as an .exe.
+    # Re-check when the updater moves to zip 9.
+    "RUSTSEC-2026-0367",
+    "RUSTSEC-2026-0368",
+    "RUSTSEC-2026-0369",
 ]
