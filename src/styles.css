@@ -6716,6 +6716,17 @@ button.link.pw-history-clear {
   background: var(--danger-soft);
 }
 
+.pw-totp-picture-btn:hover:not(:disabled) {
+  color: var(--accent-text);
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+
+.pw-totp-picture-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
 .pw-link {
   color: var(--accent-text);
   text-decoration: none;

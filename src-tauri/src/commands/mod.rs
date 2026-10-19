@@ -4,6 +4,7 @@ pub mod fido;
 pub mod kdbx;
 pub mod moves;
 pub mod pwned;
+pub mod qr;
 pub mod recovery;
 pub mod shell;
 pub mod silo;

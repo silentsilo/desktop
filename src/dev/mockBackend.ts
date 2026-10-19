@@ -413,6 +413,9 @@ const handlers: Record<string, Handler> = {
     args.prefix === "E891C"
       ? "6C1AF0DBD3E66DB4267118C543E2848818D:31337\n0000000000000000000000000000000000A:0"
       : "0000000000000000000000000000000000A:0",
+  // Any picture reads as a two-factor QR code.
+  qr_from_pixels: () =>
+    "otpauth://totp/Example:you@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example",
   // `?keyreplaced` models a bucket whose content key was rolled back or
   // overwritten, which needs someone with write access to the storage to
   // reproduce and must never be reported as "rejoin".

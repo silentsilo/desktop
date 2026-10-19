@@ -432,6 +432,7 @@ pub fn run() {
             audit::audit_org_expire,
             commands::vault::passwords_read_import_csv,
             commands::pwned::pwned_range,
+            commands::qr::qr_from_pixels,
             commands::vault::passwords_write_export_csv,
             commands::vault::vault_blob_status,
             commands::storage::s3_get_config,

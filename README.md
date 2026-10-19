@@ -106,7 +106,8 @@ from a device named, and export it as CSV or JSON lines.
 ## Passwords
 
 Logins, cards, identities, SSH keys and secure notes, each entry with its
-one-time code if it has one, custom fields (a hidden one is masked and copied
+one-time code if it has one (pasted as text, or read from a screenshot of
+the site's QR code), custom fields (a hidden one is masked and copied
 like a password) and its earlier versions: when a password, a field or a note
 changes, the entry keeps the version before it, the last 10 by default, and
 one can be put back. Health points out reused, weak and old passwords, and

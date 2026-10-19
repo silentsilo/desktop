@@ -70,6 +70,9 @@ tokio = { version = "1", features = ["macros", "sync", "time"] }
 # Derives the key Health's set-aside findings are named with. Already in the
 # tree through core.
 blake3 = "1"
+# Reads a two-factor QR code from a screenshot (MIT or Apache-2.0). Without
+# its `img` feature: the webview decodes the picture and sends grey pixels.
+rqrr = { version = "0.11", default-features = false }
 
 # Edge's own autofill and password manager are turned off on the WebView2
 # settings interface, which has no Tauri wrapper. `windows-core` is only for
@@ -84,6 +87,8 @@ windows-core = "0.61"
 [dev-dependencies]
 async-trait = "0.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+# Draws the QR codes the reader is tested against (MIT or Apache-2.0).
+qrcode = { version = "0.14", default-features = false }
 
 [features]
 default = ["custom-protocol"]

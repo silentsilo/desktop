@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import type { Os } from "../../lib/platformStrings";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFileDialog } from "../../lib/dialog";
@@ -9,6 +9,7 @@ import {
   ListPlus,
   NotebookPen,
   Paperclip,
+  ScanQrCode,
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
@@ -25,6 +26,7 @@ import {
   DEFAULT_TOTP_PERIOD,
 } from "../../lib/totp";
 import { formatBytes } from "../../lib/format";
+import { pastedImage, qrFromImage } from "../../lib/qrImage";
 import { formatAppError } from "../../lib/errors";
 import { TotpDisplay } from "./TotpDisplay";
 import {
@@ -115,6 +117,10 @@ export function EntryEditor({ initial, creating, categories, now, onSave, onCanc
   /// code display on the first valid character, so a secret could be pasted
   /// but not typed.
   const [totpTyping, setTotpTyping] = useState(false);
+  /// What reading a QR code from a picture came to, shown under the field.
+  const [qrNote, setQrNote] = useState<{ error: boolean; text: string } | null>(null);
+  const [qrBusy, setQrBusy] = useState(false);
+  const qrFileRef = useRef<HTMLInputElement>(null);
   const [attachBusy, setAttachBusy] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
 
@@ -159,6 +165,34 @@ export function EntryEditor({ initial, creating, categories, now, onSave, onCanc
       totp_algorithm: parsed.algorithm === DEFAULT_TOTP_ALGORITHM ? undefined : parsed.algorithm,
     }));
   }, []);
+
+  /// A two-factor QR code from a screenshot pasted into the field or a
+  /// picture picked from disk. Read in place: the code shows at once, so it
+  /// can be typed on the site before the entry is saved.
+  const readQr = useCallback(
+    async (picture: Blob, fromFile: boolean) => {
+      setQrNote(null);
+      setQrBusy(true);
+      try {
+        const text = await qrFromImage(picture);
+        if (!text) {
+          setQrNote({ error: true, text: t("pw.totp_qr_none") });
+        } else if (!parseTotpInput(text)) {
+          setQrNote({ error: true, text: t("pw.totp_qr_not_otp") });
+        } else {
+          setTotpTyping(false);
+          applyTotpInput(text);
+          // A saved picture of the code is the secret in the clear.
+          if (fromFile) setQrNote({ error: false, text: t("pw.totp_qr_delete_file") });
+        }
+      } catch {
+        setQrNote({ error: true, text: t("pw.totp_qr_unreadable") });
+      } finally {
+        setQrBusy(false);
+      }
+    },
+    [applyTotpInput],
+  );
 
   /// Blobs are written the moment a file is picked, so Cancel has cleanup
   /// to do: anything attached in this session but not saved would otherwise
@@ -563,11 +597,15 @@ export function EntryEditor({ initial, creating, categories, now, onSave, onCanc
                   <button
                     type="button"
                     className="pw-totp-remove-btn"
-                    onClick={() => applyTotpInput("")}
+                    onClick={() => {
+                      setQrNote(null);
+                      applyTotpInput("");
+                    }}
                   >
                     <IconClose size={13} />
                     <span>{t("pw.remove")}</span>
                   </button>
+                  {qrNote && <p className="hint pw-totp-hint">{qrNote.text}</p>}
                 </>
               ) : (
                 <>
@@ -576,16 +614,55 @@ export function EntryEditor({ initial, creating, categories, now, onSave, onCanc
                     aria-label={t("pw.field_totp")}
                     placeholder={t("pw.totp_placeholder")}
                     value={totpInput}
-                    onChange={(e) => applyTotpInput(e.target.value)}
+                    onChange={(e) => {
+                      setQrNote(null);
+                      applyTotpInput(e.target.value);
+                    }}
+                    onPaste={(e) => {
+                      const picture = pastedImage(e.clipboardData);
+                      if (!picture) return;
+                      e.preventDefault();
+                      e.currentTarget.blur();
+                      void readQr(picture, false);
+                    }}
                     onFocus={() => setTotpTyping(true)}
                     onBlur={() => setTotpTyping(false)}
-                    aria-invalid={totpError ? true : undefined}
+                    aria-invalid={totpError || qrNote?.error ? true : undefined}
                     autoComplete="off"
                     spellCheck={false}
                   />
-                  <p className={`hint pw-totp-hint${totpError ? " pw-totp-hint-error" : ""}`}>
-                    {totpError ? t("pw.totp_invalid") : t("pw.totp_hint")}
-                  </p>
+                  {qrNote ? (
+                    <p
+                      className={`hint pw-totp-hint${qrNote.error ? " pw-totp-hint-error" : ""}`}
+                      role="status"
+                    >
+                      {qrNote.text}
+                    </p>
+                  ) : (
+                    <p className={`hint pw-totp-hint${totpError ? " pw-totp-hint-error" : ""}`}>
+                      {totpError ? t("pw.totp_invalid") : t("pw.totp_hint")}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    className="pw-totp-remove-btn pw-totp-picture-btn"
+                    disabled={qrBusy}
+                    onClick={() => qrFileRef.current?.click()}
+                  >
+                    <ScanQrCode size={13} />
+                    <span>{t("pw.totp_from_picture")}</span>
+                  </button>
+                  <input
+                    ref={qrFileRef}
+                    type="file"
+                    accept="image/*"
+                    hidden
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) void readQr(file, true);
+                    }}
+                  />
                 </>
               )}
             </div>

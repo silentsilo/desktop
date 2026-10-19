@@ -15,6 +15,10 @@ silo from opening needs a major version rather than a note.
   scans it and opens the silo from then on. The app checks this
   computer's Bluetooth first and says if it is off or missing. No key to
   buy.
+- The one-time code of a login can be read from the site's QR code: take
+  a screenshot of it and paste it into the field, or pick a saved picture.
+  The code is read on this computer, and shows at once so it can be typed
+  on the site before saving.
 - "Setup not working?" on the setup screen opens a GitHub issue filled in
   with what this computer offers. Nothing is sent unless you submit it.
 
