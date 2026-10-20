@@ -14,6 +14,7 @@ import type { PasswordEntry } from "../../lib/types";
 import { formatBytes } from "../../lib/format";
 import { passwordStrength, typeOf } from "../passwords/util";
 import { t } from "../../i18n";
+import { TOTP_SITES } from "../../lib/twoFactorSites";
 
 /** How much it matters. High is "fix this today". */
 export type HealthSeverity = "high" | "medium" | "info";
@@ -71,6 +72,48 @@ const STALE_MS = 2 * 365 * 24 * 60 * 60 * 1000;
 const WEAK_SCORE = 1;
 
 const SEVERITY_ORDER: Record<HealthSeverity, number> = { high: 0, medium: 1, info: 2 };
+
+/** Addresses on this side of the router: a password sent to them over
+ *  http:// does not cross the internet, and many devices offer nothing
+ *  else. */
+function localHost(host: string): boolean {
+  if (host === "localhost" || /\.(localhost|local|lan|home\.arpa|internal)$/.test(host)) {
+    return true;
+  }
+  if (host.startsWith("[")) return true;
+  const ip = /^(\d+)\.(\d+)\.\d+\.\d+$/.exec(host);
+  if (!ip) return !host.includes(".");
+  const [a, b] = [Number(ip[1]), Number(ip[2])];
+  return (
+    a === 10 ||
+    a === 127 ||
+    (a === 192 && b === 168) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 169 && b === 254)
+  );
+}
+
+/** Whether a login's address sends its password unencrypted: `http://` to
+ *  a host on the internet. */
+export function plainHttp(url: string): boolean {
+  const match = /^\s*http:\/\/([^/?#]+)/i.exec(url);
+  if (!match) return false;
+  const host = match[1]!.replace(/^[^@]*@/, "").replace(/:\d+$/, "").toLowerCase();
+  return !localHost(host);
+}
+
+/** Whether the site behind an address offers two-factor codes: its host,
+ *  or a domain it is under, is on the 2fa.directory list the app carries. */
+export function offersTotp(url: string): boolean {
+  const match = /^\s*(?:[a-z][a-z0-9+.-]*:\/\/)?([^/?#]+)/i.exec(url);
+  if (!match) return false;
+  const host = match[1]!.replace(/^[^@]*@/, "").replace(/:\d+$/, "").toLowerCase();
+  const labels = host.split(".");
+  for (let i = 0; i < labels.length - 1; i++) {
+    if (TOTP_SITES.has(labels.slice(i).join("."))) return true;
+  }
+  return false;
+}
 
 function byService(a: PasswordEntry, b: PasswordEntry): number {
   return a.service.localeCompare(b.service);
@@ -209,8 +252,27 @@ export function analyseHealth(
     });
   }
 
+  const plain = entries
+    .filter((e) => typeOf(e) === "login" && e.password && plainHttp(e.url))
+    .sort(byService);
+  if (plain.length > 0) {
+    findings.push({
+      id: "plain-http",
+      severity: "medium",
+      get title() {
+        return t("dlg.health_http_title", { count: plain.length });
+      },
+      get detail() {
+        return t("dlg.health_http_detail");
+      },
+      entries: plain,
+    });
+  }
+
   const noTotp = entries
-    .filter((e) => typeOf(e) === "login" && e.password && e.url && !e.totp_secret)
+    .filter(
+      (e) => typeOf(e) === "login" && e.password && !e.totp_secret && offersTotp(e.url),
+    )
     .sort(byService);
   if (noTotp.length > 0) {
     findings.push({

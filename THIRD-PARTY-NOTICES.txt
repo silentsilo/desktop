@@ -8,7 +8,7 @@ Each is listed with its version and its licence, and the full text of every
 licence follows, once per distinct text. Where a component ships its own
 copyright or NOTICE file, that file is what is reproduced here.
 
-Generated from the resolved dependency graph on 2026-10-19, for x86_64-pc-windows-msvc, x86_64-unknown-linux-gnu, aarch64-apple-darwin, x86_64-apple-darwin.
+Generated from the resolved dependency graph on 2026-10-20, for x86_64-pc-windows-msvc, x86_64-unknown-linux-gnu, aarch64-apple-darwin, x86_64-apple-darwin.
 Regenerate with: npm run notices
 
 Components: 686
@@ -3443,6 +3443,21 @@ zvariant_utils 3.5.0 (crate)
   licence: MIT
   source:  https://github.com/z-galaxy/zbus/
   text:    see [5]
+
+==============================================================================
+DATA
+==============================================================================
+
+EFF large word list (for passphrases and usernames)
+  licence: CC BY 3.0 US, https://creativecommons.org/licenses/by/3.0/us/
+  source:  https://www.eff.org/dice
+  by the Electronic Frontier Foundation, used unchanged
+
+2fa.directory: the domains of sites offering TOTP codes (for Health)
+  licence: MIT
+  source:  https://github.com/2factorauth/twofactorauth
+  by the 2factorauth contributors; the domain names only, from
+  https://api.2fa.directory/v3/totp.json
 
 ==============================================================================
 LICENCE TEXTS

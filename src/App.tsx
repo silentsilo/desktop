@@ -66,6 +66,7 @@ import { JoinView } from "./views/JoinView";
 import { EnrollView } from "./views/EnrollView";
 import { FilesExplorer } from "./views/FilesExplorer";
 import { PasswordsPanel } from "./views/passwords/PasswordsPanel";
+import type { TrashedEntry } from "./views/passwords/PasswordTrashDialog";
 import {
   BREACHES_IDLE,
   BREACHES_KEY,
@@ -3929,23 +3930,16 @@ export default function App() {
 
   const deletePasswordEntry = useCallback(
     async (entry: PasswordEntry) => {
-      // The entry is the only thing referencing its attachment blobs, so
-      // deleting it is the last chance to reclaim them. Best-effort: a blob
-      // that fails to delete is orphaned ciphertext, not a data leak.
+      // The attachments stay: the entry waits in the password trash for 30
+      // days, and the sweep clears their content once nothing refers to it.
       const id = entry.id;
       const removed = passwordEntries.find((e) => e.id === id) ?? entry;
-      const attachments = (entry.withheld ? removed : entry).attachments ?? [];
       setPasswordEntries((prev) => prev.filter((e) => e.id !== id));
       begin("entries");
       try {
         await withPasswordWrite(() =>
           invoke("vault_delete_password", { id, label: removed?.service ?? null }),
         );
-        for (const attachment of attachments) {
-          void invoke("password_delete_attachment", { blobId: attachment.blob_id }).catch(
-            () => {},
-          );
-        }
       } catch (e) {
         // Put back: a delete that failed used to leave the entry gone from
         // the screen while it was still in the silo.
@@ -3958,6 +3952,17 @@ export default function App() {
       }
     },
     [begin, end, passwordEntries, toasts, withPasswordWrite],
+  );
+
+  /// Puts an entry back from the password trash, then reads the list again
+  /// so it shows as stored. Errors go back to the trash dialog.
+  const restorePasswordEntry = useCallback(
+    async (entry: TrashedEntry) => {
+      await invoke("vault_restore_password", { id: entry.id, label: entry.service || null });
+      await refreshPasswordsRef.current?.();
+      toasts.info(t("pw.trash_restored", { name: entry.service || t("pw.trash_unnamed") }));
+    },
+    [toasts],
   );
 
   /// Import writes many entries; each is its own operation, so a failure
@@ -4455,6 +4460,7 @@ export default function App() {
             onImportEntries={(entries, source) => void importPasswordEntries(entries, source)}
             onSaveCategories={(categories) => void savePasswordCategories(categories)}
             onConfirmRun={confirmRun}
+            onRestoreEntry={restorePasswordEntry}
           />
         )}
 

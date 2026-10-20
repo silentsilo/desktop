@@ -5998,6 +5998,91 @@ tr.is-moving {
   line-height: 1.5;
 }
 
+/* The export choice, a dialog: one card per kind of file, the recommended
+   one first, the unencrypted one last in the warning colours. */
+.modal-card.pw-export-card {
+  width: min(480px, 92vw);
+}
+
+.pw-export-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.pw-export-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.6rem;
+  row-gap: 0.25rem;
+  align-items: start;
+  padding: 10px 12px;
+  text-align: left;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-1) ease,
+    background-color var(--dur-1) ease;
+}
+
+.pw-export-option > svg {
+  grid-row: 1 / span 2;
+  margin-top: 1px;
+  color: var(--text-tertiary);
+}
+
+.pw-export-option:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+
+.pw-export-option:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.pw-export-option.is-recommended {
+  border-color: var(--accent-border);
+}
+
+.pw-export-option.is-recommended > svg {
+  color: var(--accent-text);
+}
+
+.pw-export-option.is-plain {
+  border-color: var(--warning-border);
+  background: var(--warning-soft);
+}
+
+.pw-export-option.is-plain > svg {
+  color: var(--warning-text);
+}
+
+.pw-export-option-name {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-weight: 650;
+  font-size: var(--fs-13);
+}
+
+.pw-export-option-name em {
+  font-style: normal;
+  font-weight: 600;
+  font-size: var(--fs-12);
+  color: var(--accent-text);
+}
+
+.pw-export-option-text {
+  font-size: var(--fs-12);
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
 .pw-kdbx-keyfile {
   display: flex;
   align-items: center;
@@ -6716,6 +6801,57 @@ button.link.pw-history-clear {
   background: var(--danger-soft);
 }
 
+/* Recently deleted: a wider card, one row per entry. */
+.modal-card.pw-trash-card {
+  width: min(520px, 92vw);
+}
+
+.pw-trash-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  max-height: 50vh;
+}
+
+.pw-trash-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+}
+
+.pw-trash-icon {
+  flex: none;
+  color: var(--text-tertiary);
+}
+
+.pw-trash-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pw-trash-text strong,
+.pw-trash-text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pw-trash-text span,
+.pw-trash-empty {
+  font-size: var(--fs-12);
+  color: var(--text-secondary);
+}
+
 .pw-totp-picture-btn:hover:not(:disabled) {
   color: var(--accent-text);
   border-color: var(--accent-border);
@@ -6948,6 +7084,14 @@ button.link.pw-history-clear {
   font-family: var(--font-mono);
   font-size: var(--fs-13);
   letter-spacing: 0.03em;
+}
+
+/* The username row borrows the layout for its generate button, not the
+   password's typewriter look. */
+.pw-password-input-row.pw-username-row input {
+  font-family: inherit;
+  font-size: inherit;
+  letter-spacing: normal;
 }
 
 .pw-gen-btn {

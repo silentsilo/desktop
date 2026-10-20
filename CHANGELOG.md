@@ -7,6 +7,10 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+## [1.5.1] - Your phone as the key, Recently deleted and SilentSilo export
+
+On core v1.10.1.
+
 ### Added
 
 - Your phone as the key, on Windows 11: a third choice when setting up a
@@ -19,6 +23,28 @@ silo from opening needs a major version rather than a note.
   a screenshot of it and paste it into the field, or pick a saved picture.
   The code is read on this computer, and shows at once so it can be typed
   on the site before saving.
+- The generator makes passwords from random words as well: 3 to 12 from
+  the EFF list (six give about 77 bits), with a separator, capitals and a
+  digit to choose. A button beside the username fills in a random one,
+  such as `velvet_orbit42`. Both lists are inside the app; nothing is
+  fetched.
+- Export to a SilentSilo file, for another silo or another person who uses
+  SilentSilo: all entries or the selected ones, with every kind, setting,
+  history and attached file, under a password you choose (Argon2id). Import
+  opens it and adds the entries; none already here is overwritten. The
+  password dialog can suggest six random words.
+- Recently deleted, beside Import in Passwords: a deleted entry can be put
+  back for 30 days, on every device, with its history and attached files.
+  Deleting no longer removes an entry's attached files at once.
+- Health asks for a two-factor code only on sites that offer one, by the
+  2fa.directory list carried in the app, rather than on every login.
+- Health names logins whose address starts with `http://`, where the
+  password crosses the internet unencrypted. Addresses at home (a router,
+  a NAS) are left alone.
+- The browser extension finds a login on every host of its site: a login
+  saved for `google.com` is offered on `accounts.google.com`. Two sites
+  that only share a public suffix, such as two blogs on `github.io`, stay
+  apart (Public Suffix List). Logins for the exact host come first.
 - "Setup not working?" on the setup screen opens a GitHub issue filled in
   with what this computer offers. Nothing is sent unless you submit it.
 

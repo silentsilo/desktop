@@ -310,8 +310,9 @@ pub fn saved_site(address: &str) -> Option<SavedSite> {
 }
 
 impl SavedSite {
-    /// The whole matching rule. The hosts are equal, or one is `www.` plus
-    /// the other; nothing else, so no parent domains and no look-alikes.
+    /// The whole matching rule. The hosts are the same site
+    /// ([`same_site`]): equal, or under one registrable domain. No
+    /// look-alikes.
     ///
     /// The ports are equal too. An address without one means its scheme's
     /// default (443, or 80 for `http://`), never any port; an `http://`
@@ -320,9 +321,7 @@ impl SavedSite {
     /// ports must be written the same: `localhost:3000` is only `:3000`, and
     /// `localhost` only a tab with no port.
     pub fn matches(&self, tab: &Site) -> bool {
-        let same_host = self.host == tab.host
-            || self.host.strip_prefix("www.") == Some(tab.host.as_str())
-            || tab.host.strip_prefix("www.") == Some(self.host.as_str());
+        let same_host = same_site(&self.host, &tab.host);
         let same_port = if tab.loopback {
             self.explicit_port == tab.explicit_port
         } else {
@@ -333,6 +332,26 @@ impl SavedSite {
                     && tab.explicit_port.is_none())
         };
         same_host && same_port
+    }
+}
+
+/// Whether two hosts are one site: equal, or under the same registrable
+/// domain as the Public Suffix List reads it, private suffixes included. So
+/// `accounts.google.com` and `google.com` are one site, while
+/// `alice.github.io` and `bob.github.io` are two, as `github.io` is itself a
+/// suffix. An IP address or a name with no registrable domain (`localhost`)
+/// is only itself.
+fn same_site(saved: &str, tab: &str) -> bool {
+    if saved == tab {
+        return true;
+    }
+    let is_ip = |host: &str| host.starts_with('[') || host.parse::<IpAddr>().is_ok();
+    if is_ip(saved) || is_ip(tab) {
+        return false;
+    }
+    match (psl::domain_str(saved), psl::domain_str(tab)) {
+        (Some(a), Some(b)) => a == b,
+        _ => false,
     }
 }
 
@@ -353,12 +372,25 @@ pub fn mismatch_wording(saved: Option<&SavedSite>, tab: &Site) -> String {
 
 /// The logins saved for a site, by label.
 pub fn logins_for<'a>(logins: &'a [Login], tab: &Site) -> Vec<&'a Login> {
-    let mut found: Vec<&Login> = logins
+    let mut found: Vec<(bool, &Login)> = logins
         .iter()
-        .filter(|login| saved_site(&login.url).is_some_and(|saved| saved.matches(tab)))
+        .filter_map(|login| {
+            let saved = saved_site(&login.url)?;
+            saved
+                .matches(tab)
+                .then(|| (!exact_host(&saved.host, &tab.host), login))
+        })
         .collect();
-    found.sort_by_key(|login| login.label.to_lowercase());
-    found
+    // The exact host first, then the rest of the site.
+    found.sort_by_key(|(other_host, login)| (*other_host, login.label.to_lowercase()));
+    found.into_iter().map(|(_, login)| login).collect()
+}
+
+/// The same host, or one is `www.` plus the other.
+fn exact_host(saved: &str, tab: &str) -> bool {
+    saved == tab
+        || saved.strip_prefix("www.") == Some(tab)
+        || tab.strip_prefix("www.") == Some(saved)
 }
 
 /// The login a `save` would update: saved for this site, with the same
@@ -641,13 +673,51 @@ mod tests {
     }
 
     #[test]
+    fn another_host_of_the_same_site_matches() {
+        assert!(saved_for("google.com", "https://accounts.google.com"));
+        assert!(saved_for("accounts.google.com", "https://google.com"));
+        assert!(saved_for("m.github.com", "https://www.github.com"));
+        assert!(saved_for("www.www.github.com", "https://github.com"));
+        assert!(saved_for("bank.co.uk", "https://login.bank.co.uk"));
+    }
+
+    #[test]
+    fn two_sites_under_one_public_suffix_do_not_match() {
+        assert!(!saved_for("alice.github.io", "https://bob.github.io"));
+        assert!(!saved_for("github.io", "https://bob.github.io"));
+        assert!(!saved_for("alice.blogspot.com", "https://bob.blogspot.com"));
+        assert!(!saved_for("bank.co.uk", "https://other.co.uk"));
+        assert!(!saved_for("co.uk", "https://bank.co.uk"));
+    }
+
+    #[test]
+    fn an_address_is_only_itself() {
+        assert!(!saved_for("https://10.0.0.1", "https://10.0.0.2"));
+        assert!(!saved_for("https://1.1.1.1", "https://1.1.1.1.example"));
+        assert!(saved_for("https://10.0.0.1", "https://10.0.0.1"));
+    }
+
+    #[test]
+    fn the_exact_host_comes_first() {
+        let login = |label: &str, url: &str| Login {
+            id: Uuid::new_v4(),
+            label: label.into(),
+            username: String::new(),
+            url: url.into(),
+        };
+        let logins = vec![
+            login("A parent", "google.com"),
+            login("B exact", "accounts.google.com"),
+        ];
+        let found = logins_for(&logins, &tab("https://accounts.google.com"));
+        let labels: Vec<_> = found.iter().map(|l| l.label.as_str()).collect();
+        assert_eq!(labels, vec!["B exact", "A parent"]);
+    }
+
+    #[test]
     fn nothing_else_matches() {
-        assert!(!saved_for("github.com", "https://gist.github.com"));
-        assert!(!saved_for("gist.github.com", "https://github.com"));
         assert!(!saved_for("paypal.com", "https://paypal.com.evil.example"));
         assert!(!saved_for("paypal.com", "https://secure-paypal.com"));
-        assert!(!saved_for("www.www.github.com", "https://github.com"));
-        assert!(!saved_for("m.github.com", "https://www.github.com"));
         assert!(!saved_for("", "https://github.com"));
         assert!(!saved_for(
             "android://cert@com.github.android",

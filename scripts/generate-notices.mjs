@@ -295,6 +295,23 @@ for (const c of components) {
   out.push("");
 }
 
+// Data carried inside the app that is no package (scripts/word-lists.mjs in
+// the desktop repository writes both, from files downloaded by hand).
+out.push("=".repeat(78), "DATA", "=".repeat(78), "");
+out.push(
+  "EFF large word list (for passphrases and usernames)",
+  "  licence: CC BY 3.0 US, https://creativecommons.org/licenses/by/3.0/us/",
+  "  source:  https://www.eff.org/dice",
+  "  by the Electronic Frontier Foundation, used unchanged",
+  "",
+  "2fa.directory: the domains of sites offering TOTP codes (for Health)",
+  "  licence: MIT",
+  "  source:  https://github.com/2factorauth/twofactorauth",
+  "  by the 2factorauth contributors; the domain names only, from",
+  "  https://api.2fa.directory/v3/totp.json",
+  "",
+);
+
 out.push("=".repeat(78), "LICENCE TEXTS", "=".repeat(78), "");
 for (const { index, name, text } of [...bodies.values()].sort((a, b) => a.index - b.index)) {
   out.push(`[${index}] ${name}`, "-".repeat(78), text, "");

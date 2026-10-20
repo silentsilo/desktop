@@ -27,7 +27,7 @@ export const KIND_LABELS: Record<ActivityKind, string> = {
 export const KIND_CODES: Record<ActivityKind, number[]> = {
   access: [1, 2, 3],
   secrets: [10, 11, 12, 13, 14, 15],
-  entries: [20, 21, 22, 23, 24, 40, 41],
+  entries: [20, 21, 22, 23, 24, 25, 40, 41],
   files: [30, 31, 32, 33, 34, 35, 36, 37, 38],
   security: [50, 51, 52, 53, 54, 60, 61, 62, 63, 70, 71],
 };
@@ -257,6 +257,8 @@ export function describe(entry: AuditEntry): DescribedEvent {
       return say("restore", "dlg.activity_restored_version", l);
     case 24:
       return say("delete", "dlg.activity_cleared_history", l);
+    case 25:
+      return say("restore", "dlg.activity_undeleted", l);
     case 30:
       return say("file", "dlg.activity_opened", l);
     case 31:

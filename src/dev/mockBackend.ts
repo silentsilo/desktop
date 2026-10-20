@@ -1159,7 +1159,65 @@ const handlers: Record<string, Handler> = {
           },
         ],
   passwords_write_kdbx: () => null,
+  passwords_write_silentsilo: () => null,
+  // An export from another silo: a card and a login, with a category.
+  passwords_read_silentsilo: (args) =>
+    args.password === "wrong-password"
+      ? Promise.reject(
+          "Wrong password, or the file was changed since it was made.err.export_wrong_password",
+        )
+      : {
+          entries: [
+            {
+              id: "9a1c0e44-0d5e-4c8e-9a51-3f2b1c0d7e01",
+              type: "card",
+              service: "Travel card",
+              username: "",
+              password: "",
+              url: "",
+              notes: "",
+              category: "Travel",
+              card_holder: "A. Person",
+              card_number: "4111111111111111",
+              created_at: 0,
+              updated_at: 0,
+            },
+            {
+              id: "9a1c0e44-0d5e-4c8e-9a51-3f2b1c0d7e02",
+              service: "Shared Wi-Fi",
+              username: "guest",
+              password: "velvet-orbit-mango-tundra",
+              url: "",
+              notes: "",
+              category: "Travel",
+              created_at: 0,
+              updated_at: 0,
+            },
+          ],
+          categories: [{ name: "Travel", color: "#0ea5e9" }],
+          blobs: [],
+        },
   vault_delete_password: () => null,
+  // Two entries deleted in the last days, for the Recently deleted list.
+  vault_password_trash: () => [
+    {
+      id: "7d9c3c61-8a0b-4c1e-9d7f-3b1f7a5e2c10",
+      deleted_at: Math.floor(Date.now() / 1000) - 2 * 86400,
+      service: "Old forum",
+      username: "you@example.com",
+      url: "https://forum.example.com",
+      kind: "login",
+    },
+    {
+      id: "0f6b8e2a-5c3d-4b9a-8e1f-6a2d4c7b9e31",
+      deleted_at: Math.floor(Date.now() / 1000) - 9 * 86400,
+      service: "Travel card",
+      username: "",
+      url: "",
+      kind: "card",
+    },
+  ],
+  vault_restore_password: () => null,
   copy_secret_to_clipboard: () => null,
   audit_note: () => null,
   audit_status: () => mockAudit,

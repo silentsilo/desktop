@@ -13,6 +13,11 @@ import {
   oneClickCopyValue,
   searchTextFor,
   subtitleFor,
+  DEFAULT_GEN_OPTIONS,
+  generatePassphrase,
+  generatePassword,
+  generateUsername,
+  passwordStrength,
 } from "./util";
 
 function entry(over: Partial<PasswordEntry> = {}): PasswordEntry {
@@ -225,5 +230,51 @@ describe("categoryLabel", () => {
     expect(categoryLabel("Banking stuff")).toBe("Banking stuff");
     setLanguage("en");
     expect(categoryLabel("Banking")).toBe("Banking");
+  });
+});
+
+describe("generatePassphrase", () => {
+  it("picks the asked number of words from the EFF list", () => {
+    const phrase = generatePassphrase({ ...DEFAULT_GEN_OPTIONS, kind: "words", words: 6 });
+    const words = phrase.split("-");
+    // Four list words carry a hyphen of their own (t-shirt), so a phrase can
+    // split into a few more pieces, never fewer.
+    expect(words.length).toBeGreaterThanOrEqual(6);
+    expect(words.every((w) => /^[a-z]+$/.test(w))).toBe(true);
+  });
+
+  it("capitalises, adds a digit and keeps the separator", () => {
+    const phrase = generatePassphrase({
+      ...DEFAULT_GEN_OPTIONS,
+      kind: "words",
+      words: 4,
+      separator: " ",
+      capitalize: true,
+      number: true,
+    });
+    const words = phrase.split(" ");
+    expect(words).toHaveLength(4);
+    expect(words.every((w) => /^[A-Z]/.test(w))).toBe(true);
+    expect(words.filter((w) => /\d$/.test(w))).toHaveLength(1);
+  });
+
+  it("stays within 3 to 12 words", () => {
+    expect(generatePassphrase({ ...DEFAULT_GEN_OPTIONS, words: 1, separator: "." }).split(".")).toHaveLength(3);
+    expect(generatePassphrase({ ...DEFAULT_GEN_OPTIONS, words: 40, separator: "." }).split(".")).toHaveLength(12);
+  });
+
+  it("goes through generatePassword when words are chosen", () => {
+    expect(generatePassword({ ...DEFAULT_GEN_OPTIONS, kind: "words" }).split("-").length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("rates six words as strong", () => {
+    const phrase = generatePassphrase({ ...DEFAULT_GEN_OPTIONS, kind: "words", words: 6 });
+    expect(passwordStrength(phrase).score).toBe(4);
+  });
+});
+
+describe("generateUsername", () => {
+  it("is two words and two digits", () => {
+    expect(generateUsername()).toMatch(/^[a-z]+_[a-z]+\d{2}$/);
   });
 });

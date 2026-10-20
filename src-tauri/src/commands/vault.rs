@@ -2806,8 +2806,9 @@ fn clipboard_goes(owner: Option<Uuid>, closing: Option<&[Uuid]>) -> bool {
     }
 }
 
-/// Removes one entry outright. There is no trash for logins. `label` is
-/// the name it had, for the activity log.
+/// Removes one entry. It waits in the password trash for 30 days
+/// ([`vault_password_trash`]). `label` is the name it had, for the activity
+/// log.
 #[tauri::command(async)]
 pub fn vault_delete_password(
     app: AppHandle,
@@ -2829,6 +2830,80 @@ pub fn vault_delete_password(
         .delete_password(id)
         .map_err(|e| e.to_string())
 }
+
+/// The password trash, newest delete first: for each entry only what the
+/// list shows (name, username, kind, site) and when it was deleted. The
+/// secrets stay in the silo; a restore puts the entry back whole.
+#[tauri::command(async)]
+pub fn vault_password_trash(state: State<AppState>) -> Result<Vec<TrashedEntry>, String> {
+    let trash = with_vfs(&state, |_, vfs| vfs.list_password_trash())?;
+    Ok(trash
+        .into_iter()
+        .filter_map(|mut item| {
+            let parsed: Option<serde_json::Value> = serde_json::from_str(&item.data).ok();
+            zeroize::Zeroize::zeroize(&mut item.data);
+            let parsed = parsed?;
+            let field = |name: &str| {
+                parsed
+                    .get(name)
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string()
+            };
+            let kind = field("type");
+            // The category list is stored as a row; it is no one's entry.
+            if kind.starts_with("meta:") {
+                return None;
+            }
+            Some(TrashedEntry {
+                id: item.id.to_string(),
+                deleted_at: item.deleted_at,
+                service: field("service"),
+                username: field("username"),
+                url: field("url"),
+                kind,
+            })
+        })
+        .collect())
+}
+
+#[derive(serde::Serialize)]
+pub struct TrashedEntry {
+    id: String,
+    deleted_at: i64,
+    service: String,
+    username: String,
+    url: String,
+    kind: String,
+}
+
+/// Puts an entry from the password trash back, as it was when deleted.
+#[tauri::command(async)]
+pub fn vault_restore_password(
+    app: AppHandle,
+    id: String,
+    label: Option<String>,
+    state: State<AppState>,
+) -> Result<(), String> {
+    let id = Uuid::parse_str(&id).map_err(|e| format!("That entry id is not valid: {e}"))?;
+    crate::audit::record(
+        &app,
+        crate::audit::event(crate::audit::codes::ENTRY_UNDELETED)
+            .on(id.to_string(), label.unwrap_or_default()),
+    )?;
+    with_vfs(&state, |_, vfs| vfs.restore_password(id)).map_err(|e| {
+        if e.contains("no longer in the trash") {
+            NOT_IN_TRASH.to_string()
+        } else {
+            e
+        }
+    })
+}
+
+const NOT_IN_TRASH: &str = crate::err::coded!(
+    "err.entry_not_in_trash",
+    "This entry is no longer in Recently deleted."
+);
 
 /// Proves the user is still at the keyboard, without touching the open
 /// session. The touch only counts if the key it produces actually unwraps
@@ -3503,9 +3578,11 @@ pub async fn vault_blob_status(app: AppHandle) -> Result<BlobStatus, String> {
 type AttachmentCache = Option<(Uuid, u64, Vec<(Uuid, i64)>)>;
 static ATTACHMENTS: std::sync::Mutex<AttachmentCache> = std::sync::Mutex::new(None);
 
-/// Every attachment's blob and size. Finding them means opening every
-/// password entry, secrets included, and the explorer asks every twenty
-/// seconds, so the answer is kept until a sealed row changes. Sealing uses
+/// Every attachment's blob and size, those of entries in the password trash
+/// included. Finding them means opening every password entry, secrets
+/// included, and the explorer asks every twenty seconds, so the answer is
+/// kept until a sealed row changes. An entry leaving the trash after its 30
+/// days changes no row, so its attachments drop out at the next change. Sealing uses
 /// a fresh nonce, so any edit changes the ciphertext the fingerprint reads.
 fn attachment_sizes(session: &VaultSession) -> Vec<(Uuid, i64)> {
     let fingerprint = sealed_passwords_fingerprint(session);
@@ -4007,10 +4084,27 @@ mod clipboard_and_status_tests {
         assert_ne!(before, after, "a new entry changes the fingerprint");
         assert_eq!(attachment_sizes(&session), vec![(blob, 7)]);
 
+        // A deleted entry waits in the password trash, and its attachments
+        // with it: they are still the silo's to keep.
         vfs.delete_password(id).unwrap();
-        assert!(
-            attachment_sizes(&session).is_empty(),
-            "a removed entry is not served from the cache"
+        assert_eq!(attachment_sizes(&session), vec![(blob, 7)]);
+
+        // Read again once a row changes: an entry saved after the delete.
+        let other = Uuid::new_v4();
+        let blob2 = Uuid::new_v4();
+        let entry2 = serde_json::json!({
+            "id": other.to_string(), "service": "Mail", "username": "b", "password": "q",
+            "attachments": [{ "blob_id": blob2.to_string(), "name": "y.pdf",
+                "size_bytes": 9, "blob_key": "k" }],
+        });
+        vfs.upsert_password(other, &entry2.to_string()).unwrap();
+        let mut sizes = attachment_sizes(&session);
+        sizes.sort();
+        let mut expected = vec![(blob, 7), (blob2, 9)];
+        expected.sort();
+        assert_eq!(
+            sizes, expected,
+            "a changed row is not served from the cache"
         );
     }
 }

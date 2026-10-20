@@ -1,6 +1,6 @@
 [package]
 name = "silentsilo"
-version = "1.5.0"
+version = "1.5.1"
 description = "SilentSilo desktop client"
 authors = ["Software Hive S.R.L."]
 edition = "2024"
@@ -73,6 +73,9 @@ blake3 = "1"
 # Reads a two-factor QR code from a screenshot (MIT or Apache-2.0). Without
 # its `img` feature: the webview decodes the picture and sends grey pixels.
 rqrr = { version = "0.11", default-features = false }
+# The Public Suffix List, for matching a login to every host of its site.
+# Already in the tree through core's FIDO crate.
+psl = "2"
 
 # Edge's own autofill and password manager are turned off on the WebView2
 # settings interface, which has no Tauri wrapper. `windows-core` is only for

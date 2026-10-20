@@ -1,5 +1,5 @@
 ﻿import { describe, expect, it } from "vitest";
-import { analyseHealth, summarise, type SiloHealth } from "./analysis";
+import { analyseHealth, offersTotp, plainHttp, summarise, type SiloHealth } from "./analysis";
 
 /// A disk with plenty of room, so the space finding stays out of the way
 /// of tests about passwords. Its own cases set it deliberately.
@@ -28,7 +28,7 @@ function entry(overrides: Partial<PasswordEntry> = {}): PasswordEntry {
     service: "Example",
     username: "user@example.com",
     password: "8Kq!vRz2mNp#4Wd",
-    url: "https://example.com",
+    url: "https://github.com",
     notes: "",
     category: "General",
     created_at: NOW,
@@ -116,6 +116,20 @@ describe("analyseHealth", () => {
     expect(ids(findings)).toContain("no-totp");
   });
 
+  it("asks for a two-factor code only where the site offers one", () => {
+    expect(offersTotp("https://github.com/login")).toBe(true);
+    expect(offersTotp("github.com")).toBe(true);
+    expect(offersTotp("https://www.github.com")).toBe(true);
+    expect(offersTotp("https://forum.example.com")).toBe(false);
+    expect(offersTotp("")).toBe(false);
+    const findings = analyseHealth(
+      [entry({ totp_secret: undefined, url: "https://forum.example.com" })],
+      HEALTHY_SILO,
+      NOW,
+    );
+    expect(ids(findings)).not.toContain("no-totp");
+  });
+
   it("does not ask a card or a note for a two-factor code", () => {
     const findings = analyseHealth(
       [entry({ type: "card", totp_secret: undefined })],
@@ -201,5 +215,30 @@ describe("breached passwords", () => {
   it("are absent before a check", () => {
     const findings = analyseHealth([entry()], HEALTHY_SILO, NOW);
     expect(findings.some((f) => f.id === "breached")).toBe(false);
+  });
+});
+
+describe("plain http", () => {
+  it("names a site on the internet, not a device at home", () => {
+    expect(plainHttp("http://forum.example.com/login")).toBe(true);
+    expect(plainHttp("HTTP://user@shop.example.net:8080")).toBe(true);
+    expect(plainHttp("https://example.com")).toBe(false);
+    expect(plainHttp("example.com")).toBe(false);
+    expect(plainHttp("http://192.168.1.1")).toBe(false);
+    expect(plainHttp("http://10.0.0.5:8080")).toBe(false);
+    expect(plainHttp("http://router.lan")).toBe(false);
+    expect(plainHttp("http://nas.local")).toBe(false);
+    expect(plainHttp("http://localhost:3000")).toBe(false);
+    expect(plainHttp("http://printer")).toBe(false);
+    expect(plainHttp("http://[fe80::1]")).toBe(false);
+  });
+
+  it("is a medium finding for logins only", () => {
+    const plain = entry({ service: "Old forum", url: "http://forum.example.com" });
+    const fine = entry({ service: "Fine", url: "https://github.com" });
+    const findings = analyseHealth([plain, fine], HEALTHY_SILO, NOW);
+    const found = findings.find((f) => f.id === "plain-http");
+    expect(found?.severity).toBe("medium");
+    expect(found?.entries.map((e) => e.service)).toEqual(["Old forum"]);
   });
 });

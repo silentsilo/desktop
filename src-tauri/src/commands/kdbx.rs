@@ -423,7 +423,7 @@ fn read_entries(
 }
 
 /// A string field of an entry's JSON.
-fn text<'a>(entry: &'a Json, key: &str) -> &'a str {
+pub(crate) fn text<'a>(entry: &'a Json, key: &str) -> &'a str {
     entry.get(key).and_then(Json::as_str).unwrap_or_default()
 }
 
@@ -636,7 +636,7 @@ fn build_database(
 }
 
 /// Overwrites every string in `value`: the entries arrive in clear.
-fn wipe(value: &mut Json) {
+pub(crate) fn wipe(value: &mut Json) {
     match value {
         Json::String(s) => zeroize::Zeroize::zeroize(s),
         Json::Array(items) => items.iter_mut().for_each(wipe),
@@ -647,7 +647,10 @@ fn wipe(value: &mut Json) {
 
 /// Puts the stored entry in place of one the window holds without its
 /// secrets, so the export carries what the silo does.
-async fn whole_where_withheld(app: &AppHandle, entries: &mut [Json]) -> Result<(), String> {
+pub(crate) async fn whole_where_withheld(
+    app: &AppHandle,
+    entries: &mut [Json],
+) -> Result<(), String> {
     let wanted: std::collections::HashSet<Uuid> = entries
         .iter()
         .filter(|e| e.get("withheld").is_some())

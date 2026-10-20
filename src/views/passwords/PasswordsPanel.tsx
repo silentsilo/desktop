@@ -10,6 +10,7 @@ import {
   MousePointerClick,
   ShieldCheck,
   Star,
+  Trash2,
   Upload,
 } from "lucide-react";
 import { ViewHeader } from "../../components/ViewHeader";
@@ -49,6 +50,8 @@ import { ConfirmDialog } from "../ConfirmDialog";
 import { EntryList } from "./EntryList";
 import { ImportFilingDialog } from "./ImportFilingDialog";
 import { KdbxPasswordDialog } from "./KdbxPasswordDialog";
+import { ExportChoiceDialog } from "./ExportChoiceDialog";
+import { PasswordTrashDialog, type TrashedEntry } from "./PasswordTrashDialog";
 import { attachmentBlobs, kdbxToEntries, type KdbxEntry } from "../../lib/kdbx";
 import { loadHistoryPolicy } from "../../lib/historySetting";
 import { EntryDetail } from "./EntryDetail";
@@ -103,9 +106,21 @@ type Props = {
   onSaveCategories: (categories: PasswordCategory[]) => void;
   /** Asks the user to confirm something that runs when opened. */
   onConfirmRun: (name: string) => Promise<boolean>;
+  /** Puts an entry back from the password trash. */
+  onRestoreEntry: (entry: TrashedEntry) => Promise<void>;
 };
 
 const SHOW_FAVICONS_KEY = "silentsilo.passwords.showFavicons";
+
+/** The extension of a SilentSilo password export, as core names it. */
+const SILENTSILO_EXPORT = "silopwd";
+
+/** An export's entries, each with a new id where this silo already has the
+ *  id: an import adds, it never overwrites an entry that is here. */
+function withFreshIds(imported: PasswordEntry[], here: PasswordEntry[]): PasswordEntry[] {
+  const taken = new Set(here.map((e) => e.id));
+  return imported.map((e) => (taken.has(e.id) ? { ...e, id: crypto.randomUUID() } : e));
+}
 
 /** What an import counts, by where it came from: Bitwarden items, CSV
  * logins or KeePass entries, each with what its skipped rows were. */
@@ -180,6 +195,7 @@ export function PasswordsPanel({
   onImportEntries,
   onSaveCategories,
   onConfirmRun,
+  onRestoreEntry,
 }: Props) {
   useLocale();
   const [search, setSearch] = useState("");
@@ -221,10 +237,16 @@ export function PasswordsPanel({
     /** Attachments a KeePass import already encrypted into the silo, which
      * a cancel deletes again. */
     blobs?: string[];
+    /** A SilentSilo export's categories, with their colours. */
+    categories?: PasswordCategory[];
   } | null>("pw.pending_import", null, Boolean);
   /** A KeePass database being opened for import, or the export's password
    * being asked for. */
-  const [kdbx, setKdbx] = useState<{ mode: "open" | "export"; path: string } | null>(null);
+  const [kdbx, setKdbx] = useState<{
+    mode: "open" | "export";
+    path: string;
+    format: "kdbx" | "silentsilo";
+  } | null>(null);
   const [kdbxError, setKdbxError] = useState<string | null>(null);
   /// An import read before a lock must not land after it: what it parsed
   /// is passwords in clear.
@@ -626,6 +648,7 @@ export function PasswordsPanel({
   const checkAnchor = useRef<string | null>(null);
   const [movingChecked, setMovingChecked] = useState(false);
   const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
+  const [trashOpen, setTrashOpen] = useState(false);
   /// Clearing takes old passwords out of the entry on every device; older
   /// records of the silo keep them until those are cleared.
   const [pendingClearHistory, setPendingClearHistory] = useState<PasswordEntry | null>(null);
@@ -709,8 +732,8 @@ export function PasswordsPanel({
     }
   }, [allStarred, checkedEntries, onSaveEntry]);
 
-  /// A protected entry is deleted only after the key: there is no trash
-  /// to bring it back from.
+  /// A protected entry is deleted only after the key: the trash can put it
+  /// back, but the delete still reaches every device.
   const confirmBulkDelete = useCallback(async () => {
     setPendingBulkDelete(false);
     const going = await ensureVerifiedAll(checkedEntries);
@@ -770,7 +793,7 @@ export function PasswordsPanel({
       filters: [
         {
           name: t("pw.import_filter"),
-          extensions: ["kdbx", "csv", "json", "zip"],
+          extensions: [SILENTSILO_EXPORT, "kdbx", "csv", "json", "zip"],
         },
       ],
     });
@@ -778,7 +801,12 @@ export function PasswordsPanel({
     if (!path) return;
     if (path.toLowerCase().endsWith(".kdbx")) {
       setKdbxError(null);
-      setKdbx({ mode: "open", path });
+      setKdbx({ mode: "open", path, format: "kdbx" });
+      return;
+    }
+    if (path.toLowerCase().endsWith(`.${SILENTSILO_EXPORT}`)) {
+      setKdbxError(null);
+      setKdbx({ mode: "open", path, format: "silentsilo" });
       return;
     }
 
@@ -840,6 +868,29 @@ export function PasswordsPanel({
       setKdbxError(null);
       const current = startedFor();
       try {
+        if (kdbx.format === "silentsilo") {
+          const read = await invoke<{
+            entries: PasswordEntry[];
+            categories: PasswordCategory[] | null;
+            blobs: string[];
+          }>("passwords_read_silentsilo", { path: kdbx.path, password });
+          if (!current()) {
+            dropBlobs(read.blobs);
+            return;
+          }
+          setKdbx(null);
+          setPendingImport({
+            imported: withFreshIds(read.entries, entries),
+            skipped: 0,
+            source: "SilentSilo",
+            sourceLabel: "SilentSilo",
+            kind: "entry",
+            extras: noExtras(),
+            blobs: read.blobs,
+            categories: read.categories ?? undefined,
+          });
+          return;
+        }
         const read = await invoke<KdbxEntry[]>("passwords_read_kdbx", {
           path: kdbx.path,
           password: password || null,
@@ -864,7 +915,7 @@ export function PasswordsPanel({
         setTransferBusy(false);
       }
     },
-    [dropBlobs, kdbx, setPendingImport, setTransferBusy, startedFor]
+    [dropBlobs, entries, kdbx, setPendingImport, setTransferBusy, startedFor]
   );
 
   const cancelImport = useCallback(() => {
@@ -886,6 +937,14 @@ export function PasswordsPanel({
       // second copy; only an exact match is dropped as a duplicate.
       const { fresh, duplicates } = dropDuplicates(entries, imported);
       if (fresh.length > 0) onImportEntries(fresh, source);
+      // A SilentSilo export brings its categories' colours: any the silo
+      // does not have yet are added, none it has are changed.
+      const brought = pendingImport.categories ?? [];
+      const known = new Set(storedCategories?.map((c) => c.name) ?? []);
+      const added = brought.filter((c) => c.name && !known.has(c.name));
+      if (fresh.length > 0 && added.length > 0) {
+        onSaveCategories([...(storedCategories ?? []), ...added]);
+      }
       if (pendingImport.blobs) {
         const kept = new Set(attachmentBlobs(fresh));
         dropBlobs(pendingImport.blobs.filter((id) => !kept.has(id)));
@@ -912,7 +971,16 @@ export function PasswordsPanel({
               .join(" ")
       );
     },
-    [dropBlobs, entries, onImportEntries, pendingImport, setPendingImport, setTransferNotice]
+    [
+      dropBlobs,
+      entries,
+      onImportEntries,
+      onSaveCategories,
+      pendingImport,
+      setPendingImport,
+      setTransferNotice,
+      storedCategories,
+    ]
   );
 
   /// Every export asks for the key, each time, whatever was touched a
@@ -942,30 +1010,61 @@ export function PasswordsPanel({
     setConfirmingExport(false);
     if (!(await confirmExport())) return;
     setKdbxError(null);
-    setKdbx({ mode: "export", path: "" });
+    setKdbx({ mode: "export", path: "", format: "kdbx" });
+  }, [confirmExport]);
+
+  /// Every entry as the silo keeps it, for another silo or another person
+  /// who uses SilentSilo: kinds, settings, history and files come back
+  /// exactly, which a KeePass file cannot promise.
+  const startSilentsiloExport = useCallback(async () => {
+    setConfirmingExport(false);
+    if (!(await confirmExport())) return;
+    setKdbxError(null);
+    setKdbx({ mode: "export", path: "", format: "silentsilo" });
   }, [confirmExport]);
 
   const finishKdbxExport = useCallback(
     async (password: string) => {
       setKdbxError(null);
+      const own = kdbx?.format === "silentsilo";
       try {
-        const path = await saveFileDialog({
-          defaultPath: "silentsilo-passwords.kdbx",
-          filters: [{ name: t("pw.kdbx_filter"), extensions: ["kdbx"] }],
-        });
+        const path = await saveFileDialog(
+          own
+            ? {
+                defaultPath: `Passwords.${SILENTSILO_EXPORT}`,
+                filters: [{ name: t("pw.sse_filter"), extensions: [SILENTSILO_EXPORT] }],
+              }
+            : {
+                defaultPath: "silentsilo-passwords.kdbx",
+                filters: [{ name: t("pw.kdbx_filter"), extensions: ["kdbx"] }],
+              },
+        );
         if (!path) return;
         setTransferBusy(true);
-        await invoke("passwords_write_kdbx", { path, password, entries: JSON.stringify(toExport) });
+        if (own) {
+          await invoke("passwords_write_silentsilo", {
+            path,
+            password,
+            entries: JSON.stringify(toExport),
+            categories: storedCategories ? JSON.stringify(storedCategories) : null,
+          });
+        } else {
+          await invoke("passwords_write_kdbx", { path, password, entries: JSON.stringify(toExport) });
+        }
         setKdbx(null);
         setExportOnly(null);
-        setTransferNotice(t("pw.kdbx_exported", { count: toExport.length }));
+        setTransferNotice(
+          own
+            ? t("pw.sse_exported", { count: toExport.length })
+            : t("pw.kdbx_exported", { count: toExport.length }),
+        );
       } catch (e) {
         setKdbxError(formatAppError(e));
       } finally {
         setTransferBusy(false);
       }
     },
-    [toExport, setTransferBusy, setTransferNotice]
+    [kdbx, storedCategories, toExport, setTransferBusy, setTransferNotice]
   );
 
   const handleExport = useCallback(async () => {
@@ -1005,6 +1104,7 @@ export function PasswordsPanel({
         [
           t("pw.csv_exported", { count: logins.length }),
           leftOut > 0 ? t("pw.csv_left_out", { count: leftOut }) : "",
+          t("pw.export_csv_formula"),
         ]
           .filter(Boolean)
           .join(" ")
@@ -1050,6 +1150,16 @@ export function PasswordsPanel({
         <button
           type="button"
           className="pw-transfer-btn"
+          disabled={busy}
+          onClick={() => setTrashOpen(true)}
+          data-tooltip={t("pw.trash_tip")}
+        >
+          <Trash2 size={15} />
+          <span>{t("pw.trash_button")}</span>
+        </button>
+        <button
+          type="button"
+          className="pw-transfer-btn"
           disabled={busy || transferBusy}
           onClick={() => void handleImport()}
           data-tooltip={t("pw.import_tip")}
@@ -1070,7 +1180,7 @@ export function PasswordsPanel({
           data-tooltip={t("pw.export_tip")}
         >
           <Download size={15} />
-          <span>{t("pw.export")}</span>
+          <span>{t("pw.export_all")}</span>
         </button>
         <div className="pw-add-wrap">
           <button
@@ -1123,6 +1233,7 @@ export function PasswordsPanel({
       {kdbx && (
         <KdbxPasswordDialog
           mode={kdbx.mode}
+          format={kdbx.format}
           busy={transferBusy}
           error={kdbxError}
           onSubmit={(password, keyFile) =>
@@ -1136,47 +1247,22 @@ export function PasswordsPanel({
       )}
 
       {confirmingExport && (
-        <div className="pw-export-warning" role="alertdialog" aria-label={t("pw.export_choose_label")}>
-          <div>
-            <strong>
-              {exportOnly
-                ? t("pw.export_selected_title", { count: exportOnly.length })
-                : t("pw.export_title")}
-            </strong>
-            <p>{t("pw.export_kdbx_body")}</p>
-            <p>
-              {t("pw.export_csv_body")} {t("pw.export_csv_formula")}
-            </p>
-          </div>
-          <div className="pw-export-warning-actions">
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => {
-                setConfirmingExport(false);
-                setExportOnly(null);
-              }}
-            >
-              {t("common.cancel")}
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={transferBusy}
-              onClick={() => void handleExport()}
-            >
-              {t("pw.export_csv_button")}
-            </button>
-            <button
-              className="btn-primary"
-              type="button"
-              disabled={transferBusy}
-              onClick={() => void startKdbxExport()}
-            >
-              {t("pw.export_kdbx_button")}
-            </button>
-          </div>
-        </div>
+        <ExportChoiceDialog
+          selected={exportOnly ? exportOnly.length : null}
+          busy={transferBusy}
+          onChoose={(kind) => {
+            setConfirmingExport(false);
+            void (kind === "silentsilo"
+              ? startSilentsiloExport()
+              : kind === "kdbx"
+                ? startKdbxExport()
+                : handleExport());
+          }}
+          onCancel={() => {
+            setConfirmingExport(false);
+            setExportOnly(null);
+          }}
+        />
       )}
 
       {transferNotice && (
@@ -1477,8 +1563,7 @@ export function PasswordsPanel({
             backedUp
               ? t("pw.delete_synced", { name: pendingDelete.service })
               : t("pw.delete_local", { name: pendingDelete.service }),
-            t("pw.records_cleared_later"),
-            t("pw.delete_no_trash"),
+            t("pw.delete_to_trash"),
             backedUp && (pendingDelete.attachments ?? []).length > 0
               ? t("pw.delete_attachments_kept")
               : "",
@@ -1503,8 +1588,7 @@ export function PasswordsPanel({
           title={t("pw.bulk_delete_title", { count: checkedEntries.length })}
           message={[
             backedUp ? t("pw.bulk_delete_synced") : t("pw.bulk_delete_local"),
-            t("pw.records_cleared_later"),
-            t("pw.delete_no_trash"),
+            t("pw.delete_to_trash"),
             backedUp && checkedEntries.some((e) => (e.attachments ?? []).length > 0)
               ? t("pw.delete_attachments_kept")
               : "",
@@ -1522,6 +1606,10 @@ export function PasswordsPanel({
           onConfirm={() => void confirmBulkDelete()}
           onCancel={() => setPendingBulkDelete(false)}
         />
+      )}
+
+      {trashOpen && (
+        <PasswordTrashDialog onRestore={onRestoreEntry} onClose={() => setTrashOpen(false)} />
       )}
 
       {pendingClearHistory && (

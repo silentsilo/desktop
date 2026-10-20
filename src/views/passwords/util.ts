@@ -6,6 +6,7 @@
 
 import type { CredentialType, PasswordCategory, PasswordEntry } from "../../lib/types";
 import { t, type Key } from "../../i18n";
+import { WORDS } from "../../lib/wordlist";
 
 /** Absent means login: every entry predating the other kinds is one. */
 export function typeOf(entry: PasswordEntry): CredentialType {
@@ -252,22 +253,69 @@ export function categoryChoices(categories: PasswordCategory[]): string[] {
 }
 
 export type PasswordGenOptions = {
+  /** Random characters, or random words from the EFF list. */
+  kind: "characters" | "words";
   length: number;
   upper: boolean;
   lower: boolean;
   digits: boolean;
   symbols: boolean;
+  /** How many words, 3 to 12; each adds about 12.9 bits. */
+  words: number;
+  separator: string;
+  capitalize: boolean;
+  /** A digit after one of the words, for sites that insist on one. */
+  number: boolean;
 };
 
 export const DEFAULT_GEN_OPTIONS: PasswordGenOptions = {
+  kind: "characters",
   length: 20,
   upper: true,
   lower: true,
   digits: true,
   symbols: true,
+  words: 6,
+  separator: "-",
+  capitalize: false,
+  number: false,
 };
 
+/// A uniform index below `n` from the system's random source. Draws that
+/// land in the uneven top of the 32-bit range are drawn again, so no index
+/// is more likely than another.
+function randomBelow(n: number): number {
+  const limit = Math.floor(0x1_0000_0000 / n) * n;
+  const draw = new Uint32Array(1);
+  for (;;) {
+    crypto.getRandomValues(draw);
+    if (draw[0]! < limit) return draw[0]! % n;
+  }
+}
+
+/// Words picked at random from the EFF list: six give about 77 bits, as
+/// much as a random 12-character password with symbols, and can be typed
+/// on a TV or read out.
+export function generatePassphrase(opts: PasswordGenOptions): string {
+  const count = Math.min(Math.max(Math.round(opts.words), 3), 12);
+  const words = Array.from({ length: count }, () => WORDS[randomBelow(WORDS.length)]!);
+  const shaped = opts.capitalize ? words.map((w) => w[0]!.toUpperCase() + w.slice(1)) : words;
+  if (opts.number) {
+    const at = randomBelow(count);
+    shaped[at] = `${shaped[at]}${randomBelow(10)}`;
+  }
+  return shaped.join(opts.separator);
+}
+
+/// A username nobody can tie to you: two random words and two digits, such
+/// as `velvet_orbit42`, without the list's hyphens.
+export function generateUsername(): string {
+  const word = () => WORDS[randomBelow(WORDS.length)]!.replace(/-/g, "");
+  return `${word()}_${word()}${randomBelow(90) + 10}`;
+}
+
 export function generatePassword(opts: PasswordGenOptions): string {
+  if (opts.kind === "words") return generatePassphrase(opts);
   const charsets: string[] = [];
   if (opts.upper) charsets.push("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
   if (opts.lower) charsets.push("abcdefghijklmnopqrstuvwxyz");
@@ -310,6 +358,8 @@ export function passwordStrength(pw: string): PasswordStrength {
   let score = 0;
   if (pw.length >= 8) score++;
   if (pw.length >= 14) score++;
+  // A passphrase of six random words is long rather than varied.
+  if (pw.length >= 24) score++;
   if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) score++;
   if (/\d/.test(pw)) score++;
   if (/[^A-Za-z0-9]/.test(pw)) score++;

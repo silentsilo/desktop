@@ -110,14 +110,21 @@ one-time code if it has one (pasted as text, or read from a screenshot of
 the site's QR code), custom fields (a hidden one is masked and copied
 like a password) and its earlier versions: when a password, a field or a note
 changes, the entry keeps the version before it, the last 10 by default, and
-one can be put back. Health points out reused, weak and old passwords, and
-an entry back on one it had before; what is not critical can be ignored.
+one can be put back. The generator makes random characters or random
+words, and random usernames. A deleted entry waits 30 days in Recently
+deleted.
+Health points out reused, weak and old passwords, logins sent over
+`http://`, sites that offer two-factor codes where none is saved, and an
+entry back on one it had before; what is not critical can
+be ignored.
 
-Import reads a KeePass database (`.kdbx`, with its key file if it has one),
+Import reads a SilentSilo export (`.silopwd`), a KeePass database (`.kdbx`, with its key file if it has one),
 Bitwarden's JSON or its zip with attachments, and CSV from Bitwarden, LastPass, 1Password, Proton Pass,
-Dashlane, NordPass, KeePass, RoboForm and the browsers. Export writes every
-entry to a KeePass file under a password you choose, which KeePassXC and
-KeePassDX open, or the logins alone to CSV. The browser extension fills
+Dashlane, NordPass, KeePass, RoboForm and the browsers. Export writes all
+entries or the selected ones to a SilentSilo file, which another SilentSilo
+opens exactly as they were (every kind, setting, history and attached file),
+or to a KeePass file, which KeePassXC and KeePassDX open, both under a
+password you choose; or the logins alone to CSV. The browser extension fills
 logins, confirmed in the app, and offers a login typed on a page for saving,
 which the app asks about first; it holds nothing itself. The SSH agent lets
 ssh, Git and your editor sign with the SSH keys in the silo, each use

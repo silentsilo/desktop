@@ -34,6 +34,7 @@ import {
   categoryChoices,
   DEFAULT_GEN_OPTIONS,
   generatePassword,
+  generateUsername,
   passwordStrength,
   TYPE_TEXTS,
   typeOf,
@@ -434,13 +435,24 @@ export function EntryEditor({ initial, creating, categories, now, onSave, onCanc
             <>
               <label className="field">
                 <span>{t("pw.field_username_or_email")}</span>
-                <input
-                  type="text"
-                  autoComplete="off"
-                  placeholder="your@email.com"
-                  value={draft.username}
-                  onChange={(e) => setDraft({ ...draft, username: e.target.value })}
-                />
+                <div className="pw-password-input-row pw-username-row">
+                  <input
+                    type="text"
+                    autoComplete="off"
+                    placeholder="your@email.com"
+                    value={draft.username}
+                    onChange={(e) => setDraft({ ...draft, username: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className="pw-gen-btn"
+                    data-tooltip={t("pw.generate_username")}
+                    aria-label={t("pw.generate_username")}
+                    onClick={() => setDraft({ ...draft, username: generateUsername() })}
+                  >
+                    <IconGenerate size={15} />
+                  </button>
+                </div>
               </label>
               <label className="field field-full">
                 <span>{t("pw.field_password")}</span>
@@ -509,41 +521,109 @@ export function EntryEditor({ initial, creating, categories, now, onSave, onCanc
 
                 {genOpen && (
                   <div className="pw-gen-panel">
-                    <div className="pw-gen-panel-header">
-                      <span>{t("pw.generator")}</span>
-                      <span className="pw-gen-length-value">
-                        {t("pw.generator_length", { count: genOptions.length })}
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min={8}
-                      max={64}
-                      value={genOptions.length}
-                      onChange={(e) =>
-                        setGenOptions({ ...genOptions, length: Number(e.target.value) })
-                      }
-                      className="pw-gen-slider"
-                    />
-                    <div className="pw-gen-chips">
-                      {(
-                        [
-                          ["upper", "A-Z"],
-                          ["lower", "a-z"],
-                          ["digits", "0-9"],
-                          ["symbols", "!@#$"],
-                        ] as const
-                      ).map(([key, label]) => (
+                    <div className="pw-gen-chips" role="group" aria-label={t("pw.generator")}>
+                      {(["characters", "words"] as const).map((kind) => (
                         <button
-                          key={key}
+                          key={kind}
                           type="button"
-                          className={`pw-gen-chip${genOptions[key] ? " active" : ""}`}
-                          onClick={() => setGenOptions({ ...genOptions, [key]: !genOptions[key] })}
+                          aria-pressed={genOptions.kind === kind}
+                          className={`pw-gen-chip${genOptions.kind === kind ? " active" : ""}`}
+                          onClick={() => setGenOptions({ ...genOptions, kind })}
                         >
-                          {label}
+                          {kind === "words"
+                            ? t("pw.generator_kind_words")
+                            : t("pw.generator_kind_characters")}
                         </button>
                       ))}
                     </div>
+                    <div className="pw-gen-panel-header">
+                      <span>{t("pw.generator")}</span>
+                      <span className="pw-gen-length-value">
+                        {genOptions.kind === "words"
+                          ? t("pw.generator_words", { count: genOptions.words })
+                          : t("pw.generator_length", { count: genOptions.length })}
+                      </span>
+                    </div>
+                    {genOptions.kind === "words" ? (
+                      <>
+                        <input
+                          type="range"
+                          min={3}
+                          max={12}
+                          value={genOptions.words}
+                          onChange={(e) =>
+                            setGenOptions({ ...genOptions, words: Number(e.target.value) })
+                          }
+                          className="pw-gen-slider"
+                        />
+                        <div className="pw-gen-chips">
+                          {(["-", " ", ".", "_"] as const).map((separator) => (
+                            <button
+                              key={separator}
+                              type="button"
+                              aria-label={t("pw.generator_separator", {
+                                sign: separator === " " ? t("pw.generator_space") : separator,
+                              })}
+                              className={`pw-gen-chip${genOptions.separator === separator ? " active" : ""}`}
+                              onClick={() => setGenOptions({ ...genOptions, separator })}
+                            >
+                              {separator === " " ? t("pw.generator_space") : separator}
+                            </button>
+                          ))}
+                          {(
+                            [
+                              ["capitalize", "Aa"],
+                              ["number", "0-9"],
+                            ] as const
+                          ).map(([key, label]) => (
+                            <button
+                              key={key}
+                              type="button"
+                              className={`pw-gen-chip${genOptions[key] ? " active" : ""}`}
+                              onClick={() =>
+                                setGenOptions({ ...genOptions, [key]: !genOptions[key] })
+                              }
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <input
+                          type="range"
+                          min={8}
+                          max={64}
+                          value={genOptions.length}
+                          onChange={(e) =>
+                            setGenOptions({ ...genOptions, length: Number(e.target.value) })
+                          }
+                          className="pw-gen-slider"
+                        />
+                        <div className="pw-gen-chips">
+                          {(
+                            [
+                              ["upper", "A-Z"],
+                              ["lower", "a-z"],
+                              ["digits", "0-9"],
+                              ["symbols", "!@#$"],
+                            ] as const
+                          ).map(([key, label]) => (
+                            <button
+                              key={key}
+                              type="button"
+                              className={`pw-gen-chip${genOptions[key] ? " active" : ""}`}
+                              onClick={() =>
+                                setGenOptions({ ...genOptions, [key]: !genOptions[key] })
+                              }
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </label>

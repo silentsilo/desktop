@@ -705,9 +705,13 @@ flowchart LR
   something desktop can do alone.
 - **Matching** (`browser/protocol.rs`): only `https:` tabs, plus `http:` on
   `localhost` and loopback addresses; any other scheme gets an empty list.
-  A login matches when the host of its saved address equals the tab's host,
-  or one is `www.` plus the other. No parent domains, no look-alikes, no
-  guessing from the label. Ports must be equal: an address without one means
+  A login matches when its saved host and the tab's host are the same site:
+  equal, or under the same registrable domain by the Public Suffix List,
+  private suffixes included (`psl::domain_str`), so `accounts.google.com`
+  takes a `google.com` login and `alice.github.io` never takes
+  `bob.github.io`'s. IP addresses and `localhost` match only themselves.
+  Exact host matches are listed first. No look-alikes, no guessing from the
+  label. Ports must be equal: an address without one means
   its scheme's default (443, or 80 for `http://`), never any port, and an
   `http://` address also matches the same host over https on 443. On
   loopback, where each port is another program, the ports must be written

@@ -7,6 +7,7 @@ pub mod pwned;
 pub mod qr;
 pub mod recovery;
 pub mod shell;
+pub mod silentsilo_export;
 pub mod silo;
 pub mod silo_report;
 pub mod storage;
