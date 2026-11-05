@@ -131,7 +131,8 @@ extractor="$OUT/silentsilo-extract-macos-universal"
 lipo -create -output "$extractor" \
   "$core_src/target/aarch64-apple-darwin/release/silentsilo-extract" \
   "$core_src/target/x86_64-apple-darwin/release/silentsilo-extract"
-lipo "$extractor" -verify_arch arm64 x86_64
+# One architecture per call: lipo in Xcode 27 takes no list here.
+for arch in arm64 x86_64; do lipo "$extractor" -verify_arch "$arch"; done
 codesign --force --options runtime --timestamp --identifier com.silentsilo.extract \
   --sign "$IDENTITY" "$extractor"
 codesign --verify --strict --verbose=2 "$extractor"
