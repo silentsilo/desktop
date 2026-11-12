@@ -7,6 +7,49 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+## [1.5.2] - Sync that starts when you unlock
+
+On core v1.10.4.
+
+### Fixed
+
+- Sync starts right after an unlock. The unlock started nothing, and a copy
+  that had failed while the silo was locked was skipped for up to fifteen
+  minutes. Coming back to the window tries such a copy again, and the
+  network coming back starts a sync.
+- "Synced just now" only after a pass that reached a copy. Offline, the
+  indicator went back and forth between "Sync failed" and "Synced just now";
+  it now keeps the last real time and says when it tries again.
+- Changes received from another device no longer show as changes waiting,
+  and the next pass no longer sends them back.
+- One copy that does not answer, or a never-delete copy under a replaced
+  key, no longer makes the app run a full sync every ten seconds or keep
+  "changes waiting" on screen for good.
+- Pressing Sync while a pass runs on another silo no longer leaves the
+  button spinning.
+- A change made on a newer SilentSilo no longer stops sync on this
+  computer. The rest still syncs, and the app says to update.
+
+### Changed
+
+- One sync line for the whole pass, "Syncing…", with the file name only
+  while one uploads or downloads. The steps used to show one after another,
+  with counts starting again for each copy, and read as several syncs.
+- A large upload no longer holds back other devices' changes, and a silo
+  uploading for a long time no longer holds back the others.
+- The offer to download every file is not shown when this computer keeps a
+  full copy, and "Not now" lasts a week instead of for ever.
+- When only one copy is behind, the status bar names it.
+
+### Security
+
+- russh 0.65 for SFTP: a hostile server could make the app allocate without
+  bound or stall every upload. Same algorithms and key formats as before,
+  so an existing SFTP backup connects as it did.
+- Dependencies moved past the advisories published since 1.5.1
+  (crypto-bigint, ctutils, rustls-webpki, webpki-root-certs, tokio, rustix,
+  pageant).
+
 ## [1.5.1] - Your phone as the key, Recently deleted and SilentSilo export
 
 On core v1.10.1.

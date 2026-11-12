@@ -83,8 +83,9 @@ to the window as `sync-report`, `sync-progress` and `vault-changed`, logs its
 warnings and reads the stored copies. The desktop had its own copy of the
 pass until 1.2; the two drifted, and only core's was under the fleet and
 lifecycle tests. `AppState` holds core's state and derefs to it, so a pass
-and a command lock the same sessions and the same `sync_in_flight`. The
-steps, in this exact order, each placed for a reason:
+and a command lock the same sessions and the same pass locks: one pass per
+silo, and a key operation holds them all (`hold_sync`, core's
+`try_hold_sync`). The steps, in this exact order, each placed for a reason:
 
 ```mermaid
 sequenceDiagram
@@ -98,11 +99,13 @@ sequenceDiagram
     Note over P: rotated away? → needs_rejoin, stop before pushing anything
     Note over P: replaced, records still open? → key_material_replaced, stop
     P->>T: reconcile key envelopes: add keys enrolled elsewhere, honour revocation markers
-    P->>T: push_everything_to: manifest, KEK, recovery, base snapshot, key envelopes, ops, blobs
+    P->>T: push_records_to: manifest, KEK, recovery, base snapshot, key envelopes, ops
     P->>T: fetch_missing_ops (op-id diff, above local base horizon)
-    Note over P: usable_prefix: stop below the first unreadable object
-    P->>DB: replay, mark_delivered per reached target, settle delivery
-    P->>T: inbox import (items a locked phone sent), finish items recorded earlier
+    Note over P: usable_prefix: stop below the first unreadable object or a newer release's change
+    P->>DB: replay, mark_delivered per reached target, mark what each listing named
+    P->>T: push_blobs_within: content, within the upload budget
+    P->>DB: settle delivery against the copies still taking records
+    P->>T: inbox import (items a locked phone sent), finish items on a copy that holds every record
     P->>T: full-copy fetch (any target that has the blob)
     P->>T: compaction if due, only when every copy was read and nothing held back
     P->>T: orphan sweep (deletable targets, daily, 30-day grace) and restore of missing content, same condition
@@ -135,7 +138,19 @@ sequenceDiagram
   is marked failed and backs off. A pass that errors, or stops before any target records an outcome
   (rebuild, rejoin, replaced key), holds that silo's background passes for
   `PULL_INTERVAL_SECS` even with changes waiting (`pass_due`); pressing
-  Sync is not held.
+  Sync is not held. The loop runs a pass for records owed to copies that are
+  due now (core's `owed_now`), not for `pending_count`: one copy resting or
+  retired kept that above zero, and the loop ran a full pass every tick.
+- **Someone being there clears the backoff**: an unlock, pressing Sync, and
+  the window coming back to the front or the network coming back
+  (`sync_user_here`: a focus at most once a minute and only when a copy was
+  resting, the network coming back every time). The backoff is kept in the
+  silo, so a copy that failed while it was locked made the first pass after
+  the unlock skip it for up to fifteen minutes while the window said
+  "Synced". An unlock also runs a pass of its own at once
+  (`sync_after_unlock`), outside the loop, which takes silos one after
+  another and could be busy with another silo's upload. A pass that reached no copy
+  (`reached: 0`) never moves "last synced".
 - **The sweep waits 30 days and puts content back**: a candidate is deleted
   only when an earlier sweep saw it unreferenced and this device first saw
   that 30 days ago (`blob_gc_seen`). A device that has not synced can still
@@ -147,11 +162,15 @@ sequenceDiagram
   older than 24 hours under `blobs/`, `snapshots/` and `inbox/`
   (`silentsilo_sync::abort_stale_uploads`); a failure there is a warning and
   the sweep carries on.
-- **Ops before blobs on push, and on the same push**: a visible file whose
+- **Ops before blobs, and the pull between them**: a visible file whose
   content has not arrived self-corrects next pass; content with no record
   looks like an orphan and gets swept. Same reasoning gives the join order
-  in `push_everything_to` (identity first, snapshot before log, content
-  last).
+  in `push_records_to` (identity first, snapshot before log), with content
+  after it. The pull sits between the two since 1.5.2: a large upload held
+  back every other device's changes for as long as it took. Content goes
+  only to copies that took the records, and a pass stops starting uploads
+  after ten minutes, saying `more_to_do`, which makes the loop run again at
+  the next tick.
 - **Keys reconcile before the push**: a device learns keys other devices
   enrolled, and a revocation leaves a sealed marker the others honour.
   Publishing first would put back a key another device just revoked. A
@@ -178,17 +197,23 @@ sequenceDiagram
   pass with `RETIRED_COPY` as its status and not counted as a copy to reach,
   since waiting on it held the inbox, the sweep and compaction for good.
 - **The inbox imports after the push and pull**: an item recorded in one
-  pass leaves the inbox only in a later pass that reached every target, so
+  pass leaves a copy's inbox only in a later pass that found that copy
+  holding every record this device has, with the content staged there, so
   it is never gone from storage while its record exists on this machine
   alone. With more than one target the content is fetched down for the next
   push to spread. Core's `silentsilo_app::inbox_import`, fed this app's
   session map without touching idle timers.
 - **Delivery accounting is per target** (`op_delivery`, `blob_delivery`):
-  `pushed`/`synced` mean "every configured target has it", which is the only
-  meaning that makes local pruning and eviction safe. Removing a target
-  drops its rows; a target added later is owed everything, including
-  history. Core's `mark_delivered` writes the whole list under a savepoint,
-  which nests inside the transaction this pass wraps the per-target loop in,
+  `pushed`/`synced` mean "every configured target still taking records has
+  it", which is the only meaning that makes local pruning and eviction safe.
+  A copy retired under a replaced key takes nothing new and is left out of
+  that, or "changes waiting" never cleared. Removing a target drops its
+  rows; a target added later is owed everything, including history. A record
+  a copy's listing names counts as delivered there, the ones that just came
+  from it included: before, received records read as waiting and the next
+  pass asked the copy for each of them again. Core's `mark_delivered` writes
+  the whole list under a savepoint, which nests inside the transaction this
+  pass wraps the per-target loop in,
   so one commit covers every target: a target owed a long history used to pay
   for a commit per record with the sessions mutex held. A delivery that does
   not commit leaves the records owed, which the next pass settles by finding

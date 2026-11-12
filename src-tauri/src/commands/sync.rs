@@ -171,10 +171,9 @@ pub(crate) async fn expire_audit_segments(app: &AppHandle) -> Result<usize, Stri
         .await
 }
 
-/// One full pass: operations out, operations in, then blob content.
-/// Operations before blobs: a visible file that cannot open yet
-/// self-corrects on the next pass, while unreferenced content looks like an
-/// orphan and may get cleaned up.
+/// One full pass for the silo on screen: core's `sync_now`, which waits out
+/// a pass already running there and clears every copy's backoff. The one
+/// thing added here is the fill, which holds sync off for its whole run.
 #[tauri::command]
 pub async fn sync_now(app: AppHandle) -> Result<SyncReport, String> {
     // The silo on screen: pressing Sync is about the one being looked at,
@@ -189,54 +188,87 @@ pub async fn sync_now(app: AppHandle) -> Result<SyncReport, String> {
             "A copy is being filled. Sync runs when the fill finishes or is stopped.".into(),
         );
     }
-    // Pressing the button clears every backoff timer first. The wait exists
-    // to stop this device hammering a target that is not answering, which is
-    // not the situation when someone is sitting there asking for a pass now.
-    let configured = silentsilo_vault::load_targets(silo.id);
-    if let Ok(state) = app.state::<crate::state::AppState>().sessions.lock()
-        && let Some(session) = state.get(&silo.id)
-    {
-        for target in &configured {
-            let _ = silentsilo_vfs::reset_target_backoff(&session.conn, target.config.target_id());
-        }
-    }
-    // Someone pressed a button and is owed an answer about their own silo, so
-    // a background pass already running is waited out rather than reported as
-    // nothing to do. Bounded: a pass that never finishes must not leave the
-    // button spinning for the rest of the session.
-    wait_for_pass_to_finish(&app, WAIT_FOR_PASS).await;
-    run_sync_pass(&app, &silo).await
+    let state = app.state::<AppState>();
+    silentsilo_app::sync_now(&state.core, &DesktopHost { app: &app }, &silo).await
 }
 
-/// How long a pressed Sync waits for a pass already running.
-const WAIT_FOR_PASS: std::time::Duration = std::time::Duration::from_secs(90);
-
-async fn wait_for_pass_to_finish(app: &AppHandle, limit: std::time::Duration) {
-    let deadline = std::time::Instant::now() + limit;
-    while app
-        .state::<AppState>()
-        .sync_in_flight
-        .load(Ordering::SeqCst)
-    {
-        if std::time::Instant::now() >= deadline {
+/// After an unlock: every copy's backoff cleared, the loop's own timers for
+/// this silo forgotten, and the loop woken. The unlock used to start
+/// nothing; the next tick picked the silo up, and a copy still resting after
+/// a failure while the silo was locked kept it waiting up to a quarter of an
+/// hour with "Synced" on screen.
+pub(crate) fn sync_after_unlock(app: &AppHandle, silo_id: Uuid) {
+    let state = app.state::<AppState>();
+    silentsilo_app::clear_backoff(&state.core, &DesktopHost { app }, silo_id);
+    crate::state::lock_recovering(&state.sync_fresh).insert(silo_id);
+    // Its own pass, now: the loop takes silos one after another, and another
+    // silo uploading for minutes would keep this one waiting.
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let Ok(silo) = crate::state::silo_by_id(&app, silo_id) else {
             return;
+        };
+        if let Ok(report) = run_sync_pass(&app, &silo).await
+            && !report.skipped
+        {
+            // The loop counts it as its pull, so it does not run one more.
+            let state = app.state::<AppState>();
+            crate::state::lock_recovering(&state.sync_pulled).insert(silo_id);
         }
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-    }
+        app.state::<AppState>().sync_kick.notify_one();
+    });
+}
+
+/// How often the window may ask for a pass because someone came back to it.
+const PRESENCE_EVERY: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// The window came back to the front (`network` false, at most once a
+/// minute), or the network came back (`network` true, always). Someone is
+/// there, so a copy resting after a failure is tried again now rather than
+/// when its wait runs out, with a pass even when nothing is owed. Off the
+/// main thread: it reads the storage settings and locks the sessions.
+#[tauri::command(async)]
+pub async fn sync_user_here(app: AppHandle, network: Option<bool>) -> Result<(), String> {
+    let network = network.unwrap_or(false);
+    crate::commands::fido::run_blocking(move || {
+        let state = app.state::<AppState>();
+        if !network {
+            let mut at = crate::state::lock_recovering(&state.sync_presence_at);
+            if at.is_some_and(|at| at.elapsed() < PRESENCE_EVERY) {
+                return Ok(());
+            }
+            *at = Some(std::time::Instant::now());
+        }
+        let mut fresh = Vec::new();
+        for id in state.open_silo_ids() {
+            let was_resting =
+                silentsilo_app::clear_backoff(&state.core, &DesktopHost { app: &app }, id);
+            // A focus with every copy answering is not news; the network
+            // coming back is.
+            if was_resting || network {
+                fresh.push(id);
+            }
+        }
+        if !fresh.is_empty() {
+            crate::state::lock_recovering(&state.sync_fresh).extend(fresh);
+            state.sync_kick.notify_one();
+        }
+        Ok(())
+    })
+    .await
 }
 
 /// Keeps sync passes off while a key operation rewrites what a pass reads.
 ///
-/// Waits for a running pass to end, then holds the same flag a pass takes,
-/// so the background loop stands down until the guard drops. A pass that
-/// loaded `fido.json` before a key change and saved it back after put the
-/// old envelopes over the new ones, and one still pushing during a rotation
-/// sealed records under the key being retired.
+/// Waits for every running pass to end, then holds sync off until the guard
+/// drops. A pass that loaded `fido.json` before a key change and saved it
+/// back after put the old envelopes over the new ones, and one still pushing
+/// during a rotation sealed records under the key being retired.
 pub(crate) async fn hold_sync(app: &AppHandle) -> Result<SyncGuard, String> {
     let deadline = std::time::Instant::now() + WAIT_FOR_PASS;
     loop {
-        if let Some(guard) = SyncGuard::acquire(app) {
-            return Ok(guard);
+        if app.state::<AppState>().try_hold_sync() {
+            return Ok(SyncGuard(app.clone()));
         }
         if std::time::Instant::now() >= deadline {
             return Err(crate::err::coded!(
@@ -249,28 +281,16 @@ pub(crate) async fn hold_sync(app: &AppHandle) -> Result<SyncGuard, String> {
     }
 }
 
-/// Guards a pass so only one runs at a time.
-///
-/// Released on drop, so an error or an early return can't leave sync wedged
-/// off for the rest of the session.
-pub(crate) struct SyncGuard(AppHandle);
+/// How long a key operation waits for a pass already running.
+const WAIT_FOR_PASS: std::time::Duration = std::time::Duration::from_secs(90);
 
-impl SyncGuard {
-    fn acquire(app: &AppHandle) -> Option<Self> {
-        app.state::<AppState>()
-            .sync_in_flight
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .ok()
-            .map(|_| Self(app.clone()))
-    }
-}
+/// Sync held off. Released on drop, so an error or an early return can't
+/// leave sync off for the rest of the session.
+pub(crate) struct SyncGuard(AppHandle);
 
 impl Drop for SyncGuard {
     fn drop(&mut self) {
-        self.0
-            .state::<AppState>()
-            .sync_in_flight
-            .store(false, Ordering::SeqCst);
+        self.0.state::<AppState>().release_sync_hold();
     }
 }
 
@@ -656,8 +676,9 @@ pub async fn vault_join_from_storage(
     .await
 }
 
-/// How often the loop wakes up to look. The look is one SQLite count and
-/// touches no network: waking often and acting rarely.
+/// How often the loop wakes up to look. The look reads the storage settings
+/// and counts in SQLite, and touches no network: waking often and acting
+/// rarely.
 const AUTO_SYNC_TICK: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// How long an idle silo goes between pulls. Receiving has to poll:
@@ -679,9 +700,33 @@ pub fn spawn_auto_sync(app: AppHandle) {
         // again. Their targets' own backoff never moved, so without this a
         // silo with changes waiting ran a full pass every tick.
         let mut held_until: std::collections::HashMap<Uuid, i64> = std::collections::HashMap::new();
+        // Silos whose last pass left work for the next one: content past the
+        // upload budget, a full copy still filling, inbox items past the
+        // per-pass limit. They run on the next tick, not two minutes later.
+        let mut more: std::collections::HashSet<Uuid> = std::collections::HashSet::new();
 
         loop {
-            tokio::time::sleep(AUTO_SYNC_TICK).await;
+            // A tick, or sooner when an unlock or the window asks.
+            {
+                let state = app.state::<AppState>();
+                tokio::select! {
+                    _ = tokio::time::sleep(AUTO_SYNC_TICK) => {}
+                    _ = state.sync_kick.notified() => {}
+                }
+            }
+            let fresh: Vec<Uuid> =
+                crate::state::lock_recovering(&app.state::<AppState>().sync_fresh)
+                    .drain()
+                    .collect();
+            for id in fresh {
+                last_pull.remove(&id);
+                held_until.remove(&id);
+            }
+            // Passes run outside the loop, right after an unlock.
+            let pulled: Vec<Uuid> =
+                crate::state::lock_recovering(&app.state::<AppState>().sync_pulled)
+                    .drain()
+                    .collect();
 
             // A locked silo has no key to decrypt anything with, and one
             // with no storage configured has nowhere to sync to.
@@ -700,12 +745,16 @@ pub fn spawn_auto_sync(app: AppHandle) {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs() as i64)
                 .unwrap_or(0);
+            for id in pulled {
+                last_pull.insert(id, now);
+            }
 
             for silo in open {
-                // Two local reads, no network. A silo with nothing waiting
-                // that pulled recently costs this loop a count and a
-                // subtraction.
-                let waiting = pending_locally(&app, silo.id);
+                // Local reads, no network. Records owed to copies that are
+                // due now: one resting after a failure, or retired, is not
+                // a reason to run, or a disk in a drawer meant a full pass
+                // every tick.
+                let waiting = owed_now(&app, silo.id) + usize::from(more.contains(&silo.id));
                 if !pass_due(
                     waiting,
                     now,
@@ -724,6 +773,11 @@ pub fn spawn_auto_sync(app: AppHandle) {
                     Ok(report) if report.skipped => {}
                     Ok(report) if report.configured => {
                         last_pull.insert(silo.id, now);
+                        if report.more_to_do {
+                            more.insert(silo.id);
+                        } else {
+                            more.remove(&silo.id);
+                        }
                         if report.needs_rebuild
                             || report.needs_rejoin
                             || report.key_material_replaced
@@ -741,8 +795,10 @@ pub fn spawn_auto_sync(app: AppHandle) {
                     Err(e) => {
                         // Recorded as an attempt, and held off even with
                         // changes waiting, so a silo whose pass keeps failing
-                        // does not retry every ten seconds.
+                        // does not retry every ten seconds. The window heard
+                        // it as a report carrying the error.
                         last_pull.insert(silo.id, now);
+                        more.remove(&silo.id);
                         held_until.insert(silo.id, now + PULL_INTERVAL_SECS);
                         crate::diagnostics::warn(
                             "sync",
@@ -806,18 +862,12 @@ async fn maybe_compact_local(app: &AppHandle, silo_id: Uuid, now: i64) {
     .await;
 }
 
-/// Changes this device has authored and not yet sent, read from its own
-/// database. Zero for a silo that is locked or gone, which is also "nothing
+/// Records owed to copies that are due now and not retired, received ones
+/// included. Zero for a silo that is locked or gone, which is also "nothing
 /// to do".
-fn pending_locally(app: &AppHandle, silo_id: Uuid) -> usize {
+fn owed_now(app: &AppHandle, silo_id: Uuid) -> usize {
     let state = app.state::<AppState>();
-    let Ok(sessions) = state.sessions.lock() else {
-        return 0;
-    };
-    sessions
-        .get(&silo_id)
-        .and_then(|session| pending_count(&session.conn).ok())
-        .unwrap_or(0)
+    silentsilo_app::owed_now(&state.core, &DesktopHost { app }, silo_id)
 }
 
 /// What a check of one target found.

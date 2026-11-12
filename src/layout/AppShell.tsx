@@ -32,44 +32,33 @@ export type SyncIndicator = {
   /** Unix ms of the last pass that reached the bucket. */
   lastSyncAt: number | null;
   lastError: string | null;
+  /** With "error": no copy was reached, and the next try is due then (Unix ms). */
+  retryAt?: number | null;
+  /** Another device runs a newer SilentSilo; its changes wait for an update. */
+  needsUpdate?: boolean;
+  /** The one copy the last pass left behind, when the others are current. */
+  behind?: { label: string; ops: number } | null;
   /** Where a running pass is, when it has said. */
   progress?: SyncProgress | null;
 };
 
-/** What the status bar says about a step of a running pass. */
+/** What the status bar says while a pass runs. One line from start to
+ * report: each phase and each copy restarts its own count, and showing them
+ * read as several syncs. Detail only where it helps: the file moving, and
+ * items coming in from a phone. */
 function describeProgress(p: SyncProgress): string {
-  const count =
-    p.total > 1 ? ` ${t("start.of", { done: Math.min(p.done + 1, p.total), total: p.total })}` : "";
-  const name = p.name ? `: ${p.name}` : "";
-  // One large file holds the count still for the whole of its upload, which
-  // is the case these bytes exist for. Zero on the phases counted in items,
-  // and then nothing is added.
-  const bytes =
-    p.bytes_total > 0
-      ? ` (${t("start.of", { done: formatBytes(p.bytes_done), total: formatBytes(p.bytes_total) })})`
-      : "";
-  switch (p.phase) {
-    case "sending-changes":
-      return `${t("start.progress_sending")}${count}`;
-    case "uploading": {
-      const label = p.target
-        ? t("start.progress_uploading_to", { target: p.target })
-        : t("start.progress_uploading");
-      return `${label}${count}${name}${bytes}`;
-    }
-    case "fetching-changes":
-      return `${t("start.progress_fetching")}${count}`;
-    case "downloading":
-      return `${t("start.progress_downloading")}${count}${name}${bytes}`;
-    case "importing":
-      return `${t("start.progress_importing")}${count}`;
-    case "applying":
-      return `${t("start.progress_applying")}${count}`;
-    case "compacting":
-      return t("start.progress_compacting");
-    case "checking":
-      return t("start.progress_checking");
+  if (p.phase === "importing" && p.total > 0) {
+    return t("start.syncing_inbox", { count: p.total });
   }
+  if ((p.phase === "uploading" || p.phase === "downloading") && p.name) {
+    // A large file holds still for minutes, so its bytes say it is moving.
+    const bytes =
+      p.bytes_total > 0
+        ? ` (${t("start.of", { done: formatBytes(p.bytes_done), total: formatBytes(p.bytes_total) })})`
+        : "";
+    return `${t("start.syncing")} ${p.name}${bytes}`;
+  }
+  return t("start.syncing");
 }
 
 /// Deliberately vague past an hour: "3 minutes ago" is actionable, "47
@@ -421,9 +410,22 @@ export function AppShell({
                   : sync.state === "syncing"
                     ? t("start.syncing")
                     : sync.state === "error"
-                      ? t("start.sync_failed")
+                      ? sync.needsUpdate
+                        ? t("start.update_needed")
+                        : sync.retryAt
+                          ? t("start.not_reached", {
+                              minutes: Math.max(1, Math.ceil((sync.retryAt - Date.now()) / 60_000)),
+                            })
+                          : t("start.sync_failed")
                       : sync.pending > 0
-                        ? t("start.changes_waiting", { count: sync.pending })
+                        ? // Named when one copy is the whole wait, and only while
+                          // the count is still the one it was behind by.
+                          sync.behind && sync.pending <= sync.behind.ops
+                          ? t("start.changes_waiting_for", {
+                              count: sync.pending,
+                              copy: sync.behind.label,
+                            })
+                          : t("start.changes_waiting", { count: sync.pending })
                         : sync.lastSyncAt
                           ? t("start.synced_ago", { age: formatAge(sync.lastSyncAt) })
                           : t("start.storage_connected")}

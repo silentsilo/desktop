@@ -102,18 +102,18 @@ export function lastingTasks(running: Map<string, unknown>): BackgroundTask[] {
   return tasks;
 }
 
-/** A sync pass in flight, from its own progress. */
+/** A sync pass in flight, from its own progress. No percentage of the
+ * pass: each phase and each copy restarts its count, so it jumped back. Only
+ * the file moving, with its own bytes. */
 export function syncTask(progress: SyncProgress | null, syncing: boolean): BackgroundTask | null {
   if (!progress && !syncing) return null;
-  const detail = !progress
-    ? null
-    : progress.bytes_total > 0
-      ? percent(progress.bytes_done, progress.bytes_total)
-      : percent(progress.done, progress.total);
+  const moving =
+    progress?.name && (progress.phase === "uploading" || progress.phase === "downloading");
+  const bytes = moving ? percent(progress.bytes_done, progress.bytes_total) : null;
   return {
     id: "sync",
     label: t("nav.task_sync"),
-    detail: progress?.name && detail ? `${progress.name}, ${detail}` : detail,
+    detail: moving ? (bytes ? `${progress.name}, ${bytes}` : progress.name) : null,
     place: { section: "backup" },
   };
 }

@@ -45,7 +45,13 @@ import { silosToLock } from "./lib/autoLock";
 import { decideConfirmSlot } from "./lib/confirmSlot";
 import { overwriteConfirmLabel, overwriteMessage } from "./lib/overwrite";
 import { PasswordRefreshGate } from "./lib/passwordRefresh";
-import { syncOutcome, type SyncReport } from "./lib/syncOutcome";
+import {
+  behindCopy,
+  reachedNone,
+  restingUntil,
+  syncOutcome,
+  type SyncReport,
+} from "./lib/syncOutcome";
 import { securityKeyDisplayName } from "./lib/keyName";
 import { osOf, platformStrings } from "./lib/platformStrings";
 import { runsOnOpen } from "./lib/executable";
@@ -126,6 +132,22 @@ const UPDATE_PENDING_KEY = "silentsilo.update.pendingVersion";
 /// A silo's id is its vault id, so the key can be removed with the silo.
 function contentOfferKeyFor(siloId: string): string {
   return `silentsilo.content.offered.${siloId}`;
+}
+
+/// How long "Not now" holds the download offer back.
+const CONTENT_OFFER_QUIET_MS = 7 * 24 * 60 * 60 * 1000;
+
+/// Whether "Not now" was pressed within the last week. The key once held
+/// "true" for ever; that is read as pressed now, so it comes back in a week.
+function contentOfferWaved(key: string): boolean {
+  const saved = localStorage.getItem(key);
+  if (saved === null) return false;
+  if (saved === "true") {
+    localStorage.setItem(key, String(Date.now()));
+    return true;
+  }
+  const at = Number(saved);
+  return Number.isFinite(at) && Date.now() - at < CONTENT_OFFER_QUIET_MS;
 }
 
 function loadAutoLockMinutes(): number {
@@ -744,6 +766,9 @@ export default function App() {
     [],
   );
 
+  /// refreshSync, for the report listener below, which subscribes once.
+  const refreshSyncRef = useRef<() => Promise<void>>(async () => {});
+
   // Every pass reports, including the ones that gave up before touching a
   // target, so the indicator has to read the report rather than treat the
   // event's arrival as good news. A pass where no target would even open
@@ -787,12 +812,32 @@ export default function App() {
           setSync((prev) => ({ ...prev, state: "ok" }));
           return;
         }
+        // The count in the status bar now, not at the next 20 s poll.
+        void refreshSyncRef.current();
 
+        // Only a pass that reached a copy and finished moves the timestamp.
+        // Offline, the old one stays and the line says when it tries again.
         const outcome = syncOutcome(report, "");
+        const retryAt = restingUntil(report, Date.now());
         setSync((prev) =>
           outcome.kind === "error"
-            ? { ...prev, state: "error", lastError: outcome.message }
-            : { ...prev, state: "ok", lastSyncAt: Date.now(), lastError: null },
+            ? {
+                ...prev,
+                state: "error",
+                lastError: outcome.message,
+                retryAt,
+                needsUpdate: !!report.needs_update && !report.error,
+                behind: null,
+              }
+            : {
+                ...prev,
+                state: "ok",
+                lastSyncAt: reachedNone(report) || report.error ? prev.lastSyncAt : Date.now(),
+                lastError: null,
+                retryAt: null,
+                needsUpdate: false,
+                behind: behindCopy(report),
+              },
         );
 
         // One message however many were renamed: a pass that resolves
@@ -3105,19 +3150,17 @@ export default function App() {
   }, []);
 
   /// Whether the explorer's offer to download everything has been waved
-  /// away for this silo. Per silo and remembered, because the answer is
-  /// about this machine's relationship with this silo, not this session.
-  /// The Backup page carries the offer permanently either way.
+  /// away for this silo. Per silo and remembered for a week, because the
+  /// answer is about this machine's relationship with this silo, not this
+  /// session. The Backup page carries the offer permanently either way.
   const contentOfferKey = meta ? contentOfferKeyFor(meta.vault_id) : null;
   const [contentOfferDismissed, setContentOfferDismissed] = useState(false);
   useEffect(() => {
-    setContentOfferDismissed(
-      contentOfferKey ? localStorage.getItem(contentOfferKey) === "true" : false,
-    );
+    setContentOfferDismissed(contentOfferKey ? contentOfferWaved(contentOfferKey) : false);
   }, [contentOfferKey]);
 
   const dismissContentOffer = useCallback(() => {
-    if (contentOfferKey) localStorage.setItem(contentOfferKey, "true");
+    if (contentOfferKey) localStorage.setItem(contentOfferKey, String(Date.now()));
     setContentOfferDismissed(true);
   }, [contentOfferKey]);
 
@@ -3140,6 +3183,7 @@ export default function App() {
     }
     await refreshBlobStatus();
   }, [refreshBlobStatus]);
+  refreshSyncRef.current = refreshSync;
 
   const syncNow = async () => {
     setSync((prev) => ({ ...prev, state: "syncing", lastError: null }));
@@ -3149,6 +3193,12 @@ export default function App() {
       // duplicating it here is how the button and the background pass came
       // to disagree about the same event.
       const report = await invoke<SyncReport>("sync_now");
+      // A stood-down pass sends no event, so the spinner stops here.
+      if (report.skipped) {
+        setSync((prev) => ({ ...prev, state: "ok" }));
+        toasts.info(t("app.sync_already_running"));
+        return;
+      }
       if (report.needs_rebuild) return;
       await refreshSync();
       await refreshCurrentFolder();
@@ -3709,6 +3759,25 @@ export default function App() {
     const timer = setInterval(() => void refreshSync(), 20_000);
     return () => clearInterval(timer);
   }, [meta, refreshSync]);
+
+  // Someone came back to the window, or the network came back: copies
+  // resting after a failure are tried now. Rust takes a focus once a minute,
+  // and the network coming back every time.
+  useEffect(() => {
+    const ask = () => void invoke("sync_user_here", { network: false }).catch(() => {});
+    const online = () => void invoke("sync_user_here", { network: true }).catch(() => {});
+    const shown = () => {
+      if (document.visibilityState === "visible") ask();
+    };
+    window.addEventListener("focus", ask);
+    window.addEventListener("online", online);
+    document.addEventListener("visibilitychange", shown);
+    return () => {
+      window.removeEventListener("focus", ask);
+      window.removeEventListener("online", online);
+      document.removeEventListener("visibilitychange", shown);
+    };
+  }, []);
 
   useEffect(() => {
     if (view === "activity" && meta) {
@@ -4343,9 +4412,10 @@ export default function App() {
             none of the content, and each file downloads when it is first
             opened. That suits a laptop and does not suit someone who has
             just replaced a machine, so the offer is made once, here, where
-            they are looking at the files it is about. */}
+            they are looking at the files it is about. A full copy fills
+            itself, so it is not offered there; "Not now" lasts a week. */}
         {view === "files" && meta && sync.configured && (blobStatus?.missing.length ?? 0) > 0 &&
-          (!contentOfferDismissed || contentFetch) && (
+          ((!contentOfferDismissed && !fullCopy) || contentFetch) && (
           <div className="content-offer" role="status">
             <div className="content-offer-text">
               <strong>

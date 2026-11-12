@@ -60,6 +60,18 @@ pub struct AppState {
     /// When an export was confirmed with a key, for the one export that
     /// follows. Forgotten with the epoch as well.
     pub export_confirmed: Mutex<Option<Instant>>,
+    /// Wakes the background sync loop at once instead of at its next tick.
+    pub sync_kick: tokio::sync::Notify,
+    /// Silos just unlocked, whose loop timers start over: a pull two minutes
+    /// after the last one, or a hold after a failure, is not a reason to make
+    /// someone who just unlocked wait.
+    pub sync_fresh: Mutex<std::collections::HashSet<Uuid>>,
+    /// Silos a pass outside the loop just pulled, so the loop does not run
+    /// another at once.
+    pub sync_pulled: Mutex<std::collections::HashSet<Uuid>>,
+    /// When the window last asked for a pass because someone came back to
+    /// it, so focusing it ten times a minute is one request.
+    pub sync_presence_at: Mutex<Option<Instant>>,
 }
 
 /// A decrypted copy as this app wrote it, to tell it from one changed since.
@@ -559,6 +571,7 @@ pub fn open_focused_session(app: &AppHandle, session: VaultSession) -> Result<()
     crate::audit::set_unlocked_with(id, None);
     announce_this_device(&state);
     crate::commands::sync::start_audit_by_default(app, id);
+    crate::commands::sync::sync_after_unlock(app, id);
     Ok(())
 }
 

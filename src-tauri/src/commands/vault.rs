@@ -3531,8 +3531,11 @@ pub async fn vault_blob_status(app: AppHandle) -> Result<BlobStatus, String> {
 
         let mut missing = Vec::new();
         let mut missing_bytes = 0i64;
+        // Every blob already counted, so an attachment sharing one is not
+        // counted twice. A set: a Vec lookup per attachment was quadratic.
+        let mut counted: HashSet<Uuid> = HashSet::new();
         for (blob_id, size) in sizes {
-            if here.contains(&blob_id) {
+            if here.contains(&blob_id) || !counted.insert(blob_id) {
                 continue;
             }
             if absent_ids.contains(&blob_id) {
@@ -3546,10 +3549,10 @@ pub async fn vault_blob_status(app: AppHandle) -> Result<BlobStatus, String> {
         // Password attachments hold blobs the file tree never references, so
         // a recovery that only counted the tree would leave them behind.
         for (blob_id, size_bytes) in attachments {
-            let id = blob_id.to_string();
-            if here.contains(&blob_id) || missing.contains(&id) || absent.contains(&id) {
+            if here.contains(&blob_id) || !counted.insert(blob_id) {
                 continue;
             }
+            let id = blob_id.to_string();
             if absent_ids.contains(&blob_id) {
                 absent.push(id);
             } else {

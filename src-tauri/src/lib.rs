@@ -237,6 +237,10 @@ pub fn run() {
             open_cancelled: Mutex::new(std::collections::HashSet::new()),
             revealed: Mutex::new(std::collections::HashMap::new()),
             export_confirmed: Mutex::new(None),
+            sync_kick: tokio::sync::Notify::new(),
+            sync_fresh: Mutex::new(std::collections::HashSet::new()),
+            sync_pulled: Mutex::new(std::collections::HashSet::new()),
+            sync_presence_at: Mutex::new(None),
         })
         .manage(browser::BrowserBridge::default())
         .manage(autotype::AutoType::default())
@@ -467,6 +471,7 @@ pub fn run() {
             commands::cloud::backup_target_reconnect,
             commands::sync::sync_status,
             commands::sync::sync_now,
+            commands::sync::sync_user_here,
             commands::sync::sync_fetch_blob,
             commands::sync::vault_rebuild_from_snapshot,
             commands::sync::vault_preview_join,

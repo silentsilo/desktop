@@ -47,7 +47,7 @@ there. The storage has to refuse it, as the next section sets up.
   design; do not put it on a share.
 - **Backup goes to a per-employee folder on storage the company controls**,
   for example `\\server\vaults\popescu`, with permissions restricted to that
-  employee and IT. Any of the four backends works; a share is the simplest.
+  employee and IT. Any kind of storage works; a share is the simplest.
 - **A second place, a never-delete copy, on storage the company controls
   and the employee cannot delete from.** "Never-delete copy" is offered only
   under Settings, Backup, when adding another copy; the main copy, at the top

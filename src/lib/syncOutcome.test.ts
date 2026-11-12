@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   backupHeadline,
+  behindCopy,
   describeSync,
+  reachedNone,
+  restingUntil,
   syncOutcome,
   type SyncReport,
   type TargetStatus,
@@ -206,5 +209,75 @@ describe("the backup card's standing line", () => {
     expect(backupHeadline(0, 0, 0, null)).toBe(
       "Connected. The first sync runs in the background.",
     );
+  });
+});
+
+describe("what the newer engine reports", () => {
+  it("reads a pass that stopped part way as an error", () => {
+    const r = report({ error: "connection reset", reached: 1, targets: [target()] });
+    expect(syncOutcome(r, "")).toEqual({ kind: "error", message: "connection reset" });
+  });
+
+  it("never reads a pass that reached no copy as synced", () => {
+    // Offline, every copy rests after its last failure. The line used to
+    // flip between "Sync failed" and "Synced just now".
+    const r = report({ reached: 0, targets: [target({ waiting: true, retry_in: 240 })] });
+    expect(reachedNone(r)).toBe(true);
+    expect(syncOutcome(r, "")).toEqual({
+      kind: "error",
+      message: "Could not reach backup storage. Trying again in about 4 min.",
+    });
+    expect(restingUntil(r, 1_000)).toBe(241_000);
+  });
+
+  it("says when the soonest copy is tried again", () => {
+    const r = report({
+      reached: 0,
+      targets: [
+        target({ waiting: true, retry_in: 900 }),
+        target({ id: "t2", label: "S3", waiting: true, retry_in: 120 }),
+      ],
+    });
+    expect(restingUntil(r, 0)).toBe(120_000);
+  });
+
+  it("leaves a real failure to the failure line", () => {
+    const r = report({ reached: 0, targets: [target({ failed: "host unreachable" })] });
+    expect(restingUntil(r, 0)).toBeNull();
+    expect(line(r)).toBe("host unreachable");
+  });
+
+  it("counts every target as reached for a report without the field", () => {
+    expect(reachedNone(report({ targets: [target()] }))).toBe(false);
+  });
+
+  it("tells the user to update when another device is newer", () => {
+    const r = report({ needs_update: true, reached: 1, ops_pushed: 2, targets: [target()] });
+    expect(syncOutcome(r, "")).toEqual({
+      kind: "error",
+      message:
+        "2 changes sent. Another device uses a newer SilentSilo. Update SilentSilo on this computer to get its changes.",
+    });
+  });
+
+  it("mentions what came in from a phone", () => {
+    expect(describeSync(report({ inbox_imported: 3 }))).toBe("3 items added from your phone");
+  });
+
+  it("gives the first reason content would not upload", () => {
+    const r = report({ blobs_failed: 2, blob_errors: ["OneDrive: quota exceeded", "S3: too big"] });
+    expect(describeSync(r)).toBe("2 failed, will retry (OneDrive: quota exceeded)");
+  });
+
+  it("names the one copy left behind, and only when there are several", () => {
+    const two = report({
+      targets: [target({ ops_behind: 4, label: "USB" }), target({ id: "t2", label: "S3" })],
+    });
+    expect(behindCopy(two)).toEqual({ label: "USB", ops: 4 });
+    expect(behindCopy(report({ targets: [target({ ops_behind: 4 })] }))).toBeNull();
+    const both = report({
+      targets: [target({ ops_behind: 4 }), target({ id: "t2", label: "S3", ops_behind: 1 })],
+    });
+    expect(behindCopy(both)).toBeNull();
   });
 });

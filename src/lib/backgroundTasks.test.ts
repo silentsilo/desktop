@@ -45,4 +45,21 @@ describe("background tasks", () => {
     expect(task?.detail).toBe("a.zip, 50%");
     expect(syncTask(null, false)).toBeNull();
   });
+
+  it("shows no count for a pass, since each phase restarts its own", () => {
+    const task = syncTask(
+      {
+        silo_id: "s",
+        phase: "sending-changes",
+        done: 40,
+        total: 50,
+        bytes_done: 0,
+        bytes_total: 0,
+        file_id: null,
+        name: null,
+      },
+      false,
+    );
+    expect(task?.detail).toBeNull();
+  });
 });

@@ -416,6 +416,8 @@ const handlers: Record<string, Handler> = {
   // Any picture reads as a two-factor QR code.
   qr_from_pixels: () =>
     "otpauth://totp/Example:you@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example",
+  // Rust rate-limits it and wakes the loop; nothing to model here.
+  sync_user_here: () => null,
   // `?keyreplaced` models a bucket whose content key was rolled back or
   // overwritten, which needs someone with write access to the storage to
   // reproduce and must never be reported as "rejoin".

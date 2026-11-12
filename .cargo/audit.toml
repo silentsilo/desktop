@@ -8,7 +8,8 @@ ignore = [
     # rsa moves.
     "RUSTSEC-2023-0071",
     # zip 4.6.1: SUID bits, symlinks out of the target and permissions through
-    # symlinks, all in `extract()` (RUSTSEC-2026-0367, -0368, -0369). Fixed in
+    # symlinks, and an abort on a symlink entry with a huge declared size, all
+    # in `extract()` (RUSTSEC-2026-0367, -0368, -0369, -0429). Fixed in
     # zip 9, but tauri-plugin-updater still needs 4.x. The Bitwarden import
     # reads entries and never extracts; the updater extracts only on Windows,
     # only a zip whose signature our key made, and ours ship as an .exe.
@@ -16,4 +17,12 @@ ignore = [
     "RUSTSEC-2026-0367",
     "RUSTSEC-2026-0368",
     "RUSTSEC-2026-0369",
+    "RUSTSEC-2026-0429",
+    # SQLite before 3.54.0 can return stale memory when it opens a database
+    # with a crafted `-wal` beside it (RUSTSEC-2026-0459). The fix in
+    # libsqlite3-sys 0.39 does not reach `bundled-sqlcipher`: its SQLCipher
+    # still carries SQLite 3.53.4. Every database opened here sits in the
+    # app's own folders and is written only by the app. Re-check when
+    # sqlcipher-src ships SQLite 3.54; core has the same entry.
+    "RUSTSEC-2026-0459",
 ]

@@ -1,4 +1,4 @@
-import { formatAppError } from "./errors";
+import { formatAppError, plainError } from "./errors";
 /// Turning a sync pass into the line the user reads.
 ///
 /// Kept out of the panel so it can be tested. The counters alone do not say
@@ -61,7 +61,49 @@ export type SyncReport = {
   unreadable?: string[];
   /// Records waiting because an unreadable object sits below them.
   held_back?: number;
+  /// Items a locked device sent that this pass added as files.
+  inbox_imported?: number;
+  /// Items left in an inbox, with why.
+  inbox_refused?: string[];
+  /// Why the pass stopped part way. Core sends this report, then fails.
+  error?: string | null;
+  /// Another device wrote a change only a newer SilentSilo understands.
+  needs_update?: boolean;
+  /// Copies that answered this pass. Zero with copies configured means
+  /// nothing was checked.
+  reached?: number;
+  /// Work left for the next pass.
+  more_to_do?: boolean;
+  /// Up to three "copy: reason" lines for content that would not upload.
+  blob_errors?: string[];
 };
+
+/// Whether the pass talked to no copy at all. Its zeroes then say nothing
+/// about whether the copies are current. A report from before `reached`
+/// existed counts every target as reached.
+export function reachedNone(r: SyncReport): boolean {
+  const targets = r.targets ?? [];
+  return r.configured && targets.length > 0 && (r.reached ?? targets.length) === 0;
+}
+
+/// When the next try is due, in Unix ms, for a pass that reached nothing
+/// only because every copy was resting after earlier failures. Null for
+/// anything else.
+export function restingUntil(r: SyncReport, now: number): number | null {
+  const targets = r.targets ?? [];
+  if (r.error || r.skipped || !reachedNone(r) || targets.some((t) => t.failed)) return null;
+  const waits = targets.map((t) => t.retry_in).filter((s) => s > 0);
+  return now + (waits.length > 0 ? Math.min(...waits) : 60) * 1000;
+}
+
+/// The one copy still owed records, when there are several and the rest
+/// are current. Null when the wait is not about one copy.
+export function behindCopy(r: SyncReport): { label: string; ops: number } | null {
+  const targets = r.targets ?? [];
+  const behind = targets.filter((t) => t.ops_behind > 0);
+  if (targets.length < 2 || behind.length !== 1) return null;
+  return { label: behind[0]!.label, ops: behind[0]!.ops_behind };
+}
 
 /// The backup card's standing line: what is still owed, if anything.
 ///
@@ -120,8 +162,15 @@ export function describeSync(r: SyncReport): string {
   const parts: string[] = [];
   if (r.ops_pushed > 0) parts.push(t("app.sync_sent", { count: r.ops_pushed }));
   if (r.ops_applied > 0) parts.push(t("app.sync_received", { count: r.ops_applied }));
+  const imported = r.inbox_imported ?? 0;
+  if (imported > 0) parts.push(t("app.sync_inbox_imported", { count: imported }));
   if (r.blobs_uploaded > 0) parts.push(t("app.sync_backed_up", { count: r.blobs_uploaded }));
-  if (r.blobs_failed > 0) parts.push(t("app.sync_failed_retry", { count: r.blobs_failed }));
+  if (r.blobs_failed > 0) {
+    // The first reason is enough to act on: a full quota, a size limit.
+    const why = r.blob_errors?.[0];
+    const failed = t("app.sync_failed_retry", { count: r.blobs_failed });
+    parts.push(why ? `${failed} (${plainError(why)})` : failed);
+  }
   const restored = r.blobs_restored ?? 0;
   if (restored > 0) parts.push(t("app.sync_restored", { count: restored }));
   const holes = r.chain_holes?.length ?? 0;
@@ -155,6 +204,10 @@ export function syncOutcome(r: SyncReport, renamed: string): Status {
   if (r.needs_rejoin || r.key_material_replaced) {
     return { kind: "error", message: describeSync(r) };
   }
+  // The pass stopped part way: nothing it counted is the whole story.
+  if (r.error) {
+    return { kind: "error", message: formatAppError(r.error) };
+  }
   const targets = r.targets ?? [];
   const failed = targets.filter((t) => t.failed);
   const waiting = targets.filter((t) => !t.failed && t.waiting);
@@ -168,6 +221,20 @@ export function syncOutcome(r: SyncReport, renamed: string): Status {
         : failed.map((t) => `${t.label}: ${formatAppError(t.failed)}`).join(" ");
     const partial = r.ops_pushed > 0 ? `${describeSync(r)} ` : "";
     return { kind: "error", message: `${partial}${detail}` };
+  }
+
+  // Every copy resting after earlier failures: nothing was checked, so this
+  // must not read as synced.
+  const until = restingUntil(r, Date.now());
+  if (until !== null) {
+    const minutes = Math.max(1, Math.ceil((until - Date.now()) / 60_000));
+    return { kind: "error", message: t("app.sync_not_reached", { minutes }) };
+  }
+
+  // Own changes went out; the newer device's did not come in.
+  if (r.needs_update) {
+    const moved = r.ops_pushed > 0 || r.blobs_uploaded > 0 ? `${describeSync(r)}. ` : "";
+    return { kind: "error", message: `${moved}${t("app.sync_needs_update")}` };
   }
 
   if (waiting.length > 0 && r.ops_pushed === 0) {
