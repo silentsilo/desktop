@@ -23,6 +23,7 @@ import { ExtensionStoreLinks } from "../ExtensionStoreLinks";
 import { HISTORY_POLICIES, type HistoryPolicy } from "../../lib/entryHistory";
 import { SshAgentSettings } from "./SshAgentSettings";
 import { AutoTypeSettings } from "./AutoTypeSettings";
+import { DiskEncryptionSettings } from "./DiskEncryptionSettings";
 import { ScreenCaptureSettings } from "./ScreenCaptureSettings";
 import { UnprotectedSecretsSettings } from "./UnprotectedSecretsSettings";
 import { loadHistoryPolicy, saveHistoryPolicy } from "../../lib/historySetting";
@@ -324,6 +325,7 @@ export function AppSettingsSection({
             <Toggle id="lock-notice" checked={lockNotice} onChange={setLockNotice} />
           </SettingRow>
 
+          <DiskEncryptionSettings />
           <ScreenCaptureSettings />
           <UnprotectedSecretsSettings />
 

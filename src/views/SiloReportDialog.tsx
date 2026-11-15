@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useModal } from "../hooks/useModal";
 import { formatBytes } from "../lib/format";
 import { type KeyCounts, type SiloReport, reportTime, siloReportText } from "../lib/siloReport";
@@ -42,7 +43,8 @@ export function SiloReportDialog({ report, onClose }: Props) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
-    await navigator.clipboard.writeText(siloReportText(report));
+    // Names folders and storage: kept out of clipboard history.
+    await invoke("copy_private_to_clipboard", { text: siloReportText(report) });
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
   };

@@ -10,6 +10,7 @@ import { useEventSubscription } from "./hooks/useEventSubscription";
 import { useToasts } from "./hooks/useToasts";
 import { useJobs } from "./hooks/useJobs";
 import { coalesceLatest } from "./lib/coalesce";
+import { shouldWarnDiskOnce } from "./lib/diskEncryption";
 import { mapPool, uploadConcurrency } from "./lib/pool";
 import { breadcrumbSegments, formatBytes } from "./lib/format";
 import type {
@@ -3055,6 +3056,9 @@ export default function App() {
     setOpening({ fileId: file.id, name: file.name, phase: "preparing", done: 0, total: 0 });
     try {
       await invoke("vault_open_file", { fileId: file.id });
+      // Once ever, on a computer whose disk is not encrypted: the copy just
+      // opened sits on that disk while it is open.
+      if (await shouldWarnDiskOnce()) toasts.push("info", t("app.disk_not_encrypted"), 0);
     } catch (e) {
       if (String(e) !== OPEN_CANCELLED) toasts.error(e);
     } finally {

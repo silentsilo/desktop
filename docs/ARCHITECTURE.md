@@ -269,10 +269,17 @@ Opening a file (`vault_open_file`) reports each step to the window as
 the size of the `.part` file the download and the decrypt write, so neither
 needs a callback in core. Cancel (`vault_open_cancel`) gives up a download
 at once; a decrypt cannot stop half way, so what it wrote is deleted when it
-ends and nothing opens. A copy decrypted in this unlock and left as it was
-written (same content, size and modified time, `AppState::opened_copies`)
-is opened again without decrypting it again; the epoch moving forgets them
-all, and the lock sweep deletes the files as before. Every copy handed to
+ends and nothing opens. The copy gets a random name with the original
+extension, in a folder EFS-encrypted where Windows can
+(`silentsilo_vault::opened_file_name`, `encrypt_scratch_dir`; core
+CRYPTO.md, "Files opened in another application"). A copy decrypted in this
+unlock and left as it was written (same path, content, size and modified
+time, `AppState::opened_copies`, keyed by file id) is opened again without
+decrypting it again; the epoch moving forgets them all. After the viewer
+starts, `shred_when_released` asks every two seconds which processes hold
+the copy (`silentsilo_vault::holders`, Windows only) and shreds it once one
+held it and none does; attachments get the same watch. Every other copy
+waits for the lock sweep, which shreds rather than deletes. Every copy handed to
 another program, a file or an attachment, carries the Mark of the Web on
 Windows (`silentsilo_shell::mark_from_elsewhere`, a `Zone.Identifier`
 stream with `ZoneId=3`), written before the copy is made read-only: whoever

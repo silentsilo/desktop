@@ -2253,42 +2253,7 @@ fn safe_join(dest: &Path, name: &str) -> Result<PathBuf, String> {
     Ok(dest.join(name))
 }
 
-/// Where a file goes when the user opens it rather than exporting it.
-///
-/// Under the vault's own directory, not the shared OS temp dir, which many
-/// other processes read routinely — indexers, backup agents, antivirus.
-pub fn open_scratch_dir(vault_root: &Path) -> PathBuf {
-    silentsilo_vault::work_dir_for(vault_root).join("open")
-}
-
-/// Removes every decrypted copy left behind by opening files.
-///
-/// Called on lock and on exit, so plaintext never outlives the session that
-/// asked for it. Best-effort: an application still holding a file open will
-/// block the delete on Windows, and failing the lock over that would be
-/// worse than one file surviving until the next attempt — which is why this
-/// also runs on unlock, cleaning up whatever a crash left.
-pub fn wipe_open_scratch(vault_root: &Path) {
-    let dir = open_scratch_dir(vault_root);
-    if !dir.exists() {
-        return;
-    }
-    // Read-only is set on every file written here, and Windows refuses to
-    // delete a read-only file, so the bit has to come off first.
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if let Ok(meta) = std::fs::metadata(&path) {
-                let mut perms = meta.permissions();
-                #[allow(clippy::permissions_set_readonly_false)]
-                perms.set_readonly(false);
-                let _ = std::fs::set_permissions(&path, perms);
-            }
-            let _ = std::fs::remove_file(&path);
-        }
-    }
-    let _ = std::fs::remove_dir_all(&dir);
-}
+pub use silentsilo_app::{open_scratch_dir, wipe_open_scratch};
 
 /// Opens a file in whatever application the OS associates with it.
 ///
@@ -2341,11 +2306,12 @@ pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), Stri
     };
     ensure_blobs_local_watched(&app, &[blob_id], Some(watched)).await?;
 
-    // The original name, so the OS picks the right application and the
-    // title bar says something the user recognises.
+    // A random name with the original extension, so the OS still picks the
+    // right application and the real name never reaches the disk
+    // (`opened_file_name`). The folder is EFS-encrypted where Windows can.
     let dir = open_scratch_dir(&root);
     silentsilo_vault::create_private_dir(&dir).map_err(|e| e.to_string())?;
-    let dest = safe_join(&dir, &name)?;
+    silentsilo_vault::encrypt_scratch_dir(&dir);
     crate::audit::record_off_thread(
         &app,
         crate::state::focused_id(&state)?,
@@ -2356,11 +2322,19 @@ pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), Stri
     // Decrypted already in this unlock and left as it was written: opened
     // again as it is. Anything else, changed or gone, is decrypted afresh.
     let kept = crate::state::lock_recovering(&state.opened_copies)
-        .get(&dest)
+        .get(&file_id)
         .cloned();
-    let reusable = kept.is_some_and(|kept| {
-        kept.blob == blob_id && copy_of(&dest, blob_id).as_ref() == Some(&kept)
+    let reusable = kept.as_ref().is_some_and(|kept| {
+        kept.blob == blob_id && copy_of(&kept.path, blob_id).as_ref() == Some(kept)
     });
+    let dest = match kept {
+        Some(kept) if reusable => kept.path,
+        Some(stale) => {
+            remove_opened(&stale.path);
+            dir.join(silentsilo_vault::opened_file_name(&name))
+        }
+        None => dir.join(silentsilo_vault::opened_file_name(&name)),
+    };
     if !reusable {
         let watch = ProgressWatch::start(&app, file_id, "decrypting", part_path(&dest), size);
         let app2 = app.clone();
@@ -2402,14 +2376,50 @@ pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), Stri
             return Err(OPEN_CANCELLED.into());
         }
         if let Some(copy) = copy_of(&dest, blob_id) {
-            crate::state::lock_recovering(&state.opened_copies).insert(dest.clone(), copy);
+            crate::state::lock_recovering(&state.opened_copies).insert(file_id, copy);
         }
     }
 
     open_progress(&app, file_id, "opening", size, size);
     app.opener()
         .open_path(dest.to_string_lossy().to_string(), None::<&str>)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    shred_when_released(&app, Some(file_id), dest);
+    Ok(())
+}
+
+/// Shreds an opened copy as soon as the application that held it lets go,
+/// rather than at the next lock. Only where "held" can be asked
+/// (`silentsilo_vault::holders`, Windows): an application that reads the
+/// file and closes it at once never holds it, and its copy waits for the
+/// lock. Ends when the file is gone, whoever removed it.
+fn shred_when_released(app: &AppHandle, file_id: Option<Uuid>, path: PathBuf) {
+    if silentsilo_vault::holders(&path).is_none() {
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let mut seen_held = false;
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            if !path.exists() {
+                return;
+            }
+            match silentsilo_vault::holders(&path) {
+                Some(apps) if !apps.is_empty() => seen_held = true,
+                Some(_) if seen_held => break,
+                _ => {}
+            }
+        }
+        if let Some(id) = file_id {
+            let state = app.state::<AppState>();
+            let mut copies = crate::state::lock_recovering(&state.opened_copies);
+            if copies.get(&id).is_some_and(|copy| copy.path == path) {
+                copies.remove(&id);
+            }
+        }
+        let _ = tauri::async_runtime::spawn_blocking(move || remove_opened(&path)).await;
+    });
 }
 
 /// What a cancelled opening answers with; the window shows nothing for it.
@@ -2498,22 +2508,18 @@ fn part_path(path: &Path) -> PathBuf {
 fn copy_of(path: &Path, blob: Uuid) -> Option<crate::state::OpenedCopy> {
     let meta = std::fs::metadata(path).ok()?;
     Some(crate::state::OpenedCopy {
+        path: path.to_path_buf(),
         blob,
         len: meta.len(),
         modified: meta.modified().ok(),
     })
 }
 
-/// Removes a decrypted copy, read-only as it is left: Windows will not
-/// delete a read-only file, so the bit comes off first.
+/// Shreds a decrypted copy: overwritten, then deleted, read-only or not
+/// (`silentsilo_vault::shred_file`). A copy another application still holds
+/// stays, for the lock or the next start.
 fn remove_opened(path: &Path) {
-    if let Ok(meta) = std::fs::metadata(path) {
-        let mut perms = meta.permissions();
-        #[allow(clippy::permissions_set_readonly_false)]
-        perms.set_readonly(false);
-        let _ = std::fs::set_permissions(path, perms);
-    }
-    let _ = std::fs::remove_file(path);
+    let _ = silentsilo_vault::shred_file(path);
 }
 
 /// Every password entry, as a JSON array.
@@ -2775,6 +2781,16 @@ pub async fn copy_secret_to_clipboard(
         }
     });
     Ok(())
+}
+
+/// Copies text from the silo that is not a secret (a user name, an email,
+/// a public key, the silo report) the way a secret goes, kept out of
+/// Windows Clipboard History and cloud sync, but not cleared after: taking
+/// back a user name would be theatre. Through the webview's clipboard API
+/// these landed in the history on disk, for good.
+#[tauri::command]
+pub async fn copy_private_to_clipboard(text: String) -> Result<(), String> {
+    run_blocking(move || silentsilo_shell::set_private_clipboard(&text)).await
 }
 
 /// The silo the secret on the clipboard came from, if one was focused.
@@ -3323,11 +3339,12 @@ pub(crate) fn decrypt_attachment_bytes(
     })?;
     let dir = open_scratch_dir(&snapshot.root);
     silentsilo_vault::create_private_dir(&dir).map_err(|e| e.to_string())?;
+    silentsilo_vault::encrypt_scratch_dir(&dir);
     let dest = dir.join(format!("export-{}", Uuid::new_v4()));
     let blob_path = silentsilo_vault::VaultPaths::new(snapshot.root.clone()).blob_path(blob_id);
     let decrypted = decrypt_blob(&blob_path, &dest, &key, blob_id).map_err(|e| e.to_string());
     let bytes = decrypted.and_then(|_| std::fs::read(&dest).map_err(|e| e.to_string()));
-    let _ = std::fs::remove_file(&dest);
+    remove_opened(&dest);
     bytes.map(zeroize::Zeroizing::new)
 }
 
@@ -3355,13 +3372,15 @@ pub async fn password_open_attachment(
 
         let dir = open_scratch_dir(&snapshot.root);
         silentsilo_vault::create_private_dir(&dir).map_err(|e| e.to_string())?;
-        // The name comes out of entry JSON, which an import fills from a
-        // file someone else made: repaired as a file name in the silo is
-        // (a device name such as CON, a trailing dot), then joined through
-        // the same guard as every export, so it cannot walk out of the
-        // scratch directory.
-        let dest = safe_join(&dir, &silentsilo_vfs::sanitize_name(&name))?;
-        let _ = std::fs::remove_file(&dest);
+        silentsilo_vault::encrypt_scratch_dir(&dir);
+        // A random name with the attachment's extension, as for a vault
+        // file. The name comes out of entry JSON, which an import fills from
+        // a file someone else made, so only a plain extension is carried and
+        // the join goes through the same guard as every export.
+        let dest = safe_join(
+            &dir,
+            &silentsilo_vault::opened_file_name(&silentsilo_vfs::sanitize_name(&name)),
+        )?;
         crate::audit::record_in(
             &app2,
             snapshot.id,
@@ -3391,7 +3410,9 @@ pub async fn password_open_attachment(
 
     app.opener()
         .open_path(path.to_string_lossy().to_string(), None::<&str>)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    shred_when_released(&app, None, path);
+    Ok(())
 }
 
 /// Removes an attachment's local content. The backup copy is left to the

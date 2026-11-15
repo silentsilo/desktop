@@ -970,6 +970,7 @@ const handlers: Record<string, Handler> = {
   },
   autotype_open_access: () => null,
   screen_capture_status: () => ({ supported: true, protected: mockCaptureProtected }),
+  disk_encryption_status: () => ({ encrypted: false, os: "windows" }),
   screen_capture_set: (args) => {
     mockCaptureProtected = Boolean(args.protected);
     return { supported: true, protected: mockCaptureProtected };
@@ -1221,6 +1222,7 @@ const handlers: Record<string, Handler> = {
   ],
   vault_restore_password: () => null,
   copy_secret_to_clipboard: () => null,
+  copy_private_to_clipboard: () => null,
   audit_note: () => null,
   audit_status: () => mockAudit,
   /// `?mock=unlocked&biglog` holds 1,000 events of every kind over a few

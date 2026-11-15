@@ -7,6 +7,24 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
+On core v1.11.0.
+
+### Security
+
+- A file opened in another app is written under a random name with its
+  extension, so its real name stays off the disk and out of the viewer's
+  recent lists. On Windows editions with EFS, the folder it goes to is
+  encrypted.
+- Opened copies are overwritten before they are deleted, and on Windows a
+  copy is deleted as soon as the app holding it (Word, for example) closes
+  it, instead of at the next lock.
+- Settings, General says when the disk opened files are written to is not
+  encrypted, with a link to turn on Device encryption, BitLocker or
+  FileVault. The first file opened on such a disk says so once.
+- User names, emails, public keys and the silo report are copied with the
+  same opt-out from Windows Clipboard History and cloud clipboard as
+  passwords, without the timed clear.
+
 ## [1.5.2] - Sync that starts when you unlock
 
 On core v1.10.4.

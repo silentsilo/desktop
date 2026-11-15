@@ -159,3 +159,21 @@ pub fn secrets_allow_unprotected(allow: bool) -> Result<SecretsStatus, String> {
     silentsilo_vault::allow_unprotected_secrets(allow).map_err(|e| e.to_string())?;
     Ok(secrets_status())
 }
+
+/// Whether the disk opened files land on is encrypted, for Settings,
+/// General. `encrypted` is `None` when the system does not say.
+#[derive(serde::Serialize)]
+pub struct DiskEncryption {
+    pub encrypted: Option<bool>,
+    pub os: &'static str,
+}
+
+#[tauri::command(async)]
+pub fn disk_encryption_status() -> DiskEncryption {
+    DiskEncryption {
+        encrypted: silentsilo_shell::disk_encryption::volume_encrypted(
+            &silentsilo_vault::work_base(),
+        ),
+        os: std::env::consts::OS,
+    }
+}

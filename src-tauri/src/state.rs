@@ -49,9 +49,10 @@ pub struct AppState {
     /// Counts the Activity page's closes, so a read still running when the
     /// page closed keeps nothing.
     pub audit_closes: AtomicU64,
-    /// Files decrypted to open, by path, as they were left: one still like
-    /// that is opened again without decrypting it again. For one unlock.
-    pub opened_copies: Mutex<std::collections::HashMap<std::path::PathBuf, OpenedCopy>>,
+    /// Files decrypted to open, by file id, with where each went and how it
+    /// was left: one still like that is opened again without decrypting it
+    /// again. For one unlock.
+    pub opened_copies: Mutex<std::collections::HashMap<Uuid, OpenedCopy>>,
     /// Files whose opening the person cancelled while it was made ready.
     pub open_cancelled: Mutex<std::collections::HashSet<uuid::Uuid>>,
     /// Protected entries a key check just let through, with when. For one
@@ -77,6 +78,7 @@ pub struct AppState {
 /// A decrypted copy as this app wrote it, to tell it from one changed since.
 #[derive(Clone, PartialEq, Eq)]
 pub struct OpenedCopy {
+    pub path: std::path::PathBuf,
     pub blob: uuid::Uuid,
     pub len: u64,
     pub modified: Option<std::time::SystemTime>,
@@ -287,7 +289,7 @@ pub fn discard_if_locked(state: &State<AppState>, id: Uuid, dest: &Path) -> Resu
     if session_is_open(state, id) {
         return Ok(());
     }
-    let _ = std::fs::remove_file(dest);
+    let _ = silentsilo_vault::shred_file(dest);
     Err(CoreError::VaultLocked.to_string())
 }
 

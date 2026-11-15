@@ -6,6 +6,7 @@ pub mod bluetooth;
 pub mod browser_pipe;
 mod cli;
 mod clipboard;
+pub mod disk_encryption;
 pub mod disk_space;
 mod files;
 mod foreground;
@@ -39,7 +40,8 @@ pub use identity::{platform, system_name};
 pub use os_integration::{ensure_os_integration, register_os_integration};
 pub use secret_clipboard::{
     SECRET_CLIPBOARD_TTL_SECS, clear_expired as clear_expired_secret,
-    clear_outstanding as clear_secret_clipboard_now, set_secret_tracked as set_secret_clipboard,
+    clear_outstanding as clear_secret_clipboard_now, set_secret as set_private_clipboard,
+    set_secret_tracked as set_secret_clipboard,
 };
 pub use session_watch::{SessionEvent, on_user_left};
 pub use tray::available as tray_available;

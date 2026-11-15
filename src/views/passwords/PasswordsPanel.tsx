@@ -518,11 +518,11 @@ export function PasswordsPanel({
     setTimeout(() => setCopiedId(null), 2000);
   }, []);
 
-  /// Non-secret text: name, email, public key. The ordinary clipboard is
-  /// fine for these, and clearing it would be theatre.
+  /// Non-secret text: name, email, public key. Kept out of clipboard
+  /// history like a secret, but not cleared after: that would be theatre.
   const copyPlain = useCallback(
     async (key: string, text: string) => {
-      await navigator.clipboard.writeText(text);
+      await invoke("copy_private_to_clipboard", { text });
       flashCopied(key);
     },
     [flashCopied]
