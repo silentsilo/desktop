@@ -25,6 +25,15 @@ On core v1.11.0.
   same opt-out from Windows Clipboard History and cloud clipboard as
   passwords, without the timed clear.
 
+### Changed
+
+- Settings, Backup and the first-run backup step say plainly that SilentSilo
+  can have bugs, and that files you cannot afford to lose belong in a copy
+  that does not depend on it too.
+- Settings, Backup says when none of the copies is a never-delete copy: a
+  file deleted for good is then cleared from all of them after 30 days, and
+  someone who takes over the computer can delete from them.
+
 ## [1.5.2] - Sync that starts when you unlock
 
 On core v1.10.4.

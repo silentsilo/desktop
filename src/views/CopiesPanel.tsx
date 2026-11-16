@@ -310,6 +310,10 @@ export function CopiesPanel({ busy, os, siloName, fullCopy, onActivity }: Props)
           ? ` ${t("backup.copies_offsite")}`
           : ""}
       </p>
+      {list.length > 0 && !list.some((target) => target.archive) && (
+        <p className="hint">{t("backup.no_never_delete")}</p>
+      )}
+      <p className="hint">{t("backup.keep_outside")}</p>
 
       <ul className="key-list copies-list">
         <li className="key-list-item">

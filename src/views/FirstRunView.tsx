@@ -141,6 +141,7 @@ export function FirstRunView({
           </button>
         </div>
         <p className="hint">{t("first.until_then")}</p>
+        <p className="hint">{t("backup.keep_outside")}</p>
       </section>
     </AuthShell>
   );
