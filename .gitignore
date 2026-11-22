@@ -31,7 +31,7 @@ Thumbs.db
 test-results/
 playwright-report/
 
-# Internal working documents (audits, drafts, business notes)
+# Local files kept out of the repository
 private/
 
 # Git history archives

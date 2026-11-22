@@ -91,7 +91,11 @@ fn read_export_within<R: Read + Seek, T>(
     // zipped again from.
     let mut root: Option<Option<String>> = None;
     for i in 0..zip.len() {
-        let name = zip.name_for_index(i).unwrap_or_default().to_string();
+        // A name that is not text cannot be `data.json`.
+        let name = match zip.name_for_index(i) {
+            Some(Ok(name)) => name.to_string(),
+            _ => continue,
+        };
         match parts(&name).as_slice() {
             ["data.json"] => {
                 root = Some(None);
@@ -129,7 +133,9 @@ fn read_export_within<R: Read + Seek, T>(
         if entry.is_dir() {
             continue;
         }
-        let name = entry.name().to_string();
+        let Ok(name) = entry.name().map(|name| name.to_string()) else {
+            continue;
+        };
         let all = parts(&name);
         let Some(skip) = prefix(&all) else { continue };
         let rest = &all[skip..];

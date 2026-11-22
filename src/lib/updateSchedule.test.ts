@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   isNewerVersion,
+  isPostponed,
   pendingToShow,
+  postpone,
+  readPostponed,
   shouldCheckForUpdate,
   UPDATE_CHECK_INTERVAL_MS,
+  UPDATE_POSTPONE_MS,
 } from "./updateSchedule";
 
 const NOW = 1_800_000_000_000;
@@ -47,5 +51,32 @@ describe("an update an earlier check found", () => {
     expect(isNewerVersion("1.10.0", "1.9.9")).toBe(true);
     expect(isNewerVersion("1.4.9", "1.5.0")).toBe(false);
     expect(isNewerVersion("not a version", "1.0.0")).toBe(false);
+  });
+});
+
+describe("postponing an update for a week", () => {
+  const now = 1_000_000_000_000;
+
+  it("hides that version for seven days, then shows it again", () => {
+    const held = postpone("1.6.0", now);
+    expect(isPostponed(held, "1.6.0", now)).toBe(true);
+    expect(isPostponed(held, "1.6.0", now + UPDATE_POSTPONE_MS - 1)).toBe(true);
+    expect(isPostponed(held, "1.6.0", now + UPDATE_POSTPONE_MS)).toBe(false);
+  });
+
+  it("does not hide a newer version", () => {
+    expect(isPostponed(postpone("1.6.0", now), "1.6.1", now)).toBe(false);
+  });
+
+  it("does not outlive a clock moved back", () => {
+    expect(isPostponed(postpone("1.6.0", now), "1.6.0", now - 1)).toBe(false);
+  });
+
+  it("reads back what it stored, and nothing else", () => {
+    const held = postpone("1.6.0", now);
+    expect(readPostponed(JSON.stringify(held))).toEqual(held);
+    expect(readPostponed(null)).toBeNull();
+    expect(readPostponed("not json")).toBeNull();
+    expect(readPostponed('{"version":1}')).toBeNull();
   });
 });

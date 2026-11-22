@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Settings2, X } from "lucide-react";
-import type { Update } from "@tauri-apps/plugin-updater";
 import type { Os } from "../../lib/platformStrings";
 import { AppSettingsSection, useUpdater, type AppSectionId } from "./AppSettings";
 import { t, useLocale, type Key } from "../../i18n";
@@ -20,13 +19,12 @@ type Props = {
   os: Os;
   /** Which tab to open on: Updates when an update is waiting. */
   initial: AppSectionId;
-  backgroundUpdate: { version: string; update: Update | null } | null;
+  backgroundUpdate: { version: string } | null;
   autoUpdateEnabled: boolean;
   onAutoUpdateEnabled: (on: boolean) => void;
   defaultAutoLockMinutes: number;
   onDefaultAutoLockMinutes: (minutes: number) => void;
   onClose: () => void;
-  onUpdateFailedAfterLock?: (message: string) => void;
 };
 
 /**
@@ -44,12 +42,11 @@ export function AppSettingsDrawer({
   defaultAutoLockMinutes,
   onDefaultAutoLockMinutes,
   onClose,
-  onUpdateFailedAfterLock,
 }: Props) {
   useLocale();
   const [section, setSection] = useState<AppSectionId>(initial);
   const [closing, setClosing] = useState(false);
-  const updater = useUpdater(backgroundUpdate, onUpdateFailedAfterLock);
+  const updater = useUpdater(backgroundUpdate);
   const panel = useRef<HTMLElement>(null);
   const opener = useRef<Element | null>(null);
 

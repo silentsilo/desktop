@@ -18,13 +18,6 @@ specification in core names a tampered binary as the path nothing inside the
 program can defend against, and a reproducible build is the half of the
 answer still missing.
 
-### macOS is not released
-
-Windows and, from 1.4, Linux ship. The release workflow builds a macOS
-bundle, and signs and notarises it once the Developer ID secrets are set;
-no macOS build has been tested on a Mac yet, so none is released. The crates underneath build and are tested
-on macOS in [silentsilo/core](https://github.com/silentsilo/core).
-
 ## Housekeeping
 
 ### Dependency licences

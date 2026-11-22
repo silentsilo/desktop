@@ -876,8 +876,7 @@ AppImage itself. That is the same user the next section already rules out.
 
 ### On macOS
 
-The Linux code, with three places that differ (run on a Mac since 1.5.0;
-the first session is in `planuri/lansare-1.5.md`):
+The Linux code, with three places that differ (run on a Mac since 1.5.0):
 
 - **The socket** is `~/Library/Application Support/SilentSilo/browser.sock`
   (`unix_place::socket_dir`), the folder made `0700`. macOS has no runtime
@@ -1125,25 +1124,86 @@ version stored in clear is dropped.
 
 ## Updates
 
+**The app never installs an update.** Once a day at most (`updateSchedule.ts`)
+it asks which version is the latest, and when that is newer than its own it
+shows a card on the screens before a silo opens, a toast once per version,
+and a line under Settings, Updates and about. **Get latest version** opens
+`https://silentsilo.com/download/` in the browser; the user downloads the
+installer and runs it over the installed copy. **Postpone 1 week** hides that
+version for seven days; a newer version shows at once, and Check for updates
+ignores the postponement.
+
+This is a security decision, and it replaced the Tauri updater after 1.5.2:
+
+- **No one path reaches every install.** With the updater, one minisign key
+  on one release machine plus the update endpoint put code on every running
+  copy within a day. Stolen, on a compromised machine, or under coercion,
+  that is the shortest route to everyone's silos. Now every install is the
+  user's own act, in the browser, from the project's download page.
+- **Time to look.** A release is public on GitHub, with its source, SBOM and
+  provenance, before people install it at their own pace. A bad one no
+  longer lands everywhere on the same day.
+- **Less privileged code.** Gone with the updater: downloading, unpacking
+  archives (`zip` 4 and its advisories), replacing the running binary, and
+  `pkexec` for a `.deb`. The check reads one version string.
+- **The answer cannot send anyone anywhere.** It is `{"version":"x.y.z"}`;
+  the card's text and the download page are fixed in the app. A forged
+  answer can announce a version that does not exist, nothing more.
+- **It says nothing about this install.** No version, platform or
+  identifier goes with the request.
+
+What it costs, stated so nobody rediscovers it as a bug: fixes reach people
+more slowly, since an ignored card leaves a copy on an old version; and the
+installer people download is checked by Authenticode on Windows and
+notarisation on macOS, not by our own key, and on Linux by nothing but
+HTTPS. A compromised website could now mislead existing users as well as
+new ones.
+
+**Where the answer comes from.** `update_check.rs` reads
+`https://silentsilo.com/latest.json`, and, when that gives no usable
+answer (no connection, an error status, not a version),
+`raw.githubusercontent.com/silentsilo/website/main/public/latest.json`.
+The website's build refuses to run when `public/latest.json` and
+`LATEST_VERSION` in `app/links.ts` disagree, so the file cannot announce a
+version the download page does not offer. Fields other than `version` are
+ignored, so the file can grow. A prerelease never goes in it.
+
+**Copies before this change.** 1.0.0 to 1.5.2 ask
+`releases.silentsilo.com` through the Tauri updater and trust the minisign
+key in `tauri.conf.json`. The first release with this change was published
+to them that way, signed as before, and the endpoint stays frozen on it:
+a copy started years later is still offered that release, installs it,
+and then hears about the current one. Nothing new is ever written to that
+endpoint. `plugins.updater` stays in `tauri.conf.json` for the release
+scripts until that release is out.
+
+**Installing over a running copy (Windows).** Tauri's installer, run by
+hand over an older version, offers "Uninstall before installing", and both
+the installer and the uninstaller end a running app outright, without a
+lock. The updater used to skip that page. So:
+
+- `src-tauri/nsis/installer.nsi` is Tauri's template with one change: an
+  upgrade skips that page and installs over the copy it finds, as `/UPDATE`
+  does, so the old uninstaller and its "Delete the application data" box
+  never run. The page stays for a reinstall of the same version and for a
+  downgrade. A CLI upgrade needs a fresh copy (`nsisTemplate.test.ts`).
+- The pre-install and pre-uninstall hooks ask a running copy to lock every
+  silo and quit (`--lock-and-quit`, `ShellAction::Quit`, forwarded by the
+  single-instance plugin), and wait up to 30 seconds before the forced
+  close. The pre-install hook asks only versions after 1.5.2, which know
+  the flag; started with no copy running, the flag exits at once.
+
 The Windows installer refuses to go over a newer version
 (`bundle.windows.allowDowngrades: false`, from 1.5.1): a build older than
 the silo's data could misread what a newer one wrote, so going back means
-uninstalling first, which keeps the silos. The window asks the updater with
-`allowDowngrades: false`, and offers an
-update only when every file the answer names sits under
-`https://github.com/silentsilo/desktop/releases/download/v<version>/`, the
-version it claims (`fromOurReleases`, `err.update_not_ours`). The minisign
-signature says who built a file, not which version it is; a tag on the
-repository names its version and only its owners can put files under it.
-The scheduled check asks at most once a day: an update an earlier run found
-is shown again from what that check left (`pendingToShow`), and Install
-asks for it then.
+uninstalling first, which keeps the silos.
 
-The updater's identity is pinned by `src/lib/updaterIdentity.test.ts`: the
-minisign public key, the endpoint, the release prefix, the bundle
-identifier (it names the data folder and the keyring service) and the
-product name. Changing any of them strands every installed copy, so that
-test changes only with a transition plan.
+The addresses every installed copy relies on are pinned by
+`src/lib/updaterIdentity.test.ts`: the two `latest.json` addresses, the
+download page, the old endpoint and key, the bundle identifier (it names the
+data folder and the keyring service) and the product name. Changing any of
+them strands installed copies, so that test changes only with a transition
+plan.
 
 ## Looks wrong, is deliberate
 

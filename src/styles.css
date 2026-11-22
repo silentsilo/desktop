@@ -1,6 +1,6 @@
 /* ── Tokens ──
- * Values from planuri/design-1.5.md, annex A, checked by the contrast
- * script: text 4.5:1 and boundaries 3:1 on every surface, in both themes.
+ * Checked by the contrast script: text 4.5:1 and boundaries 3:1 on every
+ * surface, in both themes.
  * Dark here, light in `.light-theme` below. */
 :root {
   /* Surfaces, from the back: page, panes and cards, menus and dialogs,

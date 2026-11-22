@@ -36,7 +36,6 @@ import { securityKeyDisplayName, usableHere } from "../lib/keyName";
 import { AUTO_LOCK_OPTIONS_MINUTES } from "../lib/types";
 import { AuditLogPanel } from "./AuditLogPanel";
 import { ProtectedFoldersPanel } from "./ProtectedFolders";
-import type { Update } from "@tauri-apps/plugin-updater";
 import type { SyncIndicator } from "../layout/AppShell";
 import { AppSettingsSection, formatMinutes, useUpdater } from "./settings/AppSettings";
 import { OverviewPanel } from "./settings/OverviewPanel";
@@ -57,12 +56,9 @@ type Props = {
   /** Whether the daily scheduled update check is on. */
   autoUpdateEnabled: boolean;
   onAutoUpdateEnabled: (on: boolean) => void;
-  /** An update the scheduled check already found, so this panel can offer
-   * the install without a second request. */
-  backgroundUpdate: { version: string; update: Update | null } | null;
-  /** An install that failed after locking every silo, which closes this
-   * panel before it can show the error. */
-  onUpdateFailedAfterLock: (message: string) => void;
+  /** An update the scheduled check already found, so this panel can show it
+   * without a second request. */
+  backgroundUpdate: { version: string } | null;
   securityKeys: SecurityKeyInfo[];
   newKeyLabel: string;
   onNewKeyLabel: (v: string) => void;
@@ -150,7 +146,6 @@ export function SettingsPanel(props: Props) {
     autoUpdateEnabled,
     onAutoUpdateEnabled,
     backgroundUpdate,
-    onUpdateFailedAfterLock,
     securityKeys,
     newKeyLabel,
     onNewKeyLabel,
@@ -216,7 +211,7 @@ export function SettingsPanel(props: Props) {
     setRenamingDevice(null);
   };
 
-  const updater = useUpdater(backgroundUpdate, onUpdateFailedAfterLock);
+  const updater = useUpdater(backgroundUpdate);
 
   /// Each group's heading is drawn once, above the first item that carries
   /// it, so the rail reads as two blocks: this silo, then the app.

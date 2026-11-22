@@ -356,8 +356,7 @@ back to a stub backend on which no security-key operation succeeds.
 
 See [BACKLOG.md](BACKLOG.md) for what is deliberately unfinished. No
 independent security audit has been done, as the note at the top says. The
-dependency licences have not been audited against AGPL-3.0 either, and there
-is no licensing code. Log compaction, blob
+dependency licences have not been audited against AGPL-3.0 either. Log compaction, blob
 garbage collection, key rotation, conflict copies, silo verification, the
 printable emergency kit and the standalone extraction tool are all done.
 

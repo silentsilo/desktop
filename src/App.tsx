@@ -58,11 +58,13 @@ import { osOf, platformStrings } from "./lib/platformStrings";
 import { runsOnOpen } from "./lib/executable";
 import { checkForUpdate } from "./lib/updater";
 import {
+  isPostponed,
   pendingToShow,
+  postpone,
+  readPostponed,
   shouldCheckForUpdate,
   UPDATE_POLL_INTERVAL_MS,
 } from "./lib/updateSchedule";
-import type { Update } from "@tauri-apps/plugin-updater";
 import { useTheme } from "./lib/theme";
 import { AppShell, type SyncIndicator } from "./layout/AppShell";
 import { SiloPickerView } from "./views/SiloPickerView";
@@ -129,6 +131,8 @@ const UPDATE_LAST_CHECK_KEY = "silentsilo.update.lastCheckAt";
 const UPDATE_NOTIFIED_KEY = "silentsilo.update.lastNotifiedVersion";
 /** The version the last check found, until a check finds none. */
 const UPDATE_PENDING_KEY = "silentsilo.update.pendingVersion";
+/** "Postpone 1 week" on the update card: which version, until when. */
+const UPDATE_POSTPONED_KEY = "silentsilo.update.postponed";
 
 /// A silo's id is its vault id, so the key can be removed with the silo.
 function contentOfferKeyFor(siloId: string): string {
@@ -357,20 +361,22 @@ export default function App() {
     setAutoUpdateEnabledState(on);
     localStorage.setItem(AUTO_UPDATE_KEY, on ? "on" : "off");
   };
-  /// An update the scheduled check found, held so Settings can offer the
-  /// install without asking the endpoint a second time. `update` is null for
-  /// one an earlier run found: Install asks for it then.
-  const [backgroundUpdate, setBackgroundUpdate] = useState<{
-    version: string;
-    update: Update | null;
-  } | null>(null);
+  /// An update the scheduled check found, held so Settings can show it
+  /// without asking a second time.
+  const [backgroundUpdate, setBackgroundUpdate] = useState<{ version: string } | null>(null);
   /// What the sidebar badges. Only while automatic checks are on: someone
   /// who turned them off asked not to be told, and a manual check shows its
   /// answer inside Settings.
   const pendingUpdate = autoUpdateEnabled ? (backgroundUpdate?.version ?? null) : null;
-  /// "Later" on the first screen's card: until the next start, not for the
-  /// whole version.
-  const [updateCardLater, setUpdateCardLater] = useState(false);
+  /// "Postpone 1 week" on the first screen's card: that version, for a week.
+  const [updatePostponed, setUpdatePostponed] = useState(() =>
+    readPostponed(localStorage.getItem(UPDATE_POSTPONED_KEY)),
+  );
+  const postponeUpdate = (version: string) => {
+    const held = postpone(version, Date.now());
+    localStorage.setItem(UPDATE_POSTPONED_KEY, JSON.stringify(held));
+    setUpdatePostponed(held);
+  };
 
   /// The fallback a silo without its own timeout follows. Set under
   /// General, which belongs to the app rather than to one silo.
@@ -1280,7 +1286,7 @@ export default function App() {
       // restart inside the day asks the server nothing.
       if (!updateInHand.current) {
         const pending = pendingToShow(localStorage.getItem(UPDATE_PENDING_KEY), __APP_VERSION__);
-        if (pending) setBackgroundUpdate((held) => held ?? { version: pending, update: null });
+        if (pending) setBackgroundUpdate((held) => held ?? { version: pending });
         else localStorage.removeItem(UPDATE_PENDING_KEY);
       }
       if (!shouldCheckForUpdate(last, Date.now())) return;
@@ -1296,11 +1302,16 @@ export default function App() {
         // Kept even when this run of the effect was cancelled meanwhile: the
         // run that replaced it found the request in flight and sent none.
         updateInHand.current = true;
-        setBackgroundUpdate({ version: result.version, update: result.update });
+        setBackgroundUpdate({ version: result.version });
         if (cancelled) return;
         // Said once per version, not once per day: the same toast every
-        // morning trains people to dismiss it unread.
-        if (localStorage.getItem(UPDATE_NOTIFIED_KEY) !== result.version) {
+        // morning trains people to dismiss it unread. Not for a version the
+        // user postponed.
+        const postponed = readPostponed(localStorage.getItem(UPDATE_POSTPONED_KEY));
+        if (
+          localStorage.getItem(UPDATE_NOTIFIED_KEY) !== result.version &&
+          !isPostponed(postponed, result.version, Date.now())
+        ) {
           localStorage.setItem(UPDATE_NOTIFIED_KEY, result.version);
           toasts.info(t("app.update_available", { version: result.version }));
         }
@@ -1318,20 +1329,6 @@ export default function App() {
       window.clearInterval(timer);
     };
   }, [autoUpdateEnabled, toasts]);
-
-  /// An install locks every silo first, so when it then fails the Settings
-  /// page that started it is gone and the unlock screen is all that is left.
-  /// Said here, and the screen brought in line even if the lock itself was
-  /// what failed part way.
-  const updateFailedAfterLock = useCallback(
-    (message: string) => {
-      toasts.errorText(t("app.update_failed_locked", { error: message.replace(/\.$/, "") }));
-      resetExplorer();
-      void refreshBootstrap();
-      void refreshSilos();
-    },
-    [toasts, resetExplorer, refreshBootstrap, refreshSilos],
-  );
 
   const createSilo = async (name: string, location: string | null) => {
     begin("silo");
@@ -1695,7 +1692,7 @@ export default function App() {
   const runningWorkRef = useRef<() => string[]>(() => []);
   runningWorkRef.current = () => {
     const names = backgroundTasks()
-      .filter((task) => task.id !== "sync" && task.id !== "update")
+      .filter((task) => task.id !== "sync")
       .map((task) => task.label);
     if (rebuilding) names.push(t("app.out_of_step_title"));
     if (shellUploadBusy) names.push(t("dlg.adding"));
@@ -4165,12 +4162,12 @@ export default function App() {
   /// The screens before a silo is unlocked offer the app's settings, in a
   /// panel over them: the screen underneath stays as it was.
   const updateCard =
-    pendingUpdate && backgroundUpdate && !updateCardLater ? (
+    pendingUpdate &&
+    backgroundUpdate &&
+    !isPostponed(updatePostponed, backgroundUpdate.version, Date.now()) ? (
       <UpdateCard
         version={backgroundUpdate.version}
-        update={backgroundUpdate.update}
-        onLater={() => setUpdateCardLater(true)}
-        onFailedAfterLock={updateFailedAfterLock}
+        onPostpone={() => postponeUpdate(backgroundUpdate.version)}
       />
     ) : null;
   const beforeUnlock = (screen: ReactNode) => (
@@ -4187,7 +4184,6 @@ export default function App() {
             defaultAutoLockMinutes={autoLockMinutes}
             onDefaultAutoLockMinutes={setAutoLockMinutes}
             onClose={() => setAppSettingsOpen(false)}
-            onUpdateFailedAfterLock={updateFailedAfterLock}
           />
         )}
       </UpdateCardContext.Provider>
@@ -4664,7 +4660,6 @@ export default function App() {
             autoUpdateEnabled={autoUpdateEnabled}
             onAutoUpdateEnabled={setAutoUpdateEnabled}
             backgroundUpdate={backgroundUpdate}
-            onUpdateFailedAfterLock={updateFailedAfterLock}
             securityKeys={securityKeys}
             newKeyLabel={newKeyLabel}
             onNewKeyLabel={(v) => {

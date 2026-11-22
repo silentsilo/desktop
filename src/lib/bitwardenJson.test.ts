@@ -28,7 +28,7 @@ const sample = JSON.stringify({
       type: 3,
       name: "Visa",
       card: {
-        cardholderName: "Alex",
+        cardholderName: "Sam",
         brand: "Visa",
         number: "4111111111111111",
         expMonth: "9",
@@ -40,8 +40,8 @@ const sample = JSON.stringify({
       type: 4,
       name: "Me",
       identity: {
-        firstName: "Alex",
-        lastName: "Stanciu",
+        firstName: "Sam",
+        lastName: "Carter",
         email: "a@example.com",
         ssn: "123-45-6789",
       },
@@ -79,7 +79,7 @@ describe("bitwardenJsonToEntries", () => {
     expect(card.card_code).toBe("123");
 
     const identity = entries.find((e) => e.type === "identity")!;
-    expect(identity.id_full_name).toBe("Alex Stanciu");
+    expect(identity.id_full_name).toBe("Sam Carter");
     // Fields with no slot of ours survive in notes instead of vanishing.
     expect(identity.notes).toContain("123-45-6789");
 

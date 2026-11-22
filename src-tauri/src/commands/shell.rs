@@ -95,5 +95,9 @@ pub fn handle_shell_action(app: &AppHandle, args: Vec<String>) {
         // waits there: unprompted, an unlock request on top of the login
         // screen would train people to touch their key without reading.
         ShellAction::Autostart => {}
+        // From the installer (nsis-hooks.nsh). Exiting locks every open silo
+        // and writes its snapshot, which the installer's kill would skip.
+        // Unlike the tray's Quit it does not ask about running work.
+        ShellAction::Quit => app.exit(0),
     }
 }

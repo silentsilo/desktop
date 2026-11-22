@@ -33,11 +33,13 @@ token refresh, and a read of the account's address and free space. The app
 asks only for its own folder at each (`Files.ReadWrite.AppFolder`,
 Dropbox's app folder, `drive.file`), and the refresh token stays on the
 computer. The second is the
-updater, which asks `releases.silentsilo.com` whether a newer version exists
-and downloads
-it from GitHub; update packages are signed, and the app verifies that
-signature before installing. Automatic update checks can be turned off in
-Settings. The third is the breach check in Health, which runs only when its
+update check, which reads `silentsilo.com/latest.json` (or the same file in
+the website's GitHub repository when the site does not answer) to learn the
+latest version number, with nothing about the install in the request. The
+app never downloads or installs an update: it opens the download page and
+the user installs the new version, a deliberate choice explained in
+`docs/ARCHITECTURE.md`, "Updates". Automatic update checks can be turned off
+in Settings. The third is the breach check in Health, which runs only when its
 button is pressed: the first five characters of each password's SHA-1 go to
 `api.pwnedpasswords.com` (the k-anonymity range API, with padded responses),
 the passwords themselves never leave, and nothing identifying the user or
@@ -58,8 +60,8 @@ where the app enforces a rule against the person at the keyboard rather than for
 them. A silo created that way carries keys its user cannot retire, and the
 enforcement is in the client, not in the cryptography: those keys unwrap the
 same vault key as any other, and someone editing the silo's files by hand or
-running a modified build can clear the marking on their own disk. That is not a
-vulnerability, it is the design. What actually holds is the copy the
+running a modified build can clear the marking on their own disk. That is by
+design. What actually holds is the copy the
 organisation keeps on storage it owns. Reports that the marking can be bypassed
 locally are welcome as documentation bugs if the docs overstate it, not as
 security issues.

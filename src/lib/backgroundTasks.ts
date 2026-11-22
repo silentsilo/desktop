@@ -20,8 +20,8 @@ function percent(done: number, total: number): string | null {
 /**
  * What the pages that keep their work in lib/lasting have running, by the
  * names they keep it under. Each value is checked here as well: a lasting
- * value can be kept for something other than running work (the updater
- * keeps a found update, Health keeps the breach answer).
+ * value can be kept for something other than running work (the update
+ * check keeps a found version, Health keeps the breach answer).
  */
 export function lastingTasks(running: Map<string, unknown>): BackgroundTask[] {
   const tasks: BackgroundTask[] = [];
@@ -87,17 +87,6 @@ export function lastingTasks(running: Map<string, unknown>): BackgroundTask[] {
   }
   if (has("protected.busy")) {
     tasks.push({ id: "scan", label: t("nav.task_scan"), detail: null, place: { section: "protected" } });
-  }
-  const update = running.get("updater") as
-    | { phase: string; downloaded?: number; contentLength?: number | null }
-    | undefined;
-  if (update?.phase === "installing") {
-    tasks.push({
-      id: "update",
-      label: t("nav.task_update"),
-      detail: update.contentLength ? percent(update.downloaded ?? 0, update.contentLength) : null,
-      place: { section: "updates" },
-    });
   }
   return tasks;
 }

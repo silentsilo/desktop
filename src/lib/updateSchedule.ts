@@ -6,9 +6,8 @@
  * days, so a launch-only check would never fire again. The caller polls
  * this hourly and the timestamp gates the actual request.
  *
- * The privacy contract this cap supports: the app contacts the release
- * endpoint at most once a day, and the request carries the app version and
- * platform, nothing that identifies a person or a machine.
+ * The app asks silentsilo.com/latest.json at most once a day, and the
+ * request carries nothing about this install.
  */
 
 export const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -72,4 +71,41 @@ export function isNewerVersion(candidate: string, current: string): boolean {
  * runs: shown at a restart without asking the server again. */
 export function pendingToShow(pending: string | null, current: string): string | null {
   return pending !== null && isNewerVersion(pending, current) ? pending : null;
+}
+
+/** How long "Postpone 1 week" hides an update. */
+export const UPDATE_POSTPONE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** What "Postpone 1 week" leaves behind: the version hidden, and until when. */
+export type Postponed = { version: string; until: number };
+
+/** Read from storage; anything that does not read is no postponement. */
+export function readPostponed(raw: string | null): Postponed | null {
+  if (raw === null) return null;
+  try {
+    const value = JSON.parse(raw) as Partial<Postponed>;
+    return typeof value.version === "string" && typeof value.until === "number"
+      ? { version: value.version, until: value.until }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function postpone(version: string, now: number): Postponed {
+  return { version, until: now + UPDATE_POSTPONE_MS };
+}
+
+/**
+ * Whether `version` is hidden by a postponement. Only the version that was
+ * postponed: a newer one is shown at once. A postponement running past a
+ * week from now means the clock moved back, and it no longer holds.
+ */
+export function isPostponed(postponed: Postponed | null, version: string, now: number): boolean {
+  return (
+    postponed !== null &&
+    postponed.version === version &&
+    now < postponed.until &&
+    postponed.until - now <= UPDATE_POSTPONE_MS
+  );
 }

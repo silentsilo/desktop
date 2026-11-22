@@ -146,7 +146,8 @@ echo "$notarised" | grep -Eq '"status" *: *"Accepted"' || { echo "The extractor 
 rm -rf "$extract_work"
 
 echo "== Build"
-npm ci
+# No install scripts: this session signs and notarises.
+npm ci --ignore-scripts
 
 # The browser extension's host, shipped once a store lists the extension:
 # built for both architectures, joined into one binary for the universal

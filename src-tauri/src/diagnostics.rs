@@ -42,8 +42,8 @@ mod tests {
     fn the_home_folder_is_not_written_out() {
         assert_eq!(
             without_home(
-                "skipped: /home/alex/Documents/tax.pdf is locked",
-                Some("/home/alex")
+                "skipped: /home/sam/Documents/tax.pdf is locked",
+                Some("/home/sam")
             ),
             "skipped: ~/Documents/tax.pdf is locked"
         );

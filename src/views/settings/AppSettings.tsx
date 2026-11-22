@@ -2,18 +2,11 @@ import { useEffect, useState } from "react";
 import { LOCALES, languagePreference, setLanguage, systemLocale, t, useLocale } from "../../i18n";
 import { CheckCircle2, DownloadCloud, ExternalLink, Globe, Info, SlidersHorizontal } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { Update } from "@tauri-apps/plugin-updater";
 import { type Os, platformStrings } from "../../lib/platformStrings";
-import { formatBytes } from "../../lib/format";
 import { formatAppError } from "../../lib/errors";
 import { SettingGroupTitle, SettingList, SettingRow, Toggle } from "../../components/Setting";
 import { Segmented } from "../../components/Segmented";
-import {
-  checkForUpdate,
-  installUpdateAndRelaunch,
-  lacksPermission,
-  UpdateInstallError,
-} from "../../lib/updater";
+import { checkForUpdate, openDownloadPage } from "../../lib/updater";
 import { readAutostart, writeAutostart, type AutostartStatus } from "../../lib/autostart";
 import { readBrowserExtension, writeBrowserExtension } from "../../lib/browserExtension";
 import { EXTENSION_STORES } from "../../lib/extensionStores";
@@ -42,46 +35,29 @@ export type UpdateState =
   | { phase: "idle" }
   | { phase: "checking" }
   | { phase: "up-to-date" }
-  /** `update` is null for one an earlier check found; Install asks for it. */
-  | { phase: "available"; version: string; update: Update | null }
-  | {
-      phase: "installing";
-      version: string;
-      /** Bytes down so far, and the whole size when the server said one. */
-      downloaded: number;
-      contentLength: number | null;
-    }
+  | { phase: "available"; version: string }
   | { phase: "error"; message: string };
 
 const UPDATE_IDLE: UpdateState = { phase: "idle" };
 
-/** The update check and install. */
-export function useUpdater(
-  backgroundUpdate: { version: string; update: Update | null } | null,
-  /** Told when an install failed after locking every silo, which takes
-   * this page off screen before it can show the error. */
-  onFailedAfterLock?: (message: string) => void,
-) {
+/** The update check. Installing is the user's: the app opens the download
+ * page (docs/ARCHITECTURE.md, "Updates"). */
+export function useUpdater(backgroundUpdate: { version: string } | null) {
   // One state for the whole app, kept while there is something to show:
-  // the Updates page, the settings before unlock and the update card all
-  // read it, and a download goes on when any of them is left.
+  // the Updates page and the settings before unlock both read it.
   const [state, setState] = useLasting<UpdateState>(
     "updater",
     UPDATE_IDLE,
-    (s) => s.phase === "checking" || s.phase === "installing" || s.phase === "available",
+    (s) => s.phase === "checking" || s.phase === "available",
     true,
   );
 
   // An update the daily check found lands here as the initial state, so
-  // opening Settings shows it without another request. Any state the user
-  // has since driven (checking, installing) wins over it.
+  // opening Settings shows it without another request. A check the user
+  // has since started wins over it.
   useEffect(() => {
     if (backgroundUpdate && state.phase === "idle") {
-      setState({
-        phase: "available",
-        version: backgroundUpdate.version,
-        update: backgroundUpdate.update,
-      });
+      setState({ phase: "available", version: backgroundUpdate.version });
     }
   }, [backgroundUpdate, setState, state.phase]);
 
@@ -91,7 +67,7 @@ export function useUpdater(
       const result = await checkForUpdate();
       setState(
         result.available
-          ? { phase: "available", version: result.version, update: result.update }
+          ? { phase: "available", version: result.version }
           : { phase: "up-to-date" },
       );
     } catch (e) {
@@ -99,40 +75,7 @@ export function useUpdater(
     }
   };
 
-  const install = async (update: Update | null, version: string) => {
-    setState({ phase: "installing", version, downloaded: 0, contentLength: null });
-    try {
-      // Known from an earlier run's check, which this run did not repeat:
-      // asked for now, because the person pressed Install.
-      let found = update;
-      let named = version;
-      if (!found) {
-        const result = await checkForUpdate();
-        if (!result.available) {
-          setState({ phase: "up-to-date" });
-          return;
-        }
-        found = result.update;
-        named = result.version;
-      }
-      await installUpdateAndRelaunch(found, (downloaded, contentLength) => {
-        setState({ phase: "installing", version: named, downloaded, contentLength });
-      });
-    } catch (e) {
-      const failure = e instanceof UpdateInstallError ? e : null;
-      const reason = failure ? failure.reason : e;
-      // Raw words from the OS otherwise: an AppImage in a folder this user
-      // cannot write, a .deb update with no polkit agent to ask for the
-      // password, a read-only disk.
-      const message = lacksPermission(reason)
-        ? t("app.update_no_permission")
-        : formatAppError(reason);
-      setState({ phase: "error", message });
-      if (failure?.silosLocked) onFailedAfterLock?.(message);
-    }
-  };
-
-  return { state, check, install };
+  return { state, check };
 }
 
 type Props = {
@@ -480,49 +423,22 @@ export function AppSettingsSection({
             {t("set.up_latest")}
           </p>
         )}
-        {updateState.phase === "installing" && (
-          <div className="progress-row" role="status">
-            <p className="hint">
-              {updateState.contentLength
-                ? t("set.up_downloading_of", {
-                    version: updateState.version,
-                    done: formatBytes(updateState.downloaded),
-                    total: formatBytes(updateState.contentLength),
-                  })
-                : updateState.downloaded > 0
-                  ? t("set.up_downloading_so_far", {
-                      version: updateState.version,
-                      done: formatBytes(updateState.downloaded),
-                    })
-                  : t("set.up_downloading", { version: updateState.version })}
-            </p>
-            {updateState.contentLength !== null && updateState.contentLength > 0 && (
-              <div className="progress-track">
-                <div
-                  className="progress-fill"
-                  style={{
-                    width: `${Math.min(100, (updateState.downloaded / updateState.contentLength) * 100)}%`,
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        )}
         {updateState.phase === "error" && <p className="hint is-error">{updateState.message}</p>}
         <div className="actions">
           {updateState.phase === "available" ? (
             <button
               className="btn-primary"
               type="button"
-              onClick={() => void updater.install(updateState.update, updateState.version)}
+              onClick={() => void openDownloadPage().catch(() => {})}
             >
-              {t("set.up_install")}
+              <ExternalLink size={14} />
+              {t("update.get_latest")}
             </button>
           ) : (
             <button
               type="button"
               className="btn-secondary"
-              disabled={updateState.phase === "checking" || updateState.phase === "installing"}
+              disabled={updateState.phase === "checking"}
               onClick={() => void updater.check()}
             >
               {updateState.phase === "checking" ? t("unlock.checking") : t("set.up_check")}

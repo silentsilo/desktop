@@ -19,7 +19,7 @@ pub fn system_name() -> Option<String> {
 
     #[cfg(target_os = "macos")]
     {
-        // The friendly name from System Settings, "Alex's MacBook Air", which
+        // The friendly name from System Settings, "Sam's MacBook Air", which
         // is what a person recognises in a device list. The hostname is its
         // ASCII shadow and only serves as the fallback below.
         if let Ok(out) = std::process::Command::new("/usr/sbin/scutil")

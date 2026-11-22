@@ -7,17 +7,35 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
-On core v1.11.0.
+On core v1.11.1.
 
 ### Security
 
+- The app no longer downloads or installs updates. It checks once a day
+  which version is the latest, from silentsilo.com and from the website's
+  GitHub repository when the site does not answer, and offers "Get latest
+  version", which opens the download page, or "Postpone 1 week". No key or
+  server can now push code to every install; each update is the user's own
+  act. The request carries nothing about the install. Why, and what it
+  costs, is in docs/ARCHITECTURE.md, "Updates". The check takes a plain
+  version only, over https only, and reads at most 4 KB.
+- Installing over a running copy on Windows first asks it to lock every
+  silo and quit, and an upgrade installs over the old version without
+  offering to uninstall it.
+- The Bitwarden import reads zips with `zip` 9; `url` 2.5.9
+  (RUSTSEC-2026-0592).
 - A file opened in another app is written under a random name with its
   extension, so its real name stays off the disk and out of the viewer's
   recent lists. On Windows editions with EFS, the folder it goes to is
   encrypted.
 - Opened copies are overwritten before they are deleted, and on Windows a
   copy is deleted as soon as the app holding it (Word, for example) closes
-  it, instead of at the next lock.
+  it, instead of at the next lock. A link in that folder is removed, never
+  followed, and on Windows a copy another app has open is never overwritten.
+- A password export decrypts attachments in memory, so a lock during the
+  export cannot touch them.
+- The release scripts install the npm dependencies without running their
+  install scripts.
 - Settings, General says when the disk opened files are written to is not
   encrypted, with a link to turn on Device encryption, BitLocker or
   FileVault. The first file opened on such a disk says so once.

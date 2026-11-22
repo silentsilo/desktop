@@ -50,6 +50,33 @@
   ${EndIf}
 !macroend
 
+; The app does not install its own updates any more: people run the new
+; installer over the old one, often with SilentSilo still open. Both the
+; installer and the uninstaller then end it outright (CheckIfAppIsRunning),
+; with no lock, and a silo left open keeps its unsaved changes only in the
+; working copy until the next unlock. So the copy still running is asked to
+; lock every silo and quit first (`--lock-and-quit`, forwarded to it by the
+; single-instance plugin), and given up to 30 seconds before the kill.
+; Started with nothing running, the flag exits at once without a window.
+!macro SILENTSILO_LOCK_AND_QUIT DIR
+  nsis_tauri_utils::FindProcessCurrentUser "${MAINBINARYNAME}.exe"
+  Pop $0
+  ${If} $0 = 0
+  ${AndIf} ${FileExists} "${DIR}\${MAINBINARYNAME}.exe"
+    Exec '"${DIR}\${MAINBINARYNAME}.exe" --lock-and-quit'
+    StrCpy $1 0
+    ${Do}
+      Sleep 500
+      IntOp $1 $1 + 1
+      nsis_tauri_utils::FindProcessCurrentUser "${MAINBINARYNAME}.exe"
+      Pop $0
+      ${If} $0 <> 0
+        ${ExitDo}
+      ${EndIf}
+    ${LoopUntil} $1 >= 60
+  ${EndIf}
+!macroend
+
 ; The app imports webauthn.dll by name, which Windows has from 10 version
 ; 1903 (build 18362). On 1809, LTSC 2019 or Server 2019 it would install and
 ; then fail to start with a loader error before any window, so it says so
@@ -63,6 +90,27 @@
   ${EndIf}
   nsExec::Exec '"$SYSDIR\taskkill.exe" /F /IM silentsilo-browser-host.exe'
   Pop $0
+  ; The exe here is the one installed, about to be replaced. Versions up to
+  ; 1.5.2 do not know the flag and would only show their window, so it is
+  ; asked of later ones only. After "Uninstall before installing" there is
+  ; no exe left, and the old uninstaller has already done this.
+  ; The folder comes from the registry, not the directory page, which the
+  ; user may have changed. It is stored in quotes.
+  ReadRegStr $2 SHCTX "${UNINSTKEY}" "DisplayVersion"
+  ReadRegStr $4 SHCTX "${UNINSTKEY}" "InstallLocation"
+  StrCpy $5 $4 1
+  ${If} $5 == '"'
+    StrCpy $4 $4 "" 1
+    StrCpy $4 $4 -1
+  ${EndIf}
+  ${If} $2 != ""
+  ${AndIf} $4 != ""
+    nsis_tauri_utils::SemverCompare $2 "1.5.2"
+    Pop $3
+    ${If} $3 = 1
+      !insertmacro SILENTSILO_LOCK_AND_QUIT $4
+    ${EndIf}
+  ${EndIf}
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
@@ -107,6 +155,9 @@
 ; treat the machine as new and turn it back on. Left in place, a later
 ; reinstall keeps their "off".
 !macro NSIS_HOOK_PREUNINSTALL
+  ; This uninstaller is the installed version's own, so it knows the flag.
+  !insertmacro SILENTSILO_LOCK_AND_QUIT $INSTDIR
+
   ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "SilentSilo"
   ${If} $0 != ""
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "SilentSilo"

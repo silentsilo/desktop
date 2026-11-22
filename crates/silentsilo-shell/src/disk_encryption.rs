@@ -71,8 +71,7 @@ mod platform {
         #[test]
         fn the_system_drive_gives_an_answer_or_says_it_has_none() {
             // Whatever this machine is, asking must not fail or hang.
-            let answer = super::volume_encrypted(std::path::Path::new("C:\\Windows"));
-            eprintln!("C: encrypted: {answer:?}");
+            let _ = super::volume_encrypted(std::path::Path::new("C:\\Windows"));
         }
     }
 }

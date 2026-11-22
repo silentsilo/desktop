@@ -283,7 +283,7 @@ const handlers: Record<string, Handler> = {
   silo_report: () => ({
     app_version: "1.0.0",
     name: "Personal",
-    path: String.raw`C:\Users\alex\Documents\SilentSilo\Personal`,
+    path: String.raw`C:\Users\sam\Documents\SilentSilo\Personal`,
     silo_id: "8f14e45f-ceea-467a-9575-8bd3f1a2c4d5",
     marker_version: 1,
     formats: {
@@ -676,7 +676,7 @@ const handlers: Record<string, Handler> = {
     {
       id: "d0000000-0000-0000-0000-000000000001",
       label: null,
-      system_name: "ALEX-DESKTOP",
+      system_name: "HOME-DESKTOP",
       platform: os() === "macos" ? "macOS" : "Windows 11 Pro",
       is_this_device: true,
       operations: 428,
@@ -936,7 +936,7 @@ const handlers: Record<string, Handler> = {
             id: "5b0f3a2e-9c1d-4e8f-a7b6-2d4c6e8f0a1b",
             account: {
               id: `${String(args.kind ?? "cloud")}-account`,
-              label: args.kind === "google-drive" ? "alex@gmail.com" : "alex@outlook.com",
+              label: args.kind === "google-drive" ? "sam@gmail.com" : "sam@outlook.com",
               freeBytes: 812 * 1024 ** 3,
               totalBytes: 1024 ** 4,
             },
@@ -1050,7 +1050,7 @@ const handlers: Record<string, Handler> = {
         category: "Banking",
         created_at: 1700049600000,
         updated_at: 1700049600000,
-        card_holder: "Alex Stanciu",
+        card_holder: "Sam Carter",
         card_brand: "Visa",
         card_number: "4111111111111111",
         card_exp_month: "09",
@@ -1068,7 +1068,7 @@ const handlers: Record<string, Handler> = {
         category: "General",
         created_at: 1700049600000,
         updated_at: 1700049600000,
-        id_full_name: "Alex Stanciu",
+        id_full_name: "Sam Carter",
         id_email: "alex@example.com",
         id_phone: "+40 700 000 000",
         id_address: "Str. Exemplu 1",
@@ -1542,17 +1542,7 @@ const handlers: Record<string, Handler> = {
   "plugin:path|join": (args) => ((args.paths as string[]) ?? []).join("\\"),
   // `?mock=unlocked&update` offers the next minor version, for the update
   // badge and the card on the screens before a silo opens.
-  "plugin:updater|check": () =>
-    flag("update")
-      ? {
-          rid: 1,
-          currentVersion: __APP_VERSION__,
-          version: nextMinor(__APP_VERSION__),
-          date: null,
-          body: "",
-          rawJson: {},
-        }
-      : null,
+  update_latest_version: () => (flag("update") ? nextMinor(__APP_VERSION__) : __APP_VERSION__),
 
   // Event subscriptions: the app registers several at mount, and a
   // rejection there takes the whole tree down before anything renders.

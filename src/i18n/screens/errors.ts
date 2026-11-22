@@ -1458,17 +1458,6 @@ export const errors = {
     "pt-BR": "A janela onde se digitava não estava mais na frente, então a digitação parou.",
     pl: "Okno, do którego wpisywano tekst, nie było już na pierwszym planie, więc wpisywanie zostało przerwane.",
   },
-  "err.update_not_ours": {
-    note: "Update check: the update server pointed at a file outside SilentSilo's own GitHub releases for that version, so the update is refused.",
-    en: "This update does not come from SilentSilo's releases, so it was not offered.",
-    ro: "Această actualizare nu vine din versiunile publicate de SilentSilo, așa că nu a fost oferită.",
-    de: "Dieses Update stammt nicht aus den Veröffentlichungen von SilentSilo und wurde daher nicht angeboten.",
-    fr: "Cette mise à jour ne provient pas des versions publiées de SilentSilo, elle n’a donc pas été proposée.",
-    es: "Esta actualización no viene de las versiones publicadas de SilentSilo, así que no se ofreció.",
-    it: "Questo aggiornamento non proviene dalle versioni pubblicate di SilentSilo, quindi non è stato proposto.",
-    "pt-BR": "Esta atualização não vem das versões publicadas do SilentSilo, então não foi oferecida.",
-    pl: "Ta aktualizacja nie pochodzi z wydań SilentSilo, więc nie została zaproponowana.",
-  },
   "err.autotype_elevated": {
     note: "Error message after an auto-type. ",
     en: "That window runs as administrator, and Windows does not let SilentSilo type into it.",

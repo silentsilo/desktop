@@ -47,6 +47,7 @@
     "windows": {
       "allowDowngrades": false,
       "nsis": {
+        "template": "nsis/installer.nsi",
         "installerHooks": "nsis-hooks.nsh"
       }
     },

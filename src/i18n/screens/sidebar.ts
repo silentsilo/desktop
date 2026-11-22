@@ -320,17 +320,6 @@ export const sidebar = {
     "pt-BR": "Alterando uma cópia de backup",
     pl: "Zmiana kopii zapasowej",
   },
-  "nav.task_update": {
-    note: "Sidebar, under the storage figure: one piece of work going on in the background. Short, an ongoing action, no ending punctuation. Clicking it opens the page where it can be followed or stopped. The new version of the app being downloaded.",
-    en: "Downloading the update",
-    ro: "Se descarcă actualizarea",
-    de: "Update wird heruntergeladen",
-    fr: "Téléchargement de la mise à jour",
-    es: "Descargando la actualización",
-    it: "Download dell’aggiornamento",
-    "pt-BR": "Baixando a atualização",
-    pl: "Pobieranie aktualizacji",
-  },
   "nav.lock_silo_after": {
     note: "Tooltip on the Lock button when the silo locks itself after a while unused. {time} is that while, e.g. '30 min' or '6 hours'.",
     en: "Lock silo. It also locks by itself after {time} unused.",

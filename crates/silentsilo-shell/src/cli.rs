@@ -1,12 +1,19 @@
 use std::path::PathBuf;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ShellAction {
     None,
-    Upload { paths: Vec<PathBuf> },
-    Download { target_dir: PathBuf },
+    Upload {
+        paths: Vec<PathBuf>,
+    },
+    Download {
+        target_dir: PathBuf,
+    },
     Show,
     Autostart,
+    /// Lock every silo and quit: what the Windows installer asks of a copy
+    /// still running, before it would otherwise end it without a lock.
+    Quit,
 }
 
 pub fn parse_args(args: impl IntoIterator<Item = String>) -> ShellAction {
@@ -30,6 +37,7 @@ pub fn parse_args(args: impl IntoIterator<Item = String>) -> ShellAction {
             // What the OS sign-in entry passes. Same app, but it goes to the
             // notification area instead of putting a window on screen.
             "--autostart" => action = ShellAction::Autostart,
+            "--lock-and-quit" => action = ShellAction::Quit,
             other if other.starts_with('-') => {}
             path => match action {
                 ShellAction::Download { .. } => {
@@ -93,6 +101,12 @@ mod tests {
     fn parse_autostart() {
         let action = parse_args(["silentsilo", "--autostart"].map(String::from));
         assert!(matches!(action, ShellAction::Autostart));
+    }
+
+    #[test]
+    fn parse_lock_and_quit() {
+        let action = parse_args(["silentsilo", "--lock-and-quit"].map(String::from));
+        assert_eq!(action, ShellAction::Quit);
     }
 
     #[test]

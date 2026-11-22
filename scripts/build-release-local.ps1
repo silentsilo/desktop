@@ -227,7 +227,8 @@ try {
     # suite runs.
     Write-Host "`n== Checks ==" -ForegroundColor Cyan
     # The dependencies as the lockfile names them, before any of them runs.
-    npm ci; if (-not $?) { throw "npm ci failed" }
+    # No install scripts: the signing token may be unlocked while they run.
+    npm ci --ignore-scripts; if (-not $?) { throw "npm ci failed" }
     npm run typecheck; if (-not $?) { throw "typecheck failed" }
     npm run lint;      if (-not $?) { throw "lint failed" }
     npm test;          if (-not $?) { throw "tests failed" }
@@ -434,9 +435,9 @@ try {
         platforms = $platforms
     }
     # Written through .NET, not Out-File: PowerShell 5.1's utf8 puts a BOM in
-    # front, the worker parses this file as JSON straight out of KV, and a
-    # parser that refuses the BOM turns every update check into a 500 with
-    # nothing pointing back here.
+    # front, the update endpoint serves this file as JSON, and a parser that
+    # refuses the BOM turns every update check into an error with nothing
+    # pointing back here.
     $json = $manifest | ConvertTo-Json -Depth 5
     [System.IO.File]::WriteAllText(
         (Join-Path $out "latest.json"), $json,

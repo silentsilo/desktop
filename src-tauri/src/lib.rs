@@ -11,6 +11,7 @@ mod pin;
 mod screen_capture;
 mod ssh_agent;
 mod state;
+mod update_check;
 
 /// The fixture builder's escape hatch must not be in a shipped binary.
 /// `seal_under_code_for_fixtures` wraps the DEK under any string, which is
@@ -207,8 +208,6 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_notification::init())
         // Size, position and maximised state, and nothing else. The plugin
         // also tracks visibility by default, and this window is hidden at
@@ -248,6 +247,14 @@ pub fn run() {
         .manage(ssh_agent::SshAgent::default())
         .manage(commands::cloud::SignInSlot::default())
         .setup(move |app| {
+            // Sent by the installer, to the copy already running, which
+            // locks every silo and quits (`ShellAction::Quit`). Reaching here
+            // means no copy was running: nothing is open, so leave at once.
+            if silentsilo_shell::parse_args(startup_args.clone())
+                == silentsilo_shell::ShellAction::Quit
+            {
+                std::process::exit(0);
+            }
             // Nothing is unlocked yet, so any decrypted scratch on disk is
             // what a crash, a kill or a power cut left behind.
             let _ = silentsilo_vault::wipe_work_dirs_except(&[]);
@@ -442,6 +449,7 @@ pub fn run() {
             audit::audit_org_expire,
             commands::vault::passwords_read_import_csv,
             commands::pwned::pwned_range,
+            update_check::update_latest_version,
             commands::qr::qr_from_pixels,
             commands::vault::passwords_write_export_csv,
             commands::vault::vault_blob_status,

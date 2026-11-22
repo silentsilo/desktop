@@ -1045,9 +1045,8 @@ pub async fn vault_lock(app: AppHandle, id: Option<String>) -> Result<(), String
         tell_if_scratch_survived(&app, state.sweep_scratch());
         crate::commands::cloud::forget_sign_ins_when_all_locked(&app);
         // Every silo closing is news to the screen, which the caller may not
-        // own: the updater locks all of them before installing, and when the
-        // install then failed, the window went on showing a silo that no
-        // longer answered.
+        // own (the tray, the user leaving the computer): without it, the
+        // window went on showing a silo that no longer answered.
         if all {
             let _ = app.emit("silos-locked", ());
         }
@@ -3322,8 +3321,7 @@ pub(crate) fn encrypt_attachment_bytes(
 }
 
 /// An attachment's content, for an export that writes it into another file.
-/// Decrypted through the scratch directory, which a lock sweeps, and removed
-/// as soon as it is read.
+/// Decrypted in memory, never on disk.
 pub(crate) fn decrypt_attachment_bytes(
     snapshot: &crate::state::SessionSnapshot,
     blob_id: &str,
@@ -3337,15 +3335,9 @@ pub(crate) fn decrypt_attachment_bytes(
         )
         .to_string()
     })?;
-    let dir = open_scratch_dir(&snapshot.root);
-    silentsilo_vault::create_private_dir(&dir).map_err(|e| e.to_string())?;
-    silentsilo_vault::encrypt_scratch_dir(&dir);
-    let dest = dir.join(format!("export-{}", Uuid::new_v4()));
+    // In memory: a lock wiping the scratch folder must not reach it halfway.
     let blob_path = silentsilo_vault::VaultPaths::new(snapshot.root.clone()).blob_path(blob_id);
-    let decrypted = decrypt_blob(&blob_path, &dest, &key, blob_id).map_err(|e| e.to_string());
-    let bytes = decrypted.and_then(|_| std::fs::read(&dest).map_err(|e| e.to_string()));
-    remove_opened(&dest);
-    bytes.map(zeroize::Zeroizing::new)
+    silentsilo_crypto::decrypt_blob_to_vec(&blob_path, &key, blob_id).map_err(|e| e.to_string())
 }
 
 /// Opens an attachment the way a vault file opens: decrypted into the
@@ -4021,7 +4013,7 @@ mod export_path_tests {
     /// folder the user chose.
     #[test]
     fn a_name_that_walks_out_of_the_destination_is_refused() {
-        let dest = Path::new("C:/Users/alex/Exports");
+        let dest = Path::new("C:/Users/sam/Exports");
         for bad in [
             "..",
             ".",
@@ -4043,7 +4035,7 @@ mod export_path_tests {
 
     #[test]
     fn an_ordinary_name_lands_inside_the_destination() {
-        let dest = Path::new("C:/Users/alex/Exports");
+        let dest = Path::new("C:/Users/sam/Exports");
         for good in ["report.pdf", ".gitignore", "Ștampilă 2026.pdf", "a b c"] {
             let joined = safe_join(dest, good).expect("an ordinary name is fine");
             assert!(joined.starts_with(dest), "{good:?} landed at {joined:?}");
