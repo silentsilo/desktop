@@ -128,6 +128,10 @@ pub enum BindError {
     Taken {
         holder: Option<PathBuf>,
     },
+    /// The name exists and this user may not open it: on Windows, the pipe
+    /// of another user signed in to the same computer, or of a program
+    /// running as administrator. Windows' OpenSSH has one name for everyone.
+    OtherUser,
     Other(io::Error),
 }
 
@@ -139,6 +143,9 @@ impl std::fmt::Display for BindError {
             }
             BindError::Taken { holder: None } => {
                 write!(f, "the agent's address is held by another program")
+            }
+            BindError::OtherUser => {
+                write!(f, "the agent's address is held by another user")
             }
             BindError::Other(e) => write!(f, "{e}"),
         }
@@ -217,7 +224,7 @@ mod imp {
                     holder: Some(holder),
                 }),
                 None if last.kind() == std::io::ErrorKind::PermissionDenied => {
-                    Err(BindError::Taken { holder: None })
+                    Err(BindError::OtherUser)
                 }
                 None => Err(BindError::Other(last)),
             }
@@ -251,6 +258,15 @@ mod imp {
                     _ = pipe.connect() => {}
                     _ = stop.changed() => return Ok(()),
                 }
+                // The next instance before this one is handed off. With none
+                // waiting, the name lapses when the last connection closes,
+                // and another user signed in could take it. All instances
+                // taken: the top of the loop tries again.
+                waiting = match descriptor.create(&name, false) {
+                    Ok(next) => Some(next),
+                    Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => return Err(e),
+                    Err(_) => None,
+                };
                 let (handler, warn, stop) = (handler.clone(), warn.clone(), stop.clone());
                 tokio::spawn(async move {
                     let peer = match tokio::task::spawn_blocking({

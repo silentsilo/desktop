@@ -357,6 +357,17 @@ export const start = {
     "pt-BR": "Montando o silo neste computador a partir do que foi baixado. Um silo grande leva alguns minutos.",
     pl: "Budowanie silosu na tym komputerze z pobranych danych. Duży silos zajmuje kilka minut.",
   },
+  "start.join_retired_go": {
+    note: "Button under that error: go on with the old encryption key anyway, because the user knows a key change was left unfinished.",
+    en: "Go on, a key change was left unfinished",
+    ro: "Continuă, o schimbare de cheie a rămas neterminată",
+    de: "Fortfahren, ein Schlüsselwechsel ist unvollendet",
+    fr: "Continuer, un changement de clé est resté inachevé",
+    es: "Continuar, un cambio de clave quedó sin terminar",
+    it: "Continua, un cambio di chiave è rimasto incompleto",
+    "pt-BR": "Continuar, uma troca de chave ficou inacabada",
+    pl: "Kontynuuj, zmiana klucza nie została dokończona",
+  },
   "start.join_no_silo": {
     note: "Error after reading the backup storage: it holds no silo. 'Sync once': run a sync on the computer that has the silo.",
     en: "There is no silo there yet. Sync once from the computer that has it, or create a new silo here instead.",

@@ -6,7 +6,7 @@ import { AlertCircle, ArrowLeft, CheckCircle2, FolderOpen, LifeBuoy } from "luci
 import { open as openDialog } from "../lib/dialog";
 import { AuthShell } from "../layout/AuthShell";
 import { RecoveryCodeInput } from "../components/RecoveryCodeInput";
-import { formatAppError } from "../lib/errors";
+import { decodeAppError, formatAppError } from "../lib/errors";
 import { t, useLocale } from "../i18n";
 import { isCloudKind } from "../lib/types";
 import {
@@ -82,6 +82,9 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [location, setLocation] = useState<string | null>(null);
+  /// The credential opened a key a rotation retired: joining waits for a
+  /// second, deliberate press.
+  const [retired, setRetired] = useState(false);
   /// How far through the download the join is. Joining a large silo is
   /// minutes of work, and a spinner that says nothing for minutes reads as a
   /// hang rather than as progress.
@@ -123,20 +126,22 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
 
   const payload = () => storeDraftPayload(draft);
 
-  const handleJoin = async () => {
+  const handleJoin = async (allowRetired = false) => {
     setWorking(true);
     setError(null);
+    setRetired(false);
     try {
       const siloName = name.trim() || defaultSiloName(draft);
       const args =
         mode === "code"
-          ? { config: payload(), code, name: siloName, location }
-          : { config: payload(), name: siloName, location };
+          ? { config: payload(), code, name: siloName, location, allowRetired }
+          : { config: payload(), name: siloName, location, allowRetired };
       const command =
         mode === "code" ? "vault_join_with_recovery" : "vault_join_from_storage";
       setFetched(null);
       await onJoined(await invoke(command, args));
     } catch (e) {
+      setRetired(decodeAppError(e).code === "err.join_retired_key");
       setError(formatAppError(e));
     } finally {
       setWorking(false);
@@ -160,6 +165,7 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
               // user had since changed, and joined whatever the form said.
               setDraft(next);
               setPreview(null);
+              setRetired(false);
             }}
             hasStoredSecret={false}
             busy={disabled}
@@ -172,6 +178,16 @@ export function JoinView({ busy, onBack, onJoined }: Props) {
             <AlertCircle size={14} />
             {error}
           </p>
+        )}
+        {error && retired && (
+          <button
+            type="button"
+            className="btn-danger"
+            disabled={disabled}
+            onClick={() => void handleJoin(true)}
+          >
+            {t("start.join_retired_go")}
+          </button>
         )}
 
         {/* Shown while the download runs, and only then: a count left on

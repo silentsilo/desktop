@@ -6,6 +6,7 @@ mod diagnostics;
 #[cfg(feature = "e2e")]
 mod e2e;
 mod err;
+mod favicon;
 mod front;
 mod pin;
 mod screen_capture;
@@ -450,6 +451,7 @@ pub fn run() {
             commands::vault::passwords_read_import_csv,
             commands::pwned::pwned_range,
             update_check::update_latest_version,
+            favicon::favicon_fetch,
             commands::qr::qr_from_pixels,
             commands::vault::passwords_write_export_csv,
             commands::vault::vault_blob_status,

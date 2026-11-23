@@ -5,8 +5,10 @@ import {
   AVATAR_PALETTE,
   avatarColor,
   copyKindFor,
+  faviconHost,
   faviconUrl,
   hashColor,
+  resolveCategories,
   inkOn,
   normalizeUrl,
   notesAreSecret,
@@ -61,6 +63,13 @@ describe("normalizeUrl", () => {
   it("treats an empty field as nothing to open", () => {
     expect(normalizeUrl("")).toBeNull();
     expect(normalizeUrl("   ")).toBeNull();
+  });
+});
+
+describe("faviconHost", () => {
+  it("is the host of a public site, and nothing for a local one", () => {
+    expect(faviconHost("https://www.example.com/login")).toBe("www.example.com");
+    expect(faviconHost("http://192.168.1.1")).toBeNull();
   });
 });
 
@@ -276,5 +285,19 @@ describe("generatePassphrase", () => {
 describe("generateUsername", () => {
   it("is two words and two digits", () => {
     expect(generateUsername()).toMatch(/^[a-z]+_[a-z]+\d{2}$/);
+  });
+});
+
+describe("stored category colours", () => {
+  it("keeps a hex colour and replaces anything else with the name's own", () => {
+    const resolved = resolveCategories(
+      [
+        { name: "Work", color: "#2563eb" },
+        { name: "Spy", color: "url(https://example.invalid/t.png)" },
+        { name: "Red", color: "red; position: fixed" },
+      ],
+      [],
+    );
+    expect(resolved.map((c) => c.color)).toEqual(["#2563eb", hashColor("Spy"), hashColor("Red")]);
   });
 });

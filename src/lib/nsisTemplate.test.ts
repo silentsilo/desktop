@@ -31,4 +31,10 @@ describe("the NSIS template", () => {
       /; SilentSilo:[\s\S]*?\$\{If\} \$R0 = 1\s+\$\{AndIf\} \$WixMode = 0\s+Abort\s+\$\{EndIf\}\s+; Skip showing the page if passive/,
     );
   });
+
+  it("compares the versions itself on a silent install, so /S cannot downgrade", () => {
+    expect(template).toMatch(
+      /\$\{If\} \$\{Silent\}\s+; SilentSilo:[\s\S]*?SemverCompare "\$\{VERSION\}" \$R0\s+Pop \$R0[\s\S]*?; If downgrading\s+\$\{If\} \$R0 = -1/,
+    );
+  });
 });

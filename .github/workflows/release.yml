@@ -23,9 +23,9 @@ name: Release everything that is not Windows
 # local script uses for the Windows one and the Mac script for the macOS one.
 #
 # No signing key is on GitHub. The build jobs never see a token that can
-# write: they run vite, every npm install script, every cargo build script
-# and the bundler, and any of those can plant something for a later step of
-# the same job (a changed node_modules, a line in $GITHUB_ENV). So they only
+# write: they run vite, every cargo build script and the bundler (npm
+# installs with --ignore-scripts, as the release machines do), and any of
+# those can plant something for a later step of the same job (a changed node_modules, a line in $GITHUB_ENV). So they only
 # build and upload workflow artifacts, and `publish` attaches them unsigned,
 # with provenance, building nothing. The release machine checks that
 # provenance and signs every file for the updater.
@@ -171,7 +171,7 @@ jobs:
         with:
           toolchain: 1.97.1
           targets: aarch64-apple-darwin,x86_64-apple-darwin
-      - run: npm ci
+      - run: npm ci --ignore-scripts
 
       # The browser extension's host, as on Windows and Linux: shipped once a
       # store lists the extension, checked with `--check-release`, built for
@@ -284,7 +284,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           toolchain: 1.97.1
-      - run: npm ci
+      - run: npm ci --ignore-scripts
 
       # `APPIMAGE_EXTRACT_AND_RUN` because the AppImage tooling mounts itself
       # through FUSE by default, and a container has no FUSE. Without it the

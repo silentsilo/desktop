@@ -797,6 +797,15 @@ export default function App() {
         if (report.needs_rebuild && rebuildId) {
           setNeedsRebuild((prev) => new Set(prev).add(rebuildId));
         }
+        // Said for any silo, and once: the next pass finds no code to drop.
+        if (report.recovery_turned_off) {
+          toasts.push("info", t("app.recovery_turned_off"), 0);
+          if (onScreen) {
+            void invoke<RecoveryStatus>("recovery_status")
+              .then(setRecovery)
+              .catch(() => {});
+          }
+        }
         if (!onScreen) return;
         // A pass may have started the log (on by default) or brought a
         // change to it from another device.
@@ -1545,7 +1554,19 @@ export default function App() {
   const repairFromStorage = async (siloId: string, code: string) => {
     repairingRef.current = true;
     try {
-      await invoke("vault_repair_from_storage", { siloId, code });
+      try {
+        await invoke("vault_repair_from_storage", { siloId, code });
+      } catch (e) {
+        // The code opened a key a rotation retired. Only the user knows
+        // whether a key change was left unfinished, so asked, not refused.
+        if (decodeAppError(e).code !== "err.join_retired_key") throw e;
+        const go = await askConfirm(t("app.join_retired_title"), formatAppError(e), {
+          confirmLabel: t("start.join_retired_go"),
+          danger: true,
+        });
+        if (!go) throw e;
+        await invoke("vault_repair_from_storage", { siloId, code, allowRetired: true });
+      }
     } finally {
       repairingRef.current = false;
       setFidoProgress(null);

@@ -17,7 +17,7 @@ import {
   categoryLabel,
   avatarColor,
   cardDigits,
-  faviconUrl,
+  faviconHost,
   groupCardNumber,
   inkOn,
   normalizeUrl,
@@ -27,6 +27,7 @@ import {
 } from "./util";
 import { IconCopy, IconEdit, IconEye, IconEyeOff, IconTrash } from "../../ui/Icons";
 import { t, useLocale } from "../../i18n";
+import { useFavicons } from "../../hooks/useFavicons";
 
 type Props = {
   entry: PasswordEntry;
@@ -105,7 +106,8 @@ export function EntryDetail({
   const history = entry.history ?? [];
 
   const type = typeOf(entry);
-  const icon = type === "login" && showFavicons && entry.url ? faviconUrl(entry.url) : null;
+  const iconHost = type === "login" && showFavicons && entry.url ? faviconHost(entry.url) : null;
+  const icon = useFavicons(iconHost ? [iconHost] : []).get(iconHost ?? "") ?? null;
   const showIcon = icon !== null && !faviconFailed;
 
   /// One reveal per entry, covering whichever secrets its kind has: asking

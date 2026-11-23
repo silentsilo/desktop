@@ -1,8 +1,8 @@
 ; SilentSilo's copy of Tauri's NSIS template, from tauri-cli-v2.11.4
-; (crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi), with one
-; change, marked "SilentSilo:" below. src/lib/nsisTemplate.test.ts fails
+; (crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi), with two
+; changes, marked "SilentSilo:" below. src/lib/nsisTemplate.test.ts fails
 ; when @tauri-apps/cli moves to another version: take that version's
-; template and apply the same change again.
+; template and apply the same changes again.
 Unicode true
 ManifestDPIAware true
 ; Add in `dpiAwareness` `PerMonitorV2` to manifest for Windows 10 1607+ (note this should not affect lower versions since they should be able to ignore this and pick up `dpiAware` `true` set by `ManifestDPIAware true`)
@@ -539,6 +539,16 @@ Section EarlyChecks
   ; Abort silent installer if downgrades is disabled
   !if "${ALLOWDOWNGRADES}" == "false"
   ${If} ${Silent}
+    ; SilentSilo: compared here. A silent install skips the page that sets
+    ; $R0, so the check below never saw a downgrade and /S installed an
+    ; older version over a newer one.
+    ReadRegStr $R0 SHCTX "${UNINSTKEY}" "DisplayVersion"
+    ${If} $R0 != ""
+      nsis_tauri_utils::SemverCompare "${VERSION}" $R0
+      Pop $R0
+    ${Else}
+      StrCpy $R0 1
+    ${EndIf}
     ; If downgrading
     ${If} $R0 = -1
       System::Call 'kernel32::AttachConsole(i -1)i.r0'

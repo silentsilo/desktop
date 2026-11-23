@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Check, Contact, CreditCard, Paperclip, StickyNote, TerminalSquare, User } from "lucide-react";
 import type { PasswordEntry } from "../../lib/types";
-import { avatarColor, faviconUrl, inkOn, serviceInitials, subtitleFor, typeOf } from "./util";
+import { avatarColor, faviconHost, inkOn, serviceInitials, subtitleFor, typeOf } from "./util";
+import { useFavicons } from "../../hooks/useFavicons";
 import { IconCopy } from "../../ui/Icons";
 import { t, useLocale } from "../../i18n";
 
@@ -44,6 +45,9 @@ export function EntryList({
 }: Props) {
   useLocale();
   const [faviconErrorIds, setFaviconErrorIds] = useState<Set<string>>(new Set());
+  const iconHostOf = (entry: PasswordEntry) =>
+    typeOf(entry) === "login" && showFavicons && entry.url ? faviconHost(entry.url) : null;
+  const favicons = useFavicons(entries.map(iconHostOf).filter((h): h is string => h !== null));
 
   const picking = checked.size > 0;
 
@@ -76,8 +80,8 @@ export function EntryList({
     >
       {entries.map((entry) => {
         const type = typeOf(entry);
-        const icon =
-          type === "login" && showFavicons && entry.url ? faviconUrl(entry.url) : null;
+        const host = iconHostOf(entry);
+        const icon = host ? (favicons.get(host) ?? null) : null;
         const showIcon = icon !== null && !faviconErrorIds.has(entry.id);
         const isChecked = checked.has(entry.id);
         const name = entry.service || t("pw.untitled_entry");

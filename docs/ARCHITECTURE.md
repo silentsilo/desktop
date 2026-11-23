@@ -366,6 +366,12 @@ in core (`rotation::commit_rotation_with`); past that commit an error locks
 the silo. A seed runs with the silo's key (`seed_target_checked`), so a copy
 that missed a rotation cannot put the old key back on another.
 
+Resuming a change that core 1.9 or earlier staged
+(`rotation::staged_by_earlier_release`) commits it and then, in the same
+call, stages and commits a second change to a key made there. That key's
+new key sat in the silo folder, where anyone who held the old key could
+have written their own. Only the second recovery code is shown.
+
 ## Key checks in Rust
 
 The window can be driven by a script, so what a key check guards is checked
@@ -1017,7 +1023,12 @@ KeePassXC, RFC 9987 and OpenSSH's `PROTOCOL.agent`.
   this user's SID only (Bitwarden takes tokio's defaults). When Windows'
   OpenSSH Authentication Agent service holds the name, the pipe cannot be
   created: Settings says so and shows how to stop and disable the service,
-  which needs an administrator; the app never does it itself. Git for
+  which needs an administrator; the app never does it itself. The name is
+  one for every user of the machine, so a free instance is created as soon
+  as one connects: with none, the name would lapse when the last connection
+  closed and another user could take it. A name this user may not open is
+  reported as another user's (`BindError::OtherUser`), and a server that
+  stops sets the problem Settings shows. Git for
   Windows' bundled ssh does not use the pipe; Settings gives the
   `core.sshCommand` line that points Git at Windows' `ssh.exe`, as
   1Password does. On Linux, `$XDG_RUNTIME_DIR/silentsilo/ssh-agent.sock`,
@@ -1212,6 +1223,13 @@ crates are in core's map.
 
 - **The desktop app is free and stays that way; wording is accountability,
   never warranty.** Every copy change goes through that filter.
+- **Site icons go through Rust (`favicon::favicon_fetch`), not an `<img>`
+  pointed at the site.** The WebView keeps what it loads in a cache on disk,
+  unencrypted, which made it a list of the sites the silo has logins for.
+  The backend resolves the name, refuses local and private addresses, pins
+  the connection to the address it checked, and hands back a `data:` URL
+  held in memory (`hooks/useFavicons`). The CSP's `img-src` is `'self'
+  data:` for the same reason.
 - **A KeePass import encrypts attachments before anyone has said yes.**
   `passwords_read_kdbx` (`commands/kdbx.rs`) reads the database and puts
   each attached file straight into the silo as a blob, so the bytes never
@@ -1249,7 +1267,10 @@ crates are in core's map.
   joined device for good, asking each time for a ceremony with a key that
   does not exist. Core keeps that claim only on the key that proved itself
   in this join, clears it everywhere else, and drops revoked keys and any a
-  sealed marker names. Three copies of that rule would be three things to
+  sealed marker names. All three also stop with `err.join_retired_key`
+  when the credential opens a key a rotation retired, and go on only when
+  called again with `allow_retired`: the join screen and the repair dialog
+  ask first. Three copies of that rule would be three things to
   get wrong; `join_tests` in `commands/sync.rs` plants an `org` envelope and
   holds both doors to it.
 - **A failed join leaves nothing behind.** Once the folder is registered, a

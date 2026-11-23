@@ -34,7 +34,7 @@ jobs:
           toolchain: 1.97.1
           components: clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
@@ -201,7 +201,7 @@ jobs:
             libudev-dev \
             libssl-dev \
             pkg-config
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       # `tauri::generate_context!` refuses to compile when `frontendDist` is
       # missing, so the app crate cannot be checked without this.
       - run: npm run build
@@ -222,7 +222,7 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: package-lock.json
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       # `--with-deps` runs its own apt-get, so the -o flags the other Linux
       # jobs pass cannot reach it. The same settings go in apt.conf.d, where
       # every apt-get in this job picks them up, playwright's included. A

@@ -49,8 +49,22 @@ pub use tray::available as tray_available;
 const UPLOAD_QUEUE: &str = "upload-queue.txt";
 const DOWNLOAD_QUEUE: &str = "download-queue.txt";
 
+/// One path per line, so a path that holds a line break is refused: on
+/// Linux and macOS a file can be named `a`, a line break, then
+/// `/home/me/.ssh/id_ed25519`, and the queue would read two paths.
+fn one_line(path: &str) -> std::io::Result<()> {
+    if path.contains(['\n', '\r']) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "a path with a line break in it",
+        ));
+    }
+    Ok(())
+}
+
 pub fn queue_upload(path: &str) -> std::io::Result<()> {
     use std::io::Write;
+    one_line(path)?;
     let queue_path = queue_file_path();
     if let Some(parent) = queue_path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -70,9 +84,9 @@ pub fn drain_upload_queue() -> std::io::Result<Vec<String>> {
     }
     let content = std::fs::read_to_string(&queue_path)?;
     std::fs::write(&queue_path, "")?;
+    // Only the line ends go: a name may end in a space.
     Ok(content
         .lines()
-        .map(str::trim)
         .filter(|l| !l.is_empty())
         .map(str::to_string)
         .collect())
@@ -89,6 +103,7 @@ fn queue_file_path() -> std::path::PathBuf {
 /// background click before the first is handled should replace the target
 /// directory, not queue up two downloads.
 pub fn queue_download(target_dir: &str) -> std::io::Result<()> {
+    one_line(target_dir)?;
     let queue_path = download_queue_file_path();
     if let Some(parent) = queue_path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -103,7 +118,7 @@ pub fn drain_download_queue() -> std::io::Result<Option<String>> {
     }
     let content = std::fs::read_to_string(&queue_path)?;
     std::fs::write(&queue_path, "")?;
-    let trimmed = content.trim();
+    let trimmed = content.trim_end_matches(['\r', '\n']);
     Ok(if trimmed.is_empty() {
         None
     } else {
@@ -194,6 +209,18 @@ mod appimage_tests {
             (None, None),
         ] {
             assert_eq!(appimage_of(appimage, appdir, &exe), None);
+        }
+    }
+}
+
+#[cfg(test)]
+mod queue_tests {
+    #[test]
+    fn a_path_with_a_line_break_does_not_go_in_the_queue() {
+        assert!(super::one_line("/home/ana/report.pdf").is_ok());
+        assert!(super::one_line("/home/ana/ends in a space ").is_ok());
+        for bad in ["a\n/home/ana/.ssh/id_ed25519", "a\r\nb", "a\rb"] {
+            assert!(super::one_line(bad).is_err(), "{bad:?}");
         }
     }
 }

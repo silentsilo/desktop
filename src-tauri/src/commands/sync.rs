@@ -505,6 +505,24 @@ pub async fn vault_preview_join(
     })
 }
 
+/// Stops a join whose credential opened a key a rotation retired, before
+/// anything local is made, until the user says to go on. A rotation that
+/// stopped part way looks the same as storage put back by someone who still
+/// holds the old key; see `RecoveryJoin::retired_by_rotation`.
+pub(crate) fn stop_if_retired(
+    join: &silentsilo_app::flows::RecoveryJoin,
+    allow: Option<bool>,
+) -> Result<(), String> {
+    if join.retired_by_rotation() && allow != Some(true) {
+        return Err(crate::err::coded!(
+            "err.join_retired_key",
+            "The key or code you used opens an encryption key that a key change on another device replaced. Either that key change stopped part way, or the backup storage was put back from an older copy by someone who still has the old key and could then read what this computer adds. Go on only if you know a key change was left unfinished. Otherwise use a key kept through the change, or the recovery code shown then."
+        )
+        .into());
+    }
+    Ok(())
+}
+
 /// Joins the vault the configured bucket already holds. The security key
 /// unwraps a key envelope published by another device, and that DEK is what
 /// makes this device part of the same vault rather than a new one.
@@ -515,6 +533,7 @@ pub async fn vault_join_from_storage(
     config: crate::commands::storage::StoreConfigInput,
     name: String,
     location: Option<String>,
+    allow_retired: Option<bool>,
 ) -> Result<VaultMeta, String> {
     silentsilo_fido::require_fido_ready().map_err(|e| e.to_string())?;
 
@@ -602,6 +621,7 @@ pub async fn vault_join_from_storage(
         None => zeroize::Zeroizing::new(unlock.wrap_key),
     };
     let join = silentsilo_app::flows::key_join_open(&**store, &offer, &touched, &wrap_key).await?;
+    stop_if_retired(&join, allow_retired)?;
 
     // From here on local state is created. Everything above could fail
     // without leaving anything behind, and everything below is undone if it
@@ -1611,5 +1631,23 @@ mod join_tests {
             "only the key that was touched may keep its policy: {:?}",
             keys.keys
         );
+    }
+
+    /// A key a rotation retired stops the join until the user says to go on.
+    #[tokio::test]
+    async fn a_join_onto_a_retired_key_waits_for_the_user() {
+        let origin = origin().await;
+        let store = FolderStore::new(origin.storage.clone());
+        let join = recovery_join_begin(&store, &origin.code).await.unwrap();
+        assert!(stop_if_retired(&join, None).is_ok());
+
+        sync::write_rotation_proof(&store, join.dek())
+            .await
+            .unwrap();
+        let join = recovery_join_begin(&store, &origin.code).await.unwrap();
+        let refused = stop_if_retired(&join, None).unwrap_err();
+        assert!(refused.ends_with("err.join_retired_key"), "{refused}");
+        assert!(stop_if_retired(&join, Some(false)).is_err());
+        assert!(stop_if_retired(&join, Some(true)).is_ok());
     }
 }

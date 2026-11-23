@@ -290,6 +290,7 @@ async fn start(app: &AppHandle) -> Result<(), String> {
         alive: alive.clone(),
     });
     let handle = app.clone();
+    let owner = app.clone();
     tauri::async_runtime::spawn(async move {
         let handler = move |peer: Arc<Peer>, connection: Arc<Connection>, message: Vec<u8>| {
             let app = handle.clone();
@@ -298,6 +299,10 @@ async fn start(app: &AppHandle) -> Result<(), String> {
         let warn = |warning: String| crate::diagnostics::warn("ssh-agent", warning);
         if let Err(e) = server.run(handler, warn).await {
             crate::diagnostics::warn("ssh-agent", format_args!("stopped: {e}"));
+            // Said in Settings, where the switch still reads on.
+            *lock(&owner.state::<SshAgent>().problem) = Some(format!(
+                "The SSH agent stopped: {e}. Turn it off and on again."
+            ));
         }
         alive.store(false, Ordering::SeqCst);
     });
@@ -329,6 +334,7 @@ fn bind_problem(error: &BindError) -> String {
                     .into()
             }
         }
+        BindError::OtherUser => "Another user signed in to this computer, or a program running as administrator, holds the SSH agent's address. Windows has one address for every user, so only one of them can have an agent at a time.".into(),
         BindError::Other(e) => format!("The SSH agent could not start: {e}"),
     }
 }

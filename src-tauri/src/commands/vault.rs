@@ -1963,6 +1963,8 @@ pub async fn vault_export_file(
         let blob_path = silentsilo_vault::VaultPaths::new(snapshot.root.clone()).blob_path(blob_id);
         silentsilo_crypto::decrypt_file(&blob_path, &dest, &key, blob_id, &recorded_hash)
             .map_err(|e| e.to_string())?;
+        // As an opened copy is: whoever could write to the silo chose it.
+        silentsilo_shell::mark_from_elsewhere(&dest);
         let _ = touch_blob_access(&snapshot.root, blob_id);
         Ok(())
     })
@@ -2176,6 +2178,7 @@ pub async fn vault_export_folder(
                         recorded_hash,
                     )
                     .map_err(|e| e.to_string())?;
+                    silentsilo_shell::mark_from_elsewhere(dest);
                     let _ = touch_blob_access(&snapshot.root, *blob_id);
                     exported += 1;
                     open_progress(&app, folder_id, "decrypting", exported.into(), file_count);
@@ -2200,30 +2203,48 @@ enum ExportItem {
     },
 }
 
+/// Folders deeper than this are not exported. Far past any real tree and
+/// any path Windows can write; a silo written by someone else could nest
+/// without end.
+const MAX_EXPORT_DEPTH: usize = 512;
+
 /// Walks the subtree under the lock, producing the plan the lock-free half
 /// executes. Parents land before their children, so the create-then-write
-/// order takes care of itself.
+/// order takes care of itself. A loop, not recursion, and each folder once:
+/// a deep or circular tree stops with an error instead of the stack.
 fn plan_export(
     vfs: &Vfs,
     folder_id: Uuid,
     dest: &Path,
     plan: &mut Vec<ExportItem>,
 ) -> Result<(), String> {
-    for entry in vfs.list_folder(folder_id).map_err(|e| e.to_string())? {
-        match entry {
-            VaultEntry::Folder(sub) => {
-                let sub_dest = safe_join(dest, &sub.name)?;
-                plan.push(ExportItem::Dir(sub_dest.clone()));
-                plan_export(vfs, sub.id, &sub_dest, plan)?;
-            }
-            VaultEntry::File(file) => {
-                plan.push(ExportItem::File {
-                    dest: safe_join(dest, &file.name)?,
-                    blob_id: file.blob_id,
-                    size: file.size_bytes.max(0) as u64,
-                    wrapped_key: vfs.blob_key(file.id).map_err(|e| e.to_string())?,
-                    recorded_hash: file.content_hash.clone().unwrap_or_default(),
-                });
+    let mut seen = std::collections::HashSet::from([folder_id]);
+    let mut queue = std::collections::VecDeque::from([(folder_id, dest.to_path_buf(), 0usize)]);
+    while let Some((folder, dest, depth)) = queue.pop_front() {
+        for entry in vfs.list_folder(folder).map_err(|e| e.to_string())? {
+            match entry {
+                VaultEntry::Folder(sub) => {
+                    if !seen.insert(sub.id) {
+                        return Err("This folder contains itself, so it cannot be exported.".into());
+                    }
+                    if depth + 1 > MAX_EXPORT_DEPTH {
+                        return Err(format!(
+                            "Folders more than {MAX_EXPORT_DEPTH} levels deep cannot be exported."
+                        ));
+                    }
+                    let sub_dest = safe_join(&dest, &sub.name)?;
+                    plan.push(ExportItem::Dir(sub_dest.clone()));
+                    queue.push_back((sub.id, sub_dest, depth + 1));
+                }
+                VaultEntry::File(file) => {
+                    plan.push(ExportItem::File {
+                        dest: safe_join(&dest, &file.name)?,
+                        blob_id: file.blob_id,
+                        size: file.size_bytes.max(0) as u64,
+                        wrapped_key: vfs.blob_key(file.id).map_err(|e| e.to_string())?,
+                        recorded_hash: file.content_hash.clone().unwrap_or_default(),
+                    });
+                }
             }
         }
     }
@@ -4064,6 +4085,50 @@ mod export_path_tests {
             assert!(joined.starts_with(dest), "{good:?} landed at {joined:?}");
             assert!(joined.ends_with(good));
         }
+    }
+
+    /// A loop with a ceiling: a tree past it stops with an error, and one
+    /// that fits comes out parents first.
+    #[test]
+    fn a_tree_too_deep_to_export_is_refused_and_one_that_fits_is_planned() {
+        let dir = tempfile::tempdir().unwrap();
+        let session = silentsilo_vault::VaultSession::provision(
+            dir.path().join("silo"),
+            uuid::Uuid::new_v4(),
+            "secret",
+        )
+        .unwrap();
+        let vfs = silentsilo_vfs::Vfs::new(&session);
+        vfs.ensure_initialized().unwrap();
+        let top = vfs
+            .create_folder(vfs.root_folder_id().unwrap(), "top")
+            .unwrap()
+            .id;
+        let mut deepest = top;
+        for n in 0..=super::MAX_EXPORT_DEPTH {
+            deepest = vfs.create_folder(deepest, &format!("{n}")).unwrap().id;
+        }
+        let dest = Path::new("C:/x");
+
+        let mut plan = Vec::new();
+        let refused = super::plan_export(&vfs, top, dest, &mut plan).unwrap_err();
+        assert!(refused.contains("levels deep"), "{refused}");
+
+        let mut plan = Vec::new();
+        let middle = vfs.list_folder(top).unwrap();
+        let super::VaultEntry::Folder(first) = &middle[0] else {
+            panic!("a folder")
+        };
+        super::plan_export(&vfs, first.id, dest, &mut plan).unwrap();
+        assert_eq!(plan.len(), super::MAX_EXPORT_DEPTH);
+        let dirs: Vec<_> = plan
+            .iter()
+            .map(|item| match item {
+                super::ExportItem::Dir(path) => path.components().count(),
+                super::ExportItem::File { .. } => panic!("no files here"),
+            })
+            .collect();
+        assert!(dirs.windows(2).all(|w| w[0] < w[1]), "parents first");
     }
 
     /// Guessing a key produces an authentication failure that reads as

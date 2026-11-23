@@ -76,6 +76,9 @@ export type SyncReport = {
   more_to_do?: boolean;
   /// Up to three "copy: reason" lines for content that would not upload.
   blob_errors?: string[];
+  /// This pass dropped the recovery code because another device, or
+  /// someone holding the content key, turned it off.
+  recovery_turned_off?: boolean;
 };
 
 /// Whether the pass talked to no copy at all. Its zeroes then say nothing

@@ -210,6 +210,8 @@ export function categoryLabel(name: string): string {
   return key ? t(key) : name;
 }
 
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+
 /** A stable colour for a name the list does not define: same name, same
  * colour, on every device, with nothing to store. */
 export function hashColor(name: string): string {
@@ -232,7 +234,12 @@ export function resolveCategories(
   entries: PasswordEntry[],
 ): PasswordCategory[] {
   const inUse = new Set(entries.map((e) => e.category).filter(Boolean));
-  const base = stored ?? DEFAULT_CATEGORIES.filter((c) => inUse.has(c.name));
+  // The stored colour goes straight into a style. Another device, or anyone
+  // with the silo's key, wrote it: only a plain hex colour is kept, so a
+  // `url(...)` cannot make the window fetch from anywhere.
+  const base = (stored ?? DEFAULT_CATEGORIES.filter((c) => inUse.has(c.name))).map((c) =>
+    HEX_COLOR.test(c.color) ? c : { ...c, color: hashColor(c.name) },
+  );
 
   const known = new Set(base.map((c) => c.name));
   const extras = [...inUse]
@@ -469,6 +476,12 @@ export function faviconUrl(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+/** The host whose icon to ask the backend for, under the same rules. */
+export function faviconHost(url: string): string | null {
+  const icon = faviconUrl(url);
+  return icon ? new URL(icon).hostname : null;
 }
 
 export function serviceInitials(service: string): string {

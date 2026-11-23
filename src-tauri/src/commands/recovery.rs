@@ -420,6 +420,7 @@ pub async fn vault_repair_from_storage(
     state: State<'_, AppState>,
     silo_id: String,
     code: String,
+    allow_retired: Option<bool>,
 ) -> Result<(), String> {
     let silo_id = uuid::Uuid::parse_str(&silo_id).map_err(|e| e.to_string())?;
     let silo = crate::state::silo_by_id(&app, silo_id)?;
@@ -455,6 +456,7 @@ pub async fn vault_repair_from_storage(
 
     // The code has to open the silo before anything local is touched.
     let join = silentsilo_app::flows::recovery_join_begin(store, &code).await?;
+    crate::commands::sync::stop_if_retired(&join, allow_retired)?;
     let _opening = crate::state::opening(&app, &root);
 
     // And the local copy has to be really unreadable. Asked with the key the
@@ -566,6 +568,7 @@ pub async fn vault_join_with_recovery(
     code: String,
     name: String,
     location: Option<String>,
+    allow_retired: Option<bool>,
 ) -> Result<silentsilo_core::VaultMeta, String> {
     let described = crate::commands::storage::describe(config, None)?;
     let s3_config = described.config.clone();
@@ -574,6 +577,7 @@ pub async fn vault_join_with_recovery(
     // Nothing local is touched yet: the bucket has to hold a silo, that silo
     // has to have a published code, and the code has to open it.
     let join = silentsilo_app::flows::recovery_join_begin(&**store, &code).await?;
+    crate::commands::sync::stop_if_retired(&join, allow_retired)?;
 
     // Local state starts here. Everything above could fail without leaving
     // anything behind, and everything below is undone if it fails, so the

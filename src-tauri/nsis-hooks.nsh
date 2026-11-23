@@ -149,8 +149,9 @@
 ; The two queue files hold plaintext paths of whatever was last right-clicked
 ; and are never cleaned up otherwise, so they go regardless of the box.
 ;
-; The marker goes only when autostart was on. Installing over an older
-; version runs this uninstaller too, without the update flag, and deleting
+; The marker goes only when autostart was on. An upgrade no longer runs this
+; uninstaller, but "Uninstall" on the installer's page still does (the same
+; version again, or an older one), without the update flag, and deleting
 ; the marker of someone who had turned autostart off made the next start
 ; treat the machine as new and turn it back on. Left in place, a later
 ; reinstall keeps their "off".

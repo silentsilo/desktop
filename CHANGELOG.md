@@ -7,7 +7,7 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
-On core v1.11.3.
+On core v1.11.4.
 
 ### Security
 
@@ -34,14 +34,50 @@ On core v1.11.3.
   followed, and on Windows a copy another app has open is never overwritten.
 - A password export decrypts attachments in memory, so a lock during the
   export cannot touch them.
-- The release scripts install the npm dependencies without running their
-  install scripts.
+- The release scripts and CI install the npm dependencies without running
+  their install scripts. Before the signing token goes in, the release
+  machine installs them again from the lockfile and checks that the build
+  changed no tracked file.
+- The release machine refuses a tag that more than one release carries,
+  checks the provenance of CI files against the commit as well as the tag,
+  and asks for the SHA-256 the Mac printed before it signs the macOS files.
+- A silent install (`/S`) can no longer put an older version over a newer
+  one: the check compared against a version only the skipped page read.
 - Auto-type refuses a user name or password that holds a control character
   such as a line break, which typed into a terminal would press Enter and
   run what follows.
 - A key's touch counts as presence only when its envelope opens to the open
   silo's key, so an envelope planted in storage under someone else's key
   proves nothing (core v1.11.3).
+- Finishing a key change started by a release before 1.5 moves the silo
+  on to one more new key, made on this computer: the unfinished change kept
+  its key in the silo folder, where someone else could have written it.
+- Setting up or rebuilding from backup storage with a key or code that a
+  key change retired now stops and explains, and goes on only if you say a
+  key change was left unfinished. The storage could otherwise have been put
+  back by someone who still has the old key.
+- A sync that finds the recovery code turned off on another device says
+  so, because a removed device can do that too.
+- The SSH agent on Windows keeps a free instance of its pipe open while
+  it serves a connection, so the address never lapses for another user
+  signed in to take. Settings says when the address is held by another
+  user, and when the agent stopped.
+- Exporting a folder walks the tree in a loop with a depth limit, so a
+  silo nested without end, or a folder that contains itself, stops with an
+  error instead of crashing the app. Core refuses a snapshot with a folder
+  that is its own parent.
+- Site icons in the password list, when turned on, are fetched by the app
+  and kept in memory. Loaded by the window, they stayed in its cache on
+  disk, a list of the sites the silo has logins for. A name that resolves to
+  this computer or the local network fetches nothing, and the window may no
+  longer load images from the internet at all.
+- A category colour from another device is used only when it is a plain
+  hex colour.
+- Files and folders saved out of a silo on Windows carry the mark of a
+  download, as opened files already did, so Windows and Office warn before
+  running or editing them.
+- "Add to SilentSilo" refuses a path with a line break in it, which the
+  queue read as two paths, and keeps a name that ends in a space.
 - A KeePass file cannot get past the key-derivation limit by giving the
   setting twice or in an unexpected shape.
 - Opening a Python, Perl or Ruby script, or a macOS or Linux file that runs

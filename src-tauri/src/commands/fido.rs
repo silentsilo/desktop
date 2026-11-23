@@ -1714,49 +1714,38 @@ pub async fn vault_rotate_resume(
     // would be the only key left after this, opening nothing.
     opens_current_key(&keys, &credential, &label, &candidates(&unlock), &old_dek)?;
 
+    // Staged by core 1.9 or earlier, with the new key in the silo folder.
+    // Anyone who held the old key and could write the folder could have put
+    // their own key there, so it is finished and then replaced at once.
+    let from_folder = silentsilo_vault::rotation::staged_by_earlier_release(&root);
+
     // Idempotent, so whatever the interrupted pass managed is kept and only
     // the rest is done.
     reseal_started(&app);
-    let mut resealed = 0;
-    let mut unreadable = 0;
-    for target in every_target {
-        if !target.role.allows_delete() {
-            continue;
-        }
-        let outcome = sync::reseal_under_new_key(
-            &*target.store,
-            &old_dek,
-            &new_dek,
-            &mut reseal_reporter(&app, &target.label),
-        )
-        .await
-        .map_err(|e| e.to_string())?;
-        if !outcome.failed.is_empty() {
-            return Err(format!(
-                "{} files on {} still cannot move to the new key, so replacing the encryption \
-                 key is unfinished. The first was {}: {}",
-                outcome.failed.len(),
-                target.label,
-                outcome.failed[0].0,
-                outcome.failed[0].1
-            ));
-        }
-        resealed += outcome.resealed;
-        unreadable += outcome.unreadable.len();
-    }
+    let (mut resealed, mut unreadable) =
+        reseal_every_target(&app, &every_target, &old_dek, &new_dek).await?;
 
     // Only this key is known to work now. The others were never re-wrapped,
     // and there is no way to tell from here whether the interrupted pass
     // meant to keep them, so they are marked rather than guessed about.
-    let envelope =
-        silentsilo_vault::wrap_dek_bytes(&new_dek, &unlock.wrap_key).map_err(|e| e.to_string())?;
-    for key in keys.keys.iter_mut() {
-        if key.credential_id != credential {
-            key.revoked = true;
-        } else {
-            key.wrapped_dek = hex::encode(&envelope);
-        }
-    }
+    rewrap_only(&mut keys, &credential, &new_dek, &unlock.wrap_key)?;
+
+    let (new_dek, org_proof) = if from_folder {
+        // The folder's key goes in force first, with a recovery code nobody
+        // sees: it is replaced in this same call. Then a rotation like any
+        // other, staged on this machine.
+        let (_, recovery) = recovery_envelope_blocking(&new_dek, &kek).await?;
+        commit_blocking(&app, &silo, &root, &new_dek, &keys, org_proof, &recovery).await?;
+        let fresh = silentsilo_crypto::generate_dek();
+        silentsilo_vault::rotation::stage_rotation(&root, &fresh, &kek, &new_dek)
+            .map_err(|e| e.to_string())?;
+        (resealed, unreadable) = reseal_every_target(&app, &every_target, &new_dek, &fresh).await?;
+        rewrap_only(&mut keys, &credential, &fresh, &unlock.wrap_key)?;
+        // The key set is the same, so no proof is needed this time.
+        (fresh, None)
+    } else {
+        (new_dek, org_proof)
+    };
 
     // A new code, and one somebody actually gets to write down. The old code
     // unwraps the key that just stopped being current, so a resume that kept
@@ -1775,6 +1764,63 @@ pub async fn vault_rotate_resume(
         recovery_code,
         unchanged_targets,
     })
+}
+
+/// Carries every target that accepts deletes from `old` to `new`. Idempotent:
+/// what an earlier pass moved is left. Returns how many objects moved and
+/// how many open under neither key.
+async fn reseal_every_target(
+    app: &AppHandle,
+    targets: &[crate::state::TargetHandle],
+    old: &silentsilo_crypto::MasterDek,
+    new: &silentsilo_crypto::MasterDek,
+) -> Result<(usize, usize), String> {
+    let mut resealed = 0;
+    let mut unreadable = 0;
+    for target in targets {
+        if !target.role.allows_delete() {
+            continue;
+        }
+        let outcome = sync::reseal_under_new_key(
+            &*target.store,
+            old,
+            new,
+            &mut reseal_reporter(app, &target.label),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+        if !outcome.failed.is_empty() {
+            return Err(format!(
+                "{} files on {} still cannot move to the new key, so replacing the encryption \
+                 key is unfinished. The first was {}: {}",
+                outcome.failed.len(),
+                target.label,
+                outcome.failed[0].0,
+                outcome.failed[0].1
+            ));
+        }
+        resealed += outcome.resealed;
+        unreadable += outcome.unreadable.len();
+    }
+    Ok((resealed, unreadable))
+}
+
+/// Wraps `dek` for `credential` alone and marks every other key revoked.
+fn rewrap_only(
+    keys: &mut StoredFidoKeys,
+    credential: &str,
+    dek: &silentsilo_crypto::MasterDek,
+    wrap_key: &[u8; 32],
+) -> Result<(), String> {
+    let envelope = silentsilo_vault::wrap_dek_bytes(dek, wrap_key).map_err(|e| e.to_string())?;
+    for key in keys.keys.iter_mut() {
+        if key.credential_id != credential {
+            key.revoked = true;
+        } else {
+            key.wrapped_dek = hex::encode(&envelope);
+        }
+    }
+    Ok(())
 }
 
 /// Puts a fresh recovery envelope on every target that accepts a delete,

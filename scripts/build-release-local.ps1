@@ -338,6 +338,15 @@ try {
     # Everything is compiled. Only now the token: it signs the app as Tauri
     # bundles it, the browser host beside it, the installer and the
     # extractor, and nothing that ran a build script.
+    #
+    # Every build script has run by now, and any of them could have changed
+    # what runs while the token is in: the Tauri CLI in node_modules, a
+    # tracked script. node_modules comes back from the lockfile, and the
+    # tree has to be as the tag left it.
+    npm ci --ignore-scripts; if (-not $?) { throw "npm ci failed" }
+    if (git status --porcelain) {
+        throw "The build changed tracked files. Find out why before the signing token goes in."
+    }
     Write-Host "`n== Authenticode ==" -ForegroundColor Cyan
     Read-Host "Plug in the signing token and press Enter" | Out-Null
     npx --no-install tauri bundle @tauriConfigs
@@ -369,6 +378,16 @@ try {
     # What the release workflow and the Mac attached to the draft, in a
     # folder of its own: only their signatures go up from here.
     Write-Host "`n== From the draft ==" -ForegroundColor Cyan
+    # One release per tag. Drafts can share a tag name, and someone with
+    # write access to the repository could add a second one for this tag,
+    # which `gh release view` might then read instead.
+    # The tag goes in through the environment: Windows PowerShell mangles
+    # quotes inside an argument to a native program.
+    $env:SILENTSILO_TAG = $tag
+    $sameTag = @(gh api "repos/$slug/releases?per_page=100" --paginate --jq '.[] | select(.tag_name == $ENV.SILENTSILO_TAG) | .id')
+    if ($sameTag.Count -ne 1) {
+        throw "$($sameTag.Count) releases carry the tag $tag. Delete the extra ones on GitHub, then run this again."
+    }
     $draft = Join-Path ([System.IO.Path]::GetTempPath()) "silentsilo-draft-$tag"
     if (Test-Path $draft) { Remove-Item $draft -Recurse -Force }
     New-Item -ItemType Directory -Path $draft | Out-Null
@@ -384,16 +403,22 @@ try {
     # this tag and this workflow. Anything else on the draft from CI is
     # refused: it is exactly what someone with write access to the
     # repository, and no key, could put there. The macOS app and extractor
-    # come from the Mac and have none; Gatekeeper checks their Developer ID
-    # signature.
+    # come from the Mac and have none. Gatekeeper checks their Developer ID
+    # signature, but this script is about to sign them for the updater, so
+    # their hashes are compared with what the Mac script printed.
+    # Bound to the commit as well as the tag: a tag can be moved.
     $identity = "https://github.com/$slug/.github/workflows/release.yml@refs/tags/$tag"
+    $commit = (git rev-parse HEAD).Trim()
     foreach ($file in Get-ChildItem $draft -File) {
         if ($file.Name -like "*.dmg" -or $file.Name -like "*.app.tar.gz" -or
             $file.Name -eq "silentsilo-extract-macos-universal") {
-            Write-Host ("  {0,-46} from the Mac" -f $file.Name)
+            $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLower()
+            Write-Host ("  {0,-46} from the Mac, sha256 {1}" -f $file.Name, $hash)
+            $same = Read-Host "  Is that the hash the Mac script printed for it? (y/N)"
+            if ($same -ne "y") { throw "$($file.Name) on the draft is not the file the Mac uploaded" }
             continue
         }
-        gh attestation verify $file.FullName --repo $slug --cert-identity $identity | Out-Null
+        gh attestation verify $file.FullName --repo $slug --cert-identity $identity --source-digest $commit | Out-Null
         if (-not $?) { throw "$($file.Name) has no provenance from this tag's release workflow" }
         Write-Host ("  {0,-46} built by the release workflow" -f $file.Name)
     }

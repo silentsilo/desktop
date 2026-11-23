@@ -241,6 +241,10 @@ ls -l "$OUT"
 
 echo "== Upload to the draft"
 gh release upload "$tag" "$OUT"/* --repo silentsilo/desktop --clobber
+# The release machine asks for these before it signs the files for the
+# updater: the draft is writable by anyone with access to the repository.
+echo "== SHA-256 of what was uploaded"
+shasum -a 256 "$OUT"/*
 cat <<EOF
 
 Uploaded to the draft $tag. Next, on the release machine:
