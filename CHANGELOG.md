@@ -7,9 +7,25 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
-On core v1.11.4.
+On core v1.11.5.
 
 ### Security
+
+- A file name with a character that reverses the text after it can no
+  longer make an `.exe` read as a `.pdf`: the character shows as `_`, and
+  a name typed or dropped with one is refused (core v1.11.5).
+- A snapshot from storage has its names repaired on restore, so a name
+  such as `../x` cannot reach the disk on export (core v1.11.5).
+- Joining or repairing with a published key removes this computer's
+  device secret at once, instead of at the next unlock (core v1.11.5).
+- WebDAV: a server cannot keep a listing going for ever or fill memory
+  with one reply, and an address with a password in it is refused; put it
+  in the password field (core v1.11.5).
+- A storage filled with fake inbox items no longer slows every sync: at
+  most 1000 are read per pass (core v1.11.5).
+- Exporting a file no longer writes through `name.part` beside it, which
+  could overwrite a file of yours with that name, and a name close to 255
+  characters exports (core v1.11.5).
 
 - The app no longer downloads or installs updates. It checks once a day
   which version is the latest, from silentsilo.com and from the website's

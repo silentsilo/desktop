@@ -5761,8 +5761,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-app"
-version = "1.11.4"
-source = "git+https://github.com/silentsilo/core?tag=v1.11.4#06fd349b85bbb26148e0dcf77160c1d752b791eb"
+version = "1.11.5"
+source = "git+https://github.com/silentsilo/core?tag=v1.11.5#58a4c941408fa66f1c5561fdc9825d6b81809ecf"
 dependencies = [
  "hex",
  "serde",
@@ -5780,8 +5780,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-audit"
-version = "1.11.4"
-source = "git+https://github.com/silentsilo/core?tag=v1.11.4#06fd349b85bbb26148e0dcf77160c1d752b791eb"
+version = "1.11.5"
+source = "git+https://github.com/silentsilo/core?tag=v1.11.5#58a4c941408fa66f1c5561fdc9825d6b81809ecf"
 dependencies = [
  "blake3",
  "hex",
@@ -5808,8 +5808,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-cloud"
-version = "1.11.4"
-source = "git+https://github.com/silentsilo/core?tag=v1.11.4#06fd349b85bbb26148e0dcf77160c1d752b791eb"
+version = "1.11.5"
+source = "git+https://github.com/silentsilo/core?tag=v1.11.5#58a4c941408fa66f1c5561fdc9825d6b81809ecf"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -5829,8 +5829,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-core"
-version = "1.11.4"
-source = "git+https://github.com/silentsilo/core?tag=v1.11.4#06fd349b85bbb26148e0dcf77160c1d752b791eb"
+version = "1.11.5"
+source = "git+https://github.com/silentsilo/core?tag=v1.11.5#58a4c941408fa66f1c5561fdc9825d6b81809ecf"
 dependencies = [
  "serde",
  "thiserror 2.0.19",
@@ -5839,8 +5839,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-crypto"
-version = "1.11.4"
-source = "git+https://github.com/silentsilo/core?tag=v1.11.4#06fd349b85bbb26148e0dcf77160c1d752b791eb"
+version = "1.11.5"
+source = "git+https://github.com/silentsilo/core?tag=v1.11.5#58a4c941408fa66f1c5561fdc9825d6b81809ecf"
 dependencies = [
  "aes-gcm 0.10.3",
  "blake3",
@@ -5857,8 +5857,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-fido"
-version = "1.11.4"
-source = "git+https://github.com/silentsilo/core?tag=v1.11.4#06fd349b85bbb26148e0dcf77160c1d752b791eb"
+version = "1.11.5"
+source = "git+https://github.com/silentsilo/core?tag=v1.11.5#58a4c941408fa66f1c5561fdc9825d6b81809ecf"
 dependencies = [
  "aes 0.8.4",
  "base64 0.22.1",
@@ -5886,8 +5886,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-s3"
-version = "1.11.4"
-source = "git+https://github.com/silentsilo/core?tag=v1.11.4#06fd349b85bbb26148e0dcf77160c1d752b791eb"
+version = "1.11.5"
+source = "git+https://github.com/silentsilo/core?tag=v1.11.5#58a4c941408fa66f1c5561fdc9825d6b81809ecf"
 dependencies = [
  "aws-credential-types",
  "aws-sdk-s3",
@@ -5924,8 +5924,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-store"
-version = "1.11.4"
-source = "git+https://github.com/silentsilo/core?tag=v1.11.4#06fd349b85bbb26148e0dcf77160c1d752b791eb"
+version = "1.11.5"
+source = "git+https://github.com/silentsilo/core?tag=v1.11.5#58a4c941408fa66f1c5561fdc9825d6b81809ecf"
 dependencies = [
  "async-trait",
  "objc2-foundation",
@@ -5947,8 +5947,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-sync"
-version = "1.11.4"
-source = "git+https://github.com/silentsilo/core?tag=v1.11.4#06fd349b85bbb26148e0dcf77160c1d752b791eb"
+version = "1.11.5"
+source = "git+https://github.com/silentsilo/core?tag=v1.11.5#58a4c941408fa66f1c5561fdc9825d6b81809ecf"
 dependencies = [
  "blake3",
  "hex",
@@ -5969,8 +5969,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-vault"
-version = "1.11.4"
-source = "git+https://github.com/silentsilo/core?tag=v1.11.4#06fd349b85bbb26148e0dcf77160c1d752b791eb"
+version = "1.11.5"
+source = "git+https://github.com/silentsilo/core?tag=v1.11.5#58a4c941408fa66f1c5561fdc9825d6b81809ecf"
 dependencies = [
  "aes-gcm 0.10.3",
  "argon2 0.5.3",
@@ -5998,8 +5998,8 @@ dependencies = [
 
 [[package]]
 name = "silentsilo-vfs"
-version = "1.11.4"
-source = "git+https://github.com/silentsilo/core?tag=v1.11.4#06fd349b85bbb26148e0dcf77160c1d752b791eb"
+version = "1.11.5"
+source = "git+https://github.com/silentsilo/core?tag=v1.11.5#58a4c941408fa66f1c5561fdc9825d6b81809ecf"
 dependencies = [
  "base64 0.22.1",
  "blake3",

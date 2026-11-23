@@ -1950,7 +1950,13 @@ pub async fn vault_export_file(
         return Err(OPEN_CANCELLED.into());
     }
 
-    let watch = ProgressWatch::start(&app, file_id, "decrypting", part_path(&dest), size);
+    let watch = ProgressWatch::start(
+        &app,
+        file_id,
+        "decrypting",
+        silentsilo_crypto::decrypt_temp_path(&dest),
+        size,
+    );
     let written = run_blocking(move || {
         let snapshot = crate::state::snapshot_focused_session(&app.state::<AppState>())?;
         crate::audit::record_in(
@@ -2356,7 +2362,13 @@ pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), Stri
         None => dir.join(silentsilo_vault::opened_file_name(&name)),
     };
     if !reusable {
-        let watch = ProgressWatch::start(&app, file_id, "decrypting", part_path(&dest), size);
+        let watch = ProgressWatch::start(
+            &app,
+            file_id,
+            "decrypting",
+            silentsilo_crypto::decrypt_temp_path(&dest),
+            size,
+        );
         let app2 = app.clone();
         let target = dest.clone();
         let written = run_blocking(move || {
@@ -2517,7 +2529,7 @@ impl ProgressWatch {
     }
 }
 
-/// `path.part`, where `decrypt_blob` writes before it renames.
+/// `path.part`, where `encrypt_stream` writes a blob before it renames.
 fn part_path(path: &Path) -> PathBuf {
     let mut name = path.as_os_str().to_os_string();
     name.push(".part");

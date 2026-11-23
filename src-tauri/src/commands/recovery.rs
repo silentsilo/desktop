@@ -507,17 +507,20 @@ pub async fn vault_repair_from_storage(
         })
         .await?
     };
+    // Saved before the rebuild, as the joins do: the rebuild retires the
+    // secret once a published key opens this copy, and a save after it put
+    // the secret back.
+    silentsilo_vault::save_credentials(&silentsilo_vault::LocalVaultAuth {
+        vault_id: silo.id,
+        device_secret: device_secret.clone(),
+    })
+    .map_err(|e| e.to_string())?;
     // The rebuild is the same one a join does, through the same function:
     // the content key, the published key envelopes with nothing trusted that
     // storage could have planted, and the recovery envelope.
     let session =
         crate::commands::sync::provision_joined_silo(store, &join, root.clone(), &device_secret)
             .await?;
-    silentsilo_vault::save_credentials(&silentsilo_vault::LocalVaultAuth {
-        vault_id: silo.id,
-        device_secret,
-    })
-    .map_err(|e| e.to_string())?;
 
     // The same plan a join follows: snapshot plus tail on a compacted silo,
     // the whole log otherwise.
