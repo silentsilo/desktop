@@ -23,7 +23,7 @@ On core v1.11.4.
   silo and quit, and an upgrade installs over the old version without
   offering to uninstall it.
 - The Bitwarden import reads zips with `zip` 9; `url` 2.5.9
-  (RUSTSEC-2026-0592).
+  (RUSTSEC-2026-0592); `cookie` 0.18.3 (RUSTSEC-2026-0594).
 - A file opened in another app is written under a random name with its
   extension, so its real name stays off the disk and out of the viewer's
   recent lists. On Windows editions with EFS, the folder it goes to is

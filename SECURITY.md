@@ -47,7 +47,9 @@ the silo goes with the request. The fourth is site icons in the credentials
 list, off unless switched on: each is fetched as `/favicon.ico` from the host
 named in the entry itself, never through an icon service that would see every
 site at once, and private, local and non-public hostnames are skipped so the
-fetch cannot be turned into a probe of the user's own network. Switching it on
+fetch cannot be turned into a probe of the user's own network. The app makes
+these requests itself, over HTTPS only, to the address it checked, and keeps
+the icons in memory: the window's disk cache holds no list of sites. Switching it on
 tells each of those sites that someone holding an entry for them opened this
 list, which is why it is off to begin with.
 
