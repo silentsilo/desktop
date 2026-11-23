@@ -35,6 +35,11 @@
 # lockfile before anything of the app's and checked by hash before it runs:
 # `tauri signer` runs out of node_modules, which any npm package can rewrite.
 #
+# A third, for people: SHA256SUMS over every file of the release, signed
+# with the checksums key (its own password, asked for by the same signer).
+# Its public key is release-checksums.pub in this repository. That key
+# installs nothing anywhere, unlike the updater key.
+#
 # Everything lands in dist-release\, ready to upload to the GitHub release.
 
 $ErrorActionPreference = "Stop"
@@ -46,6 +51,8 @@ $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
 $tag = "v$version"
 $slug = "silentsilo/desktop"
 $keyFile = Join-Path $HOME ".tauri\silentsilo.key"
+$checksumsKey = Join-Path $HOME ".silentsilo-release\checksums.key"
+$checksumsPub = Join-Path $repoRoot "release-checksums.pub"
 $out = Join-Path $repoRoot "dist-release"
 
 Write-Host "Building SilentSilo $version" -ForegroundColor Cyan
@@ -181,6 +188,10 @@ $signerHash = (Get-FileHash $signer -Algorithm SHA256).Hash
 # token itself is asked for later), and gh signed in for the draft.
 & $signer --key $keyFile --check
 if ($LASTEXITCODE -ne 0) { throw "the updater key at $keyFile cannot be read" }
+& $signer --minisig --key $checksumsKey --pubkey-file $checksumsPub --check
+if ($LASTEXITCODE -ne 0) {
+    throw "the checksums key at $checksumsKey or $checksumsPub cannot be read. Made once with: $signer --new-checksums-key $checksumsKey $checksumsPub"
+}
 $pubkey = (Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json).plugins.updater.pubkey
 if (-not $pubkey) { throw "tauri.conf.json carries no updater public key" }
 $thumbprint = if ($env:SILENTSILO_SIGN_THUMBPRINT) { $env:SILENTSILO_SIGN_THUMBPRINT } else { "5DF397C236D87DA3DB0137E9CBFDF29319241E4A" }
@@ -441,6 +452,23 @@ try {
         $sig = Join-Path $out ("{0}.sig" -f (Split-Path $path -Leaf))
         if (-not (Test-Path $sig)) { throw "$sig was not written" }
     }
+
+    # SHA256SUMS, in the format `sha256sum -c` reads, over the same files,
+    # and its minisign signature: what a person checks a download against.
+    Write-Host "`n== SHA256SUMS ==" -ForegroundColor Cyan
+    $sumsPath = Join-Path $out "SHA256SUMS"
+    $lines = $toSign | Sort-Object { Split-Path $_ -Leaf } | ForEach-Object {
+        "{0}  {1}" -f (Get-FileHash $_ -Algorithm SHA256).Hash.ToLower(), (Split-Path $_ -Leaf)
+    }
+    [System.IO.File]::WriteAllText($sumsPath, (($lines -join "`n") + "`n"),
+        (New-Object System.Text.UTF8Encoding $false))
+    if ((Get-FileHash $signer -Algorithm SHA256).Hash -ne $signerHash) {
+        throw "the updater signer changed on disk since it was built"
+    }
+    & $signer --minisig --key $checksumsKey --pubkey-file $checksumsPub --comment "SilentSilo $version checksums" $sumsPath
+    if ($LASTEXITCODE -ne 0) { throw "signing SHA256SUMS failed" }
+    if (-not (Test-Path "$sumsPath.minisig")) { throw "$sumsPath.minisig was not written" }
+    Write-Host ("  {0} files" -f $lines.Count)
 
     # latest.json is what the updater actually reads. tauri-action writes it
     # in CI; built by hand it has to match byte for byte in structure, and the

@@ -18,6 +18,17 @@
 //! For each file it writes `<file>.sig`: the minisign signature, base64 as
 //! the updater expects it. The trusted comment names the version and the
 //! file, and the app checks that the version is the one it was offered.
+//!
+//! The checksums key is a second, plain minisign key, for people checking a
+//! download by hand. Stolen, it installs nothing anywhere:
+//!
+//!     silentsilo-release-signer --new-checksums-key <secret> <public>
+//!     silentsilo-release-signer --minisig --key <secret> --pubkey-file <public>
+//!         --comment <trusted comment> <file>
+//!     silentsilo-release-signer --minisig --key <secret> --pubkey-file <public> --check
+//!
+//! `--minisig` writes `<file>.minisig` in minisign's own format, which
+//! `minisign -Vm <file> -p <public>` checks.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -33,6 +44,15 @@ fn main() {
 }
 
 fn run() -> Result<(), String> {
+    let all: Vec<String> = std::env::args().skip(1).collect();
+    match all.first().map(String::as_str) {
+        Some("--new-checksums-key") => match &all[1..] {
+            [secret, public] => return new_checksums_key(Path::new(secret), Path::new(public)),
+            _ => return Err("--new-checksums-key takes <secret> <public>".into()),
+        },
+        Some("--minisig") => return minisig(&all[1..]),
+        _ => {}
+    }
     let mut key = None;
     let mut version = None;
     let mut pubkey = None;
@@ -170,6 +190,132 @@ fn sign_one(
     Ok(())
 }
 
+/// Makes the checksums key pair, the secret one under a password asked for
+/// twice. Never over an existing file: a key replaced by mistake makes every
+/// signature published with the old one unverifiable against the new.
+fn new_checksums_key(secret: &Path, public: &Path) -> Result<(), String> {
+    for path in [secret, public] {
+        if path.exists() {
+            return Err(format!(
+                "{} exists already; nothing was made",
+                path.display()
+            ));
+        }
+    }
+    let password = rpassword::prompt_password("New checksums key password: ")
+        .map_err(|e| format!("reading the password: {e}"))?;
+    let again = rpassword::prompt_password("The same password again: ")
+        .map_err(|e| format!("reading the password: {e}"))?;
+    if password.is_empty() {
+        return Err("the key needs a password".into());
+    }
+    if password != again {
+        return Err("the two passwords differ; nothing was made".into());
+    }
+    let (secret_text, public_text) = make_checksums_key(password)?;
+    if let Some(parent) = secret.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+    }
+    std::fs::write(secret, secret_text).map_err(|e| format!("{}: {e}", secret.display()))?;
+    std::fs::write(public, &public_text).map_err(|e| format!("{}: {e}", public.display()))?;
+    println!("secret key: {}", secret.display());
+    println!("public key: {}", public.display());
+    print!("{public_text}");
+    Ok(())
+}
+
+fn make_checksums_key(password: String) -> Result<(String, String), String> {
+    let pair =
+        minisign::KeyPair::generate_encrypted_keypair(Some(password)).map_err(|e| e.to_string())?;
+    let secret = pair
+        .sk
+        .to_box(Some("SilentSilo release checksums, secret key"))
+        .map_err(|e| e.to_string())?
+        .to_string();
+    let public = pair.pk.to_box().map_err(|e| e.to_string())?.to_string();
+    Ok((secret, public))
+}
+
+fn minisig(args: &[String]) -> Result<(), String> {
+    let (mut key, mut pubkey_file, mut comment, mut check) = (None, None, None, false);
+    let mut files: Vec<PathBuf> = Vec::new();
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--key" => key = args.next().map(PathBuf::from),
+            "--pubkey-file" => pubkey_file = args.next().map(PathBuf::from),
+            "--comment" => comment = args.next().cloned(),
+            "--check" => check = true,
+            _ => files.push(PathBuf::from(arg)),
+        }
+    }
+    let key = key.ok_or("--key is missing")?;
+    let pubkey_file = pubkey_file.ok_or("--pubkey-file is missing")?;
+    let secret_text =
+        std::fs::read_to_string(&key).map_err(|e| format!("{}: {e}", key.display()))?;
+    let public_text = std::fs::read_to_string(&pubkey_file)
+        .map_err(|e| format!("{}: {e}", pubkey_file.display()))?;
+    let key_box = minisign::SecretKeyBox::from_string(&secret_text)
+        .map_err(|e| format!("{} is not a minisign secret key: {e}", key.display()))?;
+    let public = minisign::PublicKeyBox::from_string(&public_text)
+        .and_then(|b| b.into_public_key())
+        .map_err(|e| {
+            format!(
+                "{} is not a minisign public key: {e}",
+                pubkey_file.display()
+            )
+        })?;
+    if check {
+        println!(
+            "{} and {} read as a key pair",
+            key.display(),
+            pubkey_file.display()
+        );
+        return Ok(());
+    }
+    let comment = comment.ok_or("--comment is missing")?;
+    let [file] = files.as_slice() else {
+        return Err("--minisig signs exactly one file".into());
+    };
+    let password = rpassword::prompt_password("Checksums key password: ")
+        .map_err(|e| format!("reading the password: {e}"))?;
+    let secret = key_box
+        .into_secret_key(Some(password))
+        .map_err(|_| "wrong password, or not the checksums key")?;
+    sign_minisig(file, &comment, &secret, &public)?;
+    println!("signed {}", file.display());
+    Ok(())
+}
+
+/// `<file>.minisig`, checked against `public` before it is written: a key
+/// that is not the published one signs nothing.
+fn sign_minisig(
+    file: &Path,
+    comment: &str,
+    secret: &minisign::SecretKey,
+    public: &minisign::PublicKey,
+) -> Result<(), String> {
+    let name = file.display();
+    let data = std::fs::read(file).map_err(|e| format!("{name}: {e}"))?;
+    let signature = minisign::sign(None, secret, data.as_slice(), Some(comment), None)
+        .map_err(|e| format!("{name}: {e}"))?;
+    let text = signature.to_string();
+    let check = minisign::SignatureBox::from_string(&text).map_err(|e| e.to_string())?;
+    minisign::verify(
+        public,
+        &check,
+        std::io::Cursor::new(data.as_slice()),
+        true,
+        false,
+        false,
+    )
+    .map_err(|_| format!("{name}: this key is not the one in the public key file"))?;
+    let mut out = file.as_os_str().to_os_string();
+    out.push(".minisig");
+    std::fs::write(PathBuf::from(&out), text).map_err(|e| format!("{name}.minisig: {e}"))?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,6 +348,52 @@ mod tests {
         assert!(
             text.contains("trusted comment: version:1.5.0	file:SilentSilo_1.5.0_x64-setup.exe")
         );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// The checksums key signs in minisign's own format, verifiable with the
+    /// public key file alone, and a key that is not the published one is
+    /// refused before anything is written.
+    #[test]
+    fn the_checksums_key_signs_what_minisign_verifies() {
+        let (secret_text, public_text) = make_checksums_key("pw".into()).unwrap();
+        let secret = minisign::SecretKeyBox::from_string(&secret_text)
+            .unwrap()
+            .into_secret_key(Some("pw".into()))
+            .unwrap();
+        let public = minisign::PublicKeyBox::from_string(&public_text)
+            .unwrap()
+            .into_public_key()
+            .unwrap();
+
+        let dir = std::env::temp_dir().join(format!("minisig-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let sums = dir.join("SHA256SUMS");
+        std::fs::write(&sums, b"abc  SilentSilo_1.6.0_x64-setup.exe\n").unwrap();
+        sign_minisig(&sums, "SilentSilo 1.6.0 checksums", &secret, &public).unwrap();
+
+        let written = std::fs::read_to_string(dir.join("SHA256SUMS.minisig")).unwrap();
+        assert!(written.contains("trusted comment: SilentSilo 1.6.0 checksums"));
+        let signature = minisign::SignatureBox::from_string(&written).unwrap();
+        let data = std::fs::read(&sums).unwrap();
+        minisign::verify(
+            &public,
+            &signature,
+            std::io::Cursor::new(data),
+            true,
+            false,
+            false,
+        )
+        .unwrap();
+
+        let (_, other_text) = make_checksums_key("pw".into()).unwrap();
+        let other = minisign::PublicKeyBox::from_string(&other_text)
+            .unwrap()
+            .into_public_key()
+            .unwrap();
+        std::fs::remove_file(dir.join("SHA256SUMS.minisig")).unwrap();
+        assert!(sign_minisig(&sums, "x", &secret, &other).is_err());
+        assert!(!dir.join("SHA256SUMS.minisig").exists());
         let _ = std::fs::remove_dir_all(dir);
     }
 
