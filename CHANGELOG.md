@@ -7,7 +7,7 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
-On core v1.11.1.
+On core v1.11.2.
 
 ### Security
 
@@ -51,6 +51,15 @@ On core v1.11.1.
 - Settings, Backup says when none of the copies is a never-delete copy: a
   file deleted for good is then cleared from all of them after 30 days, and
   someone who takes over the computer can delete from them.
+
+### Fixed
+
+- Sync deletes or overwrites nothing on a doubtful read (core v1.11.2): a
+  device behind a snapshot it cannot read no longer cleans up, a recovery
+  code that failed to download is not replaced by an older one, a backup
+  copy cut short is sent again, a blob that is not the one its name says
+  stays out of the cache, and a WebDAV or SFTP folder that went missing is
+  reported unreachable instead of being filled again as a new copy.
 
 ## [1.5.2] - Sync that starts when you unlock
 
