@@ -73,6 +73,31 @@ what an older build does when it meets a newer one. A format change that could
 leave a vault unopenable is treated as a security issue, not a compatibility
 one: the data is unrecoverable by the person who owns it.
 
+## Verifying a download
+
+From the release after 1.5.2, every release on GitHub carries `SHA256SUMS`,
+the SHA-256 of each of its files, and `SHA256SUMS.minisig`, its
+[minisign](https://jedisct1.github.io/minisign/) signature. The public key
+is [`release-checksums.pub`](release-checksums.pub) in this repository and
+is published on silentsilo.com too:
+
+```
+RWRAWSxOMH1Dl6fHrVvTKc2NzrYkwMhW5UvPR96mKXLjyHUnTzY0xtvO
+```
+
+With the files downloaded into one folder:
+
+```
+minisign -Vm SHA256SUMS -P RWRAWSxOMH1Dl6fHrVvTKc2NzrYkwMhW5UvPR96mKXLjyHUnTzY0xtvO
+sha256sum -c --ignore-missing SHA256SUMS
+```
+
+On Windows, `Get-FileHash <file>` gives the hash to compare with its line in
+`SHA256SUMS`. Windows and macOS also check the installer's own signature
+(Authenticode, Developer ID) when it runs; on Linux this is the check there
+is. The key signs only these lists. The app carries no copy of it, and it
+installs nothing.
+
 ## Supported versions
 
 Only the latest release receives fixes. Every release is free and complete,
