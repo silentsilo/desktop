@@ -52,6 +52,10 @@ const FOCUS_LOST: &str = coded!(
     "err.autotype_focus_lost",
     "The window being typed into was no longer in front, so typing stopped."
 );
+const CONTROL_CHARACTER: &str = coded!(
+    "err.autotype_control_character",
+    "The user name or password holds a character that is not text, such as a line break, so nothing was typed. Edit the entry to remove it."
+);
 const NOT_A_LOGIN: &str = coded!(
     "err.autotype_not_a_login",
     "That entry has no password to type."
@@ -359,6 +363,7 @@ pub async fn autotype_confirm(
                     silentsilo_shell::autotype::TypeError::NoAccess => NO_ACCESS,
                     silentsilo_shell::autotype::TypeError::SecureInput => SECURE_INPUT,
                     silentsilo_shell::autotype::TypeError::FocusLost => FOCUS_LOST,
+                    silentsilo_shell::autotype::TypeError::ControlCharacter => CONTROL_CHARACTER,
                     _ => REFUSED,
                 }
                 .to_string()

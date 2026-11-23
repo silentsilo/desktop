@@ -202,6 +202,9 @@ fn kdf_within_limits(bytes: &[u8]) -> Result<(), String> {
     let major = u16_at(10).ok_or(NOT_KEEPASS)?;
     let wide = major >= 4;
     let mut at = 12;
+    // The whole header, not up to the first match: the library keeps the
+    // last of a field given twice, so a cheap first one hid a costly second.
+    let mut kdf: Option<&[u8]> = None;
     loop {
         let id = *bytes.get(at).ok_or(NOT_KEEPASS)?;
         let (len, start) = if wide {
@@ -211,21 +214,29 @@ fn kdf_within_limits(bytes: &[u8]) -> Result<(), String> {
         };
         let value = bytes.get(start..start + len).ok_or(NOT_KEEPASS)?;
         match id {
-            0 => return Err(NOT_KEEPASS.into()),
-            // KDBX 3: AES-KDF rounds.
-            6 if !wide => {
-                let rounds = u64::from_le_bytes(value.try_into().map_err(|_| NOT_KEEPASS)?);
-                return if rounds > MAX_AES_ROUNDS {
-                    Err(KDF_TOO_COSTLY.into())
-                } else {
-                    Ok(())
-                };
+            0 => break,
+            // KDBX 3: AES-KDF rounds. KDBX 4: the key derivation's parameters.
+            6 if !wide => {}
+            11 if wide => {}
+            _ => {
+                at = start + len;
+                continue;
             }
-            // KDBX 4: the key derivation's parameters.
-            11 if wide => return kdf_parameters_within_limits(value),
-            _ => {}
+        }
+        if kdf.replace(value).is_some() {
+            return Err(NOT_KEEPASS.into());
         }
         at = start + len;
+    }
+    let value = kdf.ok_or(NOT_KEEPASS)?;
+    if wide {
+        return kdf_parameters_within_limits(value);
+    }
+    let rounds = u64::from_le_bytes(value.try_into().map_err(|_| NOT_KEEPASS)?);
+    if rounds > MAX_AES_ROUNDS {
+        Err(KDF_TOO_COSTLY.into())
+    } else {
+        Ok(())
     }
 }
 
@@ -235,6 +246,7 @@ fn kdf_within_limits(bytes: &[u8]) -> Result<(), String> {
 fn kdf_parameters_within_limits(dict: &[u8]) -> Result<(), String> {
     let mut at = 2;
     let (mut rounds, mut iterations, mut memory, mut lanes) = (0u64, 0u64, 0u64, 0u64);
+    let mut seen = std::collections::HashSet::new();
     loop {
         let kind = *dict.get(at).ok_or(NOT_KEEPASS)?;
         if kind == 0 {
@@ -252,19 +264,28 @@ fn kdf_parameters_within_limits(dict: &[u8]) -> Result<(), String> {
         let value_len = len_at(at + 5 + key_len)?;
         let start = at + 9 + key_len;
         let value = dict.get(start..start + value_len).ok_or(NOT_KEEPASS)?;
-        let number = match value.len() {
-            4 => u64::from(u32::from_le_bytes(
-                value.try_into().map_err(|_| NOT_KEEPASS)?,
-            )),
-            8 => u64::from_le_bytes(value.try_into().map_err(|_| NOT_KEEPASS)?),
-            _ => 0,
+        let slot = match key {
+            b"R" => Some(&mut rounds),
+            b"I" => Some(&mut iterations),
+            b"M" => Some(&mut memory),
+            b"P" => Some(&mut lanes),
+            _ => None,
         };
-        match key {
-            b"R" => rounds = number,
-            b"I" => iterations = number,
-            b"M" => memory = number,
-            b"P" => lanes = number,
-            _ => {}
+        if let Some(slot) = slot {
+            // Read as the library reads it, by its type: UInt32 (0x04) is
+            // four bytes, UInt64 (0x05) eight. Any other shape, or the key
+            // given twice, is refused rather than guessed at.
+            let number = match (kind, value.len()) {
+                (0x04, 4) => u64::from(u32::from_le_bytes(
+                    value.try_into().map_err(|_| NOT_KEEPASS)?,
+                )),
+                (0x05, 8) => u64::from_le_bytes(value.try_into().map_err(|_| NOT_KEEPASS)?),
+                _ => return Err(NOT_KEEPASS.into()),
+            };
+            if !seen.insert(key) {
+                return Err(NOT_KEEPASS.into());
+            }
+            *slot = number;
         }
         at = start + value_len;
     }
@@ -911,6 +932,74 @@ mod tests {
             ("M", memory.to_le_bytes().to_vec()),
             ("P", lanes.to_le_bytes().to_vec()),
         ])
+    }
+
+    /// A KDBX 4 header from raw dictionary entries (kind, key, value), with
+    /// the parameters field given once per dictionary.
+    fn header_of(dicts: &[&[(u8, &str, Vec<u8>)]]) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.extend(0x9AA2_D903u32.to_le_bytes());
+        out.extend(0xB54B_FB67u32.to_le_bytes());
+        out.extend(1u16.to_le_bytes());
+        out.extend(4u16.to_le_bytes());
+        for entries in dicts {
+            let mut dict = vec![0x00, 0x01];
+            for (kind, key, value) in entries.iter() {
+                dict.push(*kind);
+                dict.extend((key.len() as i32).to_le_bytes());
+                dict.extend(key.as_bytes());
+                dict.extend((value.len() as i32).to_le_bytes());
+                dict.extend(value);
+            }
+            dict.push(0);
+            out.push(11);
+            out.extend((dict.len() as u32).to_le_bytes());
+            out.extend(dict);
+        }
+        out.push(0);
+        out.extend(0u32.to_le_bytes());
+        out
+    }
+
+    #[test]
+    fn a_costly_derivation_cannot_hide_behind_a_cheap_one() {
+        // The library keeps the last of a field given twice, and reads a
+        // UInt64 from its first eight bytes whatever its length: a cheap
+        // value where this looked, a costly one where the library looks.
+        let cheap = || (0x05u8, "M", (64u64 << 20).to_le_bytes().to_vec());
+        let costly = || (0x05u8, "M", (4u64 << 40).to_le_bytes().to_vec());
+        let iterations = || (0x05u8, "I", 2u64.to_le_bytes().to_vec());
+        let not_keepass = Err(NOT_KEEPASS.to_string());
+
+        assert!(kdf_within_limits(&header_of(&[&[iterations(), cheap()]])).is_ok());
+        assert_eq!(
+            kdf_within_limits(&header_of(&[
+                &[iterations(), cheap()],
+                &[iterations(), costly()]
+            ])),
+            not_keepass,
+            "the parameters field given twice"
+        );
+        let mut sixteen = (4u64 << 40).to_le_bytes().to_vec();
+        sixteen.extend([0u8; 8]);
+        assert_eq!(
+            kdf_within_limits(&header_of(&[&[iterations(), (0x05, "M", sixteen)]])),
+            not_keepass,
+            "a UInt64 sixteen bytes long"
+        );
+        assert_eq!(
+            kdf_within_limits(&header_of(&[&[
+                iterations(),
+                (0x04, "M", (64u64 << 20).to_le_bytes().to_vec())
+            ]])),
+            not_keepass,
+            "a type that disagrees with the length"
+        );
+        assert_eq!(
+            kdf_within_limits(&header_of(&[&[iterations(), cheap(), costly()]])),
+            not_keepass,
+            "a key given twice"
+        );
     }
 
     #[test]

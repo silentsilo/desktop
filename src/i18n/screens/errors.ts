@@ -1458,6 +1458,17 @@ export const errors = {
     "pt-BR": "A janela onde se digitava não estava mais na frente, então a digitação parou.",
     pl: "Okno, do którego wpisywano tekst, nie było już na pierwszym planie, więc wpisywanie zostało przerwane.",
   },
+  "err.autotype_control_character": {
+    note: "Error message after an auto-type: the saved user name or password contains an invisible control character (for example a line break), which would act like pressing Enter, so the app typed nothing.",
+    en: "The user name or password holds a character that is not text, such as a line break, so nothing was typed. Edit the entry to remove it.",
+    ro: "Numele de utilizator sau parola conține un caracter care nu e text, de exemplu un rând nou, așa că nu s-a scris nimic. Editează intrarea și scoate-l.",
+    de: "Benutzername oder Passwort enthält ein Zeichen, das kein Text ist, etwa einen Zeilenumbruch, daher wurde nichts eingetippt. Bearbeite den Eintrag und entferne es.",
+    fr: "Le nom d’utilisateur ou le mot de passe contient un caractère qui n’est pas du texte, comme un saut de ligne, donc rien n’a été saisi. Modifiez l’entrée pour le retirer.",
+    es: "El nombre de usuario o la contraseña contiene un carácter que no es texto, como un salto de línea, así que no se escribió nada. Edita la entrada para quitarlo.",
+    it: "Il nome utente o la password contiene un carattere che non è testo, come un a capo, quindi non è stato digitato nulla. Modifica la voce per toglierlo.",
+    "pt-BR": "O nome de usuário ou a senha contém um caractere que não é texto, como uma quebra de linha, então nada foi digitado. Edite a entrada para removê-lo.",
+    pl: "Nazwa użytkownika lub hasło zawiera znak, który nie jest tekstem, na przykład znak nowego wiersza, więc nic nie zostało wpisane. Edytuj wpis i usuń go.",
+  },
   "err.autotype_elevated": {
     note: "Error message after an auto-type. ",
     en: "That window runs as administrator, and Windows does not let SilentSilo type into it.",

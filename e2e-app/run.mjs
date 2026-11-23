@@ -52,6 +52,8 @@ for (const file of files) {
     SILENTSILO_E2E_DIR: dir,
     SILENTSILO_E2E_SHARED: shared,
     SILENTSILO_E2E_APP: app,
+    // The update check asks a server the test may run here, never the site.
+    SILENTSILO_E2E_LATEST_JSON: "http://127.0.0.1:47391/latest.json",
   };
   const driver = spawn("tauri-driver", ["--native-driver", edge], { env, stdio: "inherit" });
   await new Promise((ready) => setTimeout(ready, 1500));

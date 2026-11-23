@@ -3131,6 +3131,7 @@ pub(crate) fn presence_check_enrolled(app: &AppHandle) -> bool {
 pub(crate) async fn verify_presence(app: &AppHandle, purpose: Presence) -> Result<(), String> {
     let root = vault_dir(app)?;
     let creds = crate::state::silo_credentials(app)?;
+    let current = session_dek(app)?;
 
     if !is_fido_enrolled(&root) {
         return Err(
@@ -3167,8 +3168,19 @@ pub(crate) async fn verify_presence(app: &AppHandle, purpose: Presence) -> Resul
             .to_string()
         })?;
 
-    if secret_that_opens(&unlock, &stored.wrapped_dek).is_some() {
-        return Ok(());
+    // The envelope must open to the open silo's key. One planted in storage
+    // opens under the planter's own key to something else.
+    if let Some((secret, _)) = secret_that_opens(&unlock, &stored.wrapped_dek) {
+        let opened = silentsilo_vault::unwrap_dek_hex(&stored.wrapped_dek, &secret)
+            .map_err(|e| e.to_string())?;
+        if opened.as_bytes() == current.as_bytes() {
+            return Ok(());
+        }
+        return Err(crate::err::coded!(
+            "err.key_cannot_verify",
+            "That key answered, but what it gave back does not open this silo. Use another of its keys."
+        )
+        .to_string());
     }
     // A key added before its PIN, on Windows: said, as at unlock.
     opening_wrap_key(&unlock, &stored.wrapped_dek, Some(stored))?;
@@ -3177,6 +3189,17 @@ pub(crate) async fn verify_presence(app: &AppHandle, purpose: Presence) -> Resul
         "That key answered, but what it gave back does not open this silo. Use another of its keys."
     )
     .to_string())
+}
+
+/// The open silo's key, which an envelope a key opens must match.
+pub(crate) fn session_dek(app: &AppHandle) -> Result<silentsilo_crypto::MasterDek, String> {
+    let silo = crate::state::active_silo(app)?;
+    let state = app.state::<AppState>();
+    let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
+    sessions
+        .get(&silo.id)
+        .map(|session| session.dek.clone())
+        .ok_or_else(|| CoreError::VaultLocked.to_string())
 }
 
 #[derive(serde::Serialize)]

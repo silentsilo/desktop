@@ -8,8 +8,9 @@
  * own documents is not thinking about what its extension does.
  *
  * A deliberately short list. It covers what runs on a double click with no
- * further prompt on Windows, plus the shell shortcut types that point
- * somewhere else entirely. It is not a malware filter and does not pretend to
+ * further prompt on Windows and on a Mac, scripts an installed interpreter
+ * runs the same way, plus the shell shortcut types that point somewhere else
+ * entirely. It is not a malware filter and does not pretend to
  * be one: the answer is a confirmation, not a refusal, because these are the
  * user's own files.
  */
@@ -54,6 +55,14 @@ const RUNS_ON_OPEN = [
   "wsc",
   "wsf",
   "wsh",
+  // Run by an interpreter when one is installed (py.exe, Perl, Ruby), and
+  // the downloaded-from-elsewhere mark does not stop them.
+  "pl",
+  "py",
+  "pyw",
+  "pyz",
+  "pyzw",
+  "rb",
   // An Excel add-in runs its code as soon as Excel loads it.
   "xll",
   // Disk images mount on a double click, and what is inside them loses the
@@ -80,6 +89,27 @@ const RUNS_ON_OPEN = [
   // used to do so on purpose.
   "chm",
   "diagcab",
+  // macOS: what runs, installs or mounts on a double click. A `.terminal`
+  // file opens Terminal with the command it names; an archive or disk image
+  // brings out an app that macOS then runs without asking.
+  "app",
+  "applescript",
+  "command",
+  "dmg",
+  "fileloc",
+  "inetloc",
+  "mpkg",
+  "pkg",
+  "scpt",
+  "terminal",
+  "tool",
+  "webloc",
+  "workflow",
+  // Linux desktops.
+  "appimage",
+  "desktop",
+  "run",
+  "sh",
 ];
 
 export function runsOnOpen(name: string): boolean {

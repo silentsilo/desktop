@@ -366,14 +366,19 @@ pub(crate) async fn touch_organisation_key(
     // Both halves of the question, membership and material, are asked by the
     // proof's own constructor, so this and the write path cannot drift apart
     // about what counts as proof.
-    let proof =
-        silentsilo_vault::OrgProof::verify(keys, &unlock.credential_id, &secret).map_err(|_| {
-            crate::err::coded!(
-                "err.not_org_key",
-                "That is not one of this silo's organisation keys."
-            )
-            .to_string()
-        })?;
+    let proof = silentsilo_vault::OrgProof::verify(
+        keys,
+        &unlock.credential_id,
+        &secret,
+        &crate::commands::vault::session_dek(app)?,
+    )
+    .map_err(|_| {
+        crate::err::coded!(
+            "err.not_org_key",
+            "That is not one of this silo's organisation keys."
+        )
+        .to_string()
+    })?;
     Ok((proof, org_touch(&unlock.credential_id, secret)))
 }
 

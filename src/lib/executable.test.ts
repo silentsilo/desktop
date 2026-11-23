@@ -44,6 +44,27 @@ describe("runsOnOpen", () => {
     }
   });
 
+  it("recognises scripts an interpreter runs and what a Mac or Linux runs on open", () => {
+    for (const name of [
+      "setup.py",
+      "tool.pyw",
+      "run.pl",
+      "x.rb",
+      "notes.terminal",
+      "Install.pkg",
+      "disk.dmg",
+      "link.webloc",
+      "go.command",
+      "App.app",
+      "x.scpt",
+      "tool.AppImage",
+      "launcher.desktop",
+      "install.sh",
+    ]) {
+      expect(runsOnOpen(name), name).toBe(true);
+    }
+  });
+
   it("leaves ordinary documents alone", () => {
     expect(runsOnOpen("contract.pdf")).toBe(false);
     expect(runsOnOpen("photo.jpg")).toBe(false);

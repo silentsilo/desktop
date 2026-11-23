@@ -7,7 +7,7 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
-On core v1.11.2.
+On core v1.11.3.
 
 ### Security
 
@@ -36,6 +36,17 @@ On core v1.11.2.
   export cannot touch them.
 - The release scripts install the npm dependencies without running their
   install scripts.
+- Auto-type refuses a user name or password that holds a control character
+  such as a line break, which typed into a terminal would press Enter and
+  run what follows.
+- A key's touch counts as presence only when its envelope opens to the open
+  silo's key, so an envelope planted in storage under someone else's key
+  proves nothing (core v1.11.3).
+- A KeePass file cannot get past the key-derivation limit by giving the
+  setting twice or in an unexpected shape.
+- Opening a Python, Perl or Ruby script, or a macOS or Linux file that runs
+  or installs on a double click (`.terminal`, `.pkg`, `.dmg`, `.webloc`,
+  `.sh`, `.desktop` and others), asks first, as programs already did.
 - Settings, General says when the disk opened files are written to is not
   encrypted, with a link to turn on Device encryption, BitLocker or
   FileVault. The first file opened on such a disk says so once.

@@ -121,6 +121,9 @@ pub enum TypeError {
     SecureInput,
     /// The window typed into stopped being the one in front.
     FocusLost,
+    /// The text holds a control character (a line break, a tab, an escape).
+    /// Typed, a line break is Enter: in a terminal it runs what follows.
+    ControlCharacter,
     NotSupported,
 }
 
@@ -156,6 +159,20 @@ pub fn open_access_settings() {
     }
 }
 
+/// Refuses text that holds a control character, before anything is typed:
+/// Tab and Enter are steps of their own, and a user name or password
+/// carrying a line break would press Enter unasked. In a terminal that runs
+/// whatever follows it.
+fn only_text(steps: &[Step]) -> Result<(), TypeError> {
+    if steps
+        .iter()
+        .any(|step| matches!(step, Step::Text(text) if text.chars().any(char::is_control)))
+    {
+        return Err(TypeError::ControlCharacter);
+    }
+    Ok(())
+}
+
 /// Types `steps` into `target`, after the shortcut's own keys are released.
 /// The window is checked again before every key: one that loses the front
 /// half way stops the typing there, rather than send the rest of a password
@@ -166,6 +183,7 @@ pub fn type_into(
     process_id: u32,
     steps: &[Step],
 ) -> Result<(), TypeError> {
+    only_text(steps)?;
     #[cfg(windows)]
     {
         use ::windows::Win32::UI::Input::KeyboardAndMouse::{VK_RETURN, VK_TAB};
@@ -363,5 +381,22 @@ mod tests {
     fn a_key_is_pressed_then_released() {
         let inputs = key_inputs(::windows::Win32::UI::Input::KeyboardAndMouse::VK_TAB);
         assert_eq!(inputs.len(), 2);
+    }
+}
+
+#[cfg(test)]
+mod text_tests {
+    use super::*;
+
+    #[test]
+    fn a_line_break_or_any_control_character_is_never_typed() {
+        let text = |t: &str| Step::Text(Zeroizing::new(t.to_string()));
+        assert!(only_text(&[text("admin"), Step::Tab, text("p@ss wörd😀"), Step::Enter]).is_ok());
+        for bad in ["pw\rcurl x | sh\r", "pw\n", "a\tb", "\u{1b}[2J", "x\u{7f}"] {
+            assert!(
+                matches!(only_text(&[text(bad)]), Err(TypeError::ControlCharacter)),
+                "{bad:?} was let through"
+            );
+        }
     }
 }

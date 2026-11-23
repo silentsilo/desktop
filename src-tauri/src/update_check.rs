@@ -32,8 +32,9 @@ fn client() -> Result<&'static reqwest::Client, String> {
         .timeout(Duration::from_secs(15))
         // No version in it: the request says nothing about this install.
         .user_agent("SilentSilo")
-        // A redirect to plain http would let anyone on the path answer.
-        .https_only(true)
+        // A redirect to plain http would let anyone on the path answer. An
+        // e2e build asks a local test server instead.
+        .https_only(cfg!(not(feature = "e2e")))
         .build()
         .map_err(|e| e.to_string())?;
     Ok(CLIENT.get_or_init(|| built))
@@ -100,6 +101,10 @@ async fn fetch(url: &str) -> Result<String, String> {
 /// website gives no usable answer. The window compares it with its own.
 #[tauri::command]
 pub async fn update_latest_version() -> Result<String, String> {
+    #[cfg(feature = "e2e")]
+    if let Some(url) = crate::e2e::latest_json() {
+        return fetch(&url).await;
+    }
     match fetch(LATEST_JSON).await {
         Ok(version) => Ok(version),
         Err(first) => fetch(LATEST_JSON_FALLBACK)

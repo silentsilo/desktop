@@ -28,6 +28,15 @@ pub fn isolate() {
     }
 }
 
+/// Where an e2e build asks for the latest version: a server the test runs on
+/// this machine (`SILENTSILO_E2E_LATEST_JSON`). Loopback only, so a test
+/// build never asks the real site.
+pub fn latest_json() -> Option<String> {
+    std::env::var("SILENTSILO_E2E_LATEST_JSON")
+        .ok()
+        .filter(|url| url.starts_with("http://127.0.0.1:"))
+}
+
 /// WebDriver asks WebView2 for a debugging port through
 /// `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`. On some machines, the CI runner
 /// among them, the window's own arguments replace that variable instead of
