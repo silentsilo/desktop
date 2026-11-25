@@ -34,6 +34,8 @@ const KEYS: Record<string, Key> = {
   verify_key_recovery_new: "app.fido_verify_key_recovery_new",
   verify_built_in_recovery_off: "app.fido_verify_built_in_recovery_off",
   verify_key_recovery_off: "app.fido_verify_key_recovery_off",
+  verify_built_in_log_off: "app.fido_verify_built_in_log_off",
+  verify_key_log_off: "app.fido_verify_key_log_off",
   verify_built_in_key_add: "app.fido_verify_built_in_key_add",
   verify_key_key_add: "app.fido_verify_key_key_add",
   verify_built_in_key_remove: "app.fido_verify_built_in_key_remove",

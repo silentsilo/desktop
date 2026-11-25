@@ -14,6 +14,7 @@ use silentsilo_vault::{
 };
 use silentsilo_vfs::Vfs;
 use tauri::{AppHandle, Emitter, Manager, State};
+use zeroize::Zeroizing;
 
 use crate::state::{AppState, vault_dir};
 
@@ -316,7 +317,7 @@ fn open_envelope(
 /// which would otherwise hold an async worker for the length of it.
 async fn open_envelope_blocking(
     envelope: silentsilo_vault::RecoveryEnvelope,
-    code: String,
+    code: Zeroizing<String>,
 ) -> Result<Result<silentsilo_crypto::MasterDek, CodeRefused>, String> {
     crate::commands::fido::run_blocking(move || Ok(open_envelope(&envelope, &code))).await
 }
@@ -331,6 +332,7 @@ pub async fn vault_unlock_with_recovery(
     _state: State<'_, AppState>,
     code: String,
 ) -> Result<silentsilo_core::VaultMeta, String> {
+    let code = Zeroizing::new(code);
     let root = vault_dir(&app)?;
     // This device's copy first. When it is missing (a device that joined
     // after the code was made) or does not take the code (the code was
@@ -389,7 +391,7 @@ pub async fn vault_unlock_with_recovery(
         crate::commands::vault::wipe_open_scratch(&session.paths.root);
         let silo_id = session.vault_id;
         crate::state::open_focused_session(&app, session)?;
-        crate::audit::set_unlocked_with(silo_id, Some(crate::audit::VIA_RECOVERY_CODE.into()));
+        crate::audit::set_unlocked_with_code(silo_id);
         crate::audit::record_in(
             &app,
             silo_id,
@@ -422,6 +424,7 @@ pub async fn vault_repair_from_storage(
     code: String,
     allow_retired: Option<bool>,
 ) -> Result<(), String> {
+    let code = Zeroizing::new(code);
     let silo_id = uuid::Uuid::parse_str(&silo_id).map_err(|e| e.to_string())?;
     let silo = crate::state::silo_by_id(&app, silo_id)?;
     let root = silo.path.clone();
@@ -573,6 +576,7 @@ pub async fn vault_join_with_recovery(
     location: Option<String>,
     allow_retired: Option<bool>,
 ) -> Result<silentsilo_core::VaultMeta, String> {
+    let code = Zeroizing::new(code);
     let described = crate::commands::storage::describe(config, None)?;
     let s3_config = described.config.clone();
     let store = &described.store;
@@ -660,7 +664,7 @@ pub async fn vault_join_with_recovery(
         crate::state::open_focused_session(&app, session)?;
         // Opened by the code, as an unlock with it is: the keys that came
         // down with the join may be the ones that were lost.
-        crate::audit::set_unlocked_with(silo_id, Some(crate::audit::VIA_RECOVERY_CODE.into()));
+        crate::audit::set_unlocked_with_code(silo_id);
         Ok(meta)
     })
     .await

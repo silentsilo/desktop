@@ -9,7 +9,7 @@
 //!
 //! Never call these while holding the sessions lock: recording takes it.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use silentsilo_audit::Event;
@@ -51,9 +51,18 @@ pub async fn record_off_thread(app: &AppHandle, id: Uuid, event: Event) -> Resul
 /// which key did what, not only on which device.
 static UNLOCKED_WITH: Mutex<Option<HashMap<Uuid, String>>> = Mutex::new(None);
 
+/// Silos open in a session the recovery code opened. Kept apart from the
+/// names above: a key can be labelled anything, "recovery code" included.
+static OPENED_BY_CODE: Mutex<Option<HashSet<Uuid>>> = Mutex::new(None);
+
 /// Set when a session opens: `None` for one opened without a key the log
 /// can name (a new silo, a join), so an earlier session's key never sticks.
 pub fn set_unlocked_with(id: Uuid, via: Option<String>) {
+    if let Ok(mut opened) = OPENED_BY_CODE.lock()
+        && let Some(opened) = opened.as_mut()
+    {
+        opened.remove(&id);
+    }
     let Ok(mut map) = UNLOCKED_WITH.lock() else {
         return;
     };
@@ -79,7 +88,10 @@ const BUILT_IN: &str = if cfg!(target_os = "macos") {
 
 /// A key as the log names it: its label, or what it is when it has none.
 pub fn key_name(key: &silentsilo_vault::StoredFidoCredential) -> String {
-    if !key.label.is_empty() {
+    if key.label.trim().eq_ignore_ascii_case(VIA_RECOVERY_CODE) {
+        // Read as the code in the log, it would hide which key it was.
+        format!("{} (key)", key.label)
+    } else if !key.label.is_empty() {
         key.label.clone()
     } else if key.platform {
         BUILT_IN.into()
@@ -91,9 +103,22 @@ pub fn key_name(key: &silentsilo_vault::StoredFidoCredential) -> String {
 /// What the log calls an unlock with the recovery code.
 pub const VIA_RECOVERY_CODE: &str = "recovery code";
 
-/// Whether silo `id` is open in a session the recovery code opened.
+/// Marks silo `id` as opened by the recovery code, after the session opened.
+pub fn set_unlocked_with_code(id: Uuid) {
+    set_unlocked_with(id, Some(VIA_RECOVERY_CODE.into()));
+    if let Ok(mut opened) = OPENED_BY_CODE.lock() {
+        opened.get_or_insert_with(HashSet::new).insert(id);
+    }
+}
+
+/// Whether silo `id` is open in a session the recovery code opened. Never
+/// read from the name: a key labelled "recovery code" skipped every check.
 pub fn opened_with_recovery_code(id: Uuid) -> bool {
-    unlocked_with(id).as_deref() == Some(VIA_RECOVERY_CODE)
+    OPENED_BY_CODE
+        .lock()
+        .ok()
+        .and_then(|opened| opened.as_ref().map(|o| o.contains(&id)))
+        .unwrap_or(false)
 }
 
 /// Records `event` in silo `id`'s log. An `Err` means the silo was locked
@@ -188,8 +213,17 @@ pub async fn audit_status(app: AppHandle) -> Result<SiloAuditStatus, String> {
 
 /// Turns the focused silo's own log on or off. Takes effect here at once;
 /// the copies get it at the next sync, which the window then asks for.
+/// Off asks for a key first: it is how someone at an open silo would hide
+/// what they do next.
 #[tauri::command]
 pub async fn audit_set_enabled(app: AppHandle, enabled: bool) -> Result<SiloAuditStatus, String> {
+    if !enabled {
+        crate::commands::vault::confirm_lasting_change(
+            &app,
+            crate::commands::vault::Presence::LogOff,
+        )
+        .await?;
+    }
     crate::commands::fido::run_blocking(move || {
         let state = app.state::<AppState>();
         let id = crate::state::focused_id(&state)?;
@@ -582,6 +616,23 @@ mod tests {
         set_unlocked_with(id, Some("YubiKey".into()));
         set_unlocked_with(id, None);
         assert_eq!(unlocked_with(id), None);
+    }
+
+    #[test]
+    fn only_the_code_itself_opens_a_session_as_the_code() {
+        let id = Uuid::new_v4();
+        // A key can carry the code's name; it opened nothing by the code.
+        set_unlocked_with(id, Some(VIA_RECOVERY_CODE.into()));
+        assert!(!opened_with_recovery_code(id));
+        set_unlocked_with_code(id);
+        assert!(opened_with_recovery_code(id));
+        assert_eq!(unlocked_with(id).as_deref(), Some(VIA_RECOVERY_CODE));
+        // The next session, by a key or by nothing, is not the code's.
+        set_unlocked_with(id, Some("YubiKey".into()));
+        assert!(!opened_with_recovery_code(id));
+        set_unlocked_with_code(id);
+        set_unlocked_with(id, None);
+        assert!(!opened_with_recovery_code(id));
     }
 
     #[test]

@@ -1187,6 +1187,7 @@ pub struct RestoreTest {
 /// rebuild is deleted afterwards and never becomes the open session.
 #[tauri::command]
 pub async fn vault_test_restore(app: AppHandle, code: String) -> Result<RestoreTest, String> {
+    let code = zeroize::Zeroizing::new(code);
     RESTORE_STOP.store(false, std::sync::atomic::Ordering::SeqCst);
     let silo = crate::state::active_silo(&app)?;
     let _open = crate::state::hold_open(&app, silo.id);

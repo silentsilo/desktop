@@ -1436,6 +1436,17 @@ export const errors = {
     "pt-BR": "Mostre este item primeiro e depois salve-o de novo.",
     pl: "Najpierw wyświetl ten wpis, a potem zapisz go ponownie.",
   },
+  "err.entry_needs_key": {
+    note: "Error when a protected entry is deleted and no key check let it through in the last few minutes.",
+    en: "Confirm with your key first, then delete it again.",
+    ro: "Confirmă mai întâi cu cheia, apoi șterge intrarea din nou.",
+    de: "Bestätige zuerst mit deinem Schlüssel und lösche den Eintrag dann erneut.",
+    fr: "Confirmez d’abord avec votre clé, puis supprimez l’entrée à nouveau.",
+    es: "Confirma primero con tu llave y luego vuelve a eliminar la entrada.",
+    it: "Conferma prima con la chiave, poi elimina di nuovo la voce.",
+    "pt-BR": "Confirme primeiro com sua chave e depois exclua o item de novo.",
+    pl: "Najpierw potwierdź kluczem, a potem usuń wpis ponownie.",
+  },
   "err.kdbx_kdf_too_costly": {
     note: "KeePass import: the database's own key derivation settings ask for more memory or time than the app allows.",
     en: "This database asks for more memory or time to open than SilentSilo allows. Lower its encryption settings in KeePass, then try again.",

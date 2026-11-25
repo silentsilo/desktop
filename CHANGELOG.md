@@ -26,6 +26,11 @@ On core v1.11.5.
 - Exporting a file no longer writes through `name.part` beside it, which
   could overwrite a file of yours with that name, and a name close to 255
   characters exports (core v1.11.5).
+- A key labelled "recovery code" no longer skips the key check before a
+  lasting change. The app took the label for the code itself.
+- Deleting a protected entry is checked by the app, not only by the
+  window, and turning off the activity log asks for the key.
+- The app wipes its own copy of a recovery code you type once it is used.
 
 - The app no longer downloads or installs updates. It checks once a day
   which version is the latest, from silentsilo.com and from the website's

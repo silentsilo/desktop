@@ -392,15 +392,21 @@ must open this silo's DEK.
   `vault_arrange_password`, which changes only that field on the entry as
   stored, so a stale copy in the window cannot undo another device's edit
   either. Deleting or moving protected entries asks for the key once for all
-  of them. A silo with no key keeps its entries whole: there is nothing to
-  ask.
+  of them. `vault_delete_password` checks it too (`err.entry_needs_key`):
+  a protected entry goes only within `REVEAL_FOR` of its key check. A move
+  is filing and is checked only in the window. A silo with no key keeps
+  its entries whole: there is nothing to ask.
 - **Lasting changes** ask for a key at the start of the command
   (`confirm_lasting_change`): a recovery code made or turned off, a key added
   (a key already on the silo first) or removed, a backup copy added or the
   first one pointed at another place (`s3_save_config`; new details for the
-  same place are not asked), an export. All of these refuse a locked silo. Not on a silo with no key, nor in a session the recovery code
-  opened (an unlock or a join with it): that is the way back in when the
-  keys are lost. An organisation's key, where the silo needs one, is the
+  same place are not asked), an export, the activity log turned off
+  (`audit_set_enabled`). All of these refuse a locked silo. Not on a silo
+  with no key, nor in a session the recovery code opened (an unlock or a
+  join with it): that is the way back in when the keys are lost. Which
+  session that is comes from `audit::set_unlocked_with_code`, never from
+  the name the log shows: a key can be labelled "recovery code", and one so
+  labelled used to skip every check here. An organisation's key, where the silo needs one, is the
   check.
 - **The recovery code stays** while no key outlives this computer.
   `recovery_disable` refuses (`err.recovery_needed_platform_only`) unless a

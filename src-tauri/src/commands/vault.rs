@@ -823,6 +823,7 @@ pub(crate) enum Presence {
     ExportLogins,
     RecoveryCode,
     RecoveryOff,
+    LogOff,
     /// `phone`: what is being added is a phone, so the window says which
     /// phone answers which QR code.
     AddKey {
@@ -854,6 +855,7 @@ impl Presence {
             Presence::ExportLogins => ("export", "export your logins".to_string()),
             Presence::RecoveryCode => ("recovery_new", "create a new recovery code".to_string()),
             Presence::RecoveryOff => ("recovery_off", "turn off the recovery code".to_string()),
+            Presence::LogOff => ("log_off", "turn off the activity log".to_string()),
             Presence::AddKey { .. } => ("key_add", "add a key to this silo".to_string()),
             Presence::RemoveKey => ("key_remove", "remove a key from this silo".to_string()),
             Presence::AddCopy => ("copy_add", "add a backup copy".to_string()),
@@ -2856,7 +2858,8 @@ fn clipboard_goes(owner: Option<Uuid>, closing: Option<&[Uuid]>) -> bool {
 
 /// Removes one entry. It waits in the password trash for 30 days
 /// ([`vault_password_trash`]). `label` is the name it had, for the activity
-/// log.
+/// log. A protected entry goes only after a key check let it through
+/// ([`fido_reverify`]), checked here and not only in the window.
 #[tauri::command(async)]
 pub fn vault_delete_password(
     app: AppHandle,
@@ -2865,6 +2868,13 @@ pub fn vault_delete_password(
     state: State<AppState>,
 ) -> Result<(), String> {
     let id = Uuid::parse_str(&id).map_err(|e| format!("That entry id is not valid: {e}"))?;
+    if held_back(&app, &state, id)? {
+        return Err(crate::err::coded!(
+            "err.entry_needs_key",
+            "Confirm with your key first, then delete it again."
+        )
+        .into());
+    }
     crate::audit::record(
         &app,
         crate::audit::event(crate::audit::codes::ENTRY_DELETED)
@@ -3052,6 +3062,38 @@ const SHOWN_WHEN_WITHHELD: &[&str] = &[
     "ssh_fingerprint",
     "ssh_agent",
 ];
+
+/// Whether entry `id` is protected and no key check let it through lately.
+/// A silo with no key holds nothing back.
+fn held_back(app: &AppHandle, state: &State<AppState>, id: Uuid) -> Result<bool, String> {
+    if !presence_check_enrolled(app) {
+        return Ok(false);
+    }
+    let let_through = crate::state::lock_recovering(&state.revealed)
+        .get(&id)
+        .is_some_and(|at| at.elapsed() < REVEAL_FOR);
+    if let_through {
+        return Ok(false);
+    }
+    let rows = with_vfs(state, |_, vfs| vfs.list_passwords())?;
+    let mut protected = false;
+    for mut row in rows {
+        if row_id(&row) == Some(id) {
+            protected = requires_reauth(&row);
+        }
+        zeroize::Zeroize::zeroize(&mut row);
+    }
+    Ok(protected)
+}
+
+/// Whether an entry is marked "ask again before revealing". Anything but a
+/// plain `true` is not.
+fn requires_reauth(row: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(row)
+        .ok()
+        .and_then(|v| v.get("require_reauth").and_then(serde_json::Value::as_bool))
+        == Some(true)
+}
 
 /// The id an entry's JSON names.
 fn row_id(row: &str) -> Option<Uuid> {
@@ -4566,7 +4608,7 @@ mod entry_change_tests {
 
 #[cfg(test)]
 mod withheld_tests {
-    use super::{arranged, row_id, withheld};
+    use super::{arranged, requires_reauth, row_id, withheld};
     use serde_json::{Value, json};
 
     fn protected() -> Value {
@@ -4612,6 +4654,17 @@ mod withheld_tests {
         let mut entry = protected();
         entry["require_reauth"] = json!(false);
         assert!(withheld(&entry.to_string()).is_none());
+    }
+
+    #[test]
+    fn only_a_plain_true_holds_an_entry_back_from_a_delete() {
+        assert!(requires_reauth(&protected().to_string()));
+        for flag in [json!(false), json!("true"), json!(1), Value::Null] {
+            let mut entry = protected();
+            entry["require_reauth"] = flag.clone();
+            assert!(!requires_reauth(&entry.to_string()), "{flag}");
+        }
+        assert!(!requires_reauth("not json"));
     }
 
     #[test]
