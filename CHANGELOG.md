@@ -7,7 +7,7 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
-On core v1.11.6.
+On core v1.11.7.
 
 ### Security
 
@@ -142,6 +142,9 @@ On core v1.11.6.
 - A new recovery code is dated after every code before it, with its tags
   made again. Made after a "turned off" from another device, it carried a
   tag that no longer matched, and the other devices refused it.
+- Core v1.11.7: replacing the encryption key also reseals records another
+  device sent under the old key while it ran, and that device is told to
+  rejoin; S3 errors are told apart by their status code.
 - Core v1.11.6: emptying the trash keeps conflict copies that were not in
   it; records a copy lost, or a cloud folder deleted at the provider, are
   sent to it again; compaction deletes only what its snapshot holds; a key
