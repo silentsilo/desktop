@@ -484,6 +484,19 @@ export default function App() {
   /// picking the same entry again is a change the panel notices.
   const [focusEntryId, setFocusEntryId] = useState<string | null>(null);
   const [pendingShellUploadPaths, setPendingShellUploadPaths] = useState<string[] | null>(null);
+  /// While the Explorer upload dialog is up it may focus another silo, and a
+  /// "vault-changed" read then loaded that silo's entries over this one's.
+  /// Changes wait until it closes.
+  const shellUploadOpen = useRef(false);
+  useEffect(() => {
+    const open = pendingShellUploadPaths !== null;
+    const wasOpen = shellUploadOpen.current;
+    shellUploadOpen.current = open;
+    if (wasOpen && !open && unlockedRef.current) {
+      void refreshCurrentFolderRef.current?.();
+      void refreshPasswordsRef.current?.();
+    }
+  }, [pendingShellUploadPaths]);
   const [shellUploadBusy, setShellUploadBusy] = useState(false);
   const [passwordImport, setPasswordImport] = useState<{ done: number; total: number } | null>(
     null,
@@ -776,7 +789,7 @@ export default function App() {
   useEventSubscription(
     () =>
       listen("vault-changed", () => {
-        if (unlockedRef.current) {
+        if (unlockedRef.current && !shellUploadOpen.current) {
           void refreshCurrentFolderRef.current?.();
           // Credentials are read into memory and were never re-read, so a
           // login changed on another device stayed stale on this one until
@@ -1920,10 +1933,14 @@ export default function App() {
   const refreshCurrentFolder = useCallback(async () => {
     if (!currentFolder) return;
     const epoch = sessionEpoch.current;
+    const asked = currentFolder.id;
     const list = await invoke<VaultEntry[]>("vault_list_folder", {
-      folderId: currentFolder.id,
+      folderId: asked,
     });
     if (epoch !== sessionEpoch.current) return;
+    // A slow listing that lands after another folder was opened showed the
+    // first folder's contents under the second one's name.
+    if (shownFolderId.current !== asked) return;
     setEntries(list);
     // The badges belong to these rows, so they are read with them rather
     // than on a timer that would leave a new file unlabelled for seconds.
@@ -1940,6 +1957,11 @@ export default function App() {
   useEffect(() => {
     refreshCurrentFolderRef.current = refreshCurrentFolder;
   }, [refreshCurrentFolder]);
+  /// The folder on screen now, for a listing that comes back late.
+  const shownFolderId = useRef<string | null>(null);
+  useEffect(() => {
+    shownFolderId.current = currentFolder?.id ?? null;
+  }, [currentFolder]);
 
   const goBack = useCallback(async () => {
     if (navIndex <= 0) return;
@@ -2425,6 +2447,9 @@ export default function App() {
     setShellUploadProgress(null);
     setShellUploadStopping(false);
     const unlistenBytes = await listenImportBytes(setShellUploadProgress);
+    // Closed only once the silo on screen has focus again: closing lets the
+    // held changes be read, and before that they would be the other silo's.
+    let done = false;
     const unlisten = await listen<{ phase: string; current: number; total: number; name: string }>(
       "import-progress",
       ({ payload: { phase, current, total, name } }) => {
@@ -2461,7 +2486,7 @@ export default function App() {
       if (currentFolder?.id === folderId) {
         await refreshCurrentFolder();
       }
-      setPendingShellUploadPaths(null);
+      done = true;
 
       const total = result.imported_files + result.imported_folders;
       if (total > 0) {
@@ -2490,6 +2515,7 @@ export default function App() {
         await invoke("silo_open", { id: returnTo }).catch(() => {});
         await refreshBootstrap();
       }
+      if (done) setPendingShellUploadPaths(null);
       setShellUploadBusy(false);
       setShellUploadProgress(null);
     }
@@ -2603,6 +2629,7 @@ export default function App() {
   const trashEntries_ = async (targets: VaultEntry[]) => {
     if (targets.length === 0) return;
     begin("entry");
+    let trashed = 0;
     try {
       for (const entry of targets) {
         if (entry.kind === "folder") {
@@ -2610,10 +2637,8 @@ export default function App() {
         } else {
           await invoke("vault_trash_file", { fileId: entry.id });
         }
+        trashed += 1;
       }
-      clearSelection();
-      await refreshCurrentFolder();
-      await refreshTrash();
       toasts.info(
         targets.length === 1
           ? t("app.trashed_one", { name: targets[0]!.name })
@@ -2622,6 +2647,13 @@ export default function App() {
     } catch (e) {
       toasts.error(e);
     } finally {
+      // Also after a failure part way: what went to the trash before it
+      // stayed listed and selected, as if nothing had happened.
+      if (trashed > 0) {
+        clearSelection();
+        await refreshCurrentFolder().catch(() => undefined);
+        await refreshTrash().catch(() => undefined);
+      }
       end("entry");
     }
   };
@@ -3857,11 +3889,19 @@ export default function App() {
     // writer settles this on its way out.
     if (!passwordGate.current.requestRefresh()) return;
     const epoch = sessionEpoch.current;
+    const token = passwordGate.current.startRead();
     try {
       const json = await invoke<string>("vault_read_passwords");
       // Read before a lock or a switch and answered after it: dropped, or
       // the locked silo's passwords would be back in memory.
       if (epoch !== sessionEpoch.current) return;
+      // A write began while this read ran: its answer may be from before.
+      const verdict = passwordGate.current.finishRead(token);
+      if (verdict === "later") return;
+      if (verdict === "again") {
+        void refreshPasswordsRef.current?.();
+        return;
+      }
       // The store holds one reserved row alongside the logins: the category
       // list. Partitioned here so the panel's entry list never sees it.
       const rows = JSON.parse(json) as unknown[];

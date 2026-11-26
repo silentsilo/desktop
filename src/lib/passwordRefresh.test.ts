@@ -50,4 +50,21 @@ describe("re-reading the credential store", () => {
     expect(gate.endWrite()).toBe(true);
     expect(gate.endWrite()).toBe(false);
   });
+
+  it("drops a read a write began during, and owes another", () => {
+    const gate = new PasswordRefreshGate();
+    const token = gate.startRead();
+    gate.beginWrite();
+    expect(gate.finishRead(token)).toBe("later");
+    expect(gate.endWrite()).toBe(true);
+  });
+
+  it("asks for a fresh read when the write already ended", () => {
+    const gate = new PasswordRefreshGate();
+    const token = gate.startRead();
+    gate.beginWrite();
+    gate.endWrite();
+    expect(gate.finishRead(token)).toBe("again");
+    expect(gate.finishRead(gate.startRead())).toBe("apply");
+  });
 });

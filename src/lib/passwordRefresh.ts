@@ -15,10 +15,34 @@
 export class PasswordRefreshGate {
   private writes = 0;
   private owed = false;
+  /** Counts writes started, so a read can tell one began while it ran. */
+  private generation = 0;
 
   /** A write is starting. */
   beginWrite(): void {
     this.writes += 1;
+    this.generation += 1;
+  }
+
+  /** A read is starting: the token its result is checked against. */
+  startRead(): number {
+    return this.generation;
+  }
+
+  /**
+   * A read started at `token` has its answer. "apply" when no write began
+   * since. Otherwise the answer may predate that write and would put the
+   * old value back over the optimistic one: "later" when the write is still
+   * running (the refresh is owed to its end), "again" when it has finished
+   * and a fresh read should run now.
+   */
+  finishRead(token: number): "apply" | "later" | "again" {
+    if (token === this.generation) return "apply";
+    if (this.writes > 0) {
+      this.owed = true;
+      return "later";
+    }
+    return "again";
   }
 
   /**

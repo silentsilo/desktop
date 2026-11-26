@@ -751,7 +751,12 @@ pub struct SessionSnapshot {
 }
 
 pub fn snapshot_focused_session(state: &State<AppState>) -> Result<SessionSnapshot, String> {
-    let id = focused_id(state)?;
+    snapshot_session(state, focused_id(state)?)
+}
+
+/// [`snapshot_focused_session`] for silo `id`, for a command that read its
+/// row before a download and must not follow the focus after it.
+pub fn snapshot_session(state: &State<AppState>, id: Uuid) -> Result<SessionSnapshot, String> {
     let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
     let session = sessions
         .get(&id)

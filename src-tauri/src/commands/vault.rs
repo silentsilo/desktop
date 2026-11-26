@@ -537,7 +537,14 @@ fn import_folder_recursive(
 /// answering while a large folder comes in.
 ///
 /// Returns how many files and folders could not be read or imported.
-fn import_folder_impl(app: &AppHandle, folder_id: Uuid, source: &Path) -> Result<u32, String> {
+/// `silo`: the silo it goes into, pinned by the caller. Read from the focus
+/// here, each folder of a paste followed a silo switch made during it.
+fn import_folder_impl(
+    app: &AppHandle,
+    silo: Uuid,
+    folder_id: Uuid,
+    source: &Path,
+) -> Result<u32, String> {
     if !source.is_dir() {
         return Err(crate::err::coded_with(
             "err.not_a_folder_path",
@@ -563,7 +570,7 @@ fn import_folder_impl(app: &AppHandle, folder_id: Uuid, source: &Path) -> Result
     );
 
     let state = app.state::<AppState>();
-    let snapshot = crate::state::snapshot_focused_session(&state)?;
+    let snapshot = crate::state::snapshot_session(&state, silo)?;
 
     let dir_name = source.file_name().and_then(|n| n.to_str()).ok_or_else(|| {
         crate::err::coded!(
@@ -621,7 +628,11 @@ pub async fn vault_import_folder(
 ) -> Result<u32, String> {
     let folder_id = Uuid::parse_str(&folder_id).map_err(|e| e.to_string())?;
     let source = PathBuf::from(&source_path);
-    run_blocking(move || import_folder_impl(&app, folder_id, &source)).await
+    run_blocking(move || {
+        let silo = crate::state::focused_id(&app.state::<AppState>())?;
+        import_folder_impl(&app, silo, folder_id, &source)
+    })
+    .await
 }
 
 /// Imports what the Explorer verbs queued into Inbox.
@@ -1421,7 +1432,7 @@ pub async fn vault_paste_paths(
                 return Err(SILO_CLOSED.to_string());
             }
             if source.is_dir() {
-                match import_folder_impl(&app, folder_uuid, &source) {
+                match import_folder_impl(&app, snapshot.id, folder_uuid, &source) {
                     Ok(0) => result.imported_folders += 1,
                     // Imported, minus what could not be read; said rather
                     // than counted as a clean folder.
@@ -1925,6 +1936,9 @@ pub async fn vault_export_file(
     // The row and its wrapped key under one short lock, before the network
     // and before the decrypt: neither of those may hold the sessions mutex,
     // or every small command in the app queues behind a large file.
+    // Pinned with the row: the download below takes a while, and the log
+    // entry and the key belong to this silo, not to the one focused after.
+    let silo_id = crate::state::focused_id(&app.state::<AppState>())?;
     let (blob_id, name, size, wrapped_key, recorded_hash) = {
         let state = app.state::<AppState>();
         let session_guard = state.focused_session()?;
@@ -1962,7 +1976,7 @@ pub async fn vault_export_file(
         size,
     );
     let written = run_blocking(move || {
-        let snapshot = crate::state::snapshot_focused_session(&app.state::<AppState>())?;
+        let snapshot = crate::state::snapshot_session(&app.state::<AppState>(), silo_id)?;
         crate::audit::record_in(
             &app,
             snapshot.id,
@@ -2108,6 +2122,8 @@ pub async fn vault_export_folder(
     // keys — read under one short lock at database speed. The download and
     // the decrypts run against the plan, holding nothing, so listing a
     // folder while a large export runs stays instant.
+    // Pinned with the plan, as for one file.
+    let silo_id = crate::state::focused_id(&app.state::<AppState>())?;
     let (plan, folder_path) = {
         let state = app.state::<AppState>();
         let session_guard = state.focused_session()?;
@@ -2146,7 +2162,7 @@ pub async fn vault_export_folder(
     ensure_blobs_local_watched(&app, &blob_ids, Some(watched)).await?;
 
     run_blocking(move || {
-        let snapshot = crate::state::snapshot_focused_session(&app.state::<AppState>())?;
+        let snapshot = crate::state::snapshot_session(&app.state::<AppState>(), silo_id)?;
         crate::audit::record_in(
             &app,
             snapshot.id,
@@ -2306,6 +2322,8 @@ pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), Stri
         crate::state::lock_recovering(&app.state::<AppState>().open_cancelled).contains(&file_id)
     };
 
+    // Pinned with the row, as for an export.
+    let silo_id = crate::state::focused_id(&state)?;
     let (blob_id, name, size, wrapped_key, recorded_hash) = {
         let session_guard = state.focused_session()?;
         let session = session_guard
@@ -2344,7 +2362,7 @@ pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), Stri
     silentsilo_vault::encrypt_scratch_dir(&dir);
     crate::audit::record_off_thread(
         &app,
-        crate::state::focused_id(&state)?,
+        silo_id,
         crate::audit::event(crate::audit::codes::FILE_OPENED).on(file_id.to_string(), &name),
     )
     .await?;
@@ -2379,7 +2397,7 @@ pub async fn vault_open_file(app: AppHandle, file_id: String) -> Result<(), Stri
             // The keys under a lock held for the copy; the decrypt of an
             // arbitrarily large file holds nothing, so the rest of the app
             // keeps answering while it runs.
-            let snapshot = crate::state::snapshot_focused_session(&app2.state::<AppState>())?;
+            let snapshot = crate::state::snapshot_session(&app2.state::<AppState>(), silo_id)?;
             remove_opened(&target);
             let key = silentsilo_crypto::unwrap_content_key(&wrapped_key, &snapshot.kek).map_err(
                 |_| {
@@ -3466,13 +3484,15 @@ pub async fn password_open_attachment(
     use tauri_plugin_opener::OpenerExt;
 
     let blob_id = Uuid::parse_str(&blob_id).map_err(|e| e.to_string())?;
+    // Pinned before the download, as for a vault file.
+    let silo_id = crate::state::focused_id(&app.state::<AppState>())?;
     ensure_blobs_local(&app, &[blob_id]).await?;
 
     let app2 = app.clone();
     let path = run_blocking(move || {
         // Same shape as opening a vault file: keys under a short lock, the
         // decrypt itself under none.
-        let snapshot = crate::state::snapshot_focused_session(&app2.state::<AppState>())?;
+        let snapshot = crate::state::snapshot_session(&app2.state::<AppState>(), silo_id)?;
 
         let dir = open_scratch_dir(&snapshot.root);
         silentsilo_vault::create_private_dir(&dir).map_err(|e| e.to_string())?;
@@ -3869,7 +3889,8 @@ pub async fn protected_folders_scan(app: AppHandle) -> Result<ProtectedScanRepor
         let seen =
             silentsilo_vault::protected::load_seen(&silo.path, &kek).map_err(|e| e.to_string())?;
         let state = app.state::<AppState>();
-        let snapshot = crate::state::snapshot_focused_session(&state)?;
+        // The silo whose list and ledger were read above.
+        let snapshot = crate::state::snapshot_session(&state, silo.id)?;
 
         let mut report = ProtectedScanReport::default();
         // Counted on the settings page: a first scan of a large folder takes

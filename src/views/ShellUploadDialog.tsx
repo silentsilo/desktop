@@ -99,10 +99,14 @@ export function ShellUploadDialog(props: Props) {
   /// Cancelling undoes the focus change a silo switch made, so dismissing
   /// this dialog leaves the app exactly as it found it.
   const handleCancel = () => {
-    if (siloOnOpen && siloId && siloOnOpen !== siloId) {
-      void invoke("silo_open", { id: siloOnOpen }).catch(() => {});
-    }
-    onCancel();
+    void (async () => {
+      // Awaited: closing lets the window read what changed meanwhile, which
+      // must be the silo on screen's.
+      if (siloOnOpen && siloId && siloOnOpen !== siloId) {
+        await invoke("silo_open", { id: siloOnOpen }).catch(() => {});
+      }
+      onCancel();
+    })();
   };
 
   /// Switching silo means focusing it, so the folder list below — and the

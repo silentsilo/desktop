@@ -78,8 +78,8 @@ one: the data is unrecoverable by the person who owns it.
 From the release after 1.5.2, every release on GitHub carries `SHA256SUMS`,
 the SHA-256 of each of its files, and `SHA256SUMS.minisig`, its
 [minisign](https://jedisct1.github.io/minisign/) signature. The public key
-is [`release-checksums.pub`](release-checksums.pub) in this repository and
-is published on silentsilo.com too:
+is [`release-checksums.pub`](release-checksums.pub) in this repository, and
+goes on silentsilo.com with the first release that carries the lists:
 
 ```
 RWRAWSxOMH1Dl6fHrVvTKc2NzrYkwMhW5UvPR96mKXLjyHUnTzY0xtvO

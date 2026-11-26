@@ -34,7 +34,11 @@ On core v1.11.6.
 - Switching silos while a key was asked no longer lets the action land on
   the other silo: a new recovery code, emptying the trash, removing a key,
   a key added with an organisation key, turning off the activity log. The
-  key check refuses when the silo on screen changed during it.
+  key check refuses when the silo on screen changed during it. Opening,
+  exporting and pasting files, opening an attachment and the protected
+  folder scan keep to the silo they started on, and while the Explorer
+  "Add to SilentSilo" dialog has another silo in focus, the window no
+  longer reads that silo's changes into the one on screen.
 
 - The app no longer downloads or installs updates. It checks once a day
   which version is the latest, from silentsilo.com and from the website's
@@ -148,6 +152,10 @@ On core v1.11.6.
   that the silo has no key.
 - Replacing the encryption key holds the silo open until it is done, so the
   auto-lock no longer stops it part way.
+- A list of logins read while a change was being saved no longer puts the
+  old value back on screen, where saving again would have written it.
+- Trashing several items that fails part way refreshes the list; a folder
+  listing that comes back late no longer shows under another folder.
 - Sync deletes or overwrites nothing on a doubtful read (core v1.11.2): a
   device behind a snapshot it cannot read no longer cleans up, a recovery
   code that failed to download is not replaced by an older one, a backup
