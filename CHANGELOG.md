@@ -5,7 +5,7 @@ Notable changes are documented here. The format follows
 onward the version follows semver, and anything that could stop an existing
 silo from opening needs a major version rather than a note.
 
-## [Unreleased]
+## [1.6.0] - Updates you install yourself
 
 On core v1.11.8.
 

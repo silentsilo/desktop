@@ -71,7 +71,7 @@ one: the data is unrecoverable by the person who owns it.
 
 ## Verifying a download
 
-From the release after 1.5.2, every release on GitHub carries `SHA256SUMS`,
+From 1.6.0, every release on GitHub carries `SHA256SUMS`,
 the SHA-256 of each of its files, and `SHA256SUMS.minisig`, its
 [minisign](https://jedisct1.github.io/minisign/) signature. The public key
 is [`release-checksums.pub`](release-checksums.pub) in this repository, and
