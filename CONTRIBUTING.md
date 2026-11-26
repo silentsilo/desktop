@@ -67,7 +67,7 @@ tests live there too.
 - Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) before changing the
   session lifecycle or the order a sync pass runs in. Core's own map covers
   everything below the application.
-- The 177 commands are the contract with the frontend, and so are their
+- The commands are the contract with the frontend, and so are their
   parameter names, the event names and payload shapes, and the error strings
   `src/lib/errors.ts` matches on. All four are matched by string and fail
   silently when renamed. Change the frontend in the same commit.

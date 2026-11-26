@@ -1,8 +1,9 @@
 # SilentSilo
 
 End-to-end encrypted vault for files and passwords, unlocked by a FIDO2
-security key, Windows Hello, Touch ID or a phone over the QR code (Windows 11),
-with a written-down recovery code as the fallback. For Windows 10 (version 1903 or later) and 11, macOS 13 or
+security key, Windows Hello (Windows 11 25H2 or later), Touch ID or a phone
+over the QR code (Windows 11), with a written-down recovery code as the
+fallback. For Windows 10 (version 1903 or later) and 11, macOS 13 or
 later (one app for Apple silicon and Intel), and Linux as a .deb or an
 AppImage on glibc 2.35 or later, such as Ubuntu 22.04 and Debian 12 (security
 keys only: Linux has no built-in key the app uses). AGPL-3.0.
@@ -54,8 +55,8 @@ Everything below the application lives in
 [silentsilo/core](https://github.com/silentsilo/core): the cryptography, the
 persisted formats, the operation log, sync, the storage backends, the
 security-key backends and the standalone extraction tool. `Cargo.toml` pins a
-tag from there, and the lockfile pins the commit. The Android app
-([silentsilo/mobile](https://github.com/silentsilo/mobile)) pins the same
+tag from there, and the lockfile pins the commit. The phone apps
+([silentsilo/mobile](https://github.com/silentsilo/mobile)) pin the same
 crates.
 
 | Crate | Where | Role |
@@ -176,8 +177,9 @@ is in [`docs/ORGANISATIONS.md`](docs/ORGANISATIONS.md).
 Point the app at any S3-compatible bucket you control (AWS, Backblaze B2,
 Cloudflare R2, Wasabi, MinIO, …) and it will keep itself in step with your
 other devices. There is no server in the middle and nothing to sign up for:
-the bucket is yours, and everything in it is ciphertext except a small
-manifest naming a random vault id.
+the bucket is yours, and file contents and names in it are encrypted. What
+it can still see is listed in
+[CRYPTO.md](https://github.com/silentsilo/core/blob/main/docs/CRYPTO.md#what-the-storage-provider-learns).
 
 Sync is optional. A vault that never connects storage stays fully local and
 fully usable.
@@ -191,8 +193,8 @@ tree regardless of the order records arrive in.
 To add a second computer, pick *Set up from backup storage* on first run,
 point it at the same backup storage, and touch a key already enrolled on the
 first.
-Its tree is rebuilt by replaying the log. There is no snapshot to download,
-and no step where anything is readable in transit.
+Its tree is rebuilt from the latest snapshot and the records after it, and
+nothing is readable in transit.
 
 ## Uninstalling
 
@@ -225,11 +227,12 @@ want them gone:
 
 - **Your silo folders.** Deleting one deletes that silo, and no copy of the
   files is kept anywhere else unless you set one up. There is no undo.
-- **Windows Credential Manager** keeps this computer's device secret and any
-  storage credentials you saved. Open *Credential Manager* → *Windows
-  Credentials* and remove the entries ending in `.com.silentsilo.desktop`.
-  Removing them stops this computer opening a silo without a security key, so
-  do it after the silo folders, not before.
+- **Windows Credential Manager** keeps the storage credentials you saved,
+  and the device secret of a silo that has no key yet (a key opening it
+  empties that one). Open *Credential Manager* → *Windows Credentials* and
+  remove the entries ending in `.com.silentsilo.desktop`. Do it after the
+  silo folders, not before: a silo with no key does not open without its
+  device secret.
 
 ### On Linux
 
@@ -238,18 +241,20 @@ Neither touches your silo folders or your backup storage. What the app
 leaves in your home, to remove by hand if you want it gone:
 
 - `~/.local/share/com.silentsilo.desktop`, the list of silos (names and
-  folder paths), and `~/.local/share/SilentSilo`, the encrypted working
-  copies, the cache and, for the AppImage, the copy of the browser host
+  folder paths), and `~/.local/share/SilentSilo`, the app's settings and,
+  for the AppImage, the copy of the browser host
+- `~/.cache/silentsilo`, the encrypted working copies, the cache and, on a
+  system without a keyring, the secret files you agreed to keep there
 - `~/.config/autostart/com.silentsilo.desktop.desktop`, if it starts at
   login
 - the browser extension's manifests, `com.silentsilo.desktop.json` under
   each browser's `NativeMessagingHosts` (or Firefox's
   `native-messaging-hosts`). Turning the extension off in Settings before
   uninstalling removes them.
-- the device secret and storage credentials in your keyring (GNOME Keyring
-  or KWallet, through the Secret Service), under names ending in
-  `.com.silentsilo.desktop`. As on Windows, remove them after the silo
-  folders, not before.
+- storage credentials, and the device secret of a silo with no key yet, in
+  your keyring (GNOME Keyring or KWallet, through the Secret Service), under
+  names ending in `.com.silentsilo.desktop`. As on Windows, remove them
+  after the silo folders, not before.
 
 ### On macOS
 
@@ -270,9 +275,10 @@ home, to remove by hand if you want it gone:
   each browser's `NativeMessagingHosts` in `~/Library/Application Support`.
   Turning the extension off in Settings before deleting the app removes
   them.
-- the device secret, storage credentials and Touch ID keys in your login
-  keychain, under names ending in `.com.silentsilo.desktop`. As on Windows,
-  remove them after the silo folders, not before.
+- storage credentials, Touch ID keys and the device secret of a silo with
+  no key yet, in your login keychain, under names ending in
+  `.com.silentsilo.desktop`. As on Windows, remove them after the silo
+  folders, not before.
 
 ## Dev
 

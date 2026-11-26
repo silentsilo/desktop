@@ -2,7 +2,8 @@
 
 SilentSilo backs up to storage you own. Any S3-compatible bucket, WebDAV
 share, SFTP account or plain folder works, and so does a OneDrive, Dropbox
-or Google Drive account you sign in to. Nothing here is required to use the
+or Google Drive account you sign in to, or iCloud Drive on a Mac or on a PC
+with iCloud for Windows. Nothing here is required to use the
 app. This page is about the setup that holds up when something goes
 wrong: a drive fails, a laptop is stolen, ransomware runs as you.
 
@@ -185,6 +186,14 @@ changed password, months unused), the copy says so and **Sign in again** on
 it fixes it. Only the same account is accepted there. Removing the copy
 ends the sign-in on this computer; to remove the app from the account as
 well, do it in the provider's own security settings.
+
+## iCloud Drive
+
+There is no sign-in in SilentSilo: the copy goes in the SilentSilo folder
+of iCloud Drive as the system keeps it on this computer, which on Windows
+needs iCloud for Windows with iCloud Drive turned on. Apple sees the silo's
+name, the sizes and the times, not what is inside. Like the three above it
+is a working copy that Apple, or anyone at the account, can delete from.
 
 ## Cold storage
 

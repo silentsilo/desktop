@@ -45,7 +45,7 @@ session map and the event names the frontend listens to. `silentsilo-shell`
 is the only crate here that talks to the operating system, and it is the one
 a port to another desktop platform rewrites.
 
-The 165 commands are the whole contract with the frontend, along with their
+The commands are the whole contract with the frontend, along with their
 parameter names, their event names and payload shapes, and the error strings
 `src/lib/errors.ts` matches on. None of those may change without changing
 the frontend in the same commit.
@@ -173,8 +173,8 @@ sequenceDiagram
   the next tick.
 - **Keys reconcile before the push**: a device learns keys other devices
   enrolled, and a revocation leaves a sealed marker the others honour.
-  Publishing first would put back a key another device just revoked. A
-  tombstone is dropped only once its marker is in storage. The step is
+  Publishing first would put back a key another device just revoked. Since
+  core 1.10.0 the tombstone is kept for good (`FORMATS.md`). The step is
   core's `silentsilo_sync::reconcile_key_envelopes`, run the same way as in
   `silentsilo-app`.
 - **A content key that will not open is two different things**, and
@@ -672,7 +672,7 @@ flowchart LR
   must be `SilentSilo.exe` in the host's own directory (debug builds may name
   another through `SILENTSILO_BROWSER_HOST_TEST_SERVER`, for the tests).
   The client opens with `SECURITY_IDENTIFICATION`, so a server can never
-  act as it. On any mismatch the host answers `app-not-running` to each
+  act as it. On any mismatch the host answers `channel-not-app` to each
   request with a message of its own, writes nothing to the pipe and never
   relays. When nothing listens it answers `app-not-running` itself and
   exits when stdin closes. It never starts the app. The extension closes
