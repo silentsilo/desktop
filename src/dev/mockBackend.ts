@@ -4,13 +4,13 @@ import type { Os, PlatformStatus } from "../lib/types";
  * A stand-in for the Rust side, so the pre-unlock screens can be opened in a
  * plain browser.
  *
- * Those screens — the silo picker, enrolment, unlock, recovery — are the ones
+ * Those screens, the silo picker, enrolment, unlock, recovery, are the ones
  * whose layout most needs looking at, and the ones hardest to reach: each
  * visit otherwise means provisioning a silo, touching a security key, and
  * tearing it all down again. Anything past unlocking is deliberately not
  * mocked; that needs real data and a real vault.
  *
- * Development only, and only when asked for with `?mock` — the build strips
+ * Development only, and only when asked for with `?mock`, the build strips
  * this entirely, so it cannot become a way into a real silo.
  */
 
@@ -27,7 +27,7 @@ const silos = [
   },
   {
     id: "1a2b3c4d-5e6f-7081-9203-a4b5c6d7e8f9",
-    name: "Work — a deliberately long name that has to truncate",
+    name: "Work, a deliberately long name that has to truncate",
     path: "E:\\Backups\\SilentSilo\\Work with a very long path that will not fit on one line",
     last_opened: Math.floor(Date.now() / 1000) - 86400 * 9,
     present: false,
@@ -356,7 +356,7 @@ const handlers: Record<string, Handler> = {
         silo: createdSilo,
       };
     }
-    // No silo open in the picker scenarios — that is what makes the picker
+    // No silo open in the picker scenarios, that is what makes the picker
     // the thing on screen.
     // `reopen` starts on the picker and becomes an open, unlocked silo the
     // moment one is stepped into.
@@ -756,7 +756,6 @@ const handlers: Record<string, Handler> = {
         folder_path: "/",
       },
     ].filter((hit) => starred.has(hit.id)),
-  vault_list_local_blob_ids: () => ["33333333-3333-3333-3333-333333333333"],
   // One file in each state, so all three badges are reachable: the passport
   // is here and backed up, the long-named one is here but not yet uploaded,
   // and the third exists only in the backup.
@@ -1111,6 +1110,24 @@ const handlers: Record<string, Handler> = {
     fingerprint: "SHA256:generatedgeneratedgeneratedgeneratedgenerate",
   }),
   vault_upsert_password: () => null,
+  // Commands with nothing to show in a preview: they succeed and do nothing.
+  app_quit: () => null,
+  app_quit_hold: () => null,
+  app_set_lock_notice: () => null,
+  autostart_set: () => null,
+  autostart_status: () => false,
+  cancel_import: () => null,
+  reset_import_cancel: () => null,
+  s3_disconnect: () => null,
+  tray_set_labels: () => null,
+  vault_empty_trash: () => 0,
+  vault_lock: () => null,
+  vault_test_restore_stop: () => null,
+  vault_trash_file: () => null,
+  vault_trash_folder: () => null,
+  recovery_disable: () => [],
+  silo_rename: () => null,
+  favicon_fetch: () => null,
   // A small KeePassXC database: a nested group, a field, a version in its
   // history, an attached file. "wrong" is the wrong password.
   passwords_read_kdbx: (args) =>
@@ -1646,5 +1663,5 @@ export function installMockBackend() {
   (w as unknown as Record<string, unknown>).__TAURI_EVENT_PLUGIN_INTERNALS__ = {
     unregisterListener: () => {},
   };
-  console.info(`[mock] backend stubbed — scenario "${scenario()}"`);
+  console.info(`[mock] backend stubbed, scenario "${scenario()}"`);
 }

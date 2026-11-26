@@ -359,7 +359,7 @@ export function generatePassword(opts: PasswordGenOptions): string {
 export type PasswordStrength = { score: 0 | 1 | 2 | 3 | 4; label: string; color: string };
 
 /** Quick heuristic (length + character variety), not a real entropy
- * estimate — good enough to steer users away from short/simple passwords. */
+ * estimate, good enough to steer users away from short/simple passwords. */
 export function passwordStrength(pw: string): PasswordStrength {
   if (!pw) return { score: 0, label: "", color: "var(--text-tertiary)" };
   let score = 0;
@@ -404,7 +404,7 @@ export function normalizeUrl(url: string): string | null {
  * Rejects hostnames that are literally loopback/private/link-local, so the
  * favicon fetch below can't be used to probe the user's own LAN or local
  * services (e.g. a stored URL of "http://192.168.1.1" or "http://localhost:9200").
- * This is a literal-address check, not DNS-aware — it doesn't stop rebinding
+ * This is a literal-address check, not DNS-aware, it doesn't stop rebinding
  * a public hostname to a private IP after the fact, but it blocks the
  * straightforward case a crafted "url" field could otherwise reach.
  */

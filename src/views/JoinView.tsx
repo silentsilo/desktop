@@ -64,7 +64,7 @@ type Props = {
  * background like every other silo.
  *
  * The storage is described first, then read to see whether it holds a silo
- * and which keys can open it — all before anything local is created, so
+ * and which keys can open it, all before anything local is created, so
  * being pointed at the wrong place costs nothing but a correction.
  */
 const never = () => false;

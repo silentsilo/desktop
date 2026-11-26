@@ -64,7 +64,7 @@ describe("mapPool", () => {
     );
 
     // The first 3 items are picked up together (concurrency 3) before any of
-    // them observes cancellation — all 3 finish, nothing after.
+    // them observes cancellation, all 3 finish, nothing after.
     expect(started.length).toBe(3);
   });
 

@@ -42,8 +42,8 @@ export function ShellUploadDialog(props: Props) {
   /// dialog sat on "Loading…" for good, with Cancel as the only way out.
   const [error, setError] = useState<string | null>(null);
   /// The silo that was in focus before this dialog opened. Choosing a
-  /// different destination here focuses that silo — the folder listing and
-  /// the import that follows both act on whichever silo is focused — so
+  /// different destination here focuses that silo, the folder listing and
+  /// the import that follows both act on whichever silo is focused, so
   /// backing out has to put the app back where it was rather than leaving
   /// the user in a silo they never asked to switch to.
   const [siloOnOpen, setSiloOnOpen] = useState<string | null>(null);
@@ -109,8 +109,8 @@ export function ShellUploadDialog(props: Props) {
     })();
   };
 
-  /// Switching silo means focusing it, so the folder list below — and the
-  /// import that follows — act on the one the user just named.
+  /// Switching silo means focusing it, so the folder list below, and the
+  /// import that follows, act on the one the user just named.
   const chooseSilo = async (id: string) => {
     setLoading(true);
     setSiloId(id);

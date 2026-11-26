@@ -102,7 +102,7 @@ describe("missingFields", () => {
     expect(missingFields(form({ secretAccessKey: "" }), false)).toEqual(["Secret access key"]);
   });
 
-  it("does not require a prefix — the bucket root is valid", () => {
+  it("does not require a prefix, the bucket root is valid", () => {
     expect(missingFields(form({ prefix: "" }), false)).toEqual([]);
   });
 });

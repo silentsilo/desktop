@@ -111,7 +111,7 @@ export function IconRefresh({ size = 16, className }: IconProps) {
   );
 }
 
-/** A file joining the silo — the counterpart to IconDownload's "take a copy out". */
+/** A file joining the silo, the counterpart to IconDownload's "take a copy out". */
 export function IconFilePlus({ size = 16, className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>

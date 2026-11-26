@@ -57,16 +57,12 @@ The threat model, key hierarchy and on-disk formats are documented in
 [`docs/CRYPTO.md`](https://github.com/silentsilo/core/blob/main/docs/CRYPTO.md). That document is the reference for what
 this project does and does not defend against.
 
-One scope note about organisation-administered silos, since it is the one place
-where the app enforces a rule against the person at the keyboard rather than for
-them. A silo created that way carries keys its user cannot retire, and the
-enforcement is in the client, not in the cryptography: those keys unwrap the
-same vault key as any other, and someone editing the silo's files by hand or
-running a modified build can clear the marking on their own disk. That is by
-design. What actually holds is the copy the
-organisation keeps on storage it owns. Reports that the marking can be bypassed
-locally are welcome as documentation bugs if the docs overstate it, not as
-security issues.
+Organisation-administered silos: the rule that a user cannot retire the
+organisation's keys is enforced by the app, not by the cryptography, so
+editing the silo's files or running a modified build clears it locally.
+Reports of that are documentation bugs if the docs overstate it, not
+security issues. What holds is the organisation's own copy; see
+[`docs/ORGANISATIONS.md`](docs/ORGANISATIONS.md).
 
 [`FORMATS.md`](https://github.com/silentsilo/core/blob/main/FORMATS.md) lists every persisted format with its version and
 what an older build does when it meets a newer one. A format change that could

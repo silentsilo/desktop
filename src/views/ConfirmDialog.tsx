@@ -3,7 +3,7 @@ import { useModal } from "../hooks/useModal";
 import { t, useLocale } from "../i18n";
 
 type Props = {
-  /** Names the decision, e.g. "Move to trash?" — not the product. */
+  /** Names the decision, e.g. "Move to trash?", not the product. */
   title?: string;
   message: string;
   confirmLabel?: string;

@@ -16,8 +16,7 @@ users, [ORGANISATIONS.md](ORGANISATIONS.md) is IT procedure. This page owns
 the application's moving parts.
 
 **Keep it true.** A change that alters anything described here updates this
-page in the same commit. A stale map is worse than none: it answers with
-confidence and it answers wrong.
+page in the same commit.
 
 ## Shape
 

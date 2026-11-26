@@ -593,7 +593,7 @@ pub async fn fido_enroll_primary(
         }
     };
 
-    // Compute the FIDO-wrapped DEK purely in memory first — nothing local is
+    // Compute the FIDO-wrapped DEK purely in memory first, nothing local is
     // mutated yet, so a failure part-way leaves the vault untouched and still
     // openable with the device secret rather than half-enrolled.
     let envelope_bytes = wrap_dek_bytes(&dek, &unlock.wrap_key).map_err(|e| e.to_string())?;

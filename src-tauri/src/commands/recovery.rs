@@ -232,7 +232,7 @@ pub async fn recovery_generate(app: AppHandle) -> Result<GeneratedRecovery, Stri
 /// Turns recovery off, locally and in the bucket.
 ///
 /// Deleting only the local copy would leave the written-down code working
-/// from any other device — the opposite of what someone asking for this
+/// from any other device, the opposite of what someone asking for this
 /// wants.
 /// Targets the envelope was left on, because they are append-only. Empty is
 /// the ordinary answer and means the code is genuinely gone.
@@ -385,7 +385,7 @@ pub async fn vault_unlock_with_recovery(
         }
     };
 
-    // Disk work — the working copy may be restored from its snapshot — so
+    // Disk work, the working copy may be restored from its snapshot, so
     // it runs on the blocking pool rather than an async worker.
     crate::commands::fido::run_blocking(move || {
         let creds = crate::state::silo_credentials(&app)?;

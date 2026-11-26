@@ -9,7 +9,7 @@ const THEME_KEY = "theme";
  *
  * The operating system's setting when the user has never chosen one here.
  * Defaulting to dark regardless meant someone running Windows in light mode
- * met a dark window on first launch — and, until the toggle reached the
+ * met a dark window on first launch, and, until the toggle reached the
  * screens before unlock, had no way to change it.
  */
 export function preferredTheme(): Theme {
@@ -52,7 +52,7 @@ type ThemeControl = {
 
 /**
  * Exists so the shells can offer the toggle without every screen between
- * here and them carrying two props it does not otherwise use — five views,
+ * here and them carrying two props it does not otherwise use, five views,
  * seven render sites, none of which care about theming.
  */
 export const ThemeContext = createContext<ThemeControl | null>(null);

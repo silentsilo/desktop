@@ -24,7 +24,7 @@ pub struct SiloView {
     pub name: String,
     pub path: String,
     pub last_opened: i64,
-    /// False when the folder isn't reachable — an external drive that isn't
+    /// False when the folder isn't reachable, an external drive that isn't
     /// plugged in, or one the user moved. Shown as unavailable rather than
     /// offered as a silo that fails to open for invisible reasons.
     pub present: bool,
@@ -43,7 +43,7 @@ impl From<&SiloEntry> for SiloView {
             last_opened: entry.last_opened,
             present: entry.is_present(),
             // Whether a silo is open is state, not registry data, so the
-            // conversion cannot know it — callers that care fill it in.
+            // conversion cannot know it, callers that care fill it in.
             unlocked: false,
         }
     }
@@ -60,7 +60,7 @@ pub(crate) enum AddPlan {
     /// This machine already has what it needs.
     Ready,
     /// Openable with a security key, so a fresh device secret restores
-    /// access — the unlock path takes one and ignores it, unwrapping the DEK
+    /// access, the unlock path takes one and ignores it, unwrapping the DEK
     /// with the key instead.
     MintSecret,
     /// No key enrolled and no secret: the secret *was* the only way in, and
@@ -462,8 +462,8 @@ pub fn silo_open_list(app: AppHandle, state: State<'_, AppState>) -> Result<Vec<
 
 /// How long each open silo has gone unused, against its own timeout.
 ///
-/// The frontend runs the clock — it is the side that knows about pointers
-/// and keystrokes — but the elapsed time is measured here, where the work
+/// The frontend runs the clock, it is the side that knows about pointers
+/// and keystrokes, but the elapsed time is measured here, where the work
 /// actually happens, so a silo being driven by the Explorer verbs while the
 /// window sits untouched still counts as in use.
 #[derive(serde::Serialize)]
@@ -582,7 +582,7 @@ pub fn silo_rename(app: AppHandle, id: String, name: String) -> Result<(), Strin
 
 /// Removes a silo from the list, and optionally deletes its files.
 ///
-/// Forgetting is the safe default and is reversible — the folder is still
+/// Forgetting is the safe default and is reversible, the folder is still
 /// there and can be added back. Deleting is neither, which is why it is a
 /// separate flag rather than a consequence.
 #[tauri::command]
@@ -645,7 +645,7 @@ fn silo_forget_impl(app: &AppHandle, id: String, delete_files: bool) -> Result<(
     }
 
     // Secrets go only when the files do. Removing a silo from the list while
-    // keeping its folder says "not on this list", not "not mine" — and
+    // keeping its folder says "not on this list", not "not mine", and
     // taking this machine's way into a folder the user deliberately kept is
     // a surprise in the one direction that costs them something.
     if delete_files {
@@ -737,7 +737,7 @@ pub fn silo_add_existing(
         return Ok(SiloView::from(&moved));
     }
 
-    // This machine may hold no credentials for it — the folder came from
+    // This machine may hold no credentials for it, the folder came from
     // another computer, or this one forgot the silo and cleared them.
     let plan = AddPlan::decide(
         silentsilo_vault::load_credentials(id).is_ok(),
@@ -798,7 +798,7 @@ pub(crate) struct JoinedFolder {
 
 /// Registers a silo for a vault that already exists elsewhere.
 ///
-/// Used by both join paths. The id is not ours to choose — it comes from the
+/// Used by both join paths. The id is not ours to choose, it comes from the
 /// bucket's manifest, and inventing one here would produce a silo that never
 /// recognises anything already in storage.
 pub(crate) fn register_joined_silo(

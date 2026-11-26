@@ -241,7 +241,7 @@ pub fn silo_store_config(app: &AppHandle) -> Option<silentsilo_store::StoreConfi
 /// The open silo's backup storage, ready to use.
 ///
 /// `None` covers both "no storage configured" and "the stored settings no
-/// longer open" — neither is an error at the call sites, which all treat
+/// longer open", neither is an error at the call sites, which all treat
 /// backup as optional.
 pub fn silo_store(app: &AppHandle) -> Option<Box<dyn silentsilo_store::ObjectStore>> {
     silo_store_config(app)?.open().ok()
@@ -400,7 +400,7 @@ impl AppState {
     }
 
     /// Locks `active_silo` before `sessions`, and never the other way
-    /// round — the two are taken together often enough for the order to
+    /// round, the two are taken together often enough for the order to
     /// matter.
     pub fn focused_session(&self) -> Result<SessionGuard<'_>, String> {
         let focused = self
@@ -498,7 +498,7 @@ impl AppState {
 /// Which open silo has gone longest without being used.
 ///
 /// A silo with no recorded touch was opened and never used, which makes it
-/// the best thing to close — and `None` sorting below every `Some` gives
+/// the best thing to close, and `None` sorting below every `Some` gives
 /// that for free, which is worth stating because it is the kind of ordering
 /// that is easy to get backwards.
 fn stalest(ids: impl Iterator<Item = Uuid>, touched: &HashMap<Uuid, Instant>) -> Option<Uuid> {
@@ -601,7 +601,7 @@ pub fn focused_id(state: &State<AppState>) -> Result<Uuid, String> {
 /// Records that a silo was used just now.
 ///
 /// This is what the idle timer measures against, so it has to be called on
-/// the way through anything the user did — which is why it lives in the two
+/// the way through anything the user did, which is why it lives in the two
 /// accessors every command already goes through, rather than being
 /// something each command has to remember.
 pub fn touch(state: &State<AppState>, id: Uuid) {

@@ -71,8 +71,6 @@ it has and tells you if the answer is weaker than you might assume.
 
 ## Versioning alone is not protection, and it breaks revocation
 
-This one is worth reading twice.
-
 On a versioned bucket, a DELETE does not remove anything. It writes a delete
 marker and leaves the previous version in place, readable by anyone holding
 `s3:GetObjectVersion`.
@@ -145,8 +143,8 @@ on a folder there is nothing underneath to enforce it.
 What does work on a local drive, strongest first:
 
 **Unplug it.** A disconnected disk cannot be encrypted, deleted or ruined by
-anything running on your computer. It is the oldest answer and it is still
-the best one available here. Plug it in, let the sync finish, unplug it.
+anything running on your computer. Plug it in, let the sync finish, unplug
+it.
 
 **A NAS instead of a bare disk.** Snapshots on ZFS or btrfs, or the
 write-once folders some NAS operating systems offer, are enforced by the
@@ -160,8 +158,8 @@ any size and excellent for a small unchanging set: the emergency kit, the
 handful of documents that would actually hurt to lose.
 
 A second drive you rotate weekly, kept unplugged between times, beats an
-always-connected one with clever permissions. The threat that takes your
-files is running as you, with your rights, on your machine.
+always-connected one with clever permissions: ransomware runs with your own
+access.
 
 ## OneDrive, Dropbox and Google Drive
 
@@ -216,8 +214,8 @@ One reasonable arrangement, for a silo that matters:
 
 If a bucket is not something you want to arrange, an external drive that
 lives unplugged does the same job as copy three. It is offline rather than
-immutable, which stops the same attack for a different reason, and it costs
-one habit instead of one subscription.
+immutable, which stops the same attack for a different reason, and costs
+nothing but the habit.
 
 Check the list of copies under Settings, Backup now and again. It shows when
 each was last written to,

@@ -2,8 +2,8 @@
 //!
 //! Two distinct actions, each with its own registry key so they coexist and
 //! can be told apart:
-//!   - "Add to SilentSilo" — right-click ON a file or a folder item.
-//!   - "Save here from SilentSilo" — right-click on empty space inside a
+//!   - "Add to SilentSilo", right-click ON a file or a folder item.
+//!   - "Save here from SilentSilo", right-click on empty space inside a
 //!     folder window, or on the Desktop itself.
 //!
 //! Not upload/download: a silo is a file on this disk and works with no
@@ -34,7 +34,7 @@ pub fn register_context_menu(exe_path: &Path) -> std::io::Result<()> {
 
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
 
-    // Right-click directly on a file or a folder item — upload it.
+    // Right-click directly on a file or a folder item, upload it.
     write_shell_key(
         &hkcu,
         r"Software\Classes\*\shell",
@@ -53,7 +53,7 @@ pub fn register_context_menu(exe_path: &Path) -> std::io::Result<()> {
     )?;
 
     // Right-click on empty space inside a folder window, or on the Desktop
-    // (a separate registry namespace from a plain folder's background) —
+    // (a separate registry namespace from a plain folder's background),
     // download into that location.
     write_shell_key(
         &hkcu,
@@ -93,7 +93,7 @@ fn write_shell_key(
     Ok(())
 }
 
-/// Removes Explorer context-menu entries — used both for a clean uninstall
+/// Removes Explorer context-menu entries, used both for a clean uninstall
 /// and to clear out a previous version's entries before re-registering
 /// (see `os_integration::MENU_VERSION`).
 pub fn unregister_context_menu() -> std::io::Result<()> {
@@ -124,7 +124,7 @@ mod tests {
     use winreg::enums::HKEY_CURRENT_USER;
 
     /// `cargo test` runs tests in parallel by default, but these two tests
-    /// both write to the exact same registry keys — without serializing
+    /// both write to the exact same registry keys, without serializing
     /// them, one test's `unregister_context_menu()` can wipe out state the
     /// other is mid-assertion on. `lock_or_recover` tolerates a poisoned
     /// mutex (one test panicking) rather than deadlocking the other.
@@ -133,7 +133,7 @@ mod tests {
         TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// The exe path currently registered under the upload verb, if any —
+    /// The exe path currently registered under the upload verb, if any,
     /// parsed straight out of the registry rather than tracked separately,
     /// so it reflects reality regardless of what wrote it (the real app,
     /// an earlier test run, ...).
@@ -149,7 +149,7 @@ mod tests {
         Some(PathBuf::from(&cmd[start..end]))
     }
 
-    /// These tests exercise the exact same HKCU keys the real app uses —
+    /// These tests exercise the exact same HKCU keys the real app uses,
     /// necessary to actually prove the registration logic works, but that
     /// means a naive register-then-delete test would clobber a real
     /// installation on a dev machine as a side effect of `cargo test`.
@@ -171,8 +171,8 @@ mod tests {
         }
     }
 
-    /// Exercises the real per-user registry (HKCU, no admin needed) — the
-    /// same code path the app runs on every startup — then always cleans up
+    /// Exercises the real per-user registry (HKCU, no admin needed), the
+    /// same code path the app runs on every startup, then always cleans up
     /// afterwards so the test suite never leaves entries behind.
     #[test]
     fn register_then_unregister_round_trips_all_four_locations() {
@@ -196,7 +196,7 @@ mod tests {
                 "command should reference the exe path"
             );
             // A `\\?\`-prefixed (canonicalized) path here breaks Explorer's
-            // verb dispatch — this is the exact regression this test exists
+            // verb dispatch, this is the exact regression this test exists
             // to catch, and a plain `.contains()` check above wouldn't
             // notice it (the suffix still matches).
             assert!(

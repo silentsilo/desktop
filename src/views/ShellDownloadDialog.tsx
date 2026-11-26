@@ -19,7 +19,7 @@ export function ShellDownloadDialog(props: Props) {
   const [folder, setFolder] = useState<FolderEntry | null>(null);
   const [entries, setEntries] = useState<VaultEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  // Persists across navigation — a Map (not a Set) so the entries picked in
+  // Persists across navigation, a Map (not a Set) so the entries picked in
   // an earlier folder are still available by the time "Download here" is
   // clicked, after browsing has moved on to a different folder's listing.
   const [selected, setSelected] = useState<Map<string, VaultEntry>>(new Map());

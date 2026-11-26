@@ -46,7 +46,7 @@ function describeLastOpened(at: number): string {
  *
  * Shown whenever none is open, including at first run, because "where do my
  * files live" is a question the user should answer before putting anything
- * in — not one the app should answer for them and reveal later.
+ * in, not one the app should answer for them and reveal later.
  */
 export function SiloPickerView({
   silos,

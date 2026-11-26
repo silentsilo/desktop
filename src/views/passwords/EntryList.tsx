@@ -27,8 +27,8 @@ type Props = {
  *
  * Rows, not cards. A card per login spent three lines on fields the user
  * mostly does not need until they have picked an entry, which capped the
- * screen at four or five logins. A row shows enough to choose — icon, name,
- * username — and everything else belongs to the detail pane.
+ * screen at four or five logins. A row shows enough to choose, icon, name,
+ * username, and everything else belongs to the detail pane.
  */
 export function EntryList({
   entries,
@@ -68,7 +68,7 @@ export function EntryList({
   };
 
   return (
-    // Listbox semantics: one focus stop, arrows move the selection — the
+    // Listbox semantics: one focus stop, arrows move the selection, the
     // same contract the file explorer's list keeps.
     <div
       className={`pw-rows${picking ? " is-picking" : ""}`}
@@ -156,7 +156,7 @@ export function EntryList({
               </span>
               <span className="pw-row-username">{subtitleFor(entry) || " "}</span>
             </div>
-            {/* Quick copies without opening the entry — the two things done
+            {/* Quick copies without opening the entry, the two things done
                 far more often than everything else put together. Stopping
                 propagation so a copy is not also a selection change. */}
             <div className="pw-row-actions">

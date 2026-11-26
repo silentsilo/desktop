@@ -5,14 +5,14 @@ type Unsubscribe = () => void;
 /**
  * Starts a subscription and returns the function that ends it.
  *
- * The naive version of this — assign the unsubscribe function inside
- * `.then()`, call it on teardown — leaks a listener every time it re-runs.
+ * The naive version of this, assign the unsubscribe function inside
+ * `.then()`, call it on teardown, leaks a listener every time it re-runs.
  * Registration is asynchronous, so teardown can happen *before* the promise
  * resolves, at which point the variable it would read is still undefined:
  * nothing is unsubscribed, the promise later resolves against a closure
  * nobody will look at again, and that listener stays live forever.
  *
- * The symptom is duplicated work per event — one toast per leaked listener.
+ * The symptom is duplicated work per event, one toast per leaked listener.
  *
  * Split out from the hook because the race is the whole substance here and
  * it is worth being able to test it without mounting a component.

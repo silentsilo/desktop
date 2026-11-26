@@ -4,7 +4,7 @@ import type { SiloIdleStatus } from "./types";
  * Whether a silo has sat unused long enough to lock itself.
  *
  * Its own setting wins over the app-wide default, and `null` means "follow
- * the default" rather than "never" — the two are different answers and
+ * the default" rather than "never", the two are different answers and
  * conflating them would leave a silo unlocked indefinitely on a setting the
  * user meant as a deferral.
  *

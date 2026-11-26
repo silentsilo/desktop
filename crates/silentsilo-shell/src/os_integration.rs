@@ -19,7 +19,7 @@ struct IntegrationState {
 pub fn register_os_integration(exe_path: &Path) -> std::io::Result<()> {
     #[cfg(windows)]
     {
-        // Clear out whatever a previous version registered first — old and
+        // Clear out whatever a previous version registered first, old and
         // new entries can otherwise coexist (different registry key names).
         let _ = crate::windows::unregister_context_menu();
         crate::windows::register_context_menu(exe_path)?;

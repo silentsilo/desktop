@@ -79,7 +79,7 @@ async fn refuse_foreign_vault(
 ///
 /// Separate from saving on purpose: this is the step where a person decides
 /// whether the server answering on that address is theirs. Nothing is stored
-/// and no credentials are sent — the key is offered before authentication.
+/// and no credentials are sent, the key is offered before authentication.
 #[tauri::command]
 pub async fn sftp_probe_host_key(host: String, port: u16) -> Result<String, String> {
     silentsilo_store::probe_host_key(host.trim(), port)
@@ -184,7 +184,7 @@ pub async fn s3_test_config(app: AppHandle, config: StoreConfigInput) -> Result<
 }
 
 /// Forgets the connection details. What is already in storage is left alone
-/// — it is the user's storage, and deleting their data because they
+///, it is the user's storage, and deleting their data because they
 /// disconnected would be the wrong default.
 #[tauri::command]
 pub async fn s3_disconnect(app: AppHandle) -> Result<(), String> {
@@ -807,7 +807,7 @@ mod deserialisation_tests {
     #[test]
     fn editing_an_sftp_connection_keeps_the_password_and_the_fingerprint() {
         // Blank secrets mean "unchanged", the same rule the other backends
-        // follow — otherwise changing the directory would mean pasting a
+        // follow, otherwise changing the directory would mean pasting a
         // private key back in.
         let stored = StoreConfig::Sftp(silentsilo_store::SftpConfig {
             host: "nas.example.com".into(),

@@ -12,8 +12,8 @@ import {
 /**
  * Holds the theme above the app rather than inside it.
  *
- * The app returns early for each screen before a silo opens — picker,
- * unlock, enrolment, recovery, restore — so state living inside it would
+ * The app returns early for each screen before a silo opens, picker,
+ * unlock, enrolment, recovery, restore, so state living inside it would
  * have to be threaded into every one of those branches to reach them. One
  * provider above the whole tree reaches all of them, including the ones
  * added later.

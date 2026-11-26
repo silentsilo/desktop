@@ -4,7 +4,7 @@ import type { ImportCategoryChoice } from "../../lib/passwordImport";
 import { t, useLocale } from "../../i18n";
 
 type Props = {
-  /** "12 logins from Bitwarden" — already counted and named by the caller. */
+  /** "12 logins from Bitwarden", already counted and named by the caller. */
   what: string;
   /** Category names already in the silo, offered as filing targets. */
   categories: string[];

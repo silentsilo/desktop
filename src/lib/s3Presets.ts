@@ -23,7 +23,7 @@ export type S3Preset = {
   hint: string;
 };
 
-/** The providers worth one-click support. `custom` is the escape hatch —
+/** The providers worth one-click support. `custom` is the escape hatch,
  * anything speaking S3 works, these just spare the user a docs lookup for
  * the two settings that are easy to get wrong (endpoint shape and whether
  * path-style addressing is required). */
@@ -126,7 +126,7 @@ export function detectPreset(endpoint: string): S3Preset {
 }
 
 /** Fields the user must supply before a save is worth attempting.
- * `secretAccessKey` is deliberately absent — blank means "keep the stored
+ * `secretAccessKey` is deliberately absent, blank means "keep the stored
  * one", which is valid when editing an existing connection. */
 export function missingFields(form: S3Form, hasStoredSecret: boolean): string[] {
   const missing: string[] = [];

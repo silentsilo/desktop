@@ -17,7 +17,7 @@ type Props = {
  *
  * Shared by the settings panel and by first-run joining, because a device
  * that is about to join a silo has to describe the same bucket in the same
- * way — and the two drifting apart would mean one of them silently accepting
+ * way, and the two drifting apart would mean one of them silently accepting
  * a config the other rejects.
  */
 export function S3ConfigForm({ form, set, preset, choosePreset, connected }: Props) {

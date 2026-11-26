@@ -237,7 +237,7 @@ export function storeDraftPayload(draft: StoreDraft) {
  * What still has to be filled in, named the way the labels are.
  *
  * `hasStoredSecret` says whether a saved password may stand in for a blank
- * field — true when editing an existing connection, false when describing
+ * field, true when editing an existing connection, false when describing
  * one for the first time, where there is nothing to fall back on.
  */
 export function missingStoreFields(draft: StoreDraft, hasStoredSecret: boolean): string[] {
@@ -283,7 +283,7 @@ export function missingStoreFields(draft: StoreDraft, hasStoredSecret: boolean):
  * SSH has no certificate authority: the only thing that distinguishes your
  * server from anyone who can answer on that address is its key, and a client
  * that accepts whatever it is offered authenticates nothing. So this is a
- * step of its own rather than a checkbox — the fingerprint is fetched,
+ * step of its own rather than a checkbox, the fingerprint is fetched,
  * shown, and only stored once the user says it is theirs.
  *
  * How they check it is the one thing this screen can't do for them: on the
@@ -699,7 +699,7 @@ type Props = {
  * Describing a place to keep a backup.
  *
  * Shared by Settings and by setting a silo up from an existing backup,
- * because those ask the identical question and had already drifted once —
+ * because those ask the identical question and had already drifted once,
  * the restore flow could only reach a bucket while Settings could reach
  * three kinds.
  */

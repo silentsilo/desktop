@@ -1,4 +1,4 @@
-//! OS shell integration — CLI args and single-instance upload queue.
+//! OS shell integration, CLI args and single-instance upload queue.
 
 mod autostart;
 pub mod autotype;
@@ -99,7 +99,7 @@ fn queue_file_path() -> std::path::PathBuf {
         .join(UPLOAD_QUEUE)
 }
 
-/// Overwrites rather than appends — a second "Save here from SilentSilo"
+/// Overwrites rather than appends, a second "Save here from SilentSilo"
 /// background click before the first is handled should replace the target
 /// directory, not queue up two downloads.
 pub fn queue_download(target_dir: &str) -> std::io::Result<()> {

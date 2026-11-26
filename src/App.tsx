@@ -364,7 +364,7 @@ export default function App() {
   /// in the same render.
   const contentFetchRunningRef = useRef(false);
   // Held by ThemeProvider above this component, so the screens shown before
-  // a silo opens — each of which returns early below — reach it too.
+  // a silo opens, each of which returns early below, reach it too.
   const themeControl = useTheme();
   const theme = themeControl?.theme ?? "dark";
 
@@ -513,7 +513,7 @@ export default function App() {
   const searchSeq = useRef(0);
   const viewRef = useRef<View>("files");
   /// Read inside the auto-lock sweep, which must not restart every time
-  /// bootstrap changes — a re-created interval would keep pushing the next
+  /// bootstrap changes, a re-created interval would keep pushing the next
   /// sweep further out.
   const focusedSiloRef = useRef<string | null>(null);
   /// Whether an import or an export is running. Read by the OS drop handler,
@@ -534,7 +534,7 @@ export default function App() {
       if (paths.length === 0) return;
       setPendingShellUploadPaths(paths);
     } catch {
-      // Silo isn't actually unlocked yet — the queue stays on disk and this
+      // Silo isn't actually unlocked yet, the queue stays on disk and this
       // gets retried right after the next successful unlock.
     }
   }, []);
@@ -545,7 +545,7 @@ export default function App() {
       if (!targetDir) return;
       setPendingShellDownloadTarget(targetDir);
     } catch {
-      // Silo isn't actually unlocked yet — the queue stays on disk and this
+      // Silo isn't actually unlocked yet, the queue stays on disk and this
       // gets retried right after the next successful unlock.
     }
   }, []);
@@ -718,7 +718,7 @@ export default function App() {
     [toasts],
   );
 
-  // Suppress the native WebView right-click menu everywhere by default —
+  // Suppress the native WebView right-click menu everywhere by default,
   // only the file explorer wires up a real context menu (folder/file
   // actions); other screens have no use for a right-click menu at all.
   useEffect(() => {
@@ -730,7 +730,7 @@ export default function App() {
   useEventSubscription(
     () =>
       listen("shell-upload-pending", () => {
-        // Only safe to drain the queue once we know a session is open —
+        // Only safe to drain the queue once we know a session is open,
         // otherwise vault_list_all_folders would fail and the paths would be
         // lost rather than left for the post-unlock check to pick up.
         if (unlockedRef.current) {
@@ -1151,7 +1151,7 @@ export default function App() {
       const list = await invoke<TrashItem[]>("vault_list_trash");
       if (epoch === sessionEpoch.current) setTrashEntries(list);
     } catch {
-      // Silent — this also runs opportunistically right after unlock (to
+      // Silent, this also runs opportunistically right after unlock (to
       // populate the sidebar badge) and on every trash/restore action, so a
       // toast here would be noisy; the Trash view's own visit still surfaces
       // failures loudly enough to matter.
@@ -1769,7 +1769,7 @@ export default function App() {
 
   const lockSilo = useCallback(async () => {
     // This silo, not every open one. The button lives in one silo's
-    // sidebar, so it reads as a statement about that silo — locking the
+    // sidebar, so it reads as a statement about that silo, locking the
     // others too is a decision the user did not make here. Quitting and
     // the per-silo timeouts are what close the rest.
     const id = focusedSiloRef.current;
@@ -1781,7 +1781,7 @@ export default function App() {
 
   /// Backing out of enrolment. The silo was created moments ago and holds
   /// nothing, so discarding it outright is both what the user means and the
-  /// only outcome that doesn't leave an unopenable entry in the list — a
+  /// only outcome that doesn't leave an unopenable entry in the list, a
   /// silo with no enrolled key cannot be opened again.
   const discardUnenrolledSilo = async () => {
     const silo = bootstrap?.silo;
@@ -2168,7 +2168,7 @@ export default function App() {
       await showLanded(true);
       const wasCancelled = uploadCancelRef.current && counters.imported + counters.failed < total;
       if (wasCancelled) {
-        // toasts.info (not .error) — .error runs the message through
+        // toasts.info (not .error), .error runs the message through
         // formatAppError, which rewrites anything containing "cancelled"
         // into a FIDO-prompt message unrelated to this import.
         toasts.info(
@@ -2210,7 +2210,7 @@ export default function App() {
       // Not swallowed silently: if this rejects (e.g. a stale build that
       // predates this command), the Rust-side flows would otherwise just
       // run to completion with no visible sign the click did nothing.
-      console.error("cancel_import failed — Rust-side cancellation may not have registered:", e);
+      console.error("cancel_import failed, Rust-side cancellation may not have registered:", e);
     });
   };
 
@@ -2279,7 +2279,7 @@ export default function App() {
     } catch (e) {
       if (String(e) === "cancelled") {
         await refreshCurrentFolder();
-        // toasts.info, not .error — see the comment on the equivalent
+        // toasts.info, not .error, see the comment on the equivalent
         // branch in handleAddFiles for why.
         toasts.info(t("app.folder_stopped"));
       } else {
@@ -2297,7 +2297,7 @@ export default function App() {
 
   // Ctrl+V in the file explorer: paste whatever files/folders are on the OS
   // clipboard (e.g. copied with Ctrl+C in Windows Explorer). A no-op if the
-  // clipboard doesn't hold any files — this must never fight with normal
+  // clipboard doesn't hold any files, this must never fight with normal
   // Ctrl+V text-paste elsewhere in the app.
   const handlePasteFiles = async () => {
     const paths = await invoke<string[]>("clipboard_file_paths").catch(() => []);
@@ -2670,7 +2670,7 @@ export default function App() {
     await trashEntries_([entry]);
   };
 
-  // Context-menu variant of startRename — same reasoning as handleTrashEntry.
+  // Context-menu variant of startRename, same reasoning as handleTrashEntry.
   const startRenameEntry = (entry: VaultEntry) => {
     setRenamingId(entry.id);
     setRenameValue(entry.name);

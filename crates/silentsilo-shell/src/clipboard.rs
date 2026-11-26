@@ -7,7 +7,7 @@
 #[cfg(windows)]
 mod imp {
     // Fully-qualified (leading `::`) to disambiguate from this crate's own
-    // `windows` module (the Explorer context-menu integration) — a bare
+    // `windows` module (the Explorer context-menu integration), a bare
     // `windows::` path here would resolve to that local module instead of
     // the `windows` (windows-rs) dependency.
     use ::windows::Win32::Foundation::HWND;
@@ -18,7 +18,7 @@ mod imp {
     use ::windows::Win32::UI::Shell::{DragQueryFileW, HDROP};
 
     /// Returns the paths held in the clipboard as a Windows "drop" (CF_HDROP)
-    /// — i.e. whatever a Ctrl+C in Explorer put there. Empty if the clipboard
+    ///, i.e. whatever a Ctrl+C in Explorer put there. Empty if the clipboard
     /// holds something else (plain text, an image, etc.) or nothing at all.
     pub fn read_file_paths() -> Vec<String> {
         unsafe {

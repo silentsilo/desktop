@@ -34,7 +34,7 @@ describe("subscribeWithDisposal", () => {
   it("ends a subscription that registers after disposal", async () => {
     // The leak this exists to prevent: React tears the effect down before
     // the async registration resolves, so the listener would otherwise stay
-    // live with nothing holding a reference to it — and every event after
+    // live with nothing holding a reference to it, and every event after
     // that gets handled twice.
     const { subscribe, unsubscribe, register } = deferredSubscription();
 
@@ -58,7 +58,7 @@ describe("subscribeWithDisposal", () => {
   });
 
   it("leaves exactly one listener alive across a StrictMode double-mount", async () => {
-    // Two mounts, the first torn down immediately — which is what React does
+    // Two mounts, the first torn down immediately, which is what React does
     // in development. Both registrations resolve late, so only the surviving
     // one may still be subscribed.
     const first = deferredSubscription();

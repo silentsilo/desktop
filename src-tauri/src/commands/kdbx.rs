@@ -696,9 +696,10 @@ pub(crate) async fn whole_where_withheld(
     }
     for entry in entries.iter_mut().filter(|e| e.get("withheld").is_some()) {
         let id = text(entry, "id").to_string();
-        let whole = by_id
-            .remove(&id)
-            .ok_or("An entry to export is no longer in the silo.")?;
+        let whole = by_id.remove(&id).ok_or(crate::err::coded!(
+            "err.export_entry_gone",
+            "An entry to export is no longer in the silo."
+        ))?;
         *entry = whole;
     }
     Ok(())

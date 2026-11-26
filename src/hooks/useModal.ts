@@ -54,7 +54,7 @@ export function useModal(onClose: (() => void) | undefined, open = true) {
     const card = ref.current;
     if (!card) return;
 
-    // Whatever had focus when the dialog opened gets it back on close —
+    // Whatever had focus when the dialog opened gets it back on close,
     // otherwise focus falls to the top of the document and a keyboard user
     // has to tab back to where they were.
     const previous = document.activeElement as HTMLElement | null;

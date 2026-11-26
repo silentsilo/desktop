@@ -29,7 +29,7 @@ export function AuthShell({ title, subtitle, children }: AuthShellProps) {
       <div className="auth-atmosphere" aria-hidden />
       {/* Every screen before the silo opens shares this shell, so putting
           the toggle here covers the picker, unlock, enrolment, recovery and
-          restore at once — all of which a person can be looking at for a
+          restore at once, all of which a person can be looking at for a
           while, and none of which could change the theme before. */}
       <div className="auth-corner">
         {/* Updates, startup and the browser extension belong to the app, and

@@ -346,8 +346,8 @@ pub fn cancel_import(state: State<AppState>) {
 }
 
 /// Clears any previous cancellation before starting a new cancellable batch
-/// (folder import, paste). Separate from `cancel_import` so nested calls —
-/// e.g. `vault_paste_paths` importing a folder as one of its items — don't
+/// (folder import, paste). Separate from `cancel_import` so nested calls,
+/// e.g. `vault_paste_paths` importing a folder as one of its items, don't
 /// clobber a cancellation the outer call is still checking for.
 #[tauri::command(async)]
 pub fn reset_import_cancel(state: State<AppState>) {
@@ -451,7 +451,7 @@ fn import_folder_recursive(
                 continue;
             }
         };
-        // Skip symlinks / junctions — following them can recurse forever on Windows.
+        // Skip symlinks / junctions, following them can recurse forever on Windows.
         if meta.file_type().is_symlink() {
             continue;
         }
@@ -1393,7 +1393,7 @@ pub struct PasteResult {
     failed: Vec<String>,
 }
 
-/// Imports whatever the OS clipboard held (Ctrl+C in Explorer, Ctrl+V here) —
+/// Imports whatever the OS clipboard held (Ctrl+C in Explorer, Ctrl+V here),
 /// a mix of files and folders is fine; each folder is imported the same way
 /// as "Upload folder" (recursively, with its own progress events), each file
 /// the same way as a regular file upload. Per-item failures are collected
@@ -1443,7 +1443,7 @@ pub async fn vault_paste_paths(
                             .push(format!("{name}: {skipped} items could not be read"));
                     }
                     // A cancelled sub-folder import means cancellation was
-                    // requested — stop the whole paste rather than recording the
+                    // requested, stop the whole paste rather than recording the
                     // folder as a failure.
                     Err(e) if e == IMPORT_CANCELLED => break,
                     // The silo went away. Every remaining item would fail for
@@ -1469,7 +1469,7 @@ pub async fn vault_paste_paths(
                 }
             }
             // Neither a file nor a directory anymore (e.g. moved/deleted since
-            // it was copied) — silently skipped, same as a no-op paste of it.
+            // it was copied), silently skipped, same as a no-op paste of it.
         }
 
         log_added(
@@ -2102,7 +2102,7 @@ pub fn vault_export_folder_clashes(
 /// Recursively decrypt a folder (and all its subfolders/files) into
 /// `dest_dir`, downloading any cloud-only blobs on demand. The folder
 /// itself is recreated as a subdirectory of `dest_dir` (matching normal
-/// "download folder" behavior — you pick a destination, not the final
+/// "download folder" behavior, you pick a destination, not the final
 /// path). Returns the number of files exported.
 ///
 /// `skip_existing` is the answer to the question `vault_export_folder_clashes`
@@ -2118,8 +2118,8 @@ pub async fn vault_export_folder(
     let folder_id = Uuid::parse_str(&folder_id).map_err(|e| e.to_string())?;
     crate::state::lock_recovering(&app.state::<AppState>().open_cancelled).remove(&folder_id);
 
-    // The whole subtree as a plan — destination paths, blob ids, wrapped
-    // keys — read under one short lock at database speed. The download and
+    // The whole subtree as a plan, destination paths, blob ids, wrapped
+    // keys, read under one short lock at database speed. The download and
     // the decrypts run against the plan, holding nothing, so listing a
     // folder while a large export runs stays instant.
     // Pinned with the plan, as for one file.
@@ -2251,7 +2251,11 @@ fn plan_export(
             match entry {
                 VaultEntry::Folder(sub) => {
                     if !seen.insert(sub.id) {
-                        return Err("This folder contains itself, so it cannot be exported.".into());
+                        return Err(crate::err::coded!(
+                            "err.folder_contains_itself",
+                            "This folder contains itself, so it cannot be exported."
+                        )
+                        .into());
                     }
                     if depth + 1 > MAX_EXPORT_DEPTH {
                         return Err(format!(
@@ -2279,7 +2283,7 @@ fn plan_export(
 
 /// Defense-in-depth against a traversal-shaped name (`..`, a path
 /// separator) reaching this point despite `silentsilo-vfs`'s own
-/// validation at creation/rename time — e.g. a vault.db written by an
+/// validation at creation/rename time, e.g. a vault.db written by an
 /// older client version, or one tampered with outside the normal app.
 /// `Path::join` does not sanitize `..` components, so without this check
 /// a bad name could write outside the directory the user chose to export
@@ -2294,7 +2298,11 @@ fn safe_join(dest: &Path, name: &str) -> Result<PathBuf, String> {
         || name.contains(['/', '\\', ':'])
         || name.chars().any(char::is_control)
     {
-        return Err(format!("This name cannot be used as a file name: {name:?}"));
+        return Err(crate::err::coded_with(
+            "err.name_not_a_file_name",
+            format!("This name cannot be used as a file name: {name:?}"),
+            &[("name", &name)],
+        ));
     }
     Ok(dest.join(name))
 }
@@ -2305,7 +2313,7 @@ pub use silentsilo_app::{open_scratch_dir, wipe_open_scratch};
 ///
 /// The copy is written read-only on purpose. Editing and saving would go to
 /// a scratch file that gets wiped at lock, and the user would lose the work
-/// with nothing on screen to warn them — an application complaining that it
+/// with nothing on screen to warn them, an application complaining that it
 /// cannot save is a far better outcome than silence.
 ///
 /// Each step reports to the window (`open-progress`), since a large file
@@ -3594,7 +3602,7 @@ pub async fn passwords_read_import_csv(app: AppHandle, path: String) -> Result<S
 
 /// Writes the plaintext password export to a user-chosen path.
 ///
-/// The plaintext is the point — every other manager's importer expects an
+/// The plaintext is the point, every other manager's importer expects an
 /// unencrypted CSV, and a vault you can't leave is a trap. The UI warns
 /// before calling this. The file is this user's alone (`write_owner_only`)
 /// for the time between writing it and the user moving or deleting it.
@@ -3650,9 +3658,9 @@ pub struct BlobStatus {
 pub async fn vault_blob_status(app: AppHandle) -> Result<BlobStatus, String> {
     run_blocking(move || {
         let state = app.state::<AppState>();
-        // The database's half under a short lock; the blobs directory —
+        // The database's half under a short lock; the blobs directory,
         // thousands of entries on a full-copy silo, and this command runs on
-        // a 20-second timer — is walked with no lock held at all.
+        // a 20-second timer, is walked with no lock held at all.
         let (root, sizes, attachments) = {
             let session_guard = state.focused_session()?;
             let session = session_guard

@@ -41,10 +41,10 @@ export type VaultEntry =
 
 /** A trashed entry plus the path of the folder it was trashed out of (its
  * own name/path already appears via the entry itself, so this is the
- * *containing* folder's path — where it used to live). */
+ * *containing* folder's path, where it used to live). */
 export type TrashItem = VaultEntry & { original_path: string };
 
-/** A search result plus the folder it lives in — three files called
+/** A search result plus the folder it lives in, three files called
  * "scan.pdf" are indistinguishable without the path. */
 export type SearchHit = VaultEntry & { folder_path: string };
 
@@ -54,7 +54,7 @@ export type Silo = {
   name: string;
   path: string;
   last_opened: number;
-  /** False when the folder isn't reachable — an unplugged drive, say. */
+  /** False when the folder isn't reachable, an unplugged drive, say. */
   present: boolean;
   /** Unlocked right now, so opening it costs nothing. */
   unlocked: boolean;

@@ -1,8 +1,8 @@
 /**
  * Walks the rendered page and reports anything a user could not read.
  *
- * Written because a contrast failure is invisible to whoever wrote the CSS —
- * you see the colour you intended, not the colour that won the cascade — and
+ * Written because a contrast failure is invisible to whoever wrote the CSS,
+ * you see the colour you intended, not the colour that won the cascade, and
  * because hover and disabled states are only reachable by actually being in
  * them. A rule that sets a dark background without setting a colour to match
  * looks fine until the pointer lands on it.
@@ -26,7 +26,7 @@ function parseColor(value: string): Rgba | null {
  *
  * Rough on purpose: the point is to know roughly how light the surface is,
  * and a button's gradient never spans light and dark. Ignoring it entirely
- * would be much worse — it would report the card behind the button as the
+ * would be much worse, it would report the card behind the button as the
  * background and pass a white-on-violet label as white-on-near-black.
  */
 function averageGradientColor(image: string): Rgba | null {
@@ -46,7 +46,7 @@ function averageGradientColor(image: string): Rgba | null {
 /**
  * Known limitation: `color-mix()` computes to `oklab(...)`, which this does
  * not parse. Such a surface is skipped and the walk continues to the layer
- * behind it — which understates translucent tints slightly, and is the safe
+ * behind it, which understates translucent tints slightly, and is the safe
  * direction to be wrong in. Reading a colour the tool cannot express would
  * be worse than reading the one behind it.
  */
@@ -54,7 +54,7 @@ function surfaceOf(el: Element): Rgba | null {
   const style = getComputedStyle(el);
   // A background image paints over the background colour, so when both are
   // set the gradient is what the eye lands on. Reading the colour first made
-  // a white-on-violet button — violet gradient, 3% white beneath it — report
+  // a white-on-violet button, violet gradient, 3% white beneath it, report
   // as white on white at 1:1, which is a failure that isn't there.
   if (style.backgroundImage !== "none") {
     const gradient = averageGradientColor(style.backgroundImage);
@@ -76,7 +76,7 @@ function over(top: Rgba, bottom: Rgb): Rgb {
  *
  * Composites the translucent layers rather than stopping at the first one:
  * the auth card is white at 3% over a near-black page, and treating that as
- * white made every reading on it meaningless — the first version of this
+ * white made every reading on it meaningless, the first version of this
  * audit reported the whole screen as failing, which is its own kind of
  * uselessness.
  */
@@ -157,7 +157,7 @@ function check(el: HTMLElement, state: string, findings: Finding[]) {
 /**
  * Forces each state by injecting a stylesheet that re-applies the `:hover`
  * and `:focus-visible` rules unconditionally. Dispatching pointer events
- * cannot do this — the CSS `:hover` pseudo-class only responds to a real
+ * cannot do this, the CSS `:hover` pseudo-class only responds to a real
  * cursor, so scripted hovers report the resting colours and quietly pass.
  */
 function withForcedState(state: "hover" | "focus", run: () => void) {
@@ -199,7 +199,7 @@ export function auditContrast(): Finding[] {
     for (const el of els) check(el, "focus", findings);
   });
 
-  // Body text too — the same cascade accidents hit paragraphs.
+  // Body text too, the same cascade accidents hit paragraphs.
   for (const el of document.querySelectorAll<HTMLElement>("p, h1, h2, h3, li, strong, span.hint")) {
     if (el.offsetParent === null || !el.innerText.trim()) continue;
     check(el, "rest", findings);

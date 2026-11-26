@@ -44,7 +44,7 @@ describe("rectIntersectsBox", () => {
 
   it("is false for a zero-size box sitting exactly on a rect's edge", () => {
     // The strict inequalities mean a degenerate box only overlaps a rect that
-    // strictly contains its point — sitting right on the boundary doesn't count.
+    // strictly contains its point, sitting right on the boundary doesn't count.
     const zeroBox = { x0: 20, y0: 20, x1: 20, y1: 20 };
     expect(rectIntersectsBox({ left: 20, right: 30, top: 10, bottom: 30 }, zeroBox)).toBe(false);
   });

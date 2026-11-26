@@ -421,7 +421,7 @@ pub async fn vault_rebuild_from_snapshot(app: AppHandle, silo_id: String) -> Res
     Ok(applied)
 }
 
-/// Downloads a blob this device doesn't hold — either another device
+/// Downloads a blob this device doesn't hold, either another device
 /// uploaded it, or the local cache evicted it to reclaim space.
 #[tauri::command]
 pub async fn sync_fetch_blob(
@@ -485,7 +485,7 @@ pub async fn vault_preview_join(
     config: crate::commands::storage::StoreConfigInput,
 ) -> Result<JoinPreview, String> {
     // The bucket details are passed in rather than read from a silo,
-    // because at this point there is no silo — that is the whole situation.
+    // because at this point there is no silo, that is the whole situation.
     let store = crate::commands::storage::describe(config, None)?.store;
     let Some(manifest) = sync::read_manifest(&*store)
         .await
@@ -1266,7 +1266,7 @@ pub async fn vault_test_restore(app: AppHandle, code: String) -> Result<RestoreT
     // Opening one puts the plaintext working copy under the machine's own
     // scratch base, keyed by the silo's path, and nothing under this
     // directory reaches it. Left alone, every trial restore dropped a fully
-    // decrypted `vault.db` — the entire tree of folder and file names — in
+    // decrypted `vault.db`, the entire tree of folder and file names, in
     // `work/open`, under a fresh name each run, and none of them were ever
     // cleaned up. Guarded so it happens whichever way this function leaves.
     let _plaintext = ScratchWorkDir(root.clone());

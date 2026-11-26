@@ -87,7 +87,7 @@ export function parseCsv(text: string): string[][] {
     } else if (char === "\n") {
       endRow();
     } else if (char === "\r") {
-      // CRLF — the \n branch handles the row break.
+      // CRLF, the \n branch handles the row break.
     } else {
       field += char;
     }
@@ -133,7 +133,7 @@ export function detectFormat(headers: string[]): CsvFormat {
     return "silentsilo";
   }
   // Chrome's export is exactly name,url,username,password,note (Edge writes
-  // the same) — checked after the others because those columns are common
+  // the same), checked after the others because those columns are common
   // enough to collide.
   if (set.has("name") && set.has("url") && set.has("username") && set.has("password")) {
     return "chrome";
@@ -160,7 +160,7 @@ function buildIndex(headers: string[]): Map<string, number> {
   const index = new Map<string, number>();
   headers.forEach((h, i) => {
     const key = normalizeHeader(h);
-    // First occurrence wins — some exporters repeat column names.
+    // First occurrence wins, some exporters repeat column names.
     if (!index.has(key)) index.set(key, i);
   });
   return index;
@@ -193,7 +193,7 @@ export function applyTotp(entry: PasswordEntry, raw: string): boolean {
 /**
  * Converts CSV text into importable entries. Rows with neither a password
  * nor a TOTP secret are counted as `skipped` rather than imported as empty
- * shells — Bitwarden and 1Password exports interleave secure notes, cards
+ * shells, Bitwarden and 1Password exports interleave secure notes, cards
  * and identities with logins, and none of those fit this schema.
  */
 export function csvToEntries(text: string, now: () => number = Date.now): ImportResult {

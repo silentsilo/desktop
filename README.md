@@ -59,21 +59,14 @@ tag from there, and the lockfile pins the commit. The phone apps
 ([silentsilo/mobile](https://github.com/silentsilo/mobile)) pin the same
 crates.
 
-| Crate | Where | Role |
-|-------|-------|------|
-| `silentsilo` | here, `src-tauri/` | The app: commands, sessions, flows |
-| `silentsilo-shell` | here, `crates/` | Explorer context menu, clipboard, autostart, tray plumbing, the browser and SSH agent channels |
-| `silentsilo-browser-host` | here, `crates/` | The native messaging host the browser starts, which relays to the app |
-| `silentsilo-app` | core | Sessions, the sync pass, the activity log as the app uses it |
-| `silentsilo-audit` | core | The activity log: sealed events, segments, the queue on the device |
-| `silentsilo-cloud` | core | OneDrive, Dropbox and Google Drive: sign-in, tokens, stores |
-| `silentsilo-crypto` | core | AES-GCM streaming, envelope encryption |
-| `silentsilo-vault` | core | Silo provisioning; `vault.db` encrypted at rest (AES-256-GCM) |
-| `silentsilo-vfs` | core | Folder/file tree, operation log |
-| `silentsilo-fido` | core | FIDO2 security keys and Windows Hello |
-| `silentsilo-s3` | core | S3-compatible object storage client |
-| `silentsilo-store` | core | Backup storage: bucket, folder, iCloud Drive, WebDAV or SFTP |
-| `silentsilo-sync` | core | Multi-device sync over whichever of those |
+| Crate | Role |
+|-------|------|
+| `silentsilo` (`src-tauri/`) | The app: commands, sessions, flows |
+| `silentsilo-shell` (`crates/`) | Explorer context menu, clipboard, autostart, tray plumbing, the browser and SSH agent channels |
+| `silentsilo-browser-host` (`crates/`) | The native messaging host the browser starts, which relays to the app |
+
+The core crates are listed in the
+[core README](https://github.com/silentsilo/core#readme).
 
 ## Silos
 
@@ -150,27 +143,13 @@ since envelopes are published to the bucket so other devices can join.
 
 ## Silos a company provisions
 
-A silo can be created as organisation-administered, which is a question asked
-once, when the first key is enrolled, and off unless someone ticks it. The key
-enrolled then stays the organisation's way in: the person using that computer
-cannot retire it, cannot regenerate or disable the recovery code, and cannot
-rotate the silo's encryption key without it. Each of those asks for one of the
-organisation's keys and verifies it against the silo before going ahead.
-
-It is meant for a company setting a silo up for an employee, so the archive
-survives the employee leaving. Three things keep it from being a way to take
-somebody's vault away from them: it can only be chosen while the silo is being
-created, never added to one already in use; every device shows those keys with
-an Organisation badge, so nothing about it is hidden from the person using it;
-and it changes nothing about what the key can decrypt. An organisation key
-unlocks exactly like any other.
-
-Such a silo also keeps an activity log for the organisation: every device
-writes it, only the organisation's keys read it, and everyone using the silo
-sees that it is on.
-
-The provisioning procedure, onboarding three ways and offboarding included,
-is in [`docs/ORGANISATIONS.md`](docs/ORGANISATIONS.md).
+A silo can be created as administered by an organisation, only while it is
+being created. The organisation's key then stays: the person using that
+computer cannot remove it, change the recovery code or rotate the silo's key
+without it, and every device shows it with an Organisation badge. It opens the
+silo like any other key. Such a silo also keeps an activity log only the
+organisation's keys read. The procedure is in
+[`docs/ORGANISATIONS.md`](docs/ORGANISATIONS.md).
 
 ## Optional backup and multi-device sync
 
@@ -198,87 +177,9 @@ nothing is readable in transit.
 
 ## Uninstalling
 
-A silo is a folder you chose, and uninstalling never touches it. Nothing in
-your backup storage is touched either. What the uninstaller does remove,
-whatever you answer on its one question:
-
-- the application itself, from its install folder
-- the Explorer menu entries (*Add to SilentSilo*, *Save here from SilentSilo*)
-- the sign-in entry that starts it, so Windows stops trying to run it
-- the browser extension's registration: its host, the host's two manifests,
-  and the keys named `com.silentsilo.desktop` under
-  `HKCU\Software\Google\Chrome\NativeMessagingHosts` (read by Chrome and
-  Brave), `HKCU\Software\Microsoft\Edge\NativeMessagingHosts` and
-  `HKCU\Software\Mozilla\NativeMessagingHosts` (Firefox)
-- `%LOCALAPPDATA%\SilentSilo\upload-queue.txt` and `download-queue.txt`,
-  which hold the paths of whatever was last right-clicked
-
-Ticking **Delete the application data** also removes:
-
-- `%APPDATA%\com.silentsilo.desktop`, the list of silos this computer keeps
-  (names and folder paths) and the auto-type settings. Losing it costs the list, not the data: the app
-  finds a silo again from its folder.
-- `%LOCALAPPDATA%\SilentSilo`, the encrypted working copies, the cache and
-  the browser extension setting
-- `%LOCALAPPDATA%\com.silentsilo.desktop`, WebView2's profile for this app
-
-Two things stay behind in either case, and have to be removed by hand if you
-want them gone:
-
-- **Your silo folders.** Deleting one deletes that silo, and no copy of the
-  files is kept anywhere else unless you set one up. There is no undo.
-- **Windows Credential Manager** keeps the storage credentials you saved,
-  and the device secret of a silo that has no key yet (a key opening it
-  empties that one). Open *Credential Manager* → *Windows Credentials* and
-  remove the entries ending in `.com.silentsilo.desktop`. Do it after the
-  silo folders, not before: a silo with no key does not open without its
-  device secret.
-
-### On Linux
-
-Remove the .deb with your package manager, or delete the AppImage.
-Neither touches your silo folders or your backup storage. What the app
-leaves in your home, to remove by hand if you want it gone:
-
-- `~/.local/share/com.silentsilo.desktop`, the list of silos (names and
-  folder paths), and `~/.local/share/SilentSilo`, the app's settings and,
-  for the AppImage, the copy of the browser host
-- `~/.cache/silentsilo`, the encrypted working copies, the cache and, on a
-  system without a keyring, the secret files you agreed to keep there
-- `~/.config/autostart/com.silentsilo.desktop.desktop`, if it starts at
-  login
-- the browser extension's manifests, `com.silentsilo.desktop.json` under
-  each browser's `NativeMessagingHosts` (or Firefox's
-  `native-messaging-hosts`). Turning the extension off in Settings before
-  uninstalling removes them.
-- storage credentials, and the device secret of a silo with no key yet, in
-  your keyring (GNOME Keyring or KWallet, through the Secret Service), under
-  names ending in `.com.silentsilo.desktop`. As on Windows, remove them
-  after the silo folders, not before.
-
-### On macOS
-
-Quit SilentSilo and move it from Applications to the Trash. That does not
-touch your silo folders or your backup storage. What the app leaves in your
-home, to remove by hand if you want it gone:
-
-- `~/Library/Application Support/com.silentsilo.desktop`, the list of silos
-  (names and folder paths)
-- `~/Library/Application Support/SilentSilo`, the app's settings and its
-  copy of the browser host, and `~/.cache/silentsilo`, the encrypted working
-  copies
-- `~/Library/Caches/com.silentsilo.desktop` and
-  `~/Library/WebKit/com.silentsilo.desktop`, the window's caches
-- `~/Library/LaunchAgents/com.silentsilo.desktop.plist`, if it starts at
-  login
-- the browser extension's manifests, `com.silentsilo.desktop.json` under
-  each browser's `NativeMessagingHosts` in `~/Library/Application Support`.
-  Turning the extension off in Settings before deleting the app removes
-  them.
-- storage credentials, Touch ID keys and the device secret of a silo with
-  no key yet, in your login keychain, under names ending in
-  `.com.silentsilo.desktop`. As on Windows, remove them after the silo
-  folders, not before.
+Uninstalling never touches your silo folders or your backup storage. What
+stays behind on each system, and how to remove it, is in
+[`docs/UNINSTALL.md`](docs/UNINSTALL.md).
 
 ## Dev
 
@@ -295,76 +196,13 @@ Touch ID keys by their full id, and cargo's checkout of core passes the
 git config --global core.longpaths true
 ```
 
-### Working on core at the same time
-
-The core crates come from git at a pinned tag. To build the app against a
-local checkout instead, create `.cargo/config.toml` (gitignored):
-
-```toml
-[patch."https://github.com/silentsilo/core"]
-silentsilo-app = { path = "../silentsilo.core/crates/silentsilo-app" }
-silentsilo-audit = { path = "../silentsilo.core/crates/silentsilo-audit" }
-silentsilo-cloud = { path = "../silentsilo.core/crates/silentsilo-cloud" }
-silentsilo-core = { path = "../silentsilo.core/crates/silentsilo-core" }
-silentsilo-crypto = { path = "../silentsilo.core/crates/silentsilo-crypto" }
-silentsilo-vault = { path = "../silentsilo.core/crates/silentsilo-vault" }
-silentsilo-vfs = { path = "../silentsilo.core/crates/silentsilo-vfs" }
-silentsilo-store = { path = "../silentsilo.core/crates/silentsilo-store" }
-silentsilo-sync = { path = "../silentsilo.core/crates/silentsilo-sync" }
-silentsilo-fido = { path = "../silentsilo.core/crates/silentsilo-fido" }
-silentsilo-s3 = { path = "../silentsilo.core/crates/silentsilo-s3" }
-```
-
-That file rewrites `Cargo.lock`. Delete it and run `cargo check` to restore
-the lockfile before committing; `node scripts/check-lockfile.mjs` says whether
-the lockfile still points at core, and CI runs it.
-
-The storage and sync integration tests live in core, along with the container
-setup that feeds them.
-
-```bash
-./scripts/test-local.ps1
-```
-
-runs the whole CI sequence for this repository. `-RustOnly` skips the
-frontend half.
-
-Use it rather than a bare `cargo test`. Several tests create a silo's work
-directory, which is derived from the silo's path and lives outside it, so an
-unguarded run leaves a uuid-named directory in
-`%LOCALAPPDATA%\SilentSilo\work\open` for every run, in the place a real
-silo's scratch goes. The script points `SILENTSILO_TEST_WORK_BASE` at
-`target\test-work` and clears it afterwards; CI does the same with the
-runner's temp. Set the variable yourself if you run cargo directly:
-
-```powershell
-$env:SILENTSILO_TEST_WORK_BASE = "$PWD\target\test-work"
-```
-
-### Platform notes
-
-Security-key access uses a different backend per OS (both are real, working
-implementations, neither a stub):
-
-| OS | Backend | Notes |
-|----|---------|-------|
-| Windows | OS WebAuthn API (`webauthn.dll`) | No administrator rights required. |
-| Linux / macOS | CTAP2 over USB HID, core's own `ctap2` code through `hidapi` | A key with a PIN is asked for it in the app, as Windows does. Building on Linux needs `libudev-dev` (or your distro's equivalent). Using a key needs the udev rule for FIDO keys, which the `libfido2` package installs. |
-
-`silentsilo-fido` lives in core and carries a `hardware` feature that pulls
-in the HID stack. The app asks for it explicitly, so a build here always has
-it; `--no-default-features` on the app turns off `custom-protocol` and
-nothing else. To compile the crate without HID libraries, for a lint-only
-environment, build it in core with `--no-default-features`, where it falls
-back to a stub backend on which no security-key operation succeeds.
+Working on core at the same time, the test script and the security-key
+backends per system are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Known gaps
 
 See [BACKLOG.md](BACKLOG.md) for what is deliberately unfinished. No
-independent security audit has been done, as the note at the top says. The
-dependency licences have not been audited against AGPL-3.0 either. Log compaction, blob
-garbage collection, key rotation, conflict copies, silo verification, the
-printable emergency kit and the standalone extraction tool are all done.
+independent security audit has been done.
 
 ## Docs
 

@@ -12,7 +12,7 @@ import {
 // RFC 6238 Appendix B official test vectors. The secret is the ASCII string
 // "12345678901234567890" (repeated/truncated per the RFC for the SHA-256 and
 // SHA-512 vectors), base32-encoded. Hand-verified once already this session
-// via a throwaway script — this is that verification turned into a
+// via a throwaway script, this is that verification turned into a
 // permanent regression test instead of a one-off.
 function asciiToBase32(str: string): string {
   const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -38,7 +38,7 @@ const SECRET_SHA512 = asciiToBase32(
   "1234567890123456789012345678901234567890123456789012345678901234",
 );
 
-describe("generateTotp — RFC 6238 Appendix B vectors", () => {
+describe("generateTotp, RFC 6238 Appendix B vectors", () => {
   const vectors: { time: number; sha1: string; sha256: string; sha512: string }[] = [
     { time: 59, sha1: "94287082", sha256: "46119246", sha512: "90693936" },
     { time: 1111111109, sha1: "07081804", sha256: "68084774", sha512: "25091201" },
@@ -82,7 +82,7 @@ describe("generateTotp — RFC 6238 Appendix B vectors", () => {
   });
 
   it("pads shorter codes with leading zeros", async () => {
-    // Any of the 6-digit defaults could legitimately start with a zero —
+    // Any of the 6-digit defaults could legitimately start with a zero,
     // just confirm the length is always exactly `digits`, never shorter.
     const code = await generateTotp(
       { secret: SECRET_SHA1, digits: 6, period: 30, algorithm: "SHA-1" },

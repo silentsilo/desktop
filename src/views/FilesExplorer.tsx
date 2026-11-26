@@ -249,7 +249,7 @@ export function FilesExplorer(props: Props) {
   const newFolderRef = useModal(() => setIsModalOpen(false), isModalOpen);
 
   // Long paths no longer wrap onto a second line (which broke the toolbar's
-  // fixed height) — the address bar scrolls horizontally instead, and stays
+  // fixed height), the address bar scrolls horizontally instead, and stays
   // scrolled to the current (rightmost) segment, since that's the one that
   // actually matters after navigating deeper.
   const addressBarRef = useRef<HTMLDivElement>(null);
@@ -262,7 +262,7 @@ export function FilesExplorer(props: Props) {
   // drag; entries whose bounding box intersects the dragged rectangle are
   // selected live, matching the click-and-drag gesture from Explorer/Finder.
   // A mousedown with no subsequent movement is just "click empty space to
-  // clear the selection" — same code path, since an empty rectangle
+  // clear the selection", same code path, since an empty rectangle
   // intersects nothing.
   const itemRefs = useRef(new Map<string, HTMLElement>());
   const dragCleanupRef = useRef<(() => void) | null>(null);
@@ -431,7 +431,7 @@ export function FilesExplorer(props: Props) {
     e.preventDefault();
     e.stopPropagation();
     // Right-click never changes the left-click selection (and never pops the
-    // selection toolbar) — it only does that when the entry is already part
+    // selection toolbar), it only does that when the entry is already part
     // of an existing multi-selection, to offer a bulk action consistent with
     // what the toolbar already shows for that selection.
     const keepMultiSelection = selectedIds.has(entry.id) && selectedIds.size > 1;
