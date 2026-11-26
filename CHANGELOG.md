@@ -7,7 +7,7 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
-On core v1.11.7.
+On core v1.11.8.
 
 ### Security
 
@@ -142,6 +142,10 @@ On core v1.11.7.
 - A new recovery code is dated after every code before it, with its tags
   made again. Made after a "turned off" from another device, it carried a
   tag that no longer matched, and the other devices refused it.
+- Core v1.11.8: a name with a character that reverses the text after it is
+  shown and exported with `_` in its place again, but kept as it is in the
+  silo, so devices on older releases see the same tree. Since 1.11.5 the
+  two disagreed on such a name.
 - Core v1.11.7: replacing the encryption key also reseals records another
   device sent under the old key while it ran, and that device is told to
   rejoin; S3 errors are told apart by their status code.

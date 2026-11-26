@@ -1237,6 +1237,21 @@ pub fn vault_list_folder(
 ) -> Result<Vec<VaultEntry>, String> {
     let folder_id = Uuid::parse_str(&folder_id).map_err(|e| e.to_string())?;
     crate::state::with_vfs_untouched(&state, |_session, vfs| vfs.list_folder(folder_id))
+        .map(|entries| entries.into_iter().map(for_screen).collect())
+}
+
+/// An entry as the window shows it: its name without direction overrides,
+/// which made `invoice<U+202E>fdp.exe` read as `invoiceexe.pdf`. Replay
+/// keeps them, as every release did, so this is done where names are shown
+/// and where they reach the disk ([`safe_join`]), not in the silo.
+fn for_screen(mut entry: VaultEntry) -> VaultEntry {
+    match &mut entry {
+        VaultEntry::Folder(folder) => {
+            folder.name = silentsilo_vfs::without_reordering(&folder.name)
+        }
+        VaultEntry::File(file) => file.name = silentsilo_vfs::without_reordering(&file.name),
+    }
+    entry
 }
 
 #[tauri::command(async)]
@@ -1265,7 +1280,14 @@ pub fn vault_folder_by_path(path: String, state: State<AppState>) -> Result<Fold
 /// UI should render them all.
 #[tauri::command(async)]
 pub fn vault_search(query: String, state: State<AppState>) -> Result<Vec<SearchHit>, String> {
-    with_vfs(&state, |_, vfs| vfs.search_entries(&query, 50))
+    with_vfs(&state, |_, vfs| vfs.search_entries(&query, 50)).map(|hits| {
+        hits.into_iter()
+            .map(|mut hit| {
+                hit.entry = for_screen(hit.entry);
+                hit
+            })
+            .collect()
+    })
 }
 
 #[tauri::command(async)]
@@ -1293,7 +1315,14 @@ pub fn vault_set_favorite(
 
 #[tauri::command(async)]
 pub fn vault_list_favorites(state: State<AppState>) -> Result<Vec<SearchHit>, String> {
-    with_vfs(&state, |_session, vfs| vfs.list_favorites())
+    with_vfs(&state, |_session, vfs| vfs.list_favorites()).map(|hits| {
+        hits.into_iter()
+            .map(|mut hit| {
+                hit.entry = for_screen(hit.entry);
+                hit
+            })
+            .collect()
+    })
 }
 
 #[tauri::command(async)]
@@ -1584,7 +1613,15 @@ pub fn vault_trash_folder(
 
 #[tauri::command(async)]
 pub fn vault_list_trash(state: State<AppState>) -> Result<Vec<TrashItem>, String> {
-    with_vfs(&state, |_session, vfs| vfs.list_trash())
+    with_vfs(&state, |_session, vfs| vfs.list_trash()).map(|items| {
+        items
+            .into_iter()
+            .map(|mut item| {
+                item.entry = for_screen(item.entry);
+                item
+            })
+            .collect()
+    })
 }
 
 #[tauri::command(async)]
@@ -2304,7 +2341,7 @@ fn safe_join(dest: &Path, name: &str) -> Result<PathBuf, String> {
             &[("name", &name)],
         ));
     }
-    Ok(dest.join(name))
+    Ok(dest.join(silentsilo_vfs::without_reordering(name)))
 }
 
 pub use silentsilo_app::{open_scratch_dir, wipe_open_scratch};
@@ -4139,7 +4176,7 @@ pub fn set_full_copy(app: AppHandle, enabled: bool) -> Result<(), String> {
 
 #[cfg(test)]
 mod export_path_tests {
-    use super::{fits_on_drive, safe_join, unwrap_export_key};
+    use super::{fits_on_drive, for_screen, safe_join, unwrap_export_key};
     use std::path::Path;
 
     #[test]
@@ -4182,6 +4219,32 @@ mod export_path_tests {
             assert!(joined.starts_with(dest), "{good:?} landed at {joined:?}");
             assert!(joined.ends_with(good));
         }
+    }
+
+    #[test]
+    fn a_direction_override_reaches_neither_the_disk_nor_the_screen() {
+        let dest = Path::new("C:/Users/sam/Exports");
+        let joined = safe_join(dest, "invoice\u{202E}fdp.exe").unwrap();
+        assert!(joined.ends_with("invoice_fdp.exe"), "{joined:?}");
+
+        let entry = silentsilo_core::VaultEntry::File(silentsilo_core::FileEntry {
+            name: "invoice\u{202E}fdp.exe".into(),
+            ..serde_json::from_value(serde_json::json!({
+                "id": "00000000-0000-0000-0000-000000000001",
+                "folder_id": "00000000-0000-0000-0000-000000000002",
+                "name": "x",
+                "blob_id": "00000000-0000-0000-0000-000000000003",
+                "size_bytes": 1,
+                "created_at": 0,
+                "updated_at": 0,
+                "favorite": false
+            }))
+            .unwrap()
+        });
+        let silentsilo_core::VaultEntry::File(file) = for_screen(entry) else {
+            unreachable!()
+        };
+        assert_eq!(file.name, "invoice_fdp.exe");
     }
 
     /// A loop with a ceiling: a tree past it stops with an error, and one
