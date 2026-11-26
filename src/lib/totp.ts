@@ -46,6 +46,33 @@ export function normalizeBase32Secret(input: string): string {
   return input.toUpperCase().replace(/[^A-Z2-7]/g, "");
 }
 
+/** The one-time code as an export writes it: the bare secret when every
+ * parameter is the default, which every importer reads, and an
+ * `otpauth://` link when one is not. A bare secret dropped 8 digits or a
+ * 60 second period, and the codes made after a re-import were wrong. */
+export function totpForExport(
+  secret: string | undefined,
+  digits: number | undefined,
+  period: number | undefined,
+  algorithm: TotpAlgorithm | undefined,
+  label: string,
+): string {
+  if (!secret) return "";
+  const d = digits ?? DEFAULT_TOTP_DIGITS;
+  const p = period ?? DEFAULT_TOTP_PERIOD;
+  const a = algorithm ?? DEFAULT_TOTP_ALGORITHM;
+  if (d === DEFAULT_TOTP_DIGITS && p === DEFAULT_TOTP_PERIOD && a === DEFAULT_TOTP_ALGORITHM) {
+    return secret;
+  }
+  const params = new URLSearchParams({
+    secret,
+    digits: String(d),
+    period: String(p),
+    algorithm: a.replace("-", ""),
+  });
+  return `otpauth://totp/${encodeURIComponent(label || "SilentSilo")}?${params.toString()}`;
+}
+
 /** A numeric parameter from an `otpauth://` URI, held inside sane bounds.
  * Anything missing, unparseable or out of range falls back to the default
  * rather than being trusted: the URI is user-supplied text. */

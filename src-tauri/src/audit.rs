@@ -217,6 +217,7 @@ pub async fn audit_status(app: AppHandle) -> Result<SiloAuditStatus, String> {
 /// what they do next.
 #[tauri::command]
 pub async fn audit_set_enabled(app: AppHandle, enabled: bool) -> Result<SiloAuditStatus, String> {
+    let id = crate::state::focused_id(&app.state::<AppState>())?;
     if !enabled {
         crate::commands::vault::confirm_lasting_change(
             &app,
@@ -226,7 +227,9 @@ pub async fn audit_set_enabled(app: AppHandle, enabled: bool) -> Result<SiloAudi
     }
     crate::commands::fido::run_blocking(move || {
         let state = app.state::<AppState>();
-        let id = crate::state::focused_id(&state)?;
+        if crate::state::focused_id(&state)? != id {
+            return Err(crate::commands::vault::FOCUS_CHANGED.into());
+        }
         state.set_audit_log(id, enabled)?;
         status_of(&app)
     })

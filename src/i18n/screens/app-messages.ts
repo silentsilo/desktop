@@ -1934,6 +1934,17 @@ export const appMessages = {
     "pt-BR": "Nenhuma chave cadastrada ainda.",
     pl: "Nie dodano jeszcze żadnego klucza.",
   },
+  "app.err_key_not_plugged": {
+    note: "Error when no security key is connected to the computer while one is needed. The silo does have a key; it is just not plugged in.",
+    en: "No security key is connected. Plug it in and try again.",
+    ro: "Nicio cheie de securitate nu e conectată. Conecteaz-o și încearcă din nou.",
+    de: "Kein Sicherheitsschlüssel ist angeschlossen. Schließe ihn an und versuche es erneut.",
+    fr: "Aucune clé de sécurité n’est branchée. Branchez-la et réessayez.",
+    es: "No hay ninguna llave de seguridad conectada. Conéctala e inténtalo de nuevo.",
+    it: "Nessuna chiave di sicurezza è collegata. Collegala e riprova.",
+    "pt-BR": "Nenhuma chave de segurança está conectada. Conecte-a e tente de novo.",
+    pl: "Nie podłączono klucza bezpieczeństwa. Podłącz go i spróbuj ponownie.",
+  },
   "app.err_key_already_enrolled": {
     note: "Error when adding a key that this silo already has.",
     en: "That key is already enrolled.",

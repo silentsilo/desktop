@@ -160,6 +160,11 @@ export function formatAppError(err: unknown): string {
   if (lower.includes("nosuchbucket") || lower.includes("bucket does not exist")) {
     return t("app.err_no_bucket");
   }
+  // Before "no security key": this is a key enrolled but not plugged in,
+  // which "No key enrolled yet" told people their silo had no key.
+  if (lower.includes("no security key was found")) {
+    return t("app.err_key_not_plugged");
+  }
   if (lower.includes("not enrolled") || lower.includes("no security key")) {
     return t("app.err_no_key");
   }

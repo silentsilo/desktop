@@ -92,6 +92,10 @@ describe("formatAppError", () => {
 
   it("maps FIDO enrollment-state messages", () => {
     expect(formatAppError("no security key enrolled")).toBe("No key enrolled yet.");
+    // A key that is enrolled but not plugged in, as core's FIDO layer says it.
+    expect(formatAppError("no security key was found: plug it in and try again")).toBe(
+      "No security key is connected. Plug it in and try again.",
+    );
     expect(formatAppError("This key is already enrolled")).toBe("That key is already enrolled.");
     expect(formatAppError("credential already enrolled")).toBe("That key is already enrolled.");
     expect(formatAppError("Keep at least one key enrolled")).toBe(

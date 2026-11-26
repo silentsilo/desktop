@@ -92,6 +92,18 @@ describe("dropDuplicates", () => {
     expect(dropDuplicates([stored], [reimported])).toEqual({ fresh: [], duplicates: 1 });
   });
 
+  it("imports an entry that brings files the stored one does not have", () => {
+    // Bitwarden's JSON first, then its zip for the files.
+    const stored = entry({ service: "Bank" });
+    const file = { blob_id: "b1", name: "statement.pdf", size_bytes: 10, blob_key: "k" };
+    const withFiles = entry({ service: "Bank", id: "other", attachments: [file] });
+    expect(dropDuplicates([stored], [withFiles])).toEqual({ fresh: [withFiles], duplicates: 0 });
+    // The same files again are a duplicate, and so is the entry without them.
+    const again = entry({ service: "Bank", id: "third", attachments: [{ ...file, blob_id: "b2" }] });
+    expect(dropDuplicates([withFiles], [again]).duplicates).toBe(1);
+    expect(dropDuplicates([withFiles], [entry({ service: "Bank", id: "x" })]).duplicates).toBe(1);
+  });
+
   it("imports an entry whose password changed since the last export", () => {
     const stored = entry({ password: "old" });
     const updated = entry({ password: "new" });

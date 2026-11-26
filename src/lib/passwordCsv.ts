@@ -1,6 +1,6 @@
 import { t } from "../i18n";
 import type { CustomField, PasswordEntry } from "./types";
-import { parseTotpInput } from "./totp";
+import { parseTotpInput, totpForExport } from "./totp";
 import { appendNotes, noExtras, type ImportExtras } from "./passwordImport";
 
 /** Exporters we recognise by header row. `generic` is the fallback: match
@@ -356,7 +356,15 @@ export function entriesToCsv(entries: PasswordEntry[]): string {
         escapeCsvField(entry.url ?? ""),
         escapeCsvField(entry.username ?? ""),
         escapeCsvField(entry.password ?? ""),
-        escapeCsvField(entry.totp_secret ?? ""),
+        escapeCsvField(
+          totpForExport(
+            entry.totp_secret,
+            entry.totp_digits,
+            entry.totp_period,
+            entry.totp_algorithm,
+            entry.service ?? "",
+          ),
+        ),
         escapeCsvField(entry.category ?? ""),
         escapeCsvField(entry.notes ?? ""),
       ].join(","),

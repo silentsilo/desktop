@@ -1436,6 +1436,17 @@ export const errors = {
     "pt-BR": "Mostre este item primeiro e depois salve-o de novo.",
     pl: "Najpierw wyświetl ten wpis, a potem zapisz go ponownie.",
   },
+  "err.switched_during_check": {
+    note: "Error when the user switched to another silo while a key confirmation for the first one was running. The action was not done.",
+    en: "You switched silos while the key was asked. Nothing changed; try again.",
+    ro: "Ai schimbat silozul cât timp se cerea cheia. Nu s-a schimbat nimic; încearcă din nou.",
+    de: "Du hast das Silo gewechselt, während der Schlüssel abgefragt wurde. Nichts wurde geändert; versuche es erneut.",
+    fr: "Vous avez changé de silo pendant la demande de clé. Rien n’a été modifié ; réessayez.",
+    es: "Cambiaste de silo mientras se pedía la llave. No se cambió nada; inténtalo de nuevo.",
+    it: "Hai cambiato silo mentre veniva chiesta la chiave. Non è cambiato nulla; riprova.",
+    "pt-BR": "Você trocou de silo enquanto a chave era pedida. Nada foi alterado; tente de novo.",
+    pl: "Zmieniono silos podczas prośby o klucz. Nic nie zostało zmienione; spróbuj ponownie.",
+  },
   "err.entry_needs_key": {
     note: "Error when a protected entry is deleted and no key check let it through in the last few minutes.",
     en: "Confirm with your key first, then delete it again.",

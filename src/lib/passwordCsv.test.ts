@@ -412,6 +412,26 @@ describe("entriesToCsv", () => {
     });
   });
 
+  it("keeps a one-time code's digits, period and algorithm through the round trip", () => {
+    const original = entry({
+      service: "Bank: main",
+      totp_secret: "JBSWY3DPEHPK3PXP",
+      totp_digits: 8,
+      totp_period: 60,
+      totp_algorithm: "SHA-256",
+    });
+    const [reimported] = csvToEntries(entriesToCsv([original])).entries;
+    expect(reimported).toMatchObject({
+      totp_secret: "JBSWY3DPEHPK3PXP",
+      totp_digits: 8,
+      totp_period: 60,
+      totp_algorithm: "SHA-256",
+    });
+    // The default stays a bare secret, which every importer reads.
+    const plain = entry({ totp_secret: "JBSWY3DPEHPK3PXP" });
+    expect(entriesToCsv([plain])).toContain(",JBSWY3DPEHPK3PXP,");
+  });
+
   it("keeps a password's leading and trailing spaces through the round trip", () => {
     const original = entry({ password: " two spaces  " });
     const [reimported] = csvToEntries(entriesToCsv([original])).entries;

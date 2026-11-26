@@ -1617,21 +1617,22 @@ pub fn vault_restore_folder(
 /// carrying the same blob id.
 #[tauri::command]
 pub async fn vault_empty_trash(app: AppHandle) -> Result<u64, String> {
+    // Pinned: the log write can wait behind a sync pass, and a silo switch
+    // meanwhile emptied the next silo's trash.
+    let silo_id = crate::state::focused_id(&app.state::<AppState>())?;
     log_purge(
         &app,
+        silo_id,
         crate::audit::event(crate::audit::codes::FILE_PURGED).with("what", "trash"),
     )
     .await?;
     let app2 = app.clone();
-    let (removed, blob_ids, root, silo_id) = run_blocking(move || {
+    let (removed, blob_ids, root) = run_blocking(move || {
         let state = app2.state::<AppState>();
-        let silo_id = crate::state::focused_id(&state)?;
-        let session_guard = state.focused_session()?;
-        let session = session_guard
-            .as_ref()
-            .ok_or_else(|| CoreError::VaultLocked.to_string())?;
-        let (removed, blob_ids) = Vfs::new(session).empty_trash().map_err(|e| e.to_string())?;
-        Ok((removed, blob_ids, session.paths.root.clone(), silo_id))
+        crate::state::with_session_id(&state, silo_id, |session, vfs| {
+            let (removed, blob_ids) = vfs.empty_trash()?;
+            Ok((removed, blob_ids, session.paths.root.clone()))
+        })
     })
     .await?;
 
@@ -1658,38 +1659,36 @@ pub async fn vault_purge_items(app: AppHandle, ids: Vec<String>) -> Result<u64, 
         .map(|id| Uuid::parse_str(id).map_err(|e| e.to_string()))
         .collect::<Result<_, _>>()?;
     // Named while they still exist: once purged there is nothing to ask.
-    let names: Vec<String> = with_vfs(&app.state::<AppState>(), |_session, vfs| {
-        Ok(ids
-            .iter()
-            .take(LOGGED_NAMES)
-            .filter_map(|id| {
-                vfs.get_file(*id)
-                    .map(|f| f.name)
-                    .or_else(|_| vfs.get_folder(*id).map(|f| f.name))
-                    .ok()
-            })
-            .collect())
-    })
-    .unwrap_or_default();
+    // Pinned, as emptying the trash is.
+    let silo_id = crate::state::focused_id(&app.state::<AppState>())?;
+    let names: Vec<String> =
+        crate::state::with_session_id(&app.state::<AppState>(), silo_id, |_session, vfs| {
+            Ok(ids
+                .iter()
+                .take(LOGGED_NAMES)
+                .filter_map(|id| {
+                    vfs.get_file(*id)
+                        .map(|f| f.name)
+                        .or_else(|_| vfs.get_folder(*id).map(|f| f.name))
+                        .ok()
+                })
+                .collect())
+        })
+        .unwrap_or_default();
     let mut event = crate::audit::event(crate::audit::codes::FILE_PURGED);
     event = match (ids.len(), names.as_slice()) {
         (1, [one]) => event.on(ids[0].to_string(), one.clone()),
         _ => event.with("count", ids.len()).with("names", names),
     };
-    log_purge(&app, event).await?;
+    log_purge(&app, silo_id, event).await?;
 
     let app2 = app.clone();
-    let (removed, blob_ids, root, silo_id) = run_blocking(move || {
+    let (removed, blob_ids, root) = run_blocking(move || {
         let state = app2.state::<AppState>();
-        let silo_id = crate::state::focused_id(&state)?;
-        let session_guard = state.focused_session()?;
-        let session = session_guard
-            .as_ref()
-            .ok_or_else(|| CoreError::VaultLocked.to_string())?;
-        let (removed, blob_ids) = Vfs::new(session)
-            .purge_items(&ids)
-            .map_err(|e| e.to_string())?;
-        Ok((removed, blob_ids, session.paths.root.clone(), silo_id))
+        crate::state::with_session_id(&state, silo_id, |session, vfs| {
+            let (removed, blob_ids) = vfs.purge_items(&ids)?;
+            Ok((removed, blob_ids, session.paths.root.clone()))
+        })
     })
     .await?;
 
@@ -1781,9 +1780,12 @@ fn log_added(app: &AppHandle, silo_id: Uuid, folder_id: Uuid, files: &[FileEntry
 }
 
 /// A purge about to happen, in the focused silo's log.
-async fn log_purge(app: &AppHandle, event: silentsilo_audit::Event) -> Result<(), String> {
-    let app = app.clone();
-    run_blocking(move || crate::audit::record(&app, event)).await
+async fn log_purge(
+    app: &AppHandle,
+    silo_id: Uuid,
+    event: silentsilo_audit::Event,
+) -> Result<(), String> {
+    crate::audit::record_off_thread(app, silo_id, event).await
 }
 
 /// Downloads any of `blob_ids` this device doesn't hold.
@@ -1810,7 +1812,10 @@ async fn ensure_blobs_local_watched(
     blob_ids: &[Uuid],
     watched: Option<Watched<'_>>,
 ) -> Result<(), String> {
-    let root = vault_dir(app)?;
+    // Pinned: the downloads take a while, and the delivery rows settled at
+    // the end belong to this silo, not to whichever is focused by then.
+    let silo = crate::state::active_silo(app)?;
+    let root = silo.path.clone();
     let missing: Vec<Uuid> = blob_ids
         .iter()
         .copied()
@@ -1820,7 +1825,7 @@ async fn ensure_blobs_local_watched(
         return Ok(());
     }
 
-    let targets = crate::state::silo_targets(app);
+    let targets = crate::state::targets_for(silo.id);
     if targets.is_empty() {
         return Err(
             "Some of these files are not on this computer, and no backup storage is connected."
@@ -1829,8 +1834,7 @@ async fn ensure_blobs_local_watched(
     }
     let stores: Vec<(Uuid, &dyn silentsilo_store::ObjectStore)> =
         targets.iter().map(|t| (t.id, &*t.store)).collect();
-    let every_copy = crate::state::active_silo(app)
-        .is_ok_and(|silo| silentsilo_vault::load_targets(silo.id).len() == targets.len());
+    let every_copy = silentsilo_vault::load_targets(silo.id).len() == targets.len();
     let size = |id: &Uuid| {
         watched
             .as_ref()
@@ -1877,13 +1881,11 @@ async fn ensure_blobs_local_watched(
     }
     // On the copy it came from, so no longer waiting to back up there. Also
     // after a stop: what came down before it stays.
-    if let Ok(silo) = crate::state::active_silo(app) {
-        let every_target: Vec<Uuid> = silentsilo_vault::load_targets(silo.id)
-            .iter()
-            .map(|t| t.config.target_id())
-            .collect();
-        let _ = silentsilo_vault::settle_blob_delivery(&root, &every_target);
-    }
+    let every_target: Vec<Uuid> = silentsilo_vault::load_targets(silo.id)
+        .iter()
+        .map(|t| t.config.target_id())
+        .collect();
+    let _ = silentsilo_vault::settle_blob_delivery(&root, &every_target);
     outcome
 }
 
@@ -3144,8 +3146,20 @@ pub(crate) async fn confirm_lasting_change(
     if crate::audit::opened_with_recovery_code(silo) {
         return Ok(false);
     }
-    verify_presence(app, purpose).await.map(|()| true)
+    verify_presence(app, purpose).await?;
+    // The touch was for the silo on screen when it was asked. Every caller
+    // reads the focused silo after this, and a switch during the touch let
+    // one silo's key confirm a change to another.
+    if crate::state::focused_id(&app.state::<AppState>())? != silo {
+        return Err(FOCUS_CHANGED.into());
+    }
+    Ok(true)
 }
+
+pub(crate) const FOCUS_CHANGED: &str = crate::err::coded!(
+    "err.switched_during_check",
+    "You switched silos while the key was asked. Nothing changed; try again."
+);
 
 /// Confirms an export, for the export command that follows.
 async fn confirm_export(app: &AppHandle) -> Result<(), String> {

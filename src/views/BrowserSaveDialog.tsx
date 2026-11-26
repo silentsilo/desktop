@@ -27,7 +27,7 @@ export function BrowserSaveDialog({
   onSave,
 }: {
   entries: PasswordEntry[];
-  onSave: (entry: PasswordEntry, change?: EntryChange) => Promise<boolean>;
+  onSave: (entry: PasswordEntry, change?: EntryChange, whole?: PasswordEntry) => Promise<boolean>;
 }) {
   const [prompt, setPrompt] = useState<BrowserSavePrompt | null>(null);
 
@@ -75,7 +75,7 @@ function SaveCard({
 }: {
   prompt: BrowserSavePrompt;
   entries: PasswordEntry[];
-  onSave: (entry: PasswordEntry, change?: EntryChange) => Promise<boolean>;
+  onSave: (entry: PasswordEntry, change?: EntryChange, whole?: PasswordEntry) => Promise<boolean>;
   onClose: () => void;
 }) {
   useLocale();
@@ -104,20 +104,22 @@ function SaveCard({
     try {
       // A protected login is held without its secrets; updating it keeps
       // the old password in its history, so it is read whole first, with
-      // the key.
+      // the key, and handed to the save as the version to keep.
       let base = update ? existing : undefined;
+      let whole: PasswordEntry | undefined;
       if (base?.withheld) {
         const id = base.id;
         const rows = await invoke<string[]>("fido_reverify", { purpose: null, entries: [id] });
-        const whole = rows.map((row) => withBaseFields(JSON.parse(row) as PasswordEntry));
-        base = whole.find((e) => e.id === id);
+        const read = rows.map((row) => withBaseFields(JSON.parse(row) as PasswordEntry));
+        base = read.find((e) => e.id === id);
+        whole = base;
         if (!base) {
           setError(t("dlg.save_failed"));
           return;
         }
       }
       const { entry, updated } = savedEntry(prompt, base, label, username.trim(), Date.now());
-      if (!(await onSave(entry, updated ? "edited" : "created"))) {
+      if (!(await onSave(entry, updated ? "edited" : "created", whole))) {
         setError(t("dlg.save_failed"));
         return;
       }

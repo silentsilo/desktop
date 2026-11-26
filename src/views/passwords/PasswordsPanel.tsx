@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { passwordEditorOpen } from "../../lib/editorOpen";
 import type { Os } from "../../lib/platformStrings";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFileDialog, save as saveFileDialog } from "../../lib/dialog";
@@ -101,7 +102,8 @@ type Props = {
   /** Protected entries a key touch just let through, whole, to hold in
    * place of the copies read without their secrets. */
   onRevealed: (entries: PasswordEntry[]) => void;
-  onImportEntries: (entries: PasswordEntry[], source: string) => void;
+  /** Resolves to the entries actually stored. */
+  onImportEntries: (entries: PasswordEntry[], source: string) => Promise<PasswordEntry[]>;
   /** Replaces the category list as a whole. */
   onSaveCategories: (categories: PasswordCategory[]) => void;
   /** Asks the user to confirm something that runs when opened. */
@@ -205,6 +207,12 @@ export function PasswordsPanel({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ entry: PasswordEntry; creating: boolean } | null>(null);
+  useEffect(() => {
+    passwordEditorOpen.current = editing !== null;
+    return () => {
+      passwordEditorOpen.current = false;
+    };
+  }, [editing]);
   // Lasting: an import goes on when the view is left, and one parsed and
   // waiting to be filed must still be there, or its attachments, already
   // encrypted into the silo, are never cleaned up. See lib/lasting.
@@ -924,7 +932,7 @@ export function PasswordsPanel({
   }, [dropBlobs, pendingImport, setPendingImport]);
 
   const finishImport = useCallback(
-    (choice: ImportCategoryChoice) => {
+    async (choice: ImportCategoryChoice) => {
       if (!pendingImport) return;
       const { skipped, source, sourceLabel, kind, extras } = pendingImport;
       const texts = IMPORT_TEXTS[kind];
@@ -936,17 +944,19 @@ export function PasswordsPanel({
       // entry whose content changed since the last export still arrives as a
       // second copy; only an exact match is dropped as a duplicate.
       const { fresh, duplicates } = dropDuplicates(entries, imported);
-      if (fresh.length > 0) onImportEntries(fresh, source);
+      // Awaited: the notice counts what was stored, and the attachments of
+      // an entry that was refused are dropped with the others left over.
+      const stored = fresh.length > 0 ? await onImportEntries(fresh, source) : [];
       // A SilentSilo export brings its categories' colours: any the silo
       // does not have yet are added, none it has are changed.
       const brought = pendingImport.categories ?? [];
       const known = new Set(storedCategories?.map((c) => c.name) ?? []);
       const added = brought.filter((c) => c.name && !known.has(c.name));
-      if (fresh.length > 0 && added.length > 0) {
+      if (stored.length > 0 && added.length > 0) {
         onSaveCategories([...(storedCategories ?? []), ...added]);
       }
       if (pendingImport.blobs) {
-        const kept = new Set(attachmentBlobs(fresh));
+        const kept = new Set(attachmentBlobs(stored));
         dropBlobs(pendingImport.blobs.filter((id) => !kept.has(id)));
       }
 
@@ -960,11 +970,11 @@ export function PasswordsPanel({
           : [
               skips.length > 0
                 ? t(texts.importedWith, {
-                    count: fresh.length,
+                    count: stored.length,
                     source: sourceLabel,
                     skips: skips.join(", "),
                   })
-                : t(texts.imported, { count: fresh.length, source: sourceLabel }),
+                : t(texts.imported, { count: stored.length, source: sourceLabel }),
               describeExtras(extras),
             ]
               .filter(Boolean)
@@ -1225,7 +1235,7 @@ export function PasswordsPanel({
             source: pendingImport.sourceLabel,
           })}
           categories={categories.map((c) => c.name)}
-          onConfirm={finishImport}
+          onConfirm={(choice) => void finishImport(choice)}
           onCancel={cancelImport}
         />
       )}

@@ -7,7 +7,7 @@ silo from opening needs a major version rather than a note.
 
 ## [Unreleased]
 
-On core v1.11.5.
+On core v1.11.6.
 
 ### Security
 
@@ -31,6 +31,10 @@ On core v1.11.5.
 - Deleting a protected entry is checked by the app, not only by the
   window, and turning off the activity log asks for the key.
 - The app wipes its own copy of a recovery code you type once it is used.
+- Switching silos while a key was asked no longer lets the action land on
+  the other silo: a new recovery code, emptying the trash, removing a key,
+  a key added with an organisation key, turning off the activity log. The
+  key check refuses when the silo on screen changed during it.
 
 - The app no longer downloads or installs updates. It checks once a day
   which version is the latest, from silentsilo.com and from the website's
@@ -122,6 +126,28 @@ On core v1.11.5.
 
 ### Fixed
 
+- An import that meets an entry the silo refuses goes on with the rest and
+  says how many failed, instead of stopping there and reporting all of them
+  as imported.
+- A Bitwarden zip imported after its JSON keeps its files: an entry that
+  brings attachments is no longer taken for a duplicate of one without.
+- Leaving the Passwords view with the editor open asks first.
+- Updating a protected login from the browser extension keeps the old
+  password in its history.
+- A CSV export keeps a one-time code's digits, period and algorithm.
+- A new recovery code is dated after every code before it, with its tags
+  made again. Made after a "turned off" from another device, it carried a
+  tag that no longer matched, and the other devices refused it.
+- Core v1.11.6: emptying the trash keeps conflict copies that were not in
+  it; records a copy lost, or a cloud folder deleted at the provider, are
+  sent to it again; compaction deletes only what its snapshot holds; a key
+  a rotation retired cannot rewrite the working copy; listings that come
+  back short are errors; SFTP puts back an object an overwrite left set
+  aside; the extractor reads past a record that will not open.
+- With no security key plugged in, the message says to plug it in, not
+  that the silo has no key.
+- Replacing the encryption key holds the silo open until it is done, so the
+  auto-lock no longer stops it part way.
 - Sync deletes or overwrites nothing on a doubtful read (core v1.11.2): a
   device behind a snapshot it cannot read no longer cleans up, a recovery
   code that failed to download is not replaced by an older one, a backup

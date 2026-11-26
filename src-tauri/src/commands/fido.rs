@@ -756,9 +756,11 @@ pub async fn fido_add_key(
     } else {
         String::new()
     };
+    // The silo whose keys were read above, not whichever is focused after
+    // the organisation key's touch.
     let (vault_id, dek) = {
-        let session_guard = state.focused_session()?;
-        let session = session_guard.as_ref().ok_or_else(|| {
+        let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
+        let session = sessions.get(&silo_id).ok_or_else(|| {
             crate::err::coded!(
                 "err.unlock_before_add_key",
                 "Unlock the silo first to add a key."
@@ -1076,8 +1078,9 @@ pub async fn fido_remove_key(
     // unlock the vault from another device.
     // Every target, not just the first: an envelope left on the second one
     // is a key that still unlocks the vault from any device that can read
-    // it, which is precisely what removing it was meant to stop.
-    let targets = crate::state::silo_targets(&app);
+    // it, which is precisely what removing it was meant to stop. This silo's
+    // copies, not the focused one's: focus can move during the key check.
+    let targets = crate::state::targets_for(silo.id);
     if targets.is_empty() {
         return Ok(RemoveKeyOutcome {
             published: false,
@@ -1392,6 +1395,9 @@ pub async fn vault_rotate_key(app: AppHandle, keep: Vec<String>) -> Result<Rotat
             silo,
         )
     };
+    // Held open for the length of it: resealing a long history on slow
+    // storage outlasted the auto-lock, which stopped it part way.
+    let _open = crate::state::hold_open(&app, silo.id);
 
     // A rotation that stopped part way is finished, never started again.
     // Staging a second key writes over the first, and the objects the first
@@ -1656,6 +1662,9 @@ pub async fn vault_rotate_resume(
             silo,
         )
     };
+    // Held open for the length of it: resealing a long history on slow
+    // storage outlasted the auto-lock, which stopped it part way.
+    let _open = crate::state::hold_open(&app, silo.id);
 
     if !silentsilo_vault::rotation::rotation_pending(&root) {
         return Err(crate::err::coded!(

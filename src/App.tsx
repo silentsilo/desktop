@@ -110,6 +110,7 @@ import { AppSettingsDrawer } from "./views/settings/AppSettingsView";
 import { FirstRunView } from "./views/FirstRunView";
 import { forgetSiloStorage, lastDone } from "./lib/siloMemory";
 import { decodeAppError, formatAppError, plainError } from "./lib/errors";
+import { passwordEditorOpen } from "./lib/editorOpen";
 import { AppSettingsContext, UpdateCardContext } from "./lib/appSettings";
 import { UpdateCard } from "./views/UpdateCard";
 import {
@@ -268,6 +269,19 @@ export default function App() {
       opts?: { confirmLabel?: string; danger?: boolean },
     ) => askConfirmWith(title, message, opts).then((r) => r.ok),
     [askConfirmWith],
+  );
+
+  /// Asks before a view change would close the password editor and drop
+  /// what is typed in it. Resolves to whether to go on.
+  const leaveEditor = useCallback(
+    async (next: View): Promise<boolean> => {
+      if (next === "passwords" || !passwordEditorOpen.current) return true;
+      return askConfirm(t("pw.leave_editing_title"), t("pw.leave_editing_body"), {
+        confirmLabel: t("pw.leave_editing_go"),
+        danger: true,
+      });
+    },
+    [askConfirm],
   );
   /**
    * The one overwrite question a multi-file or folder save asks.
@@ -3973,11 +3987,13 @@ export default function App() {
   /// worked, and the editor then deleted the content of any attachment it
   /// had removed.
   const savePasswordEntry = useCallback(
-    async (edited: PasswordEntry, change?: EntryChange): Promise<boolean> => {
+    async (edited: PasswordEntry, change?: EntryChange, whole?: PasswordEntry): Promise<boolean> => {
       // Every save from this window goes through here, so this is where a
       // changed entry keeps its previous version. Read from the ref: the
-      // state update below has not run yet when the entry is sent.
-      const previous = passwordEntriesRef.current.find((e) => e.id === edited.id);
+      // state update below has not run yet when the entry is sent. `whole`
+      // is a protected entry the caller just read with the key, which the
+      // list still holds without its secrets.
+      const previous = whole ?? passwordEntriesRef.current.find((e) => e.id === edited.id);
       if (change === "arranged" && previous) return arrangePasswordEntry(previous, edited);
       // A copy read without its secrets is no version to keep.
       const entry = withHistory(
@@ -4058,20 +4074,32 @@ export default function App() {
 
   /// Import writes many entries; each is its own operation, so a failure
   /// part way through leaves the ones already stored rather than nothing.
+  /// One entry refused (too large, say) no longer stops the rest; the ones
+  /// stored are returned, so the notice counts what actually landed.
   const importPasswordEntries = useCallback(
-    async (entries: PasswordEntry[], source: string) => {
+    async (entries: PasswordEntry[], source: string): Promise<PasswordEntry[]> => {
       begin("entries");
       let stored = 0;
+      const landed: PasswordEntry[] = [];
+      let failed = 0;
+      let firstError: unknown = null;
       setPasswordImport({ done: 0, total: entries.length });
       try {
         await withPasswordWrite(async () => {
           for (const entry of entries) {
-            await invoke("vault_upsert_password", {
-              id: entry.id,
-              json: JSON.stringify(entry),
-              change: "imported",
-            });
+            try {
+              await invoke("vault_upsert_password", {
+                id: entry.id,
+                json: JSON.stringify(entry),
+                change: "imported",
+              });
+            } catch (e) {
+              failed += 1;
+              firstError ??= e;
+              continue;
+            }
             stored += 1;
+            landed.push(entry);
             setPasswordImport({ done: stored, total: entries.length });
             // Upsert on the store side, so the list has to be an upsert too.
             // Appending blindly put two rows under one id, which React then
@@ -4099,6 +4127,16 @@ export default function App() {
           }).catch(() => undefined);
         }
       }
+      if (failed > 0) {
+        toasts.error(
+          t("pw.import_some_failed", {
+            failed,
+            total: entries.length,
+            reason: formatAppError(firstError),
+          }),
+        );
+      }
+      return landed;
     },
     [begin, end, toasts, withPasswordWrite],
   );
@@ -4383,10 +4421,13 @@ export default function App() {
       <AppShell
         view={view}
         onView={(next) => {
-          if (next === "settings" && pendingUpdate && view !== "settings") {
-            setSettingsSection("updates");
-          }
-          setView(next);
+          void (async () => {
+            if (!(await leaveEditor(next))) return;
+            if (next === "settings" && pendingUpdate && view !== "settings") {
+              setSettingsSection("updates");
+            }
+            setView(next);
+          })();
         }}
         updateAvailable={pendingUpdate}
         onLock={() => void lockSilo()}
@@ -4401,12 +4442,15 @@ export default function App() {
         }
         tasks={backgroundTasks()}
         onOpenTask={(place: TaskPlace) => {
-          if ("section" in place) {
-            setSettingsSection(place.section as SettingsSectionId);
-            setView("settings");
-          } else {
-            setView(place.view);
-          }
+          void (async () => {
+            if (!(await leaveEditor("section" in place ? "settings" : place.view))) return;
+            if ("section" in place) {
+              setSettingsSection(place.section as SettingsSectionId);
+              setView("settings");
+            } else {
+              setView(place.view);
+            }
+          })();
         }}
         trashCount={trashEntries.length}
         healthCount={healthCount}
@@ -4414,8 +4458,11 @@ export default function App() {
         sync={syncProgress ? { ...sync, progress: syncProgress } : sync}
         onSyncNow={() => void syncNow()}
         onOpenBackup={() => {
-          setSettingsSection("backup");
-          setView("settings");
+          void (async () => {
+            if (!(await leaveEditor("settings"))) return;
+            setSettingsSection("backup");
+            setView("settings");
+          })();
         }}
         statusSummary={statusSummary}
         siloName={bootstrap.silo.name}
@@ -4548,7 +4595,7 @@ export default function App() {
             onSaveEntry={savePasswordEntry}
             onDeleteEntry={(entry) => void deletePasswordEntry(entry)}
             onRevealed={holdRevealed}
-            onImportEntries={(entries, source) => void importPasswordEntries(entries, source)}
+            onImportEntries={importPasswordEntries}
             onSaveCategories={(categories) => void savePasswordCategories(categories)}
             onConfirmRun={confirmRun}
             onRestoreEntry={restorePasswordEntry}

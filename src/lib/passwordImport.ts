@@ -61,16 +61,32 @@ export type DedupeResult = {
   duplicates: number;
 };
 
+/** The files an entry carries, by name and size. An import with files is a
+ * duplicate only of an entry carrying the same ones: Bitwarden's zip after
+ * its JSON read as "nothing new", and the files just encrypted were thrown
+ * away. One without files still matches an entry that has them. */
+function attachmentsKey(entry: PasswordEntry): string {
+  return (entry.attachments ?? [])
+    .map((a) => `${a.name}:${a.size_bytes}`)
+    .sort()
+    .join("\u0001");
+}
+
 export function dropDuplicates(
   existing: PasswordEntry[],
   incoming: PasswordEntry[],
 ): DedupeResult {
-  const seen = new Set(existing.map(entryFingerprint));
+  const seen = new Set<string>();
+  for (const entry of existing) {
+    const fingerprint = entryFingerprint(entry);
+    seen.add(`${fingerprint}\u0002`);
+    seen.add(`${fingerprint}\u0002${attachmentsKey(entry)}`);
+  }
   const fresh: PasswordEntry[] = [];
   let duplicates = 0;
 
   for (const entry of incoming) {
-    const fingerprint = entryFingerprint(entry);
+    const fingerprint = `${entryFingerprint(entry)}\u0002${attachmentsKey(entry)}`;
     // Adding as we go also catches a file that lists the same row twice.
     if (seen.has(fingerprint)) {
       duplicates++;

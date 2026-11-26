@@ -303,22 +303,13 @@ pub struct TargetHandle {
     pub label: String,
 }
 
-/// Every place the focused silo backs up to, opened.
+/// Every place silo `silo_id` backs up to, opened.
 ///
 /// Used by the operations that touch every copy: deletions, which done on
 /// the primary alone would leave the object readable on the second one, and
 /// downloads, which the second copy can serve when the first is a disk in a
 /// drawer. Targets that will not open are skipped; the caller reports what
-/// it managed.
-pub fn silo_targets(app: &AppHandle) -> Vec<TargetHandle> {
-    let Ok(silo) = active_silo(app) else {
-        return Vec::new();
-    };
-    targets_for(silo.id)
-}
-
-/// [`silo_targets`] for a silo named by id, for commands that pin the silo
-/// they started on rather than following the focus.
+/// it managed. By id, never by focus: focus can move while a command waits.
 pub fn targets_for(silo_id: Uuid) -> Vec<TargetHandle> {
     silentsilo_vault::load_targets(silo_id)
         .into_iter()

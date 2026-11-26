@@ -152,13 +152,15 @@ pub async fn recovery_generate(app: AppHandle) -> Result<GeneratedRecovery, Stri
     // a new code invalidates the old one, so an employee could regenerate it
     // and cut off the copy in the company safe. Guarding the organisation key
     // against removal while leaving this open would protect nothing.
-    crate::state::unlocked_silo(&app)?;
+    let silo = crate::state::unlocked_silo(&app)?;
     confirm_code_change(&app, crate::commands::vault::Presence::RecoveryCode).await?;
 
+    // The silo asked about, not whichever is focused now: a switch during
+    // the key check replaced the other silo's code.
     let (dek, kek, root, silo_id) = {
         let state = app.state::<AppState>();
-        let guard = state.focused_session()?;
-        let session = guard.as_ref().ok_or_else(|| {
+        let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
+        let session = sessions.get(&silo.id).ok_or_else(|| {
             crate::err::coded!(
                 "err.unlock_before_code",
                 "Unlock the silo before creating a recovery code."
@@ -175,24 +177,37 @@ pub async fn recovery_generate(app: AppHandle) -> Result<GeneratedRecovery, Stri
     // Tagged under the content KEK, which storage never sees: that tag is
     // what lets the other devices tell this envelope from one a bucket
     // writer put there. Argon2id, so on the blocking pool and with no lock.
-    let envelope_kek = kek.clone();
+    let (envelope_kek, envelope_dek) = (kek.clone(), dek.clone());
     let (code, mut envelope) = crate::commands::fido::run_blocking(move || {
-        create_recovery_envelope(&dek, &envelope_kek).map_err(|e| e.to_string())
+        create_recovery_envelope(&envelope_dek, &envelope_kek).map_err(|e| e.to_string())
     })
     .await?;
     // Pinned from here on: the loop below talks to storage, and a silo switch
     // meanwhile would have sent this silo's envelope to the next one's.
     //
-    // Dated after any earlier "turned off", even on a device whose clock is
-    // behind the one that turned it off: the passes drop every code made at
-    // or before it.
+    // Dated after any earlier "turned off" and after every code before it,
+    // even on a device whose clock is behind the one that made them: the
+    // passes drop every code made at or before a "turned off", and keep the
+    // newer of two codes. The date is inside the envelope's tags, which
+    // `date_after` stamps again; moved by hand, the other devices refused it.
+    let mut earliest = load_recovery_envelope(&root)
+        .map(|e| e.created_at.saturating_add(1))
+        .unwrap_or(0);
     for target in crate::state::targets_for(silo_id) {
         if let Ok(Some(off)) =
             sync::revoked_at(&*target.store, &kek, sync::RECOVERY_MARKER_ID).await
         {
-            envelope.created_at = envelope.created_at.max(off.saturating_add(1));
+            earliest = earliest.max(off.saturating_add(1));
+        }
+        // Not one whose tag fails under this key: a date storage made up
+        // would push every code after it into the future.
+        if let Ok(Some(stored)) = sync::fetch_recovery_envelope(&*target.store).await
+            && (stored.auth_dek.is_none() || stored.is_authentic_now(&kek, &dek))
+        {
+            earliest = earliest.max(stored.created_at.saturating_add(1));
         }
     }
+    envelope.date_after(earliest, &kek, &dek);
     crate::audit::record_off_thread(
         &app,
         silo_id,

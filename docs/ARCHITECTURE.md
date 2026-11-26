@@ -406,7 +406,13 @@ must open this silo's DEK.
   join with it): that is the way back in when the keys are lost. Which
   session that is comes from `audit::set_unlocked_with_code`, never from
   the name the log shows: a key can be labelled "recovery code", and one so
-  labelled used to skip every check here. An organisation's key, where the silo needs one, is the
+  labelled used to skip every check here. After the touch it refuses
+  (`err.switched_during_check`) when the focused silo is no longer the one
+  it asked about: callers read the focused silo after it, and a switch
+  during the touch let one silo's key confirm a change to another. Commands
+  that wait on storage or on the log pin the silo id at their start and use
+  it throughout (`targets_for`, `with_session_id`, `record_in`); there is
+  no helper that follows the focus to storage any more. An organisation's key, where the silo needs one, is the
   check.
 - **The recovery code stays** while no key outlives this computer.
   `recovery_disable` refuses (`err.recovery_needed_platform_only`) unless a
